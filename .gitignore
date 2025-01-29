@@ -278,3 +278,5 @@ arkumu/media/
 .env
 .envs/*
 !.envs/.local/
+# dbs
+*.sql
