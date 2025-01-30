@@ -2,90 +2,67 @@
 {% load custom_filters %}
 
 {% block content %}
-    {# Navbar with model names #}
-    <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
-        <div class="container-fluid">
-            <ul class="navbar-nav">
-                {% for model in models %}
-                    <li class="nav-item">
-                        <a class="nav-link {% if selected_model == model.name %}active{% endif %}" 
-                           href="?model={{ model.model_name }}">
-                            {{ model.name }}
-                        </a>
-                    </li>
-                {% endfor %}
-            </ul>
-        </div>
-    </nav>
-
-    {# Table showing model fields #}
-    {% if objects %}
-        <div class="row">
-            <div class="col">
-                <h2 class="mb-4">{{ selected_model }} Data</h2>
-                <div class="table-responsive">
-                    <table class="table table-striped">
-                        <thead>
-                            <tr>
-                                {% for field in fields %}
-                                    <th>{{ field|title }}</th>
-                                {% endfor %}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for object in objects %}
-                                <tr>
-                                    {% for field in fields %}
-                                        <td>{{ object|get_attribute:field }}</td>
-                                    {% endfor %}
-                                </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-
-                {# Pagination #}
-                {% if is_paginated %}
-                    <nav aria-label="Page navigation">
-                        <ul class="pagination justify-content-center">
-                            {% if page_obj.has_previous %}
-                                <li class="page-item">
-                                    <a class="page-link" 
-                                       href="?model={{ request.GET.model }}&page=1">&laquo; First</a>
-                                </li>
-                                <li class="page-item">
-                                    <a class="page-link" 
-                                       href="?model={{ request.GET.model }}&page={{ page_obj.previous_page_number }}">Previous</a>
-                                </li>
-                            {% endif %}
-
-                            {% for num in page_obj.paginator.page_range %}
-                                {% if page_obj.number == num %}
-                                    <li class="page-item active">
-                                        <span class="page-link">{{ num }}</span>
-                                    </li>
-                                {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
-                                    <li class="page-item">
-                                        <a class="page-link" 
-                                           href="?model={{ request.GET.model }}&page={{ num }}">{{ num }}</a>
-                                    </li>
-                                {% endif %}
-                            {% endfor %}
-
-                            {% if page_obj.has_next %}
-                                <li class="page-item">
-                                    <a class="page-link" 
-                                       href="?model={{ request.GET.model }}&page={{ page_obj.next_page_number }}">Next</a>
-                                </li>
-                                <li class="page-item">
-                                    <a class="page-link" 
-                                       href="?model={{ request.GET.model }}&page={{ page_obj.paginator.num_pages }}">Last &raquo;</a>
-                                </li>
-                            {% endif %}
-                        </ul>
-                    </nav>
-                {% endif %}
+    <div class="container-fluid">
+        {# Navbar with model names #}
+        <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
+            <div class="container-fluid">
+                <ul class="navbar-nav">
+                    {% for model in models %}
+                        <li class="nav-item">
+                            <a class="nav-link {% if selected_model == model.name %}active{% endif %}" 
+                               href="?model={{ model.model_name }}">
+                                {{ model.name }}
+                            </a>
+                        </li>
+                    {% endfor %}
+                </ul>
             </div>
+        </nav>
+
+        {% if selected_model %}  {# Only show search when a model is selected #}
+            {# Search Form #}
+            <div class="container mb-4">
+                <div class="row">
+                    <div class="col">
+                        <form class="row g-3" hx-get="{% url 'metadata:model_browser' %}" 
+                              hx-trigger="change, search" 
+                              hx-target="#results-container"
+                              hx-push-url="true"
+                              hx-indicator="#search-indicator">
+                            <div class="col-md-4">
+                                <select name="search_field" class="form-select">
+                                    <option value="">Select field to search...</option>
+                                    {% for field in fields %}
+                                        <option value="{{ field }}" 
+                                                {% if search_field == field %}selected{% endif %}>
+                                            {{ field|title }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <input type="search" 
+                                       name="search_query" 
+                                       class="form-control" 
+                                       placeholder="Search..."
+                                       value="{{ search_query }}"
+                                       hx-trigger="keyup changed delay:500ms">
+                                <input type="hidden" name="model" value="{{ request.GET.model }}">
+                            </div>
+                            <div class="col-md-2">
+                                <div id="search-indicator" class="htmx-indicator spinner-border" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+
+        {# Results Container #}
+        <div id="results-container">
+            {% include 'model_browser_results.html' %}
         </div>
-    {% endif %}
-{% endblock %}
+    </div>
+{% endblock content %}
