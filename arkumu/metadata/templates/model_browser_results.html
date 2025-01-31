@@ -28,8 +28,13 @@
                             {% for object in objects %}
                                 <tr>
                                     {% for field in fields %}
-                                        {# get_attribute is a custom filter that safely retrieves field values from the object #}
-                                        <td>{{ object|get_attribute:field }}</td>
+                                        <td>
+                                            {% if search_query and field == search_field %}
+                                                {{ object|get_attribute:field|highlight_search:search_query|safe }}
+                                            {% else %}
+                                                {{ object|get_attribute:field }}
+                                            {% endif %}
+                                        </td>
                                     {% endfor %}
                                 </tr>
                             {% endfor %}
