@@ -1,4 +1,3 @@
-
 {% load static i18n %}<!DOCTYPE html>
 {% get_current_language as LANGUAGE_CODE %}
 <html lang="{{ LANGUAGE_CODE }}">
@@ -72,7 +71,7 @@
         </button>
         <a class="navbar-brand" href="{% url 'home' %}">arkumu</a>
         <div class="collapse navbar-collapse" id="navbarSupportedContent">
-          <ul class="navbar-nav mr-auto">
+          <ul class="navbar-nav me-auto">
             <li class="nav-item active">
               <a class="nav-link" href="{% url 'home' %}">Home <span class="visually-hidden">(current)</span></a>
             </li>
@@ -101,11 +100,62 @@
               </li>
             {% endif %}
           </ul>
+
+          <!-- Language selector in separate right-aligned ul -->
+          <ul class="navbar-nav ms-auto">
+            <li class="nav-item">
+              {% get_current_language as LANGUAGE_CODE %}
+              <div class="btn-group">
+                <form action="{% url 'set_language' %}" method="post" class="d-inline">
+                  {% csrf_token %}
+                  <input type="hidden" name="next" value="{{ request.path }}">
+                  <input type="hidden" name="language" value="en">
+                  <button type="submit" class="btn btn-sm {% if LANGUAGE_CODE == 'en' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+                    EN
+                  </button>
+                </form>
+                <form action="{% url 'set_language' %}" method="post" class="d-inline">
+                  {% csrf_token %}
+                  <input type="hidden" name="next" value="{{ request.path }}">
+                  <input type="hidden" name="language" value="de">
+                  <button type="submit" class="btn btn-sm {% if LANGUAGE_CODE == 'de' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+                    DE
+                  </button>
+                </form>
+              </div>
+            </li>
+          </ul>
         </div>
       </div>
     </nav>
   </div>
-  <div class="container">
+
+  <!-- Secondary navbar -->
+  <div class="mb-3">
+    <nav class="navbar navbar-expand-md navbar-light bg-light border-bottom">
+      <div class="container-fluid">
+        <button class="navbar-toggler"
+                type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#secondaryNavbar"
+                aria-controls="secondaryNavbar"
+                aria-expanded="false"
+                aria-label="Toggle navigation">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="secondaryNavbar">
+          <ul class="navbar-nav me-auto">
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'metadata:model_browser' %}">Metadata</a>
+            </li>
+
+          </ul>
+        </div>
+      </div>
+    </nav>
+  </div>
+
+  <div class="container-fluid">
     {% if messages %}
       {% for message in messages %}
         <div class="alert alert-dismissible {% if message.tags %}alert-{{ message.tags }}{% endif %}">
