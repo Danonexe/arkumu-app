@@ -44,11 +44,11 @@
                             {# First and Previous page links #}
                             {% if page_obj.has_previous %}
                                 <li class="page-item">
-                                    <a class="page-link" 
+                                    <a class="page-link text-secondary border-secondary" 
                                        href="?model={{ request.GET.model }}&page=1">&laquo; First</a>
                                 </li>
                                 <li class="page-item">
-                                    <a class="page-link" 
+                                    <a class="page-link text-secondary border-secondary" 
                                        href="?model={{ request.GET.model }}&page={{ page_obj.previous_page_number }}">Previous</a>
                                 </li>
                             {% endif %}
@@ -57,11 +57,11 @@
                             {% for num in page_obj.paginator.page_range %}
                                 {% if page_obj.number == num %}
                                     <li class="page-item active">
-                                        <span class="page-link">{{ num }}</span>
+                                        <span class="page-link bg-secondary border-secondary">{{ num }}</span>
                                     </li>
                                 {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
                                     <li class="page-item">
-                                        <a class="page-link" 
+                                        <a class="page-link text-secondary border-secondary" 
                                            href="?model={{ request.GET.model }}&page={{ num }}">{{ num }}</a>
                                     </li>
                                 {% endif %}
@@ -70,11 +70,11 @@
                             {# Next and Last page links #}
                             {% if page_obj.has_next %}
                                 <li class="page-item">
-                                    <a class="page-link" 
+                                    <a class="page-link text-secondary border-secondary" 
                                        href="?model={{ request.GET.model }}&page={{ page_obj.next_page_number }}">Next</a>
                                 </li>
                                 <li class="page-item">
-                                    <a class="page-link" 
+                                    <a class="page-link text-secondary border-secondary" 
                                        href="?model={{ request.GET.model }}&page={{ page_obj.paginator.num_pages }}">Last &raquo;</a>
                                 </li>
                             {% endif %}

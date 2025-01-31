@@ -145,8 +145,13 @@
         </button>
         <div class="collapse navbar-collapse" id="secondaryNavbar">
           <ul class="navbar-nav me-auto">
+            <!-- Link to metadata model browser -->
             <li class="nav-item">
               <a class="nav-link" href="{% url 'metadata:model_browser' %}">Metadata</a>
+            </li>
+            <!-- Link to metadata administration -->
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'metadata:administration' %}">Administration</a>
             </li>
 
           </ul>
@@ -168,9 +173,31 @@
       {% endfor %}
     {% endif %}
     {% block main %}
-      {% block content %}
-        <p>Use this document as a way to quick start any new project.</p>
-      {% endblock content %}
+      {% block container_type %}
+      <div class="container">
+      {% endblock container_type %}
+        
+        {% block content %}
+          <h1>{% translate "arkumu_title" %}</h1>
+
+          <div class="about-section">
+            <p>{% translate "arkumu_intro" %}</p>
+    
+            <h2>{% translate "arkumu_core_tasks_heading" %}</h2>
+            <ul>
+              <li>{% translate "arkumu_task_1" %}</li>
+              <li>{% translate "arkumu_task_2" %}</li>
+              <li>{% translate "arkumu_task_3" %}</li>
+              <li>{% translate "arkumu_task_4" %}</li>
+            </ul>
+    
+            <p>{% translate "arkumu_consortium" %}</p>
+          </div>
+        {% endblock content %}
+        
+      {% block container_type_end %}
+      </div>
+      {% endblock container_type_end %}
     {% endblock main %}
 
   </div>

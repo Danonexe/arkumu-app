@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-01-31 10:30+0000\n"
+"POT-Creation-Date: 2025-01-31 13:56+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,22 +17,55 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
 #: arkumu/templates/allauth/layouts/entrance.html:8
-#: arkumu/templates/base.html:100
+#: arkumu/templates/base.html:99
 msgid "Sign In"
 msgstr "Anmelden"
 
-#: arkumu/templates/base.html:85
+#: arkumu/templates/base.html:84
 msgid "My Profile"
 msgstr "Mein Profil"
 
-#: arkumu/templates/base.html:89
+#: arkumu/templates/base.html:88
 msgid "Sign Out"
 msgstr "Abmelden"
 
-#: arkumu/templates/base.html:95
+#: arkumu/templates/base.html:94
 msgid "Sign Up"
 msgstr "Registrieren"
+
+#: arkumu/templates/base.html:164
+msgid "arkumu_title"
+msgstr "arkumu.nrw - Archive der Kunst- und Musikhochschulen"
+
+#: arkumu/templates/base.html:167
+msgid "arkumu_intro"
+msgstr "Die Kunst- und Musikhochschulen des Landes Nordrhein-Westfalen verfügen über beeindruckende Bestände (retro-)digitaler künstlerischer Inhalte. Diese sind neben ihrem kulturellen Wert auch als Ausgangsdaten für weiterführende Lehre und Forschung von Bedeutung. Das Ziel des arkumu.nrw Projekts ist die qualitativ hochwertige Erschließung, Verfügbarhaltung und dauerhafte Archivierung dieser multimedialen Inhalte."
+
+#: arkumu/templates/base.html:169
+msgid "arkumu_core_tasks_heading"
+msgstr "Kernaufgaben bei der Umsetzung sind dabei:"
+
+#: arkumu/templates/base.html:171
+msgid "arkumu_task_1"
+msgstr "Überführung der Daten in die Langzeitsverfügbarkeits-Speicherstrukturen des Landes"
+
+#: arkumu/templates/base.html:172
+msgid "arkumu_task_2"
+msgstr "Standardisierung der fachgerechten Verzeichnung und Speicherung gemäß bibliothekarischer, archivarischer, technischer und medienästhetisch-künstlerischer Maßstäbe"
+
+#: arkumu/templates/base.html:173
+msgid "arkumu_task_3"
+msgstr "Schaffung einer benutzerfreundlichen Web-Oberfläche für die künstlerische, wissenschaftliche und öffentliche Nutzung"
+
+#: arkumu/templates/base.html:174
+msgid "arkumu_task_4"
+msgstr "Multimedial erfahrbare Dokumentation des exzellenten Niveaus von Kultur und Wissenschaft in NRW"
+
+#: arkumu/templates/base.html:177
+msgid "arkumu_consortium"
+msgstr "arkumu.nrw ist ein Konsortialprojekt der Folkwang Universität der Künste Essen, der Kunsthochschule für Medien Köln, der Hochschule für Musik und Tanz Köln und der Hochschule für Musik Detmold, und des IT Center der Universität zu Köln (ITCC), unter der Konsortialleitung der Robert Schumann Hochschule Düsseldorf, in Kooperation mit dem Hochschulbibliothekszentrum des Landes Nordrhein-Westfalen. Eine spätere Erweiterung des Konsortiums um andere interessierte Hochschulen oder Fachbereiche ist dabei ausdrücklich gewünscht."
 
 #: arkumu/users/admin.py:24
 msgid "Personal info"

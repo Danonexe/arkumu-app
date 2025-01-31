@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-01-31 10:31+0000\n"
+"POT-Creation-Date: 2025-01-31 13:56+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,22 +17,55 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
 #: arkumu/templates/allauth/layouts/entrance.html:8
-#: arkumu/templates/base.html:100
+#: arkumu/templates/base.html:99
 msgid "Sign In"
 msgstr ""
 
-#: arkumu/templates/base.html:85
+#: arkumu/templates/base.html:84
 msgid "My Profile"
 msgstr ""
 
-#: arkumu/templates/base.html:89
+#: arkumu/templates/base.html:88
 msgid "Sign Out"
 msgstr ""
 
-#: arkumu/templates/base.html:95
+#: arkumu/templates/base.html:94
 msgid "Sign Up"
 msgstr ""
+
+#: arkumu/templates/base.html:164
+msgid "arkumu_title"
+msgstr "arkumu.nrw - Archives of Art and Music Universities"
+
+#: arkumu/templates/base.html:167
+msgid "arkumu_intro"
+msgstr "The art and music universities in North Rhine-Westphalia possess impressive collections of (retro-)digital artistic content. Beyond their cultural value, these are also significant as source data for advanced teaching and research. The goal of the arkumu.nrw project is the high-quality development, availability, and permanent archiving of these multimedia contents."
+
+#: arkumu/templates/base.html:169
+msgid "arkumu_core_tasks_heading"
+msgstr "Core tasks in the implementation include:"
+
+#: arkumu/templates/base.html:171
+msgid "arkumu_task_1"
+msgstr "Transfer of data into the state's long-term availability storage structures"
+
+#: arkumu/templates/base.html:172
+msgid "arkumu_task_2"
+msgstr "Standardization of professional indexing and storage according to library, archival, technical, and media-aesthetic-artistic standards"
+
+#: arkumu/templates/base.html:173
+msgid "arkumu_task_3"
+msgstr "Creation of a user-friendly web interface for artistic, scientific, and public use"
+
+#: arkumu/templates/base.html:174
+msgid "arkumu_task_4"
+msgstr "Multimedia-experienceable documentation of the excellent level of culture and science in NRW"
+
+#: arkumu/templates/base.html:177
+msgid "arkumu_consortium"
+msgstr "arkumu.nrw is a consortium project of the Folkwang University of the Arts Essen, the Academy of Media Arts Cologne, the University of Music and Dance Cologne, and the Detmold University of Music, and the IT Center University of Cologne (ITCC), under the consortium leadership of the Robert Schumann University Düsseldorf, in cooperation with the North Rhine-Westphalian Library Service Centre. A future expansion of the consortium to include other interested universities or departments is explicitly desired."
 
 #: arkumu/users/admin.py:24
 msgid "Personal info"
