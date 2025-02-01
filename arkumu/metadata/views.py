@@ -3,6 +3,13 @@ from django.views.generic import ListView
 from django.apps import apps
 from arkumu.metadata.models import Projekt, Ereignis, Akteur, Ort, Sammlung, DigitalesObjekt, Informationstraeger, Hochschule, BestehenderLizenzvertrag, DigitalesObjektLizenz, Eigenschaft, EreignisTyp, Informationstraegertyp, Organisationseinheit, ProjektArt, ProjektKategorie, Rolle, Sprache
 from django.db.models import Q
+from django.core.cache import cache
+import logging
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
+
+# Set up logger
+logger = logging.getLogger(__name__)
 
 # Base class for model browsing views that provides common functionality
 class BaseModelBrowserView(ListView):
@@ -54,6 +61,7 @@ class BaseModelBrowserView(ListView):
         return context
 
 # View for browsing core metadata models
+@method_decorator(cache_page(60 * 15), name='dispatch')
 class MetadataModelBrowserView(BaseModelBrowserView):
     ALLOWED_MODELS = {
         'Projekt': Projekt,
@@ -67,7 +75,12 @@ class MetadataModelBrowserView(BaseModelBrowserView):
         'BestehenderLizenzvertrag': BestehenderLizenzvertrag,
     }
 
+    def dispatch(self, request, *args, **kwargs):
+        logger.info(f"MetadataModelBrowserView accessed - Cache key: {request.path}")
+        return super().dispatch(request, *args, **kwargs)
+
 # View for browsing administrative/lookup models
+@method_decorator(cache_page(60 * 15), name='dispatch')
 class AdministrationView(BaseModelBrowserView):
     ALLOWED_MODELS = {
         'BestehenderLizenzvertrag': BestehenderLizenzvertrag,
@@ -83,7 +96,12 @@ class AdministrationView(BaseModelBrowserView):
         'Sprache': Sprache,
     }
 
+    def dispatch(self, request, *args, **kwargs):
+        logger.info(f"AdministrationView accessed - Cache key: {request.path}")
+        return super().dispatch(request, *args, **kwargs)
+
 # Enhanced model browser with search functionality
+@method_decorator(cache_page(60 * 5), name='dispatch')  # Cache for 5 minutes
 class ModelBrowserView(BaseModelBrowserView):
     template_name = 'model_browser.html'
     paginate_by = 20
@@ -100,16 +118,30 @@ class ModelBrowserView(BaseModelBrowserView):
         search_field = self.request.GET.get('search_field')
         search_query = self.request.GET.get('search_query')
         
-        # Get base queryset for selected model
+        # Create a cache key based on the query parameters
+        cache_key = f'model_browser_{model_name}_{search_field}_{search_query}'
+        
+        # Log cache attempt
+        logger.info(f"Attempting to fetch from cache - Key: {cache_key}")
+        
+        # Try to get the queryset from cache
+        queryset = cache.get(cache_key)
+        if queryset is not None:
+            logger.info(f"Cache HIT for key: {cache_key}")
+            return queryset
+            
+        # If not in cache, generate the queryset
+        logger.info(f"Cache MISS for key: {cache_key}")
         if model_name and model_name in self.ALLOWED_MODELS:
             queryset = self.ALLOWED_MODELS[model_name].objects.all().order_by('id')
             
-            # Filter queryset based on search parameters if provided
             if search_field and search_query:
-                # Use case-insensitive contains lookup
                 lookup = f"{search_field}__icontains"
                 queryset = queryset.filter(**{lookup: search_query})
                 
+            # Cache the queryset for 5 minutes
+            cache.set(cache_key, queryset, 300)
+            logger.info(f"Cached new queryset for key: {cache_key}")
             return queryset
         return []
     
