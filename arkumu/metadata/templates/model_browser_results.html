@@ -1,11 +1,11 @@
-{# This template displays the results table for the selected model #}
+<!-- This template displays the results table for the selected model -->
 {% load custom_filters %}
 
 <div id="results-container">
     {% if objects %}
         <div class="row">
             <div class="col">
-                {# Display model name and search status #}
+                <!-- Display model name and search status -->
                 <h2 class="mb-4">
                     {{ selected_model }} Data 
                     {% if search_query %}
@@ -15,7 +15,7 @@
                 </h2>
                 <div class="table-responsive">
                     <table class="table table-striped w-100">
-                        {# Generate table headers from model fields #}
+                        <!-- Generate table headers from model fields -->
                         <thead>
                             <tr>
                                 {% for field in fields %}
@@ -23,7 +23,7 @@
                                 {% endfor %}
                             </tr>
                         </thead>
-                        {# Display all records (or filtered records if search is active) #}
+                        <!-- Display all records (or filtered records if search is active) -->
                         <tbody>
                             {% for object in objects %}
                                 <tr>
@@ -42,11 +42,11 @@
                     </table>
                 </div>
 
-                {# Pagination controls - only shown if there are multiple pages #}
+                <!-- Pagination controls - only shown if there are multiple pages -->
                 {% if is_paginated %}
                     <nav aria-label="Page navigation">
                         <ul class="pagination justify-content-center">
-                            {# First and Previous page links #}
+                            <!-- First and Previous page links -->
                             {% if page_obj.has_previous %}
                                 <li class="page-item">
                                     <a class="page-link text-secondary border-secondary" 
@@ -58,7 +58,7 @@
                                 </li>
                             {% endif %}
 
-                            {# Page numbers - shows current page and 2 pages before/after #}
+                            <!-- Page numbers - shows current page and 2 pages before/after -->
                             {% for num in page_obj.paginator.page_range %}
                                 {% if page_obj.number == num %}
                                     <li class="page-item active">
@@ -72,7 +72,7 @@
                                 {% endif %}
                             {% endfor %}
 
-                            {# Next and Last page links #}
+                            <!-- Next and Last page links -->
                             {% if page_obj.has_next %}
                                 <li class="page-item">
                                     <a class="page-link text-secondary border-secondary" 

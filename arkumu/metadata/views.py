@@ -7,9 +7,21 @@ from django.core.cache import cache
 import logging
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
+import os
 
 # Set up logger
 logger = logging.getLogger(__name__)
+
+
+# Replace the existing cache decorators with:
+def conditional_cache(timeout):
+    def decorator(view_func):
+        if os.environ.get('DISABLE_CACHE'):
+            logger.info("🚫 Cache is DISABLED via DISABLE_CACHE environment variable")
+            return view_func
+        logger.info("✅ Cache is ENABLED with timeout: %d seconds", timeout)
+        return cache_page(timeout)(view_func)
+    return decorator
 
 # Base class for model browsing views that provides common functionality
 class BaseModelBrowserView(ListView):
@@ -60,8 +72,10 @@ class BaseModelBrowserView(ListView):
         
         return context
 
+
+
 # View for browsing core metadata models
-@method_decorator(cache_page(60 * 15), name='dispatch')
+@method_decorator(conditional_cache(60 * 15), name='dispatch')
 class MetadataModelBrowserView(BaseModelBrowserView):
     ALLOWED_MODELS = {
         'Projekt': Projekt,
@@ -80,7 +94,7 @@ class MetadataModelBrowserView(BaseModelBrowserView):
         return super().dispatch(request, *args, **kwargs)
 
 # View for browsing administrative/lookup models
-@method_decorator(cache_page(60 * 15), name='dispatch')
+@method_decorator(conditional_cache(60 * 15), name='dispatch')
 class AdministrationView(BaseModelBrowserView):
     ALLOWED_MODELS = {
         'BestehenderLizenzvertrag': BestehenderLizenzvertrag,
@@ -101,7 +115,7 @@ class AdministrationView(BaseModelBrowserView):
         return super().dispatch(request, *args, **kwargs)
 
 # Enhanced model browser with search functionality
-@method_decorator(cache_page(60 * 5), name='dispatch')  # Cache for 5 minutes
+@method_decorator(conditional_cache(60 * 5), name='dispatch')  # Cache for 5 minutes
 class ModelBrowserView(BaseModelBrowserView):
     template_name = 'model_browser.html'
     paginate_by = 20

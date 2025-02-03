@@ -20,6 +20,8 @@ services:
     ports:
       - '8000:8000'
     command: /start
+    environment:
+      - DISABLE_CACHE=1
 
   postgres:
     build:
