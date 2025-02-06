@@ -83,6 +83,7 @@ THIRD_PARTY_APPS = [
     "rest_framework.authtoken",
     "corsheaders",
     "drf_spectacular",
+    "modeltranslation",
 ]
 
 LOCAL_APPS = [
@@ -146,6 +147,8 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "allauth.account.middleware.AccountMiddleware",
+    # user tracking middleware
+    "arkumu.metadata.middleware.middleware.CurrentUserMiddleware",
 ]
 
 # STATIC

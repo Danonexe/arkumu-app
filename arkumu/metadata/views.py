@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from django.views.generic import ListView
 from django.apps import apps
-from arkumu.metadata.models import Projekt, Ereignis, Akteur, Ort, Sammlung, DigitalesObjekt, Informationstraeger, Hochschule, BestehenderLizenzvertrag, DigitalesObjektLizenz, Eigenschaft, EreignisTyp, Informationstraegertyp, Organisationseinheit, ProjektArt, ProjektKategorie, Rolle, Sprache
+from arkumu.metadata.models import Projekt, Ereignis, Akteur, Ort, Sammlung, DigitalesObjekt, Informationstraeger, Hochschule, BestehenderLizenzvertrag, DigitalesObjektLizenz, Eigenschaft, EreignisTyp, Informationstraegertyp, Organisationseinheit, ProjektArt, ProjektKategorie, Rolle, Sprache, User, UserDetail
 from django.db.models import Q
 from django.core.cache import cache
 import logging
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 # Replace the existing cache decorators with:
 def conditional_cache(timeout):
     def decorator(view_func):
-        if os.environ.get('DISABLE_CACHE'):
+        if os.environ.get('DISABLE_CACHE') == '1':
             logger.info("🚫 Cache is DISABLED via DISABLE_CACHE environment variable")
             return view_func
         logger.info("✅ Cache is ENABLED with timeout: %d seconds", timeout)
@@ -87,6 +87,8 @@ class MetadataModelBrowserView(BaseModelBrowserView):
         'Informationstraeger': Informationstraeger,
         'Hochschule': Hochschule,
         'BestehenderLizenzvertrag': BestehenderLizenzvertrag,
+        'User': User,
+        'UserDetail': UserDetail
     }
 
     def dispatch(self, request, *args, **kwargs):

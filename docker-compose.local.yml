@@ -21,7 +21,8 @@ services:
       - '8000:8000'
     command: /start
     environment:
-      - DISABLE_CACHE=1
+      # DISABLE_CACHE: 1 = cache disabled (no caching), 0 = cache enabled (with caching)
+      - DISABLE_CACHE=0
 
   postgres:
     build:

@@ -1,16 +1,11 @@
-# This is an auto-generated Django model module.
-# You'll have to do the following manually to clean this up:
-#   * Rearrange models' order
-#   * Make sure each model has one field with primary_key=True
-#   * Make sure each ForeignKey and OneToOneField has `on_delete` set to the desired behavior
-#   * Remove `managed = False` lines if you wish to allow Django to create, modify, and delete the table
-# Feel free to rename the models, but don't rename db_table values or field names.
 from django.db import models
+from django.conf import settings
+from django.utils.timezone import now
+from django.db import models
+from arkumu.metadata.models.base import UserTrackedModel
 
-
-class Akteur(models.Model):
+class Akteur(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
-    version = models.BigIntegerField()
     date_created = models.DateTimeField()
     name_de = models.CharField(max_length=255, blank=True, null=True)
     last_updated = models.DateTimeField()
@@ -57,29 +52,26 @@ class Akteur(models.Model):
     andere_normdaten = models.TextField(blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'akteur'
 
 
-class AkteurMitwirkungsRolle(models.Model):
+class AkteurMitwirkungsRolle(UserTrackedModel):
     akteur_berufe_taetigkeiten_id = models.BigIntegerField()
     mitwirkungs_rolle_id = models.BigIntegerField(blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'akteur_mitwirkungs_rolle'
 
 
-class AkteurOrt(models.Model):
+class AkteurOrt(UserTrackedModel):
     akteur_wirkungsorte = models.ForeignKey(Akteur, models.DO_NOTHING)
     ort = models.ForeignKey('Ort', models.DO_NOTHING, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'akteur_ort'
 
 
-class AkteurRelation(models.Model):
+class AkteurRelation(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
     art_der_relation = models.BigIntegerField()
     akteur1 = models.ForeignKey(Akteur, models.DO_NOTHING)
@@ -87,20 +79,18 @@ class AkteurRelation(models.Model):
     akteur_relationen_idx = models.BigIntegerField(blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'akteur_relation'
 
 
-class AkteurRolle(models.Model):
+class AkteurRolle(UserTrackedModel):
     akteur_berufe_taetigkeiten = models.ForeignKey(Akteur, models.DO_NOTHING)
     rolle = models.ForeignKey('Rolle', models.DO_NOTHING, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'akteur_rolle'
 
 
-class AuditLog(models.Model):
+class AuditLog(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
     persisted_object_id = models.CharField(max_length=255, blank=True, null=True)
     property_name = models.CharField(max_length=255, blank=True, null=True)
@@ -115,22 +105,18 @@ class AuditLog(models.Model):
     uri = models.CharField(max_length=255, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'audit_log'
 
 
-class Base64DecodedMultipartFile(models.Model):
+class Base64DecodedMultipartFile(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
-    version = models.BigIntegerField()
 
     class Meta:
-        managed = False
         db_table = 'base64decoded_multipart_file'
 
 
-class BestehenderLizenzvertrag(models.Model):
+class BestehenderLizenzvertrag(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
-    version = models.BigIntegerField()
     lizenz_status = models.CharField(max_length=255, blank=True, null=True)
     pdf = models.ForeignKey('FileUpload', models.DO_NOTHING, blank=True, null=True)
     vertrags_text_de = models.CharField(max_length=255, blank=True, null=True)
@@ -142,13 +128,11 @@ class BestehenderLizenzvertrag(models.Model):
     uri = models.CharField(max_length=255, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'bestehender_lizenzvertrag'
 
 
-class DataImporter(models.Model):
+class DataImporter(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
-    version = models.BigIntegerField()
     source_table = models.CharField(max_length=255)
     last_updated_by = models.CharField(max_length=255, blank=True, null=True)
     date_created = models.DateTimeField()
@@ -161,13 +145,11 @@ class DataImporter(models.Model):
     status = models.CharField(max_length=255, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'data_importer'
 
 
-class DigitalesObjekt(models.Model):
+class DigitalesObjekt(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
-    version = models.BigIntegerField()
     file = models.ForeignKey('FileUpload', models.DO_NOTHING)
     last_updated_by = models.CharField(max_length=255)
     date_created = models.DateTimeField()
@@ -218,13 +200,11 @@ class DigitalesObjekt(models.Model):
     last_modified = models.DateTimeField(blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'digitales_objekt'
 
 
-class DigitalesObjektLizenz(models.Model):
+class DigitalesObjektLizenz(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
-    version = models.BigIntegerField()
     anzeige_text_de = models.CharField(max_length=255, blank=True, null=True)
     rechtestatment = models.CharField(max_length=255)
     lizenz_text_en = models.TextField(blank=True, null=True)
@@ -235,22 +215,19 @@ class DigitalesObjektLizenz(models.Model):
     anzeige_text_en = models.CharField(max_length=255, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'digitales_objekt_lizenz'
 
 
-class DigitalesObjektSchlagwort(models.Model):
+class DigitalesObjektSchlagwort(UserTrackedModel):
     digitales_objekt_objekttypen = models.ForeignKey(DigitalesObjekt, models.DO_NOTHING)
     schlagwort = models.ForeignKey('Schlagwort', models.DO_NOTHING, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'digitales_objekt_schlagwort'
 
 
-class Eigenschaft(models.Model):
+class Eigenschaft(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
-    version = models.BigIntegerField()
     name_en = models.CharField(max_length=255, blank=True, null=True)
     name_de = models.CharField(max_length=255, blank=True, null=True)
     gndid = models.CharField(max_length=255, blank=True, null=True)
@@ -260,13 +237,11 @@ class Eigenschaft(models.Model):
     type = models.BigIntegerField(blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'eigenschaft'
 
 
-class EquipmentSoftware(models.Model):
+class EquipmentSoftware(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
-    version = models.BigIntegerField()
     beschreibung_en = models.CharField(max_length=255, blank=True, null=True)
     last_updated_by = models.CharField(max_length=255, blank=True, null=True)
     date_created = models.DateTimeField()
@@ -281,13 +256,11 @@ class EquipmentSoftware(models.Model):
     wikidataid = models.CharField(max_length=255, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'equipment_software'
 
 
-class Equipmentart(models.Model):
+class Equipmentart(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
-    version = models.BigIntegerField()
     last_updated_by = models.CharField(max_length=255, blank=True, null=True)
     date_created = models.DateTimeField()
     aatid = models.CharField(max_length=255, blank=True, null=True)
@@ -299,13 +272,11 @@ class Equipmentart(models.Model):
     name_de = models.CharField(max_length=255)
 
     class Meta:
-        managed = False
         db_table = 'equipmentart'
 
 
-class Ereignis(models.Model):
+class Ereignis(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
-    version = models.BigIntegerField()
     normdatei = models.CharField(max_length=255, blank=True, null=True)
     stimmung_in_hertz = models.CharField(max_length=255, blank=True, null=True)
     date_created = models.DateTimeField()
@@ -328,22 +299,19 @@ class Ereignis(models.Model):
     kommentar_en = models.TextField(blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'ereignis'
 
 
-class EreignisAkteur(models.Model):
+class EreignisAkteur(UserTrackedModel):
     ereignis_akteure = models.ForeignKey(Ereignis, models.DO_NOTHING)
     akteur = models.ForeignKey(Akteur, models.DO_NOTHING, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'ereignis_akteur'
 
 
-class EreignisBeschreibung(models.Model):
+class EreignisBeschreibung(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
-    version = models.BigIntegerField()
     ereignis = models.ForeignKey(Ereignis, models.DO_NOTHING)
     last_updated_by = models.CharField(max_length=255, blank=True, null=True)
     date_created = models.DateTimeField()
@@ -354,69 +322,61 @@ class EreignisBeschreibung(models.Model):
     created_by = models.CharField(max_length=255, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'ereignis_beschreibung'
 
 
-class EreignisDigitalesObjekt(models.Model):
+class EreignisDigitalesObjekt(UserTrackedModel):
     ereignis_digitale_objekte = models.ForeignKey(Ereignis, models.DO_NOTHING)
     digitales_objekt = models.ForeignKey(DigitalesObjekt, models.DO_NOTHING, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'ereignis_digitales_objekt'
 
 
-class EreignisEigenschaftswert(models.Model):
+class EreignisEigenschaftswert(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
-    version = models.BigIntegerField()
     ereignis = models.ForeignKey(Ereignis, models.DO_NOTHING)
     eigenschaft = models.ForeignKey(Eigenschaft, models.DO_NOTHING)
     wert = models.CharField(max_length=255)
     ereignis_eigenschaften_idx = models.BigIntegerField(blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'ereignis_eigenschaftswert'
 
 
-class EreignisEquipmentSoftware(models.Model):
+class EreignisEquipmentSoftware(UserTrackedModel):
     ereignis_equipment_software = models.ForeignKey(Ereignis, models.DO_NOTHING)
     equipment_software = models.ForeignKey(EquipmentSoftware, models.DO_NOTHING, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'ereignis_equipment_software'
 
 
-class EreignisInformationstraeger(models.Model):
+class EreignisInformationstraeger(UserTrackedModel):
     ereignis_informationstraeger = models.ForeignKey(Ereignis, models.DO_NOTHING)
     informationstraeger = models.ForeignKey('Informationstraeger', models.DO_NOTHING, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'ereignis_informationstraeger'
 
 
-class EreignisOrt(models.Model):
+class EreignisOrt(UserTrackedModel):
     ereignis_orte = models.ForeignKey(Ereignis, models.DO_NOTHING)
     ort = models.ForeignKey('Ort', models.DO_NOTHING, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'ereignis_ort'
 
 
-class EreignisPhysischesObjekt(models.Model):
+class EreignisPhysischesObjekt(UserTrackedModel):
     physisches_objekt = models.ForeignKey('PhysischesObjekt', models.DO_NOTHING, blank=True, null=True)
     ereignis_physische_objekte_id = models.BigIntegerField()
 
     class Meta:
-        managed = False
         db_table = 'ereignis_physisches_objekt'
 
 
-class EreignisRelation(models.Model):
+class EreignisRelation(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
     art_der_relation = models.BigIntegerField()
     ereignis2 = models.ForeignKey(Ereignis, models.DO_NOTHING)
@@ -424,11 +384,10 @@ class EreignisRelation(models.Model):
     ereignis_relationen_idx = models.BigIntegerField(blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'ereignis_relation'
 
 
-class EreignisRolle(models.Model):
+class EreignisRolle(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
     ereignis = models.ForeignKey(Ereignis, models.DO_NOTHING)
     urheber = models.BooleanField(blank=True, null=True)
@@ -441,16 +400,13 @@ class EreignisRolle(models.Model):
     ungesicherte_zuschreibung = models.BooleanField(blank=True, null=True)
     last_updated = models.DateTimeField(blank=True, null=True)
     created_by = models.CharField(max_length=255, blank=True, null=True)
-    version = models.BigIntegerField()
 
     class Meta:
-        managed = False
         db_table = 'ereignis_rolle'
 
 
-class EreignisTyp(models.Model):
+class EreignisTyp(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
-    version = models.BigIntegerField()
     date_created = models.DateTimeField()
     last_updated = models.DateTimeField()
     name_en = models.CharField(max_length=255, blank=True, null=True)
@@ -463,22 +419,19 @@ class EreignisTyp(models.Model):
     wikidataid = models.CharField(max_length=255)
 
     class Meta:
-        managed = False
         db_table = 'ereignis_typ'
 
 
-class EreignisTypSynonyme(models.Model):
+class EreignisTypSynonyme(UserTrackedModel):
     ereignis_typ_id = models.BigIntegerField()
     synonyme_string = models.CharField(max_length=255, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'ereignis_typ_synonyme'
 
 
-class FileUpload(models.Model):
+class FileUpload(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
-    version = models.BigIntegerField()
     file_uri = models.CharField(max_length=255)
     original_file_name = models.CharField(max_length=255)
     file_size = models.BigIntegerField()
@@ -489,13 +442,11 @@ class FileUpload(models.Model):
     associated_entity = models.CharField(max_length=255)
 
     class Meta:
-        managed = False
         db_table = 'file_upload'
 
 
-class Hochschule(models.Model):
+class Hochschule(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
-    version = models.BigIntegerField()
     date_created = models.DateTimeField()
     last_updated = models.DateTimeField()
     signatur = models.CharField(max_length=255)
@@ -505,13 +456,11 @@ class Hochschule(models.Model):
     wikidataid = models.CharField(max_length=255, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'hochschule'
 
 
-class Informationstraeger(models.Model):
+class Informationstraeger(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
-    version = models.BigIntegerField()
     beschreibung_en = models.CharField(max_length=255, blank=True, null=True)
     kompilationstitel = models.CharField(max_length=255, blank=True, null=True)
     last_updated_by = models.CharField(max_length=255, blank=True, null=True)
@@ -541,100 +490,88 @@ class Informationstraeger(models.Model):
     pbcore_link = models.CharField(max_length=255, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'informationstraeger'
 
 
-class InformationstraegerAkteur(models.Model):
+class InformationstraegerAkteur(UserTrackedModel):
     informationstraeger_besitzer = models.ForeignKey(Informationstraeger, models.DO_NOTHING)
     akteur = models.ForeignKey(Akteur, models.DO_NOTHING, blank=True, null=True)
     informationstraeger_eigentuemer = models.ForeignKey(Informationstraeger, models.DO_NOTHING, related_name='informationstraegerakteur_informationstraeger_eigentuemer_set')
 
     class Meta:
-        managed = False
         db_table = 'informationstraeger_akteur'
 
 
-class InformationstraegerBesitzer(models.Model):
+class InformationstraegerBesitzer(UserTrackedModel):
     informationstraeger_besitzer = models.ForeignKey(Informationstraeger, models.DO_NOTHING)
     akteur = models.ForeignKey(Akteur, models.DO_NOTHING, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'informationstraeger_besitzer'
 
 
-class InformationstraegerEigenschaftswert(models.Model):
+class InformationstraegerEigenschaftswert(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
-    version = models.BigIntegerField()
     eigenschaft = models.ForeignKey(Eigenschaft, models.DO_NOTHING)
     wert = models.CharField(max_length=255)
     informationstraeger = models.ForeignKey(Informationstraeger, models.DO_NOTHING)
 
     class Meta:
-        managed = False
         db_table = 'informationstraeger_eigenschaftswert'
 
 
-class InformationstraegerEigentuemer(models.Model):
+class InformationstraegerEigentuemer(UserTrackedModel):
     informationstraeger_eigentuemer = models.ForeignKey(Informationstraeger, models.DO_NOTHING)
     akteur = models.ForeignKey(Akteur, models.DO_NOTHING, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'informationstraeger_eigentuemer'
 
 
-class InformationstraegerOriginalsprachen(models.Model):
+class InformationstraegerOriginalsprachen(UserTrackedModel):
     informationstraeger_originalsprachen = models.ForeignKey(Informationstraeger, models.DO_NOTHING)
     sprache = models.ForeignKey('Sprache', models.DO_NOTHING, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'informationstraeger_originalsprachen'
 
 
-class InformationstraegerSchlagwort(models.Model):
+class InformationstraegerSchlagwort(UserTrackedModel):
     schlagwort = models.ForeignKey('Schlagwort', models.DO_NOTHING, blank=True, null=True)
     informationstraeger_materialschlagwort = models.ForeignKey(Informationstraeger, models.DO_NOTHING)
 
     class Meta:
-        managed = False
         db_table = 'informationstraeger_schlagwort'
 
 
-class InformationstraegerSprache(models.Model):
+class InformationstraegerSprache(UserTrackedModel):
     informationstraeger_untertitelsprachen = models.ForeignKey(Informationstraeger, models.DO_NOTHING)
     sprache = models.ForeignKey('Sprache', models.DO_NOTHING, blank=True, null=True)
     informationstraeger_originalsprachen = models.ForeignKey(Informationstraeger, models.DO_NOTHING, related_name='informationstraegersprache_informationstraeger_originalsprachen_set')
     informationstraeger_sprachfassungen = models.ForeignKey(Informationstraeger, models.DO_NOTHING, related_name='informationstraegersprache_informationstraeger_sprachfassungen_set')
 
     class Meta:
-        managed = False
         db_table = 'informationstraeger_sprache'
 
 
-class InformationstraegerSprachfassungen(models.Model):
+class InformationstraegerSprachfassungen(UserTrackedModel):
     informationstraeger_sprachfassungen = models.ForeignKey(Informationstraeger, models.DO_NOTHING)
     sprache = models.ForeignKey('Sprache', models.DO_NOTHING, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'informationstraeger_sprachfassungen'
 
 
-class InformationstraegerUntertitelsprachen(models.Model):
+class InformationstraegerUntertitelsprachen(UserTrackedModel):
     informationstraeger_untertitelsprachen = models.ForeignKey(Informationstraeger, models.DO_NOTHING)
     sprache = models.ForeignKey('Sprache', models.DO_NOTHING, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'informationstraeger_untertitelsprachen'
 
 
-class Informationstraegereigenschaft(models.Model):
+class Informationstraegereigenschaft(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
-    version = models.BigIntegerField()
     last_updated_by = models.CharField(max_length=255, blank=True, null=True)
     date_created = models.DateTimeField()
     last_updated = models.DateTimeField()
@@ -644,13 +581,11 @@ class Informationstraegereigenschaft(models.Model):
     name_de = models.CharField(max_length=255)
 
     class Meta:
-        managed = False
         db_table = 'informationstraegereigenschaft'
 
 
-class Informationstraegertyp(models.Model):
+class Informationstraegertyp(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
-    version = models.BigIntegerField()
     last_updated_by = models.CharField(max_length=255, blank=True, null=True)
     date_created = models.DateTimeField()
     aatid = models.CharField(max_length=255, blank=True, null=True)
@@ -664,22 +599,19 @@ class Informationstraegertyp(models.Model):
     pbcore_link = models.CharField(max_length=255, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'informationstraegertyp'
 
 
-class InformationstraegertypSynonyme(models.Model):
+class InformationstraegertypSynonyme(UserTrackedModel):
     informationstraegertyp = models.ForeignKey(Informationstraegertyp, models.DO_NOTHING)
     synonyme_string = models.CharField(max_length=255, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'informationstraegertyp_synonyme'
 
 
-class Inhaltswarnung(models.Model):
+class Inhaltswarnung(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
-    version = models.BigIntegerField()
     last_updated_by = models.CharField(max_length=255, blank=True, null=True)
     date_created = models.DateTimeField()
     last_updated = models.DateTimeField()
@@ -688,13 +620,11 @@ class Inhaltswarnung(models.Model):
     created_by = models.CharField(max_length=255, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'inhaltswarnung'
 
 
-class Materialschlagwort(models.Model):
+class Materialschlagwort(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
-    version = models.BigIntegerField()
     date_created = models.DateTimeField()
     last_updated = models.DateTimeField()
     wikidata_item = models.CharField(unique=True, max_length=255)
@@ -705,31 +635,27 @@ class Materialschlagwort(models.Model):
     gndid = models.CharField(max_length=255, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'materialschlagwort'
 
 
-class MaterialschlagwortSynonymDe(models.Model):
+class MaterialschlagwortSynonymDe(UserTrackedModel):
     materialschlagwort = models.ForeignKey(Materialschlagwort, models.DO_NOTHING)
     synonym_de_string = models.CharField(max_length=255, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'materialschlagwort_synonym_de'
 
 
-class MaterialschlagwortSynonymEn(models.Model):
+class MaterialschlagwortSynonymEn(UserTrackedModel):
     materialschlagwort = models.ForeignKey(Materialschlagwort, models.DO_NOTHING)
     synonym_en_string = models.CharField(max_length=255, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'materialschlagwort_synonym_en'
 
 
-class Nummernart(models.Model):
+class Nummernart(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
-    version = models.BigIntegerField()
     last_updated_by = models.CharField(max_length=255, blank=True, null=True)
     date_created = models.DateTimeField()
     last_updated = models.DateTimeField()
@@ -740,13 +666,11 @@ class Nummernart(models.Model):
     name_de = models.CharField(max_length=255)
 
     class Meta:
-        managed = False
         db_table = 'nummernart'
 
 
-class Organisationseinheit(models.Model):
+class Organisationseinheit(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
-    version = models.BigIntegerField()
     beschreibung_en = models.TextField(blank=True, null=True)
     beschreibung_de = models.TextField(blank=True, null=True)
     name_en = models.CharField(max_length=255)
@@ -754,13 +678,11 @@ class Organisationseinheit(models.Model):
     hochschule = models.ForeignKey(Hochschule, models.DO_NOTHING)
 
     class Meta:
-        managed = False
         db_table = 'organisationseinheit'
 
 
-class Ort(models.Model):
+class Ort(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
-    version = models.BigIntegerField()
     date_created = models.DateTimeField()
     last_updated = models.DateTimeField()
     last_updated_by = models.CharField(max_length=255, blank=True, null=True)
@@ -776,13 +698,11 @@ class Ort(models.Model):
     longitude = models.CharField(max_length=255)
 
     class Meta:
-        managed = False
         db_table = 'ort'
 
 
-class PhysischesObjekt(models.Model):
+class PhysischesObjekt(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
-    version = models.BigIntegerField()
     name_de = models.CharField(max_length=255, blank=True, null=True)
     name_en = models.CharField(max_length=255, blank=True, null=True)
     externe_inventar_signaturnummern = models.CharField(max_length=255, blank=True, null=True)
@@ -805,77 +725,68 @@ class PhysischesObjekt(models.Model):
     last_updated = models.DateTimeField()
 
     class Meta:
-        managed = False
         db_table = 'physisches_objekt'
 
 
-class PhysischesObjektAkteur(models.Model):
+class PhysischesObjektAkteur(UserTrackedModel):
     physisches_objekt_besitzer = models.ForeignKey(PhysischesObjekt, models.DO_NOTHING)
     akteur = models.ForeignKey(Akteur, models.DO_NOTHING, blank=True, null=True)
     physisches_objekt_eigentuemer = models.ForeignKey(PhysischesObjekt, models.DO_NOTHING, related_name='physischesobjektakteur_physisches_objekt_eigentuemer_set')
 
     class Meta:
-        managed = False
         db_table = 'physisches_objekt_akteur'
 
 
-class PhysischesObjektBesitzer(models.Model):
+class PhysischesObjektBesitzer(UserTrackedModel):
     physisches_objekt_besitzer = models.ForeignKey(PhysischesObjekt, models.DO_NOTHING)
     akteur = models.ForeignKey(Akteur, models.DO_NOTHING, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'physisches_objekt_besitzer'
 
 
-class PhysischesObjektEigentuemer(models.Model):
+class PhysischesObjektEigentuemer(UserTrackedModel):
     physisches_objekt_eigentuemer = models.ForeignKey(PhysischesObjekt, models.DO_NOTHING)
     akteur = models.ForeignKey(Akteur, models.DO_NOTHING, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'physisches_objekt_eigentuemer'
 
 
-class PhysischesObjektMaterialschlagworte(models.Model):
+class PhysischesObjektMaterialschlagworte(UserTrackedModel):
     physisches_objekt_materialschlagworte = models.ForeignKey(PhysischesObjekt, models.DO_NOTHING)
     schlagwort = models.ForeignKey('Schlagwort', models.DO_NOTHING, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'physisches_objekt_materialschlagworte'
 
 
-class PhysischesObjektProduktId(models.Model):
+class PhysischesObjektProduktId(UserTrackedModel):
     physisches_objekt_produkt_id = models.ForeignKey(PhysischesObjekt, models.DO_NOTHING)
     produkt_id = models.ForeignKey('ProduktId', models.DO_NOTHING, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'physisches_objekt_produkt_id'
 
 
-class PhysischesObjektSchlagworte(models.Model):
+class PhysischesObjektSchlagworte(UserTrackedModel):
     physisches_objekt_schlagworte = models.ForeignKey(PhysischesObjekt, models.DO_NOTHING)
     schlagwort = models.ForeignKey('Schlagwort', models.DO_NOTHING, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'physisches_objekt_schlagworte'
 
 
-class PhysischesObjektTechnikschlagworte(models.Model):
+class PhysischesObjektTechnikschlagworte(UserTrackedModel):
     physisches_objekt_technikschlagworte = models.ForeignKey(PhysischesObjekt, models.DO_NOTHING)
     schlagwort = models.ForeignKey('Schlagwort', models.DO_NOTHING, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'physisches_objekt_technikschlagworte'
 
 
-class ProduktId(models.Model):
+class ProduktId(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
-    version = models.BigIntegerField()
     last_updated_by = models.CharField(max_length=255, blank=True, null=True)
     date_created = models.DateTimeField()
     nummernart = models.ForeignKey(Nummernart, models.DO_NOTHING)
@@ -885,13 +796,11 @@ class ProduktId(models.Model):
     informationstraeger = models.ForeignKey(Informationstraeger, models.DO_NOTHING)
 
     class Meta:
-        managed = False
         db_table = 'produkt_id'
 
 
-class Projekt(models.Model):
+class Projekt(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
-    version = models.BigIntegerField()
     normdatei = models.TextField(blank=True, null=True)
     dateiabfrage_dokument = models.ForeignKey(FileUpload, models.DO_NOTHING, blank=True, null=True)
     last_updated_by = models.CharField(max_length=255, blank=True, null=True)
@@ -928,23 +837,20 @@ class Projekt(models.Model):
     gndid = models.CharField(max_length=255, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'projekt'
 
 
-class ProjektAngegebeneNutzungsrechte(models.Model):
+class ProjektAngegebeneNutzungsrechte(UserTrackedModel):
     projekt_id = models.BigIntegerField(blank=True, null=True)
     angegebene_nutzungsrechte = models.BigIntegerField(blank=True, null=True)
     angegebene_nutzungsrechte_idx = models.BigIntegerField(blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'projekt_angegebene_nutzungsrechte'
 
 
-class ProjektArt(models.Model):
+class ProjektArt(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
-    version = models.BigIntegerField()
     date_created = models.DateTimeField()
     last_updated = models.DateTimeField()
     wikidataid = models.CharField(max_length=255)
@@ -954,13 +860,11 @@ class ProjektArt(models.Model):
     created_by = models.CharField(max_length=255)
 
     class Meta:
-        managed = False
         db_table = 'projekt_art'
 
 
-class ProjektBeschreibung(models.Model):
+class ProjektBeschreibung(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
-    version = models.BigIntegerField()
     last_updated_by = models.CharField(max_length=255, blank=True, null=True)
     date_created = models.DateTimeField()
     last_updated = models.DateTimeField()
@@ -971,55 +875,48 @@ class ProjektBeschreibung(models.Model):
     created_by = models.CharField(max_length=255, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'projekt_beschreibung'
 
 
-class ProjektEigenschaftswert(models.Model):
+class ProjektEigenschaftswert(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
-    version = models.BigIntegerField()
     projekt = models.ForeignKey(Projekt, models.DO_NOTHING)
     eigenschaft = models.ForeignKey(Eigenschaft, models.DO_NOTHING)
     wert = models.CharField(max_length=255)
     projekt_eigenschaften_idx = models.BigIntegerField(blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'projekt_eigenschaftswert'
 
 
-class ProjektEreignis(models.Model):
+class ProjektEreignis(UserTrackedModel):
     projekt_ereignisse = models.ForeignKey(Projekt, models.DO_NOTHING)
     ereignis = models.ForeignKey(Ereignis, models.DO_NOTHING, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'projekt_ereignis'
 
 
-class ProjektFileUpload(models.Model):
+class ProjektFileUpload(UserTrackedModel):
     projekt_weitere_rechtsdokumente_id = models.BigIntegerField(blank=True, null=True)
     file_upload = models.ForeignKey(FileUpload, models.DO_NOTHING, blank=True, null=True)
     weitere_rechtsdokumente_idx = models.BigIntegerField(blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'projekt_file_upload'
 
 
-class ProjektInhaltswarnung(models.Model):
+class ProjektInhaltswarnung(UserTrackedModel):
     projekt_id = models.BigIntegerField()
     inhaltswarnung = models.ForeignKey(Inhaltswarnung, models.DO_NOTHING, blank=True, null=True)
     inhaltswarnungen_idx = models.BigIntegerField(blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'projekt_inhaltswarnung'
 
 
-class ProjektKategorie(models.Model):
+class ProjektKategorie(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
-    version = models.BigIntegerField()
     date_created = models.DateTimeField()
     last_updated = models.DateTimeField()
     name_en = models.CharField(max_length=255, blank=True, null=True)
@@ -1032,47 +929,42 @@ class ProjektKategorie(models.Model):
     gndid = models.CharField(max_length=255, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'projekt_kategorie'
 
 
-class ProjektKategorieSynonyme(models.Model):
+class ProjektKategorieSynonyme(UserTrackedModel):
     projekt_kategorie = models.ForeignKey(ProjektKategorie, models.DO_NOTHING)
     synonyme_string = models.CharField(max_length=255, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'projekt_kategorie_synonyme'
 
 
-class ProjektOrganisationseinheit(models.Model):
+class ProjektOrganisationseinheit(UserTrackedModel):
     projekt_organisationseinheit = models.ForeignKey(Projekt, models.DO_NOTHING)
     organisationseinheit = models.ForeignKey(Organisationseinheit, models.DO_NOTHING, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'projekt_organisationseinheit'
 
 
-class ProjektProjektArt(models.Model):
+class ProjektProjektArt(UserTrackedModel):
     projekt_projekt_art = models.ForeignKey(Projekt, models.DO_NOTHING)
     projekt_art = models.ForeignKey(ProjektArt, models.DO_NOTHING, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'projekt_projekt_art'
 
 
-class ProjektProjektKategorie(models.Model):
+class ProjektProjektKategorie(UserTrackedModel):
     kategorii = models.ForeignKey(Projekt, models.DO_NOTHING)
     projekt_kategorie = models.ForeignKey(ProjektKategorie, models.DO_NOTHING, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'projekt_projekt_kategorie'
 
 
-class ProjektRelation(models.Model):
+class ProjektRelation(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
     art_der_relation = models.BigIntegerField()
     projekt2 = models.ForeignKey(Projekt, models.DO_NOTHING)
@@ -1080,45 +972,39 @@ class ProjektRelation(models.Model):
     projekt_relationen_idx = models.BigIntegerField(blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'projekt_relation'
 
 
-class ProjektSchlagworte(models.Model):
+class ProjektSchlagworte(UserTrackedModel):
     projekt_schlagworte = models.ForeignKey(Projekt, models.DO_NOTHING)
     schlagwort = models.ForeignKey('Schlagwort', models.DO_NOTHING, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'projekt_schlagworte'
 
 
-class RegistrationCode(models.Model):
+class RegistrationCode(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
     date_created = models.DateTimeField()
     username = models.CharField(max_length=255)
     token = models.CharField(max_length=255)
 
     class Meta:
-        managed = False
         db_table = 'registration_code'
 
 
-class Role(models.Model):
+class Role(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
-    version = models.BigIntegerField()
     date_created = models.DateTimeField()
     last_updated = models.DateTimeField()
     authority = models.CharField(unique=True, max_length=255)
 
     class Meta:
-        managed = False
         db_table = 'role'
 
 
-class Rolle(models.Model):
+class Rolle(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
-    version = models.BigIntegerField()
     last_updated_by = models.CharField(max_length=255, blank=True, null=True)
     date_created = models.DateTimeField()
     last_updated = models.DateTimeField()
@@ -1135,44 +1021,38 @@ class Rolle(models.Model):
     preselect_urheber = models.BooleanField()
 
     class Meta:
-        managed = False
         db_table = 'rolle'
 
 
-class RolleRelation(models.Model):
+class RolleRelation(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
-    version = models.BigIntegerField()
     ereignis = models.ForeignKey(Ereignis, models.DO_NOTHING)
     last_updated_by = models.CharField(max_length=255)
     created_by = models.CharField(max_length=255)
     akteur = models.ForeignKey(Akteur, models.DO_NOTHING)
 
     class Meta:
-        managed = False
         db_table = 'rolle_relation'
 
 
-class RolleRelationRolle(models.Model):
+class RolleRelationRolle(UserTrackedModel):
     rolle_relation_rollen = models.ForeignKey(RolleRelation, models.DO_NOTHING)
     rolle = models.ForeignKey(Rolle, models.DO_NOTHING, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'rolle_relation_rolle'
 
 
-class RolleSynonyme(models.Model):
+class RolleSynonyme(UserTrackedModel):
     rolle = models.ForeignKey(Rolle, models.DO_NOTHING)
     synonyme_string = models.CharField(max_length=255, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'rolle_synonyme'
 
 
-class Sammlung(models.Model):
+class Sammlung(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
-    version = models.BigIntegerField()
     beschreibung_en = models.TextField()
     last_updated_by = models.CharField(max_length=255, blank=True, null=True)
     date_created = models.DateTimeField()
@@ -1184,72 +1064,64 @@ class Sammlung(models.Model):
     created_by = models.CharField(max_length=255, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'sammlung'
 
 
-class SammlungVerknuepfteDigitaleObjekte(models.Model):
+class SammlungVerknuepfteDigitaleObjekte(UserTrackedModel):
     sammlung = models.OneToOneField(Sammlung, models.DO_NOTHING, primary_key=True)  # The composite primary key (sammlung_id, digitales_objekt_id) found, that is not supported. The first column is selected.
     digitales_objekt = models.ForeignKey(DigitalesObjekt, models.DO_NOTHING)
 
     class Meta:
-        managed = False
         db_table = 'sammlung_verknuepfte_digitale_objekte'
         unique_together = (('sammlung', 'digitales_objekt'),)
 
 
-class SammlungVerknuepfteEreignisse(models.Model):
+class SammlungVerknuepfteEreignisse(UserTrackedModel):
     sammlung = models.OneToOneField(Sammlung, models.DO_NOTHING, primary_key=True)  # The composite primary key (sammlung_id, ereignis_id) found, that is not supported. The first column is selected.
     ereignis = models.ForeignKey(Ereignis, models.DO_NOTHING)
 
     class Meta:
-        managed = False
         db_table = 'sammlung_verknuepfte_ereignisse'
         unique_together = (('sammlung', 'ereignis'),)
 
 
-class SammlungVerknuepfteInformationstraeger(models.Model):
+class SammlungVerknuepfteInformationstraeger(UserTrackedModel):
     sammlung = models.OneToOneField(Sammlung, models.DO_NOTHING, primary_key=True)  # The composite primary key (sammlung_id, informationstraeger_id) found, that is not supported. The first column is selected.
     informationstraeger = models.ForeignKey(Informationstraeger, models.DO_NOTHING)
 
     class Meta:
-        managed = False
         db_table = 'sammlung_verknuepfte_informationstraeger'
         unique_together = (('sammlung', 'informationstraeger'),)
 
 
-class SammlungVerknuepftePhysischeObjekte(models.Model):
+class SammlungVerknuepftePhysischeObjekte(UserTrackedModel):
     sammlung = models.OneToOneField(Sammlung, models.DO_NOTHING, primary_key=True)  # The composite primary key (sammlung_id, physisches_objekt_id) found, that is not supported. The first column is selected.
     physisches_objekt = models.ForeignKey(PhysischesObjekt, models.DO_NOTHING)
 
     class Meta:
-        managed = False
         db_table = 'sammlung_verknuepfte_physische_objekte'
         unique_together = (('sammlung', 'physisches_objekt'),)
 
 
-class SammlungVerknuepfteProjekte(models.Model):
+class SammlungVerknuepfteProjekte(UserTrackedModel):
     sammlung = models.OneToOneField(Sammlung, models.DO_NOTHING, primary_key=True)  # The composite primary key (sammlung_id, projekt_id) found, that is not supported. The first column is selected.
     projekt = models.ForeignKey(Projekt, models.DO_NOTHING)
 
     class Meta:
-        managed = False
         db_table = 'sammlung_verknuepfte_projekte'
         unique_together = (('sammlung', 'projekt'),)
 
 
-class SammlungVerknuepftesEquipment(models.Model):
+class SammlungVerknuepftesEquipment(UserTrackedModel):
     sammlung = models.ForeignKey(Sammlung, models.DO_NOTHING)
     equipment_software = models.ForeignKey(EquipmentSoftware, models.DO_NOTHING, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'sammlung_verknuepftes_equipment'
 
 
-class Schlagwort(models.Model):
+class Schlagwort(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
-    version = models.BigIntegerField()
     date_created = models.DateTimeField()
     last_updated = models.DateTimeField()
     wikidata_item = models.CharField(unique=True, max_length=255)
@@ -1260,31 +1132,27 @@ class Schlagwort(models.Model):
     gnd_item = models.CharField(max_length=255, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'schlagwort'
 
 
-class SchlagwortSynonymeDe(models.Model):
+class SchlagwortSynonymeDe(UserTrackedModel):
     schlagwort = models.ForeignKey(Schlagwort, models.DO_NOTHING)
     synonyme_de_string = models.CharField(max_length=255, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'schlagwort_synonyme_de'
 
 
-class SchlagwortSynonymeEn(models.Model):
+class SchlagwortSynonymeEn(UserTrackedModel):
     schlagwort = models.ForeignKey(Schlagwort, models.DO_NOTHING)
     synonyme_en_string = models.CharField(max_length=255, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'schlagwort_synonyme_en'
 
 
-class Sprache(models.Model):
+class Sprache(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
-    version = models.BigIntegerField()
     date_created = models.DateTimeField()
     last_updated = models.DateTimeField()
     name_en = models.CharField(max_length=255)
@@ -1296,13 +1164,11 @@ class Sprache(models.Model):
     iso_639_2_t_code = models.CharField(max_length=255, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'sprache'
 
 
-class Titel(models.Model):
+class Titel(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
-    version = models.BigIntegerField()
     last_updated_by = models.CharField(max_length=255, blank=True, null=True)
     date_created = models.DateTimeField()
     sprache_titel = models.ForeignKey(Sprache, models.DO_NOTHING)
@@ -1315,27 +1181,23 @@ class Titel(models.Model):
     rang = models.BigIntegerField()
 
     class Meta:
-        managed = False
         db_table = 'titel'
 
 
-class Tooltip(models.Model):
+class Tooltip(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
-    version = models.BigIntegerField()
     tt_text_en = models.CharField(max_length=1024, blank=True, null=True)
     tt_text_de = models.CharField(max_length=1024, blank=True, null=True)
     view = models.CharField(max_length=255)
     field = models.CharField(max_length=255)
 
     class Meta:
-        managed = False
         db_table = 'tooltip'
         unique_together = (('view', 'field'),)
 
 
-class User(models.Model):
+class User(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
-    version = models.BigIntegerField()
     date_created = models.DateTimeField()
     password_expired = models.BooleanField()
     last_updated = models.DateTimeField()
@@ -1348,13 +1210,11 @@ class User(models.Model):
     last_login = models.DateTimeField(blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'user'
 
 
-class UserDetail(models.Model):
+class UserDetail(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
-    version = models.BigIntegerField()
     anrede = models.CharField(max_length=255)
     date_created = models.DateTimeField()
     vorname = models.CharField(max_length=255)
@@ -1370,29 +1230,25 @@ class UserDetail(models.Model):
     email = models.CharField(max_length=255, blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'user_detail'
 
 
-class UserRole(models.Model):
+class UserRole(UserTrackedModel):
     user = models.OneToOneField(User, models.DO_NOTHING, primary_key=True)  # The composite primary key (user_id, role_id) found, that is not supported. The first column is selected.
     role = models.ForeignKey(Role, models.DO_NOTHING)
     date_created = models.DateTimeField()
     last_updated = models.DateTimeField()
 
     class Meta:
-        managed = False
         db_table = 'user_role'
         unique_together = (('user', 'role'),)
 
 
-class Zeitpunkt(models.Model):
+class Zeitpunkt(UserTrackedModel):
     id = models.BigAutoField(primary_key=True)
-    version = models.BigIntegerField()
     monat = models.BigIntegerField(blank=True, null=True)
     jahr = models.BigIntegerField()
     tag = models.BigIntegerField(blank=True, null=True)
 
     class Meta:
-        managed = False
         db_table = 'zeitpunkt'

@@ -283,3 +283,6 @@ arkumu/media/
 
 #fields_to_translate
 fields_to_translate.txt
+
+user_analysis/
+user_sync/
