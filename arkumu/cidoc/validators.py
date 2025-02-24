@@ -175,12 +175,29 @@ class CIDOCSchemaValidator:
         if not declared_domain:
             raise ValidationError(f"Property {property_id} has no domain defined")
         
-        print(f"\nChecking domain:")
+        print(f"\nDEBUG Domain Check:")
+        print(f"Property: {property_id}")
+        print(f"Domain class: {domain_class}")
         print(f"Domain URI: {domain_uri}")
         print(f"Declared domain: {declared_domain}")
         
-        # Check direct match or subclass
-        if domain_uri != declared_domain and not self._is_direct_subclass(domain_uri, declared_domain):
+        # Debug direct relationship
+        direct_subclass = (domain_uri, RDFS.subClassOf, declared_domain) in self.graph
+        print(f"\nDirect subclass check:")
+        print(f"Is direct subclass: {direct_subclass}")
+        
+        # Debug all subclass relationships
+        print("\nAll subclass relationships for domain:")
+        for _, _, parent in self.graph.triples((domain_uri, RDFS.subClassOf, None)):
+            print(f"  Superclass: {parent}")
+        
+        is_valid = (domain_uri == declared_domain or direct_subclass)
+        print(f"\nFinal validation:")
+        print(f"Exact match: {domain_uri == declared_domain}")
+        print(f"Direct subclass: {direct_subclass}")
+        print(f"Is valid: {is_valid}")
+        
+        if not is_valid:
             raise ValidationError(
                 f"Invalid domain for {property_id}: {domain_class} "
                 f"must be {declared_domain} or its direct subclass"
