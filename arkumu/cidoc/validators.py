@@ -152,22 +152,56 @@ class CIDOCSchemaValidator:
         if is_digital_property and not is_digital_class:
             raise ValidationError(f"Digital property {property_id} cannot be used with non-digital classes")
 
-    def _verify_property_constraints(self, property_uri, domain_uri, range_uri, property_id, domain_class, range_class):
-        """Verify property domain and range constraints - simple version."""
-        # Get declared domain and range directly
+    def _is_direct_subclass(self, class_uri, parent_uri):
+        """Check if class_uri is a direct subclass of parent_uri."""
+        # Debug output
+        print(f"\nChecking subclass relationship:")
+        print(f"Class URI: {class_uri}")
+        print(f"Parent URI: {parent_uri}")
+        
+        # Get all direct superclasses
+        direct_parents = list(self.graph.objects(class_uri, RDFS.subClassOf))
+        print(f"Direct parents found: {direct_parents}")
+        
+        # Check if parent_uri is in the list
+        result = parent_uri in direct_parents
+        print(f"Is direct subclass: {result}")
+        
+        return result
+
+    def _check_domain(self, property_uri, domain_uri, property_id, domain_class):
+        """Check if domain_uri is valid for the property."""
         declared_domain = self.graph.value(property_uri, RDFS.domain)
+        if not declared_domain:
+            raise ValidationError(f"Property {property_id} has no domain defined")
+        
+        print(f"\nChecking domain:")
+        print(f"Domain URI: {domain_uri}")
+        print(f"Declared domain: {declared_domain}")
+        
+        # Check direct match or subclass
+        if domain_uri != declared_domain and not self._is_direct_subclass(domain_uri, declared_domain):
+            raise ValidationError(
+                f"Invalid domain for {property_id}: {domain_class} "
+                f"must be {declared_domain} or its direct subclass"
+            )
+
+    def _check_range(self, property_uri, range_uri, property_id, range_class):
+        """Check if range_uri is valid for the property."""
         declared_range = self.graph.value(property_uri, RDFS.range)
+        if not declared_range:
+            raise ValidationError(f"Property {property_id} has no range defined")
         
-        # Basic validation - just check if domain/range match exactly
-        if domain_uri != declared_domain:
+        if range_uri != declared_range and not self._is_direct_subclass(range_uri, declared_range):
             raise ValidationError(
-                f"Invalid domain for {property_id}: {domain_class}"
+                f"Invalid range for {property_id}: {range_class} "
+                f"must be {declared_range} or its direct subclass"
             )
-        
-        if range_uri != declared_range:
-            raise ValidationError(
-                f"Invalid range for {property_id}: {range_class}"
-            )
+
+    def _verify_property_constraints(self, property_uri, domain_uri, range_uri, property_id, domain_class, range_class):
+        """Verify property domain and range constraints."""
+        self._check_domain(property_uri, domain_uri, property_id, domain_class)
+        self._check_range(property_uri, range_uri, property_id, range_class)
 
 def validate_cidoc_entity(crm_class):
     """

@@ -307,3 +307,115 @@ class TestSchemaLoading:
         print(f"CRMdig file exists: {crmdig_file.exists()}")
         print(f"Found files: {list(schema_dir.glob('*.rd*'))}")
 
+class TestPropertyConstraints:
+    """Tests for property constraint validation methods"""
+    
+    @pytest.fixture
+    def validator(self):
+        """Get a fresh validator instance for each test"""
+        CIDOCSchemaValidator.clear_cache()
+        return CIDOCSchemaValidator.get_instance()
+
+    def test_is_direct_subclass(self, validator):
+        """Test _is_direct_subclass method"""
+        # E21_Person is direct subclass of E20_Biological_Object
+        person_uri = validator._get_class_uri('E21_Person')
+        bio_obj_uri = validator._get_class_uri('E20_Biological_Object')
+        assert validator._is_direct_subclass(person_uri, bio_obj_uri)
+        
+        # E55_Type is not a direct subclass of E1_CRM_Entity
+        type_uri = validator._get_class_uri('E55_Type')
+        entity_uri = validator._get_class_uri('E1_CRM_Entity')
+        assert not validator._is_direct_subclass(type_uri, entity_uri)
+
+    def test_check_domain(self, validator):
+        """Test _check_domain method"""
+        # P1_is_identified_by has domain E1_CRM_Entity
+        prop_uri = validator._get_property_uri('P1_is_identified_by')
+        
+        # Valid: exact match
+        validator._check_domain(
+            prop_uri,
+            validator._get_class_uri('E1_CRM_Entity'),
+            'P1_is_identified_by',
+            'E1_CRM_Entity'
+        )
+        
+        # Valid: direct subclass
+        validator._check_domain(
+            prop_uri,
+            validator._get_class_uri('E21_Person'),
+            'P1_is_identified_by',
+            'E21_Person'
+        )
+        
+        # Invalid: not a direct subclass
+        with pytest.raises(ValidationError, match="Invalid domain for"):
+            validator._check_domain(
+                prop_uri,
+                validator._get_class_uri('E55_Type'),
+                'P1_is_identified_by',
+                'E55_Type'
+            )
+
+    def test_check_range(self, validator):
+        """Test _check_range method"""
+        # P1_is_identified_by has range E41_Appellation
+        prop_uri = validator._get_property_uri('P1_is_identified_by')
+        
+        # Valid: exact match
+        validator._check_range(
+            prop_uri,
+            validator._get_class_uri('E41_Appellation'),
+            'P1_is_identified_by',
+            'E41_Appellation'
+        )
+        
+        # Valid: direct subclass (if any exists in schema)
+        # Add test for direct subclass if applicable
+        
+        # Invalid: wrong class
+        with pytest.raises(ValidationError, match="Invalid range for"):
+            validator._check_range(
+                prop_uri,
+                validator._get_class_uri('E21_Person'),
+                'P1_is_identified_by',
+                'E21_Person'
+            )
+
+    def test_verify_property_constraints(self, validator):
+        """Test complete property constraint validation"""
+        prop_uri = validator._get_property_uri('P1_is_identified_by')
+        
+        # Valid case
+        validator._verify_property_constraints(
+            prop_uri,
+            validator._get_class_uri('E1_CRM_Entity'),
+            validator._get_class_uri('E41_Appellation'),
+            'P1_is_identified_by',
+            'E1_CRM_Entity',
+            'E41_Appellation'
+        )
+        
+        # Invalid domain
+        with pytest.raises(ValidationError, match="Invalid domain for"):
+            validator._verify_property_constraints(
+                prop_uri,
+                validator._get_class_uri('E55_Type'),
+                validator._get_class_uri('E41_Appellation'),
+                'P1_is_identified_by',
+                'E55_Type',
+                'E41_Appellation'
+            )
+        
+        # Invalid range
+        with pytest.raises(ValidationError, match="Invalid range for"):
+            validator._verify_property_constraints(
+                prop_uri,
+                validator._get_class_uri('E1_CRM_Entity'),
+                validator._get_class_uri('E21_Person'),
+                'P1_is_identified_by',
+                'E1_CRM_Entity',
+                'E21_Person'
+            )
+
