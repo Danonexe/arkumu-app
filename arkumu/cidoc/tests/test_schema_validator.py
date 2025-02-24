@@ -328,44 +328,7 @@ class TestPropertyConstraints:
         entity_uri = validator._get_class_uri('E1_CRM_Entity')
         assert not validator._is_direct_subclass(type_uri, entity_uri)
 
-    def test_check_domain(self, validator):
-        """Test _check_domain method"""
-        # P1_is_identified_by has domain E1_CRM_Entity
-        prop_uri = validator._get_property_uri('P1_is_identified_by')
-
-        # Valid: exact match
-        validator._check_domain(
-            prop_uri,
-            validator._get_class_uri('E1_CRM_Entity'),
-            'P1_is_identified_by',
-            'E1_CRM_Entity'
-        )
-
-        # Valid: direct subclass of E1_CRM_Entity
-        validator._check_domain(
-            prop_uri,
-            validator._get_class_uri('E77_Persistent_Item'),  # This is a direct subclass
-            'P1_is_identified_by',
-            'E77_Persistent_Item'
-        )
-
-        # Invalid: not a direct subclass
-        with pytest.raises(ValidationError):
-            validator._check_domain(
-                prop_uri,
-                validator._get_class_uri('E21_Person'),  # This is an indirect subclass
-                'P1_is_identified_by',
-                'E21_Person'
-            )
-
-        # Invalid: unrelated class
-        with pytest.raises(ValidationError):
-            validator._check_domain(
-                prop_uri,
-                validator._get_class_uri('E55_Type'),
-                'P1_is_identified_by',
-                'E55_Type'
-            )
+   
 
     def test_check_range(self, validator):
         """Test _check_range method"""
@@ -427,4 +390,75 @@ class TestPropertyConstraints:
                 'E1_CRM_Entity',
                 'E21_Person'
             )
+
+class TestDomainValidation:
+    """Tests specifically for domain validation logic"""
+    
+    @pytest.fixture
+    def validator(self):
+        return CIDOCSchemaValidator.get_instance()
+
+    def test_exact_domain_match(self, validator):
+        """Test when domain exactly matches declared domain"""
+        prop_uri = validator._get_property_uri('P1_is_identified_by')
+        validator._check_domain(
+            prop_uri,
+            validator._get_class_uri('E1_CRM_Entity'),
+            'P1_is_identified_by',
+            'E1_CRM_Entity'
+        )
+
+    def test_direct_subclass_domain(self, validator):
+        """Test when domain is a direct subclass of declared domain"""
+        prop_uri = validator._get_property_uri('P1_is_identified_by')
+        validator._check_domain(
+            prop_uri,
+            validator._get_class_uri('E77_Persistent_Item'),
+            'P1_is_identified_by',
+            'E77_Persistent_Item'
+        )
+
+    def test_indirect_subclass_domain(self, validator):
+        """Test when domain is an indirect subclass (should fail)"""
+        prop_uri = validator._get_property_uri('P1_is_identified_by')
+        with pytest.raises(ValidationError, match="Invalid domain for"):
+            validator._check_domain(
+                prop_uri,
+                validator._get_class_uri('E21_Person'),
+                'P1_is_identified_by',
+                'E21_Person'
+            )
+
+    def test_unrelated_class_domain(self, validator):
+        """Test when domain is an unrelated class (should fail)"""
+        prop_uri = validator._get_property_uri('P1_is_identified_by')
+        with pytest.raises(ValidationError, match="Invalid domain for"):
+            validator._check_domain(
+                prop_uri,
+                validator._get_class_uri('E55_Type'),
+                'P1_is_identified_by',
+                'E55_Type'
+            )
+
+    def test_missing_domain_definition(self, validator):
+        """Test when property has no domain defined"""
+        # Create a test property without domain
+        test_prop = validator.CRM['TestProperty']
+        with pytest.raises(ValidationError, match="Property .* has no domain defined"):
+            validator._check_domain(
+                test_prop,
+                validator._get_class_uri('E1_CRM_Entity'),
+                'TestProperty',
+                'E1_CRM_Entity'
+            )
+
+    def test_digital_class_domain(self, validator):
+        """Test domain validation with digital classes"""
+        prop_uri = validator._get_property_uri('L1_digitized')
+        validator._check_domain(
+            prop_uri,
+            validator._get_class_uri('D2_Digitization_Process'),
+            'L1_digitized',
+            'D2_Digitization_Process'
+        )
 
