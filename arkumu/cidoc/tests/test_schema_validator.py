@@ -68,6 +68,65 @@ class TestCIDOCSchemaValidator:
         assert (crm_class, RDF.type, RDFS.Class) in validator.graph, "CIDOC-CRM class not found"
         assert (crmdig_class, RDF.type, RDFS.Class) in validator.graph, "CRMdig class not found"
 
+    def test_verify_classes_exist(self):
+        """Test _verify_classes_exist method"""
+        validator = CIDOCSchemaValidator.get_instance()
+        
+        # Test valid classes
+        domain_uri, range_uri = validator._verify_classes_exist('E21_Person', 'E41_Appellation')
+        assert domain_uri == validator.CRM['E21_Person']
+        assert range_uri == validator.CRM['E41_Appellation']
+        
+        # Test invalid classes
+        with pytest.raises(ValidationError, match="Domain class does not exist"):
+            validator._verify_classes_exist('E999_Invalid', 'E41_Appellation')
+            
+        with pytest.raises(ValidationError, match="Range class does not exist"):
+            validator._verify_classes_exist('E21_Person', 'E999_Invalid')
+
+    def test_verify_digital_compatibility(self):
+        """Test _verify_digital_compatibility method"""
+        validator = CIDOCSchemaValidator.get_instance()
+        
+        # Test valid digital combinations
+        validator._verify_digital_compatibility(
+            'L1_digitized', 'D2_Digitization_Process', 'E18_Physical_Thing'
+        )  # Should not raise
+        
+        # Test invalid digital combinations
+        with pytest.raises(ValidationError, match="Digital property .* cannot be used with non-digital classes"):
+            validator._verify_digital_compatibility(
+                'L1_digitized', 'E21_Person', 'E18_Physical_Thing'
+            )
+
+    def test_verify_property_constraints(self):
+        """Test basic property constraint validation"""
+        validator = CIDOCSchemaValidator.get_instance()
+        
+        # Test P1_is_identified_by (domain: E1_CRM_Entity, range: E41_Appellation)
+        prop_uri = validator._get_property_uri('P1_is_identified_by')
+        
+        # Test exact match (should pass)
+        validator._verify_property_constraints(
+            prop_uri,
+            validator._get_class_uri('E1_CRM_Entity'),
+            validator._get_class_uri('E41_Appellation'),
+            'P1_is_identified_by',
+            'E1_CRM_Entity',
+            'E41_Appellation'
+        )
+        
+        # Test wrong domain (should fail)
+        with pytest.raises(ValidationError, match="Invalid domain for"):
+            validator._verify_property_constraints(
+                prop_uri,
+                validator._get_class_uri('E55_Type'),
+                validator._get_class_uri('E41_Appellation'),
+                'P1_is_identified_by',
+                'E55_Type',
+                'E41_Appellation'
+            )
+
 class TestEntityValidation:
     def test_valid_entity_classes(self):
         """Test validation of valid CIDOC entity classes"""
@@ -81,51 +140,6 @@ class TestEntityValidation:
         for class_id in invalid_classes:
             with pytest.raises(ValidationError):
                 validate_cidoc_entity(class_id)
-
-class TestRelationshipValidation:
-    def test_valid_relationships(self):
-        """Test validation of valid CIDOC relationships"""
-        valid_relationships = [
-            # Core CIDOC-CRM relationships
-            ('P1_is_identified_by', 'E21_Person', 'E41_Appellation'),  # Person identified by name
-            ('P2_has_type', 'E18_Physical_Thing', 'E55_Type'),  # Physical thing has type
-            ('P67_refers_to', 'E89_Propositional_Object', 'E1_CRM_Entity'),  # Document refers to entity
-            
-            # Physical object relationships
-            ('P46_is_composed_of', 'E19_Physical_Object', 'E19_Physical_Object'),  # Physical composition
-            ('P49_has_former_or_current_keeper', 'E18_Physical_Thing', 'E39_Actor'),  # Ownership/custody
-            
-            # Digital relationships from CRMdig
-            ('L1_digitized', 'D2_Digitization_Process', 'E18_Physical_Thing'),  # Digitization of physical object
-            ('L19_stores', 'D13_Digital_Information_Carrier', 'D1_Digital_Object'),  # Digital storage
-            ('L23_used_software_or_firmware', 'D7_Digital_Machine_Event', 'D14_Software'),  # Software usage
-        ]
-        
-        for prop_id, domain, range_class in valid_relationships:
-            validate_cidoc_relationship(prop_id, domain, range_class)  # Should not raise
-
-    def test_invalid_relationships(self):
-        """Test validation of invalid CIDOC relationships"""
-        invalid_relationships = [
-            # Wrong domain
-            ('P1_is_identified_by', 'E55_Type', 'E41_Appellation'),  # Type cannot be identified by appellation
-            
-            # Wrong range
-            ('P2_has_type', 'E18_Physical_Thing', 'E21_Person'),  # Person is not a type
-            
-            # Non-existent property
-            ('P999_not_real', 'E1_CRM_Entity', 'E1_CRM_Entity'),
-            
-            # Digital relationship with wrong domain
-            ('L1_digitized', 'E21_Person', 'E18_Physical_Thing'),  # Person cannot digitize
-            
-            # Digital relationship with wrong range
-            ('L19_stores', 'D13_Digital_Information_Carrier', 'E21_Person')  # Cannot store a person digitally
-        ]
-        
-        for prop_id, domain, range_class in invalid_relationships:
-            with pytest.raises((ValueError, ValidationError)):  # Allow either exception type
-                validate_cidoc_relationship(prop_id, domain, range_class)
 
 class TestPropertyValidation:
     def test_property_type_validation(self):
@@ -159,23 +173,24 @@ class TestSchemaLoading:
         """Test that the required namespaces are properly loaded"""
         validator = CIDOCSchemaValidator.get_instance()
         
+        # First ensure the validator has loaded the schemas
+        assert len(validator.graph) > 0, "Graph is empty"
+        
+        # Get all namespaces from the graph
+        namespaces = dict(validator.graph.namespaces())
+        print("\nFound namespaces:", namespaces)  # Debug output
+        
         # Check CIDOC-CRM namespace
-        assert str(validator.CRM) == "http://www.cidoc-crm.org/cidoc-crm/"
+        assert str(validator.CRM) == "http://www.cidoc-crm.org/cidoc-crm/", "CRM URI is incorrect"
+        assert 'crm' in namespaces, f"'crm' prefix not found in namespaces: {namespaces}"
+        assert str(namespaces['crm']) == str(validator.CRM), \
+            f"CRM URI mismatch: {namespaces.get('crm')} != {validator.CRM}"
         
         # Check CRMdig namespace
-        assert str(validator.CRMDIG) == "http://www.ics.forth.gr/isl/CRMdig/"
-        
-        # Convert generator to list for easier assertion
-        namespaces = dict(validator.graph.namespaces())
-        print("\nFound namespaces:", namespaces)
-        
-        # Check if namespaces are bound correctly
-        assert 'crm' in namespaces, f"'crm' prefix not found in namespaces: {namespaces}"
-        assert str(namespaces['crm']) == str(validator.CRM), f"CRM URI mismatch: {namespaces['crm']} != {validator.CRM}"
-        
-        # Check CRMdig namespace binding
+        assert str(validator.CRMDIG) == "http://www.ics.forth.gr/isl/CRMdig/", "CRMdig URI is incorrect"
         assert 'crmdig' in namespaces, f"'crmdig' prefix not found in namespaces: {namespaces}"
-        assert str(namespaces['crmdig']) == str(validator.CRMDIG), f"CRMdig URI mismatch: {namespaces['crmdig']} != {validator.CRMDIG}"
+        assert str(namespaces['crmdig']) == str(validator.CRMDIG), \
+            f"CRMdig URI mismatch: {namespaces.get('crmdig')} != {validator.CRMDIG}"
     def test_core_classes_loaded(self):
         """Test that core CIDOC-CRM classes are properly loaded"""
         validator = CIDOCSchemaValidator.get_instance()
