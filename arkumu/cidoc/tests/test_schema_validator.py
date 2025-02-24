@@ -155,7 +155,6 @@ class TestSchemaLoading:
         
         assert cidoc_file.exists(), "CIDOC-CRM schema file not found"
         assert crmdig_file.exists(), "CRMdig schema file not found"
-
     def test_schema_namespaces(self):
         """Test that the required namespaces are properly loaded"""
         validator = CIDOCSchemaValidator.get_instance()
@@ -167,10 +166,16 @@ class TestSchemaLoading:
         assert str(validator.CRMDIG) == "http://www.ics.forth.gr/isl/CRMdig/"
         
         # Convert generator to list for easier assertion
-        namespaces = list(validator.graph.namespaces())
-        assert any(prefix == 'crm' and uri == str(validator.CRM) for prefix, uri in namespaces)
-        assert any(prefix == 'crmdig' and uri == str(validator.CRMDIG) for prefix, uri in namespaces)
-
+        namespaces = dict(validator.graph.namespaces())
+        print("\nFound namespaces:", namespaces)
+        
+        # Check if namespaces are bound correctly
+        assert 'crm' in namespaces, f"'crm' prefix not found in namespaces: {namespaces}"
+        assert str(namespaces['crm']) == str(validator.CRM), f"CRM URI mismatch: {namespaces['crm']} != {validator.CRM}"
+        
+        # Check CRMdig namespace binding
+        assert 'crmdig' in namespaces, f"'crmdig' prefix not found in namespaces: {namespaces}"
+        assert str(namespaces['crmdig']) == str(validator.CRMDIG), f"CRMdig URI mismatch: {namespaces['crmdig']} != {validator.CRMDIG}"
     def test_core_classes_loaded(self):
         """Test that core CIDOC-CRM classes are properly loaded"""
         validator = CIDOCSchemaValidator.get_instance()
@@ -260,12 +265,30 @@ class TestSchemaLoading:
                    (inverse_uri, OWL.inverseOf, prop_uri) in validator.graph, \
                 f"Missing inverse relationship between {prop} and {inverse}"
 
-    def test_schema_paths():
-        """Debug test to print actual paths"""
-        validator_path = Path(__file__).parent / 'schema'
-        test_path = Path(__file__).parent.parent / 'schema'
-        print(f"\nValidator looking in: {validator_path}")
-        print(f"Test looking in: {test_path}")
-        print(f"Files exist in validator path: {list(validator_path.glob('*.rd*'))}")
-        print(f"Files exist in test path: {list(test_path.glob('*.rd*'))}")
+    def test_schema_paths(self):
+        """Test that schema files are in the correct location and accessible"""
+        # Get the schema directory path
+        schema_dir = Path(__file__).parent.parent / 'schema'
+        
+        # Check if schema directory exists
+        assert schema_dir.exists(), f"Schema directory not found at {schema_dir}"
+        assert schema_dir.is_dir(), f"{schema_dir} is not a directory"
+        
+        # Check specific schema files
+        cidoc_file = schema_dir / 'CIDOC_CRM_v7.1.1.rdf'
+        crmdig_file = schema_dir / 'CRMdig_v3.2.1.rdfs'
+        
+        # Test file existence
+        assert cidoc_file.exists(), f"CIDOC-CRM schema file not found at {cidoc_file}"
+        assert crmdig_file.exists(), f"CRMdig schema file not found at {crmdig_file}"
+        
+        # Test file readability
+        assert cidoc_file.is_file(), f"{cidoc_file} is not a file"
+        assert crmdig_file.is_file(), f"{crmdig_file} is not a file"
+        
+        # Print debug info if needed
+        print(f"\nSchema directory: {schema_dir}")
+        print(f"CIDOC file exists: {cidoc_file.exists()}")
+        print(f"CRMdig file exists: {crmdig_file.exists()}")
+        print(f"Found files: {list(schema_dir.glob('*.rd*'))}")
 
