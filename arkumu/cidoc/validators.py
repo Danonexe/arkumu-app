@@ -153,21 +153,12 @@ class CIDOCSchemaValidator:
             raise ValidationError(f"Digital property {property_id} cannot be used with non-digital classes")
 
     def _is_direct_subclass(self, class_uri, parent_uri):
-        """Check if class_uri is a direct subclass of parent_uri."""
-        # Debug output
-        print(f"\nChecking subclass relationship:")
-        print(f"Class URI: {class_uri}")
-        print(f"Parent URI: {parent_uri}")
-        
-        # Get all direct superclasses
+        """Check if class_uri is a DIRECT subclass of parent_uri."""
+        # Get only immediate parent classes
         direct_parents = list(self.graph.objects(class_uri, RDFS.subClassOf))
-        print(f"Direct parents found: {direct_parents}")
         
-        # Check if parent_uri is in the list
-        result = parent_uri in direct_parents
-        print(f"Is direct subclass: {result}")
-        
-        return result
+        # Check if parent_uri is one of the immediate parents
+        return parent_uri in direct_parents
 
     def _check_domain(self, property_uri, domain_uri, property_id, domain_class):
         """Check if domain_uri is valid for the property."""
@@ -175,27 +166,11 @@ class CIDOCSchemaValidator:
         if not declared_domain:
             raise ValidationError(f"Property {property_id} has no domain defined")
         
-        print(f"\nDEBUG Domain Check:")
-        print(f"Property: {property_id}")
-        print(f"Domain class: {domain_class}")
-        print(f"Domain URI: {domain_uri}")
-        print(f"Declared domain: {declared_domain}")
-        
-        # Debug direct relationship
-        direct_subclass = (domain_uri, RDFS.subClassOf, declared_domain) in self.graph
-        print(f"\nDirect subclass check:")
-        print(f"Is direct subclass: {direct_subclass}")
-        
-        # Debug all subclass relationships
-        print("\nAll subclass relationships for domain:")
-        for _, _, parent in self.graph.triples((domain_uri, RDFS.subClassOf, None)):
-            print(f"  Superclass: {parent}")
-        
-        is_valid = (domain_uri == declared_domain or direct_subclass)
-        print(f"\nFinal validation:")
-        print(f"Exact match: {domain_uri == declared_domain}")
-        print(f"Direct subclass: {direct_subclass}")
-        print(f"Is valid: {is_valid}")
+        # Only allow exact match or direct subclass
+        is_valid = (
+            domain_uri == declared_domain or
+            self._is_direct_subclass(domain_uri, declared_domain)  # Use existing method
+        )
         
         if not is_valid:
             raise ValidationError(

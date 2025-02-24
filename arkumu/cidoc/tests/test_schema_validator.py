@@ -332,7 +332,7 @@ class TestPropertyConstraints:
         """Test _check_domain method"""
         # P1_is_identified_by has domain E1_CRM_Entity
         prop_uri = validator._get_property_uri('P1_is_identified_by')
-        
+
         # Valid: exact match
         validator._check_domain(
             prop_uri,
@@ -340,17 +340,26 @@ class TestPropertyConstraints:
             'P1_is_identified_by',
             'E1_CRM_Entity'
         )
-        
-        # Valid: direct subclass
+
+        # Valid: direct subclass of E1_CRM_Entity
         validator._check_domain(
             prop_uri,
-            validator._get_class_uri('E21_Person'),
+            validator._get_class_uri('E77_Persistent_Item'),  # This is a direct subclass
             'P1_is_identified_by',
-            'E21_Person'
+            'E77_Persistent_Item'
         )
-        
+
         # Invalid: not a direct subclass
-        with pytest.raises(ValidationError, match="Invalid domain for"):
+        with pytest.raises(ValidationError):
+            validator._check_domain(
+                prop_uri,
+                validator._get_class_uri('E21_Person'),  # This is an indirect subclass
+                'P1_is_identified_by',
+                'E21_Person'
+            )
+
+        # Invalid: unrelated class
+        with pytest.raises(ValidationError):
             validator._check_domain(
                 prop_uri,
                 validator._get_class_uri('E55_Type'),
