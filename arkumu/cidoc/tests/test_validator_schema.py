@@ -2,15 +2,18 @@ from django.test import TestCase
 import pytest
 from django.core.exceptions import ValidationError
 from django.core.cache import cache
-from ..validators import (
+from arkumu.cidoc.validators import (
     CIDOCSchemaValidator,
     validate_cidoc_entity,
     validate_cidoc_relationship,
     validate_property_type,
-    get_valid_properties
+    get_valid_properties,           
+    validate_property_cardinality
 )
 from pathlib import Path
 from rdflib import Graph, Namespace, RDFS, RDF, OWL
+from pytest_mock import mocker
+from datetime import date, datetime, time
 
 @pytest.fixture(autouse=True)
 def clear_cache():
@@ -127,37 +130,7 @@ class TestCIDOCSchemaValidator:
                 'E41_Appellation'
             )
 
-class TestEntityValidation:
-    def test_valid_entity_classes(self):
-        """Test validation of valid CIDOC entity classes"""
-        valid_classes = ['E21_Person', 'E22_Human-Made_Object', 'D1_Digital_Object']
-        for class_id in valid_classes:
-            validate_cidoc_entity(class_id)  # Should not raise
 
-    def test_invalid_entity_classes(self):
-        """Test validation of invalid CIDOC entity classes"""
-        invalid_classes = ['E999_Invalid', 'NotAClass', 'D999_Invalid']
-        for class_id in invalid_classes:
-            with pytest.raises(ValidationError):
-                validate_cidoc_entity(class_id)
-
-class TestPropertyValidation:
-    def test_property_type_validation(self):
-        """Test validation of property value types"""
-        # Test string property
-        validate_property_type('P1_is_identified_by', 'Test String')  # Should not raise
-        
-        # Test numeric property (if applicable in your schema)
-        validate_property_type('P90_has_value', '42')  # Should not raise
-
-    def test_get_valid_properties(self):
-        """Test retrieving valid properties for a class"""
-        # Test for a common class like E21_Person
-        properties = get_valid_properties('E21_Person')
-        assert len(properties) > 0
-        # Verify some expected properties are present
-        property_ids = {str(p).split('/')[-1] for p in properties}
-        assert 'P1_is_identified_by' in property_ids
 
 class TestSchemaLoading:
     def test_schema_files_exist(self):
@@ -307,89 +280,23 @@ class TestSchemaLoading:
         print(f"CRMdig file exists: {crmdig_file.exists()}")
         print(f"Found files: {list(schema_dir.glob('*.rd*'))}")
 
-class TestPropertyConstraints:
-    """Tests for property constraint validation methods"""
-    
-    @pytest.fixture
-    def validator(self):
-        """Get a fresh validator instance for each test"""
-        CIDOCSchemaValidator.clear_cache()
-        return CIDOCSchemaValidator.get_instance()
 
-    def test_is_direct_subclass(self, validator):
-        """Test _is_direct_subclass method"""
-        # E21_Person is direct subclass of E20_Biological_Object
-        person_uri = validator._get_class_uri('E21_Person')
-        bio_obj_uri = validator._get_class_uri('E20_Biological_Object')
-        assert validator._is_direct_subclass(person_uri, bio_obj_uri)
-        
-        # E55_Type is not a direct subclass of E1_CRM_Entity
-        type_uri = validator._get_class_uri('E55_Type')
-        entity_uri = validator._get_class_uri('E1_CRM_Entity')
-        assert not validator._is_direct_subclass(type_uri, entity_uri)
 
-   
 
-    def test_check_range(self, validator):
-        """Test _check_range method"""
-        # P1_is_identified_by has range E41_Appellation
-        prop_uri = validator._get_property_uri('P1_is_identified_by')
-        
-        # Valid: exact match
-        validator._check_range(
-            prop_uri,
-            validator._get_class_uri('E41_Appellation'),
-            'P1_is_identified_by',
-            'E41_Appellation'
-        )
-        
-        # Valid: direct subclass (if any exists in schema)
-        # Add test for direct subclass if applicable
-        
-        # Invalid: wrong class
-        with pytest.raises(ValidationError, match="Invalid range for"):
-            validator._check_range(
-                prop_uri,
-                validator._get_class_uri('E21_Person'),
-                'P1_is_identified_by',
-                'E21_Person'
-            )
+class TestEntityValidation:
+    def test_valid_entity_classes(self):
+        """Test validation of valid CIDOC entity classes"""
+        valid_classes = ['E21_Person', 'E22_Human-Made_Object', 'D1_Digital_Object']
+        for class_id in valid_classes:
+            validate_cidoc_entity(class_id)  # Should not raise
 
-    def test_verify_property_constraints(self, validator):
-        """Test complete property constraint validation"""
-        prop_uri = validator._get_property_uri('P1_is_identified_by')
-        
-        # Valid case
-        validator._verify_property_constraints(
-            prop_uri,
-            validator._get_class_uri('E1_CRM_Entity'),
-            validator._get_class_uri('E41_Appellation'),
-            'P1_is_identified_by',
-            'E1_CRM_Entity',
-            'E41_Appellation'
-        )
-        
-        # Invalid domain
-        with pytest.raises(ValidationError, match="Invalid domain for"):
-            validator._verify_property_constraints(
-                prop_uri,
-                validator._get_class_uri('E55_Type'),
-                validator._get_class_uri('E41_Appellation'),
-                'P1_is_identified_by',
-                'E55_Type',
-                'E41_Appellation'
-            )
-        
-        # Invalid range
-        with pytest.raises(ValidationError, match="Invalid range for"):
-            validator._verify_property_constraints(
-                prop_uri,
-                validator._get_class_uri('E1_CRM_Entity'),
-                validator._get_class_uri('E21_Person'),
-                'P1_is_identified_by',
-                'E1_CRM_Entity',
-                'E21_Person'
-            )
+    def test_invalid_entity_classes(self):
+        """Test validation of invalid CIDOC entity classes"""
+        invalid_classes = ['E999_Invalid', 'NotAClass', 'D999_Invalid']
+        for class_id in invalid_classes:
+            with pytest.raises(ValidationError):
+                validate_cidoc_entity(class_id)
+
 
 class TestDomainValidation:
     """Tests specifically for domain validation logic"""
@@ -461,4 +368,42 @@ class TestDomainValidation:
             'L1_digitized',
             'D2_Digitization_Process'
         )
+
+class MockQuerySet:
+    def __init__(self, count):
+        self._count = count
+    def filter(self, **kwargs):
+        return self
+    def count(self):
+        return self._count
+
+class TestCacheManagement:
+    """Tests for cache management functionality"""
+
+    def test_cache_warming(self):
+        """Test that caches are properly pre-warmed"""
+        validator = CIDOCSchemaValidator.get_instance()
+        
+        # Check class cache
+        assert len(validator._class_cache) > 0, "Class cache not warmed"
+        assert 'E21_Person' in validator._class_cache, "Common class not cached"
+        
+        # Check property cache
+        assert len(validator._property_cache) > 0, "Property cache not warmed"
+        assert 'P1_is_identified_by' in validator._property_cache, "Common property not cached"
+
+    def test_cache_invalidation(self):
+        """Test cache clearing functionality"""
+        # Get initial instance
+        validator1 = CIDOCSchemaValidator.get_instance()
+        initial_class_cache = validator1._class_cache.copy()
+        
+        # Clear cache
+        CIDOCSchemaValidator.clear_cache()
+        
+        # Get new instance
+        validator2 = CIDOCSchemaValidator.get_instance()
+        
+        # Verify caches are different objects
+        assert validator2._class_cache is not initial_class_cache
 

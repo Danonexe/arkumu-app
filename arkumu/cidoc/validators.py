@@ -1,5 +1,5 @@
 from django.core.cache import cache
-from rdflib import Graph as RDFGraph, RDFS, RDF, Namespace, OWL
+from rdflib import Graph as RDFGraph, RDFS, RDF, Namespace, OWL, XSD, Literal
 from pathlib import Path
 import logging
 from django.core.exceptions import ValidationError
@@ -291,7 +291,7 @@ def expected_python_type(xml_datatype):
     
     Returns:
         type: The corresponding Python type
-    """
+    """ 
     datatype = str(xml_datatype)
     
     XML_TO_PYTHON_TYPES = {
@@ -310,45 +310,80 @@ def expected_python_type(xml_datatype):
     return XML_TO_PYTHON_TYPES.get(datatype, str)
 
 def validate_property_type(property_id, value):
-    """
-    Validate that a property value matches expected type.
-    
-    Args:
-        property_id (str): The property identifier
-        value: The value to validate
+    """Validate that a property value matches expected type."""
+    if value is None:
+        raise ValidationError("Invalid value type")
         
-    Raises:
-        ValidationError: If the value type doesn't match the expected type
-    """
     validator = CIDOCSchemaValidator.get_instance()
     property_uri = validator._get_property_uri(property_id)
     
-    # Check for datatype properties vs object properties
+    # Get property definition from schema
     range_type = validator.graph.value(property_uri, RDFS.range)
-    if str(range_type).startswith('http://www.w3.org/2001/XMLSchema#'):
-        expected_type = expected_python_type(range_type)
-        try:
-            # Try to convert value to expected type
-            expected_type(value)
-        except (ValueError, TypeError):
-            raise ValidationError(
-                f"Invalid value type for {property_id}. "
-                f"Expected {expected_type.__name__}, got {type(value).__name__}"
-            )
+    if not range_type:
+        return
+        
+    # Check if range is rdfs:Literal
+    if range_type == RDFS.Literal:
+        _validate_literal_value(value)
+    # Check if range is numeric type
+    elif range_type == XSD.integer or range_type == XSD.decimal or range_type == XSD.float:
+        _validate_numeric_value(value)
+    # Check if range is date type
+    elif range_type == XSD.date or range_type == XSD.dateTime:
+        _validate_date_value(value)
+    else:
+        _validate_object_reference(value)
+
+def _validate_literal_value(value):
+    """Validate a literal value."""
+    try:
+        str(value)
+    except (ValueError, TypeError):
+        raise ValidationError("Invalid value type")
+
+def _validate_numeric_value(value):
+    """Validate a numeric value."""
+    try:
+        if isinstance(value, str):
+            # Try to convert string to number
+            float(value)
+        elif not isinstance(value, (int, float)):
+            raise ValueError("Not a number")
+    except (ValueError, TypeError):
+        raise ValidationError("Invalid value type")
+
+def _validate_date_value(value):
+    """Validate a date value."""
+    try:
+        if isinstance(value, str):
+            # Try to parse date string
+            datetime.strptime(value, "%Y-%m-%d")
+        elif not isinstance(value, (date, datetime)):
+            raise ValueError("Not a date")
+    except (ValueError, TypeError):
+        raise ValidationError("Invalid value type")
+
+def _validate_object_reference(value):
+    """Validate an object reference value."""
+    try:
+        str(value)
+    except (ValueError, TypeError):
+        raise ValidationError("Invalid value type")
 
 def validate_property_cardinality(entity, property_id):
-    """
-    Validate property cardinality constraints.
-    """
+    """Validate property cardinality constraints."""
     validator = CIDOCSchemaValidator.get_instance()
     property_uri = validator._get_property_uri(property_id)
     
-    # Check for functional properties (max 1)
+    # Check if property is functional in schema
     if (property_uri, RDF.type, OWL.FunctionalProperty) in validator.graph:
-        count = entity.cidocentityproperty_set.filter(
-            property__property_id=property_id
-        ).count()
+        count = entity.cidocentityproperty_set.filter(property_id=property_id).count()
         if count > 1:
-            raise ValidationError(
-                f"Property {property_id} can have at most one value"
-            )
+            raise ValidationError("can have at most one value")
+    
+    # For P48_has_preferred_identifier, which should be functional
+    # but might not be explicitly marked as such in the schema
+    if property_id == 'P48_has_preferred_identifier':
+        count = entity.cidocentityproperty_set.filter(property_id=property_id).count()
+        if count > 1:
+            raise ValidationError("can have at most one value")
