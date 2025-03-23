@@ -1,6 +1,6 @@
 from django.db import models
 from django.db import transaction
-from .core import CIDOCClass, CIDOCProperty, CIDOCGraph, UUIDModel
+from .schema import CIDOCClass, CIDOCProperty, CIDOCGraph, UUIDModel
 from django.contrib.auth.models import Group, User
 from .validators import validate_cidoc_entity, validate_cidoc_relationship, validate_property_type, validate_property_cardinality
     
