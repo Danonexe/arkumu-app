@@ -22,3 +22,5 @@ drf-spectacular==0.28.0  # https://github.com/tfranzel/drf-spectacular
 django-modeltranslation==0.19.12  # https://github.com/deschler/django-modeltranslation
 # rdflib
 rdflib==7.1.3  # https://github.com/RDFLib/rdflib
+# age
+apache-age-python==0.0.7 # https://github.com/apache/age
