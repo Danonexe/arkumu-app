@@ -1,5 +1,7 @@
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.utils.translation import gettext_lazy as _
+from django.db import models
+import datetime
 
 def validate_cidoc_class(entity_class, declared_class):
     """
@@ -137,19 +139,98 @@ def validate_primitive_value(property_def, value):
     Args:
         property_def: CIDOCProperty instance
         value: The value to validate
+        
+    Returns:
+        The validated value
+        
+    Raises:
+        ValidationError: If validation fails
     """
+    if value is None:
+        return None
+        
     if not property_def.range_class or not property_def.range_class.is_primitive:
-        return
+        return value
         
     # Add specific validation logic for different primitive types
     range_class_id = property_def.range_class.class_id
     
     if range_class_id == 'E60_Number':
         try:
-            float(value)
+            return float(value)
         except (TypeError, ValueError):
             raise ValidationError(_('Value must be a number'))
             
     elif range_class_id == 'E61_Time_Primitive':
-        # Add datetime validation
-        pass 
+        try:
+            if isinstance(value, (datetime.date, datetime.datetime)):
+                return value
+            if isinstance(value, str):
+                if 'T' in value:
+                    return datetime.datetime.fromisoformat(value)
+                return datetime.date.fromisoformat(value)
+            raise ValidationError(_('Invalid date/time format'))
+        except (TypeError, ValueError):
+            raise ValidationError(_('Value must be a valid date/time in ISO format'))
+            
+    elif range_class_id == 'E95_Spacetime_Primitive':
+        if not isinstance(value, dict):
+            raise ValidationError(_('Spacetime primitive must be a valid GeoJSON object'))
+        return value
+        
+    # For E62_String and other primitives, just return the string value
+    return str(value)
+
+def validate_cidoc_entity(class_id):
+    """
+    Validates that a class ID is a valid CIDOC-CRM entity class.
+    
+    Args:
+        class_id: str class identifier (e.g., 'E22_Human-Made_Object')
+    """
+    from .schema import CIDOCClass
+    
+    if not class_id:
+        raise ValidationError(_('Entity must have a CIDOC-CRM class'))
+        
+    try:
+        CIDOCClass.objects.get(class_id=class_id)
+    except ObjectDoesNotExist:
+        raise ValidationError(_(f'Invalid CIDOC-CRM class: {class_id}'))
+
+def validate_cidoc_relationship(property_id, source_class, target_class):
+    """
+    Validates that a property is a valid CIDOC-CRM relationship between classes.
+    
+    Args:
+        property_id: str property identifier (e.g., 'P1_is_identified_by')
+        source_class: str source class identifier
+        target_class: str target class identifier
+    """
+    from .schema import CIDOCProperty, CIDOCClass
+    
+    if not property_id:
+        raise ValidationError(_('Relationship must have a CIDOC-CRM property'))
+        
+    try:
+        property_def = CIDOCProperty.objects.get(property_id=property_id)
+    except ObjectDoesNotExist:
+        raise ValidationError(_(f'Invalid CIDOC-CRM property: {property_id}'))
+        
+    try:
+        # Validate domain
+        if property_def.domain_class:
+            validate_cidoc_class(
+                CIDOCClass.objects.get(class_id=source_class),
+                property_def.domain_class.class_id
+            )
+            
+        # Validate range
+        if property_def.range_class:
+            validate_cidoc_class(
+                CIDOCClass.objects.get(class_id=target_class),
+                property_def.range_class.class_id
+            )
+            
+    except ObjectDoesNotExist:
+        raise ValidationError(_(f'Invalid CIDOC-CRM class in relationship')) 
