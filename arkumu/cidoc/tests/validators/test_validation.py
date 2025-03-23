@@ -8,9 +8,152 @@ from arkumu.cidoc.models.validators import (
     validate_property_cardinality,
     validate_inverse_relationship,
     validate_symmetric_relationship,
-    validate_primitive_value
+    validate_primitive_value,
+    validate_cidoc_entity,
+    validate_cidoc_relationship
 )
 from rdflib import RDFS, RDF, OWL, Literal
+import datetime
+
+def test_validate_cidoc_entity():
+    """Test validation of CIDOC entity class IDs"""
+    with patch('arkumu.cidoc.models.schema.CIDOCClass') as MockCIDOCClass:
+        # Test valid class ID
+        MockCIDOCClass.objects.get.return_value = Mock(class_id='E21_Person')
+        validate_cidoc_entity('E21_Person')
+        
+        # Test empty class ID
+        with pytest.raises(ValidationError, match='Entity must have a CIDOC-CRM class'):
+            validate_cidoc_entity('')
+            
+        # Test invalid class ID
+        MockCIDOCClass.objects.get.side_effect = CIDOCClass.DoesNotExist
+        with pytest.raises(ValidationError, match='Invalid CIDOC-CRM class'):
+            validate_cidoc_entity('Invalid_Class')
+
+def test_validate_cidoc_relationship():
+    """Test validation of CIDOC relationship between classes"""
+    with patch('arkumu.cidoc.models.schema.CIDOCProperty') as MockCIDOCProperty, \
+         patch('arkumu.cidoc.models.schema.CIDOCClass') as MockCIDOCClass:
+        
+        # Set up mocks
+        property_mock = Mock(
+            property_id='P62_depicts',
+            domain_class=Mock(class_id='E24_Physical_Human-Made_Thing'),
+            range_class=Mock(class_id='E1_CRM_Entity')
+        )
+        MockCIDOCProperty.objects.get.return_value = property_mock
+        
+        source_class_mock = Mock(class_id='E24_Physical_Human-Made_Thing')
+        target_class_mock = Mock(class_id='E1_CRM_Entity')
+        source_class_mock.parent_classes.all.return_value = []
+        target_class_mock.parent_classes.all.return_value = []
+        
+        def mock_get_class(class_id):
+            if class_id == 'E24_Physical_Human-Made_Thing':
+                return source_class_mock
+            if class_id == 'E1_CRM_Entity':
+                return target_class_mock
+            raise CIDOCClass.DoesNotExist()
+            
+        MockCIDOCClass.objects.get.side_effect = mock_get_class
+        
+        # Test valid relationship
+        validate_cidoc_relationship(
+            'P62_depicts',
+            'E24_Physical_Human-Made_Thing',
+            'E1_CRM_Entity'
+        )
+        
+        # Test empty property ID
+        with pytest.raises(ValidationError, match='Relationship must have a CIDOC-CRM property'):
+            validate_cidoc_relationship('', 'E24_Physical_Human-Made_Thing', 'E1_CRM_Entity')
+            
+        # Test invalid property
+        MockCIDOCProperty.objects.get.side_effect = CIDOCProperty.DoesNotExist
+        with pytest.raises(ValidationError, match='Invalid CIDOC-CRM property'):
+            validate_cidoc_relationship('Invalid_Property', 'E24_Physical_Human-Made_Thing', 'E1_CRM_Entity')
+            
+        # Test invalid source class
+        # Reset property mock to return valid property
+        MockCIDOCProperty.objects.get.side_effect = None
+        MockCIDOCProperty.objects.get.return_value = property_mock
+        
+        with pytest.raises(ValidationError, match='Invalid CIDOC-CRM class in relationship'):
+            validate_cidoc_relationship('P62_depicts', 'Invalid_Class', 'E1_CRM_Entity')
+
+def test_validate_primitive_value_extended():
+    """Test validation of primitive values with all supported types"""
+    # Test E60_Number
+    number_class = Mock(spec=CIDOCClass)
+    number_class.class_id = 'E60_Number'
+    number_class.is_primitive = True
+    
+    number_prop = Mock(spec=CIDOCProperty)
+    number_prop.range_class = number_class
+    
+    assert validate_primitive_value(number_prop, "42") == 42.0
+    assert validate_primitive_value(number_prop, "3.14") == 3.14
+    assert validate_primitive_value(number_prop, "-1.5") == -1.5
+    
+    with pytest.raises(ValidationError, match='Value must be a number'):
+        validate_primitive_value(number_prop, "not a number")
+    
+    # Test E61_Time_Primitive
+    time_class = Mock(spec=CIDOCClass)
+    time_class.class_id = 'E61_Time_Primitive'
+    time_class.is_primitive = True
+    
+    time_prop = Mock(spec=CIDOCProperty)
+    time_prop.range_class = time_class
+    
+    # Test date
+    date_value = datetime.date(2024, 3, 20)
+    assert validate_primitive_value(time_prop, date_value) == date_value
+    assert validate_primitive_value(time_prop, "2024-03-20").isoformat() == "2024-03-20"
+    
+    # Test datetime
+    datetime_value = datetime.datetime(2024, 3, 20, 14, 30)
+    assert validate_primitive_value(time_prop, datetime_value) == datetime_value
+    assert validate_primitive_value(time_prop, "2024-03-20T14:30:00").isoformat() == "2024-03-20T14:30:00"
+    
+    with pytest.raises(ValidationError, match='must be a valid date/time'):
+        validate_primitive_value(time_prop, "not a date")
+    
+    # Test E95_Spacetime_Primitive
+    geo_class = Mock(spec=CIDOCClass)
+    geo_class.class_id = 'E95_Spacetime_Primitive'
+    geo_class.is_primitive = True
+    
+    geo_prop = Mock(spec=CIDOCProperty)
+    geo_prop.range_class = geo_class
+    
+    geo_value = {"type": "Point", "coordinates": [125.6, 10.1]}
+    assert validate_primitive_value(geo_prop, geo_value) == geo_value
+    
+    with pytest.raises(ValidationError, match='must be a valid GeoJSON object'):
+        validate_primitive_value(geo_prop, "not a GeoJSON")
+    
+    # Test E62_String (and default case)
+    string_class = Mock(spec=CIDOCClass)
+    string_class.class_id = 'E62_String'
+    string_class.is_primitive = True
+    
+    string_prop = Mock(spec=CIDOCProperty)
+    string_prop.range_class = string_class
+    
+    assert validate_primitive_value(string_prop, "test string") == "test string"
+    assert validate_primitive_value(string_prop, 123) == "123"
+    
+    # Test non-primitive property
+    non_primitive_prop = Mock(spec=CIDOCProperty)
+    non_primitive_prop.range_class = None
+    
+    test_value = "any value"
+    assert validate_primitive_value(non_primitive_prop, test_value) == test_value
+    
+    # Test None value
+    assert validate_primitive_value(number_prop, None) is None
 
 def test_class_id_format(cidoc_rdf, cidoc_ns):
     """Test class ID format validation using real CIDOC classes"""
@@ -111,10 +254,10 @@ def test_validate_cidoc_class(cidoc_rdf, cidoc_ns):
     validate_cidoc_class(person, 'E21_Person')  # Direct match
     validate_cidoc_class(person, 'E39_Actor')  # Parent class
     
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError, match='Invalid CIDOC class'):
         validate_cidoc_class(person, 'E22_Human-Made_Object')
     
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError, match='Entity must have a CIDOC-CRM class'):
         validate_cidoc_class(None, 'E21_Person')
 
 def test_validate_property_domain_range(cidoc_rdf, cidoc_ns):
@@ -145,11 +288,11 @@ def test_validate_property_domain_range(cidoc_rdf, cidoc_ns):
     wrong_domain.parent_classes = Mock()
     wrong_domain.parent_classes.all.return_value = []  # No parent classes
     
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError, match='Invalid property domain'):
         validate_property_domain_range(depicts, wrong_domain, entity)
     
     # Test missing target class
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError, match='Target class required for relationship property'):
         validate_property_domain_range(depicts, physical_thing)
 
 def test_validate_property_cardinality():
@@ -180,11 +323,11 @@ def test_validate_property_cardinality():
     validate_property_cardinality(depicts, entity_without, "new_value")
     
     entity_with = MockEntity(has_property=True)
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError, match='can have at most one value'):
         validate_property_cardinality(depicts, entity_with, "new_value")
 
-def test_validate_inverse_relationship(cidoc_rdf, cidoc_ns):
-    """Test inverse relationship validation using RDF data"""
+def test_validate_inverse_relationship():
+    """Test inverse relationship validation"""
     # Create mock properties
     depicts = Mock(spec=CIDOCProperty)
     depicts.property_id = 'P62_depicts'
@@ -213,7 +356,7 @@ def test_validate_inverse_relationship(cidoc_rdf, cidoc_ns):
     # Test validation
     source = MockEntity(has_inverse=False)
     target = MockEntity()
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError, match='Missing inverse relationship'):
         validate_inverse_relationship(depicts, source, target)
     
     source_with_inverse = MockEntity(has_inverse=True)
@@ -245,29 +388,8 @@ def test_validate_symmetric_relationship():
     # Test validation
     source = MockEntity(has_symmetric=False)
     target = MockEntity()
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError, match='Missing symmetric relationship'):
         validate_symmetric_relationship(meets, source, target)
     
     source_with_symmetric = MockEntity(has_symmetric=True)
-    validate_symmetric_relationship(meets, source_with_symmetric, target)
-
-def test_validate_primitive_value():
-    """Test primitive value validation"""
-    # Create mock primitive property
-    number_class = Mock(spec=CIDOCClass)
-    number_class.class_id = 'E60_Number'
-    number_class.is_primitive = True
-    
-    number_prop = Mock(spec=CIDOCProperty)
-    number_prop.property_id = 'P90_has_value'
-    number_prop.range_class = number_class
-    
-    # Test validation
-    validate_primitive_value(number_prop, "42")
-    validate_primitive_value(number_prop, "3.14")
-    validate_primitive_value(number_prop, "-1.5")
-    
-    with pytest.raises(ValidationError):
-        validate_primitive_value(number_prop, "not a number")
-    with pytest.raises(ValidationError):
-        validate_primitive_value(number_prop, "") 
+    validate_symmetric_relationship(meets, source_with_symmetric, target) 
