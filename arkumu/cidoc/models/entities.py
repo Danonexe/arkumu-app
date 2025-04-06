@@ -2,8 +2,9 @@ from django.db import models
 from django.db import transaction
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
-from arkumu.cidoc.models.schema import CIDOCClass, CIDOCProperty, CIDOCGraph, UUIDModel
-from django.contrib.auth.models import Group, User
+from django.conf import settings
+from arkumu.cidoc.models.schema import CIDOCProperty, CIDOCGraph, UUIDModel
+from django.contrib.auth.models import Group
 from django.contrib.postgres.fields import JSONField  # For GeoJSON
 from .validators import (
     validate_cidoc_entity,
@@ -21,7 +22,7 @@ from functools import cached_property
 class CIDOCPermissionMixin:
     """Mixin to handle CIDOC property permissions."""
     
-    def user_can_read(self, user: User) -> bool:
+    def user_can_read(self, user) -> bool:
         """Check if user has read permission."""
         if user.is_superuser:
             return True
@@ -33,7 +34,7 @@ class CIDOCPermissionMixin:
             any(g in self.writable_by_groups.all() for g in user.groups.all())
         )
         
-    def user_can_write(self, user: User) -> bool:
+    def user_can_write(self, user) -> bool:
         """Check if user has write permission."""
         if user.is_superuser:
             return True
@@ -116,12 +117,12 @@ class CIDOCEntityProperty(UUIDModel, CIDOCPermissionMixin):
         blank=True
     )
     readable_by_users = models.ManyToManyField(
-        User, 
+        settings.AUTH_USER_MODEL, 
         related_name='can_read_entity_properties',
         blank=True
     )
     writable_by_users = models.ManyToManyField(
-        User, 
+        settings.AUTH_USER_MODEL, 
         related_name='can_write_entity_properties',
         blank=True
     )
@@ -201,12 +202,12 @@ class CIDOCRelationshipProperty(UUIDModel, CIDOCPermissionMixin):
         blank=True
     )
     readable_by_users = models.ManyToManyField(
-        User, 
+        settings.AUTH_USER_MODEL, 
         related_name='can_read_relationship_properties',
         blank=True
     )
     writable_by_users = models.ManyToManyField(
-        User, 
+        settings.AUTH_USER_MODEL, 
         related_name='can_write_relationship_properties',
         blank=True
     )

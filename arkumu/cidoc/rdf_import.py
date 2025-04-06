@@ -1,6 +1,7 @@
 import rdflib
 from django.db import transaction
-from ..models.core import CIDOCClass, CIDOCProperty
+from arkumu.cidoc.models.schema import CIDOCClass, CIDOCProperty
+import re
 
 @transaction.atomic
 def import_cidoc_from_rdf(rdf_file_path, namespace="http://www.cidoc-crm.org/cidoc-crm/"):
@@ -32,7 +33,16 @@ def import_cidoc_from_rdf(rdf_file_path, namespace="http://www.cidoc-crm.org/cid
     
     for class_uri in g.subjects(RDF.type, RDFS.Class):
         if str(class_uri).startswith(namespace):
-            class_id = str(class_uri).split('/')[-1]
+            # Extract class ID from URI - handle different formats
+            full_id = str(class_uri).split('/')[-1]
+            # Normalize class ID - extract E1, E21, etc.
+            # If the format is like E1_CRM_Entity, get just E1
+            match = re.match(r'(E\d+)', full_id)
+            if match:
+                class_id = match.group(1)
+            else:
+                class_id = full_id
+                
             label = g.value(class_uri, RDFS.label, None)
             comment = g.value(class_uri, RDFS.comment, None)
             
@@ -48,6 +58,7 @@ def import_cidoc_from_rdf(rdf_file_path, namespace="http://www.cidoc-crm.org/cid
             class_map[class_uri] = cidoc_class
             if created:
                 classes_count += 1
+                print(f"Created class: {class_id}")
     
     # Second pass: Set up class hierarchy
     for class_uri, cidoc_class in class_map.items():
@@ -58,7 +69,16 @@ def import_cidoc_from_rdf(rdf_file_path, namespace="http://www.cidoc-crm.org/cid
     # Import properties
     for prop_uri in g.subjects(RDF.type, RDF.Property):
         if str(prop_uri).startswith(namespace):
-            prop_id = str(prop_uri).split('/')[-1]
+            # Extract property ID - handle different formats
+            full_id = str(prop_uri).split('/')[-1]
+            # Normalize property ID - extract P1, P2, etc.
+            # If the format is like P1_is_identified_by, get just P1
+            match = re.match(r'(P\d+)', full_id)
+            if match:
+                prop_id = match.group(1)
+            else:
+                prop_id = full_id
+                
             label = g.value(prop_uri, RDFS.label, None)
             comment = g.value(prop_uri, RDFS.comment, None)
             domain = g.value(prop_uri, RDFS.domain, None)
@@ -72,18 +92,6 @@ def import_cidoc_from_rdf(rdf_file_path, namespace="http://www.cidoc-crm.org/cid
             range_obj = None
             if range_class in class_map:
                 range_obj = class_map[range_class]
-            
-            # Determine property type
-            property_type = 'string'  # Default
-            if range_class:
-                if 'Dimension' in str(range_class):
-                    property_type = 'numeric'
-                elif 'Time' in str(range_class):
-                    property_type = 'date'
-                elif 'URI' in str(range_class):
-                    property_type = 'uri'
-                elif 'Boolean' in str(range_class):
-                    property_type = 'boolean'
             
             # Check for symmetric properties
             is_symmetric = False
@@ -102,7 +110,6 @@ def import_cidoc_from_rdf(rdf_file_path, namespace="http://www.cidoc-crm.org/cid
                     'description': str(comment) if comment else '',
                     'domain_class': domain_class,
                     'range_class': range_obj,
-                    'property_type': property_type,
                     'is_symmetric': is_symmetric,
                     'is_transitive': is_transitive
                 }
@@ -110,5 +117,6 @@ def import_cidoc_from_rdf(rdf_file_path, namespace="http://www.cidoc-crm.org/cid
             
             if created:
                 properties_count += 1
+                print(f"Created property: {prop_id}")
     
     return (classes_count, properties_count)

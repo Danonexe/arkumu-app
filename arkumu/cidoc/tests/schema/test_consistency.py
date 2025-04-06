@@ -1,9 +1,47 @@
 import pytest
-from unittest.mock import Mock, patch
-from rdflib import RDFS, RDF, OWL
+from pathlib import Path
+import os
+from rdflib import RDFS, RDF, OWL, Graph, Namespace
 from arkumu.cidoc.models.schema import CIDOCClass, CIDOCProperty
 from django.core.exceptions import ValidationError
+from django.db import transaction
+from arkumu.cidoc.rdf_import import import_cidoc_from_rdf
 
+
+@pytest.fixture
+def rdf_file_path():
+    """Return the path to the CIDOC RDF file"""
+    base_dir = Path(__file__).resolve().parent.parent.parent
+    rdf_file = os.path.join(base_dir, 'schema', 'CIDOC_CRM_v7.1.1.rdf')
+    assert os.path.exists(rdf_file), f"RDF file not found at {rdf_file}"
+    return rdf_file
+
+
+@pytest.fixture
+def cidoc_rdf(rdf_file_path):
+    """Return an RDFLib graph with the CIDOC RDF loaded"""
+    g = Graph()
+    g.parse(rdf_file_path)
+    return g
+
+
+@pytest.fixture
+def cidoc_ns():
+    """Return the CIDOC namespace"""
+    return Namespace("http://www.cidoc-crm.org/cidoc-crm/")
+
+
+@pytest.fixture
+def loaded_cidoc_data(rdf_file_path):
+    """Load CIDOC data from RDF into actual database models"""
+    with transaction.atomic():
+        classes_count, properties_count = import_cidoc_from_rdf(rdf_file_path)
+        print(f"\nLoaded {classes_count} classes and {properties_count} properties for testing")
+        yield (classes_count, properties_count)
+        # Transaction will be rolled back after the test
+
+
+@pytest.mark.django_db
 def test_property_domain_range_consistency(cidoc_rdf, cidoc_ns):
     """Test that property domains and ranges reference valid classes"""
     for prop in cidoc_rdf.subjects(RDF.type, RDF.Property):
