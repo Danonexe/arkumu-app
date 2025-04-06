@@ -6,7 +6,7 @@ import os
 import datetime
 
 from arkumu.cidoc.models.schema import CIDOCClass, CIDOCProperty
-from arkumu.cidoc.models.validators import (
+from arkumu.cidoc.validators import (
     validate_cidoc_class,
     validate_property_domain_range,
     validate_property_cardinality,
@@ -57,15 +57,21 @@ def test_validate_cidoc_entity_real(loaded_cidoc_data):
     all_classes = list(CIDOCClass.objects.values_list('class_id', flat=True))
     print(f"\nAll available classes in database: {all_classes[:10]}")
     
-    # Get the first available class
+    # Get the first available class or create one if none exists
     first_class = CIDOCClass.objects.first()
-    if first_class:
-        print(f"Using first available class: {first_class.class_id}")
-        
-        # Test with a valid class ID that exists in the database
-        validate_cidoc_entity(first_class.class_id)
+    if not first_class:
+        # Create a test class
+        first_class = CIDOCClass.objects.create(
+            class_id='E1_CRM_Entity',
+            label='Test CRM Entity',
+            description='Test class for entity validation'
+        )
+        print(f"Created test class: {first_class.class_id}")
     else:
-        pytest.skip("No classes found in database")
+        print(f"Using first available class: {first_class.class_id}")
+    
+    # Test with a valid class ID that exists in the database
+    validate_cidoc_entity(first_class.class_id)
     
     # Test with empty class ID
     with pytest.raises(ValidationError, match='Entity must have a CIDOC-CRM class'):
@@ -84,7 +90,19 @@ def test_validate_cidoc_class_real(loaded_cidoc_data):
     
     person = CIDOCClass.objects.first()
     if not person:
-        pytest.skip("No classes found in database")
+        # Create a test class hierarchy
+        parent = CIDOCClass.objects.create(
+            class_id='E77_Persistent_Item',
+            label='Persistent Item',
+            description='Test parent class'
+        )
+        person = CIDOCClass.objects.create(
+            class_id='E39_Actor',
+            label='Actor',
+            description='Test child class'
+        )
+        person.parent_classes.add(parent)
+        print(f"Created test class hierarchy: {person.class_id} is a {parent.class_id}")
     
     print(f"Using class: {person.class_id}")
     
@@ -109,7 +127,29 @@ def test_validate_cidoc_class_real(loaded_cidoc_data):
             with pytest.raises(ValidationError, match='Invalid CIDOC class'):
                 validate_cidoc_class(person, unrelated_class.class_id)
     else:
-        print("No parent classes found, skipping parent tests")
+        # Create a parent class if none exists
+        parent = CIDOCClass.objects.create(
+            class_id='E1_CRM_Entity',
+            label='CRM Entity',
+            description='Root class for testing'
+        )
+        person.parent_classes.add(parent)
+        print(f"Added parent class {parent.class_id} to {person.class_id}")
+        
+        # Now test with the parent class
+        validate_cidoc_class(person, parent.class_id)
+        print(f"\nValidated {person.class_id} as a {parent.class_id}")
+        
+        # Create an unrelated class
+        unrelated_class = CIDOCClass.objects.create(
+            class_id='E90_Symbolic_Object',
+            label='Symbolic Object',
+            description='Unrelated class for testing'
+        )
+        
+        # Test with the unrelated class
+        with pytest.raises(ValidationError, match='Invalid CIDOC class'):
+            validate_cidoc_class(person, unrelated_class.class_id)
 
 @pytest.mark.django_db
 def test_validate_cidoc_relationship_real(loaded_cidoc_data):
@@ -208,7 +248,6 @@ def test_validate_property_domain_range_real(loaded_cidoc_data):
 @pytest.mark.django_db
 def test_validate_primitive_value_real(loaded_cidoc_data):
     """Test validation of primitive values with real database models"""
-    from arkumu.cidoc.models.validators import validate_primitive_value
     
     # Find primitive types in the database
     primitive_types = {
@@ -524,13 +563,45 @@ def test_symmetric_property_validation_real(loaded_cidoc_data):
     if symmetric_props.exists():
         prop = symmetric_props.first()
         print(f"\nTesting symmetric property: {prop.property_id}")
-        
-        # For symmetric properties, domain and range should be the same
-        if prop.domain_class and prop.range_class:
-            assert prop.domain_class == prop.range_class, f"Symmetric property {prop.property_id} should have same domain and range"
     else:
-        print("\nNo symmetric properties found in database, skipping test")
-        pytest.skip("No symmetric properties in database")
+        # Create a test symmetric property if none exists
+        test_class = CIDOCClass.objects.first()
+        if not test_class:
+            pytest.skip("No classes found in database")
+            
+        prop, created = CIDOCProperty.objects.get_or_create(
+            property_id='P_TEST_SYMMETRIC',
+            defaults={
+                'label': 'Test Symmetric Property',
+                'description': 'Test property for symmetric validation',
+                'domain_class': test_class,
+                'range_class': test_class,
+                'is_symmetric': True
+            }
+        )
+        
+        if not created:
+            prop.is_symmetric = True
+            prop.domain_class = test_class
+            prop.range_class = test_class
+            prop.save()
+            
+        print(f"\nCreated test symmetric property: {prop.property_id}")
+    
+    # For symmetric properties, domain and range should be the same
+    if prop.domain_class and prop.range_class:
+        assert prop.domain_class == prop.range_class, f"Symmetric property {prop.property_id} should have same domain and range"
+        print(f"Verified symmetric property {prop.property_id} has matching domain and range: {prop.domain_class.class_id}")
+    else:
+        # Fix the property by setting domain and range to the same class
+        test_class = CIDOCClass.objects.first()
+        prop.domain_class = test_class
+        prop.range_class = test_class
+        prop.save()
+        print(f"Fixed symmetric property {prop.property_id} by setting domain and range to {test_class.class_id}")
+        
+        # Now verify
+        assert prop.domain_class == prop.range_class, f"Symmetric property {prop.property_id} should have same domain and range"
 
 @pytest.mark.django_db
 def test_class_hierarchy_validation_real(loaded_cidoc_data):
@@ -541,13 +612,24 @@ def test_class_hierarchy_validation_real(loaded_cidoc_data):
     ).filter(parent_count__gt=0)
     
     if not child_classes.exists():
-        print("\nNo classes with parents found in database, skipping test")
-        pytest.skip("No classes with parents in database")
-        
-    child = child_classes.first()
-    parents = list(child.parent_classes.all())
+        # Create test class hierarchy
+        parent = CIDOCClass.objects.create(
+            class_id='E77_Persistent_Item',
+            label='Persistent Item',
+            description='Parent class for testing'
+        )
+        child = CIDOCClass.objects.create(
+            class_id='E39_Actor',
+            label='Actor',
+            description='Child class for testing'
+        )
+        child.parent_classes.add(parent)
+        print(f"\nCreated test class hierarchy: {child.class_id} is a {parent.class_id}")
+    else:
+        child = child_classes.first()
+        print(f"\nTesting class hierarchy for: {child.class_id}")
     
-    print(f"\nTesting class hierarchy for: {child.class_id}")
+    parents = list(child.parent_classes.all())
     print(f"Parents: {', '.join([p.class_id for p in parents])}")
     
     # Verify that the class can be validated as any of its parent classes
@@ -560,12 +642,20 @@ def test_class_hierarchy_validation_real(loaded_cidoc_data):
         id__in=[p.id for p in parents]
     ).exclude(id=child.id).first()
     
-    if non_parent:
-        # Verify that validation fails for non-parent class
-        with pytest.raises(ValidationError):
-            validate_cidoc_class(child, non_parent.class_id)
-            
-        print(f"Correctly rejected {child.class_id} as {non_parent.class_id}")
+    if not non_parent:
+        # Create a non-parent class
+        non_parent = CIDOCClass.objects.create(
+            class_id='E90_Symbolic_Object',
+            label='Symbolic Object',
+            description='Unrelated class for testing'
+        )
+        print(f"Created non-parent class {non_parent.class_id}")
+    
+    # Verify that validation fails for non-parent class
+    with pytest.raises(ValidationError):
+        validate_cidoc_class(child, non_parent.class_id)
+        
+    print(f"Correctly rejected {child.class_id} as {non_parent.class_id}")
 
 def test_rdf_class_hierarchy_constraints(cidoc_rdf, cidoc_ns):
     """Test class hierarchy using RDF data directly"""
@@ -617,7 +707,11 @@ def test_rdf_property_domain_range_constraints(cidoc_rdf, cidoc_ns):
         
         # Verify domain and range are valid URIs
         assert str(domain).startswith(str(cidoc_ns)), f"Domain should be in CIDOC namespace: {domain}"
-        assert str(range_).startswith(str(cidoc_ns)), f"Range should be in CIDOC namespace: {range_}"
+        
+        # Check range - it can be either a CIDOC class or rdfs:Literal
+        valid_range = (str(range_).startswith(str(cidoc_ns)) or 
+                       str(range_) == "http://www.w3.org/2000/01/rdf-schema#Literal")
+        assert valid_range, f"Range should be in CIDOC namespace or rdfs:Literal: {range_}"
 
 def test_rdf_inverse_property_validation(cidoc_rdf, cidoc_ns):
     """Test inverse property relationships using RDF data directly"""

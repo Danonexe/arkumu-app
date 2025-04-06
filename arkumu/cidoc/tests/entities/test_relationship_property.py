@@ -1,236 +1,231 @@
 import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
 from django.core.exceptions import ValidationError
-from django.db.models.fields.related_descriptors import ManyToManyDescriptor, ForwardManyToOneDescriptor
-from arkumu.cidoc.models.entities import CIDOCRelationshipProperty
+from ...models.entities import CIDOCRelationshipProperty
+from ...models.schema import CIDOCProperty
 
-@pytest.fixture
-def mock_relationship_property(mock_relationship, mock_cidoc_property, mocker):
-    # Create the property instance
-    prop = CIDOCRelationshipProperty(
-        relationship=mock_relationship,
-        cidoc_property=mock_cidoc_property,
+@pytest.mark.django_db
+def test_create_property_real(real_relationship, real_property):
+    """Test basic property creation with real entities"""
+    # Create a relationship property
+    prop = CIDOCRelationshipProperty.objects.create(
+        relationship=real_relationship,
+        cidoc_property=real_property,
         value_data='Test Value'
     )
     
-    # Mock the state to prevent DB access
-    prop._state = MagicMock()
-    prop._state.db = None
+    # Verify property was created correctly
+    assert prop.pk is not None, "Relationship property was not created"
+    assert prop.value == 'Test Value', "Relationship property has incorrect value"
     
-    # Create mock manager for M2M fields
-    def create_mock_manager():
-        manager = MagicMock()
-        manager.all.return_value = []
-        manager.set = MagicMock()
-        return manager
-    
-    # Mock the M2M descriptors
-    for field in ['readable_by_groups', 'readable_by_users', 'writable_by_groups', 'writable_by_users']:
-        manager = create_mock_manager()
-        descriptor = MagicMock(spec=ManyToManyDescriptor)
-        descriptor.__get__ = MagicMock(return_value=manager)
-        setattr(type(prop), field, descriptor)
-        setattr(prop, f'_{field}_cache', manager)
-    
-    # Mock save method
-    prop.save = MagicMock()
-    
-    return prop
+    # Verify we can retrieve it from the database
+    saved_prop = CIDOCRelationshipProperty.objects.get(pk=prop.pk)
+    assert saved_prop.value == 'Test Value', "Retrieved property has incorrect value"
 
-def test_create_property(mock_relationship, mock_cidoc_property):
-    """Test basic property creation"""
-    with patch('arkumu.cidoc.models.entities.validate_primitive_value') as validate_mock:
-        validate_mock.return_value = 'Test Value'
-        
-        # Create property instance
-        prop = CIDOCRelationshipProperty(
-            relationship=mock_relationship,
-            cidoc_property=mock_cidoc_property,
+@pytest.mark.django_db
+def test_invalid_value_type_real(real_relationship, loaded_cidoc_data):
+    """Test validation of property value type with real entities"""
+    # Find a number-type property
+    number_property = CIDOCProperty.objects.filter(
+        range_class__class_id__startswith='E60'  # Number type
+    ).first()
+    
+    if not number_property:
+        pytest.skip("No number properties available for testing")
+    
+    # Try to create property with invalid value
+    prop = CIDOCRelationshipProperty(
+        relationship=real_relationship,
+        cidoc_property=number_property
+    )
+    
+    # This should raise validation error
+    with pytest.raises(ValidationError):
+        prop.value = "not a number"
+        prop.full_clean()
+
+@pytest.mark.django_db
+def test_clean_validation_real(real_relationship, real_property):
+    """Test clean method validations with real entities"""
+    # Create property
+    prop = CIDOCRelationshipProperty(
+        relationship=real_relationship,
+        cidoc_property=real_property,
+        value_data='Test Value'
+    )
+    
+    # Should validate successfully
+    prop.clean()
+    
+    # Test with invalid domain
+    # Find a property not valid for this relationship
+    source_class = real_relationship.source.crm_class
+    target_class = real_relationship.target.crm_class
+    
+    invalid_props = CIDOCProperty.objects.filter(
+        domain_class__isnull=False,
+        range_class__isnull=False
+    ).exclude(
+        domain_class__class_id=source_class
+    ).exclude(
+        domain_class__parent_classes__class_id=source_class
+    )
+    
+    if invalid_props.exists():
+        invalid_prop = invalid_props.first()
+        invalid_rel_prop = CIDOCRelationshipProperty(
+            relationship=real_relationship,
+            cidoc_property=invalid_prop,
             value_data='Test Value'
         )
         
-        # Mock field descriptors
-        prop._state = MagicMock()
-        prop._state.db = None
-        
-        # Set up field descriptors and cache
-        fields_cache = {}
-        fields_cache[mock_cidoc_property] = mock_cidoc_property
-        prop._fields_cache = fields_cache
-        
-        # Mock relationship field descriptor
-        relationship_descriptor = MagicMock(spec=ForwardManyToOneDescriptor)
-        relationship_descriptor.__get__ = MagicMock(return_value=mock_relationship)
-        type(prop).relationship = relationship_descriptor
-        
-        # Mock cidoc_property field descriptor
-        property_descriptor = MagicMock(spec=ForwardManyToOneDescriptor)
-        property_descriptor.__get__ = MagicMock(return_value=mock_cidoc_property)
-        type(prop).cidoc_property = property_descriptor
-        
-        # Test value getter
-        assert prop.value == 'Test Value'
-        
-        # Test value setter
-        prop.value = 'New Test Value'
-        validate_mock.assert_called_with(mock_cidoc_property, 'New Test Value')
-
-def test_invalid_value_type(mock_relationship, mock_cidoc_property):
-    """Test validation of property value type"""
-    with patch('arkumu.cidoc.models.entities.validate_primitive_value') as validate_mock:
-        validate_mock.side_effect = ValidationError('Invalid type')
-        
-        prop = CIDOCRelationshipProperty(
-            relationship=mock_relationship,
-            cidoc_property=mock_cidoc_property
-        )
-        
-        # Mock field descriptors
-        prop._state = MagicMock()
-        prop._state.db = None
-        
-        # Set up field descriptors and cache
-        fields_cache = {}
-        fields_cache[mock_cidoc_property] = mock_cidoc_property
-        prop._fields_cache = fields_cache
-        
-        # Mock relationship field descriptor
-        relationship_descriptor = MagicMock(spec=ForwardManyToOneDescriptor)
-        relationship_descriptor.__get__ = MagicMock(return_value=mock_relationship)
-        type(prop).relationship = relationship_descriptor
-        
-        # Mock cidoc_property field descriptor
-        property_descriptor = MagicMock(spec=ForwardManyToOneDescriptor)
-        property_descriptor.__get__ = MagicMock(return_value=mock_cidoc_property)
-        type(prop).cidoc_property = property_descriptor
-        
+        # Should raise validation error
         with pytest.raises(ValidationError):
-            prop.value = 123  # Should raise ValidationError
-        
-        validate_mock.assert_called_once_with(mock_cidoc_property, 123)
+            invalid_rel_prop.clean()
 
-def test_clean_validation(mock_relationship, mock_cidoc_property):
-    """Test clean method validations"""
-    with patch('arkumu.cidoc.models.entities.validate_property_domain_range') as validate_domain, \
-         patch('arkumu.cidoc.models.entities.validate_property_cardinality') as validate_cardinality:
-        
-        # Set up mock property with proper domain class
-        mock_cidoc_property.domain_class = MagicMock()
-        mock_cidoc_property.domain_class.class_id = 'E21_Person'
-        mock_cidoc_property.property_id = 'P1_test_property'
-        
-        # Set up mock relationship with proper classes
-        source_class = MagicMock()
-        source_class.class_id = 'E21_Person'
-        source_class.parent_classes = MagicMock()
-        source_class.parent_classes.all.return_value = []
-        
-        target_class = MagicMock()
-        target_class.class_id = 'E53_Place'
-        target_class.parent_classes = MagicMock()
-        target_class.parent_classes.all.return_value = []
-        
-        mock_relationship.source.crm_class = source_class
-        mock_relationship.target.crm_class = target_class
-        
-        # Set up mock parent classes
-        parent_classes = MagicMock()
-        parent_classes.all.return_value = []
-        mock_cidoc_property.domain_class.parent_classes = parent_classes
-        
-        prop = CIDOCRelationshipProperty(
-            relationship=mock_relationship,
-            cidoc_property=mock_cidoc_property,
-            value_data='Test Value'
-        )
-        
-        # Mock field descriptors
-        prop._state = MagicMock()
-        prop._state.db = None
-        
-        # Set up field descriptors and cache
-        fields_cache = {}
-        fields_cache[mock_cidoc_property] = mock_cidoc_property
-        prop._fields_cache = fields_cache
-        
-        # Mock relationship field descriptor
-        relationship_descriptor = MagicMock(spec=ForwardManyToOneDescriptor)
-        relationship_descriptor.__get__ = MagicMock(return_value=mock_relationship)
-        type(prop).relationship = relationship_descriptor
-        
-        # Mock cidoc_property field descriptor
-        property_descriptor = MagicMock(spec=ForwardManyToOneDescriptor)
-        property_descriptor.__get__ = MagicMock(return_value=mock_cidoc_property)
-        type(prop).cidoc_property = property_descriptor
-        
-        # Test successful validation
-        validate_domain.return_value = None
-        validate_cardinality.return_value = None
-        prop.clean()
-        
-        validate_domain.assert_called_once_with(
-            mock_cidoc_property,
-            source_class,
-            target_class,
-            'Test Value'
-        )
-        validate_cardinality.assert_called_once_with(
-            mock_cidoc_property,
-            mock_relationship,
-            'Test Value'
-        )
-        
-        # Test validation error
-        validate_domain.reset_mock()
-        validate_domain.side_effect = ValidationError('Domain validation failed')
-        with pytest.raises(ValidationError):
-            prop.clean()
+@pytest.mark.django_db
+def test_permission_read_access_real(real_relationship, real_property, test_user, test_group):
+    """Test read permissions with real entities and users"""
+    # Create property with no permissions
+    prop = CIDOCRelationshipProperty.objects.create(
+        relationship=real_relationship,
+        cidoc_property=real_property,
+        value_data='Test Value'
+    )
+    
+    # Initially user should not have access
+    assert not prop.user_can_read(test_user), "User should not have read access without permissions"
+    
+    # Add group access
+    test_user.groups.add(test_group)
+    prop.readable_by_groups.add(test_group)
+    
+    # User should now have access through group
+    assert prop.user_can_read(test_user), "User should have read access through group membership"
+    
+    # Remove group access
+    prop.readable_by_groups.remove(test_group)
+    
+    # Add direct user access
+    prop.readable_by_users.add(test_user)
+    
+    # User should have direct access
+    assert prop.user_can_read(test_user), "User should have direct read access"
 
-def test_permission_read_access(mock_relationship_property, mock_user, mock_group):
-    """Test read permissions"""
-    prop = mock_relationship_property
+@pytest.mark.django_db
+def test_permission_write_access_real(real_relationship, real_property, test_user, test_group):
+    """Test write permissions with real entities and users"""
+    # Create property with no permissions
+    prop = CIDOCRelationshipProperty.objects.create(
+        relationship=real_relationship,
+        cidoc_property=real_property,
+        value_data='Test Value'
+    )
     
-    # Test no access
-    prop.readable_by_groups.all.return_value = []
-    prop.readable_by_users.all.return_value = []
-    mock_user.groups.all.return_value = []
-    assert not prop.user_can_read(mock_user)
+    # Initially user should not have access
+    assert not prop.user_can_write(test_user), "User should not have write access without permissions"
     
-    # Test group access
-    prop.readable_by_groups.all.return_value = [mock_group]
-    mock_user.groups.all.return_value = [mock_group]
-    assert prop.user_can_read(mock_user)
+    # Add group access
+    test_user.groups.add(test_group)
+    prop.writable_by_groups.add(test_group)
     
-    # Test direct user access
-    prop.readable_by_groups.all.return_value = []
-    mock_user.groups.all.return_value = []
-    prop.readable_by_users.all.return_value = [mock_user]
-    assert prop.user_can_read(mock_user)
+    # User should now have access through group
+    assert prop.user_can_write(test_user), "User should have write access through group membership"
+    
+    # Remove group access
+    prop.writable_by_groups.remove(test_group)
+    
+    # Add direct user access
+    prop.writable_by_users.add(test_user)
+    
+    # User should have direct access
+    assert prop.user_can_write(test_user), "User should have direct write access"
 
-def test_permission_write_access(mock_relationship_property, mock_user, mock_group):
-    """Test write permissions"""
-    prop = mock_relationship_property
+@pytest.mark.django_db
+def test_superuser_permissions_real(real_relationship, real_property, test_superuser):
+    """Test that superuser has all permissions with real entities"""
+    # Create a property
+    prop = CIDOCRelationshipProperty.objects.create(
+        relationship=real_relationship,
+        cidoc_property=real_property,
+        value_data='Test Value'
+    )
     
-    # Test no access
-    prop.writable_by_groups.all.return_value = []
-    prop.writable_by_users.all.return_value = []
-    mock_user.groups.all.return_value = []
-    assert not prop.user_can_write(mock_user)
+    # Superuser should have all permissions
+    assert prop.user_can_read(test_superuser), "Superuser should have read access"
+    assert prop.user_can_write(test_superuser), "Superuser should have write access"
     
-    # Test group access
-    prop.writable_by_groups.all.return_value = [mock_group]
-    mock_user.groups.all.return_value = [mock_group]
-    assert prop.user_can_write(mock_user)
+    # Even if we explicitly try to deny access (which we shouldn't do in practice)
+    # Superuser should still have access
+    prop.readable_by_users.clear()
+    prop.writable_by_users.clear()
+    prop.readable_by_groups.clear()
+    prop.writable_by_groups.clear()
     
-    # Test direct user access
-    prop.writable_by_groups.all.return_value = []
-    mock_user.groups.all.return_value = []
-    prop.writable_by_users.all.return_value = [mock_user]
-    assert prop.user_can_write(mock_user)
+    assert prop.user_can_read(test_superuser), "Superuser should always have read access"
+    assert prop.user_can_write(test_superuser), "Superuser should always have write access"
 
-def test_superuser_permissions(mock_relationship_property, mock_superuser):
-    """Test that superuser has all permissions"""
-    prop = mock_relationship_property
+@pytest.mark.django_db
+def test_property_value_retrieval_real(real_relationship, real_property):
+    """Test property value getter/setter with real entities"""
+    # Create property
+    prop = CIDOCRelationshipProperty.objects.create(
+        relationship=real_relationship,
+        cidoc_property=real_property,
+        value_data='Initial Value'
+    )
     
-    assert prop.user_can_read(mock_superuser)
-    assert prop.user_can_write(mock_superuser) 
+    # Test getter
+    assert prop.value == 'Initial Value', "Property getter returned incorrect value"
+    
+    # Test setter
+    prop.value = 'Updated Value'
+    prop.save()
+    
+    # Verify update
+    prop_reloaded = CIDOCRelationshipProperty.objects.get(pk=prop.pk)
+    assert prop_reloaded.value == 'Updated Value', "Property update failed"
+
+@pytest.mark.django_db
+def test_property_nullability_real(real_relationship, real_property):
+    """Test that property values can be null"""
+    # Create property with null value
+    prop = CIDOCRelationshipProperty.objects.create(
+        relationship=real_relationship,
+        cidoc_property=real_property,
+        value_data=None
+    )
+    
+    # Verify null value
+    assert prop.value is None, "Property value should be None"
+    
+    # Update to non-null and back to null
+    prop.value = 'Temporary Value'
+    prop.save()
+    
+    prop.value = None
+    prop.save()
+    
+    # Verify null again
+    prop_reloaded = CIDOCRelationshipProperty.objects.get(pk=prop.pk)
+    assert prop_reloaded.value is None, "Property should allow null values"
+
+@pytest.mark.django_db
+def test_relationship_property_cascade_delete(real_relationship, real_property):
+    """Test that relationship properties are deleted when relationship is deleted"""
+    # Create property
+    prop = CIDOCRelationshipProperty.objects.create(
+        relationship=real_relationship,
+        cidoc_property=real_property,
+        value_data='Test Value'
+    )
+    
+    # Verify property exists
+    property_id = prop.id
+    relationship_id = real_relationship.id
+    assert CIDOCRelationshipProperty.objects.filter(id=property_id).exists(), "Property should exist"
+    
+    # Delete relationship
+    real_relationship.delete()
+    
+    # Verify property was cascade deleted
+    assert not CIDOCRelationshipProperty.objects.filter(id=property_id).exists(), "Property should be deleted with relationship" 

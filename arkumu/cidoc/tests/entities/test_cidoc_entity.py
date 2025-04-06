@@ -1,171 +1,329 @@
 import pytest
-from unittest.mock import MagicMock, patch
 from django.core.exceptions import ValidationError
-from ...models.entities import CIDOCEntity, GraphManager
-from ...models.schema import CIDOCGraph
-import age
+from django.db import transaction
+from arkumu.cidoc.models.schema import CIDOCClass, CIDOCProperty
+from arkumu.cidoc.models.entities import CIDOCEntity, CIDOCEntityProperty, CIDOCRelationship
+from arkumu.cidoc.validators import validate_cidoc_relationship
+# PermissionError is a built-in Python exception
 
-# Mock the Django models and dependencies first
-mock_cidoc_entity = MagicMock()
-mock_cidoc_entity_property = MagicMock()
-mock_cidoc_property = MagicMock()
-mock_cidoc_graph = MagicMock()
-
-# Mock the modules
-patch('arkumu.cidoc.models.entities.CIDOCEntity', mock_cidoc_entity).start()
-patch('arkumu.cidoc.models.entities.CIDOCEntityProperty', mock_cidoc_entity_property).start()
-patch('arkumu.cidoc.models.schema.CIDOCProperty', mock_cidoc_property).start()
-patch('arkumu.cidoc.models.schema.CIDOCGraph', mock_cidoc_graph).start()
-
-@pytest.fixture
-def mock_graph_manager():
-    manager = MagicMock(spec=GraphManager)
-    manager.create_entity_node.return_value = 'test_vertex_id'
-    manager.create_relationship_edge.return_value = 'test_edge_id'
-    manager.update_node_properties.return_value = True
-    manager.update_edge_properties.return_value = True
-    manager.delete_node.return_value = True
-    return manager
-
-@pytest.fixture
-def mock_entity(mock_graph_manager):
-    entity = MagicMock()
-    entity.crm_class = 'E21_Person'
-    entity.age_node_id = 'test_vertex_id'
-    entity._graph_manager = mock_graph_manager
-    return entity
-
-@pytest.fixture
-def mock_cidoc_property():
-    prop = MagicMock()
-    prop.property_id = 'P1_is_identified_by'
-    prop.domain = 'E1_CRM_Entity'
-    prop.range = 'E41_Appellation'
-    return prop
-
-@pytest.fixture
-def mock_entity_property():
-    prop = MagicMock()
-    prop.value = None
-    return prop
-
-def test_create_entity(mocker, mock_graph_manager):
-    """Test basic entity creation with graph operations"""
-    # Mock the GraphManager
-    mocker.patch('arkumu.cidoc.models.entities.GraphManager', return_value=mock_graph_manager)
+@pytest.mark.django_db
+def test_entity_creation(loaded_cidoc_data, test_user):
+    """Test basic entity creation with a valid CIDOC class"""
+    # Find a valid CIDOC class
+    valid_class = CIDOCClass.objects.first()
+    assert valid_class is not None, "No CIDOC classes found in database"
     
-    # Create mock entity with save behavior
-    entity = MagicMock(spec=CIDOCEntity)
-    entity.crm_class = 'E21_Person'
-    entity._graph_manager = mock_graph_manager
-    
-    # Mock save to actually call create_entity_node
-    def mock_save():
-        entity.age_node_id = entity._graph_manager.create_entity_node(
-            entity.crm_class,
-            {'crm_class': entity.crm_class}
-        )
-    entity.save.side_effect = mock_save
-    
-    # Call save
-    entity.save()
-    
-    # Verify graph operations
-    mock_graph_manager.create_entity_node.assert_called_once_with(
-        'E21_Person',
-        {'crm_class': 'E21_Person'}
+    # Create entity with valid class
+    entity = CIDOCEntity.objects.create(
+        crm_class=valid_class.class_id,
+        created_by=test_user,
+        updated_by=test_user
     )
-    assert entity.age_node_id == 'test_vertex_id'
+    
+    # Verify entity was created with correct class
+    assert entity.pk is not None, "Entity was not created"
+    assert entity.crm_class == valid_class.class_id, "Entity has incorrect class"
+    assert entity.age_node_id is None, "Entity should not have a graph node ID when graph is disabled"
+    
+    # Clean up
+    entity.delete()
 
-def test_entity_str_representation_without_identifier(mock_entity):
-    """Test string representation without identifier property"""
-    mock_property_set = MagicMock()
-    mock_property_set.filter.return_value.first.return_value = None
-    mock_entity.cidocentityproperty_set = mock_property_set
-    
-    expected_str = 'E21_Person: Unnamed'
-    mock_entity.__str__.return_value = expected_str
-    assert str(mock_entity) == expected_str
-
-def test_entity_str_representation_with_identifier(mock_entity, mock_entity_property):
-    """Test string representation with identifier property"""
-    mock_property_set = MagicMock()
-    mock_entity_property.value = 'John Doe'
-    mock_property_set.filter.return_value.first.return_value = mock_entity_property
-    mock_entity.cidocentityproperty_set = mock_property_set
-    
-    expected_str = 'E21_Person: John Doe'
-    mock_entity.__str__.return_value = expected_str
-    assert str(mock_entity) == expected_str
-
-def test_invalid_crm_class(mocker):
-    """Test that invalid CRM class raises validation error"""
-    # Create a mock entity with an invalid CRM class
-    mock_entity = MagicMock(spec=CIDOCEntity)
-    mock_entity.crm_class = 'InvalidClass'
-    
-    # Mock the clean method to simulate validation
-    def mock_clean():
-        if mock_entity.crm_class not in ['E21_Person', 'E1_CRM_Entity']:  # Add valid classes here
-            raise ValidationError({'crm_class': ['Invalid CRM class']})
-    
-    mock_entity.clean = mock_clean
-    
+@pytest.mark.django_db
+def test_entity_with_invalid_class(loaded_cidoc_data):
+    """Test that creating an entity with invalid class raises error"""
+    # Try to create entity with invalid class
     with pytest.raises(ValidationError):
-        mock_entity.clean()
+        entity = CIDOCEntity(
+            crm_class='E999_NonExistentClass'
+        )
+        entity.full_clean()  # This should raise ValidationError
 
-def test_get_valid_properties(mock_entity):
-    """Test getting valid properties for entity"""
-    expected_props = ['P1', 'P2', 'P3']
-    mock_entity.get_valid_properties.return_value = expected_props
-    valid_props = mock_entity.get_valid_properties()
-    assert valid_props == expected_props
-
-def test_delete_entity(mocker, mock_graph_manager, mock_entity):
-    """Test entity deletion and graph node cleanup"""
-    # Set up the mock entity with graph manager
-    mock_entity.age_node_id = 'test_vertex_id'
-    mock_entity._graph_manager = mock_graph_manager
+@pytest.mark.django_db
+def test_entity_string_representation(real_entity):
+    """Test entity string representation without properties"""
+    # Default string representation
+    entity_str = str(real_entity)
+    assert real_entity.crm_class in entity_str, "Entity string does not include class ID"
     
-    # Mock the delete method to actually call the graph manager's delete_node
-    def mock_delete():
-        mock_entity._graph_manager.delete_node(mock_entity.age_node_id)
-    mock_entity.delete.side_effect = mock_delete
+    # Entity should have a representation even without properties
+    assert "Unnamed" in entity_str or real_entity.crm_class in entity_str, "Entity string missing expected content"
+
+@pytest.mark.django_db
+def test_entity_with_identifier_property(loaded_cidoc_data, test_user):
+    """Test entity with identifier property (P1)"""
+    # Create an E1 entity which supports P1 property
+    e1_class = CIDOCClass.objects.get(class_id='E1')
+    
+    entity = CIDOCEntity.objects.create(
+        crm_class=e1_class.class_id,
+        created_by=test_user,
+        updated_by=test_user
+    )
+    
+    # Get the P1 property
+    p1_property = CIDOCProperty.objects.get(property_id='P1')
+    
+    # Create entity property with P1
+    entity_property = CIDOCEntityProperty.objects.create(
+        entity=entity,
+        cidoc_property=p1_property,
+        value_data="Test Entity",
+        created_by=test_user,
+        updated_by=test_user
+    )
+    
+    # Debug information
+    print(f"Created property: {entity_property.id}")
+    print(f"Property value_data: {entity_property.value_data}")
+    print(f"Property cidoc_property_id: {entity_property.cidoc_property.property_id}")
+    
+    # Query to check if property exists
+    props = entity.cidocentityproperty_set.all()
+    print(f"Number of properties found: {props.count()}")
+    for prop in props:
+        print(f"Found property: {prop.cidoc_property.property_id}, value: {prop.value_data}")
+    
+    # Get property using the exact same query as in __str__
+    name_prop = entity.cidocentityproperty_set.filter(
+        cidoc_property__property_id='P1'
+    ).first()
+    print(f"name_prop using P1 filter: {name_prop}")
+    print(f"name_prop value: {name_prop.value_data if name_prop else 'None'}")
+    
+    # Test string representation
+    assert str(entity) == "E1: Test Entity", "Entity string representation should include property value"
+    
+    # Create an entity without the property
+    entity2 = CIDOCEntity.objects.create(
+        crm_class=e1_class.class_id,
+        created_by=test_user,
+        updated_by=test_user
+    )
+    
+    # Test string representation falls back to unnamed
+    assert str(entity2) == "E1: Unnamed", "Entity string representation should fall back to 'Unnamed'"
+
+@pytest.mark.django_db
+def test_entity_valid_properties(real_entity):
+    """Test getting valid properties for entity"""
+    # Get valid properties for the entity
+    valid_props = real_entity.get_valid_properties()
+    
+    # There should be at least one valid property
+    assert len(valid_props) > 0, "Entity has no valid properties"
+    
+    # Valid properties should include some standard ones like P1 (identifier)
+    property_ids = [p.property_id for p in valid_props]
+    assert any(p.startswith('P') for p in property_ids), "No standard properties found"
+    
+    # Print some debug info
+    print(f"\nEntity class: {real_entity.crm_class}")
+    print(f"First few valid properties: {property_ids[:5]}")
+
+@pytest.mark.django_db
+def test_entity_property_creation(loaded_cidoc_data, test_user):
+    """Test entity property creation and validation"""
+    # Create an E1 entity which supports P1 property
+    e1_class = CIDOCClass.objects.get(class_id='E1')
+    
+    entity = CIDOCEntity.objects.create(
+        crm_class=e1_class.class_id,
+        created_by=test_user,
+        updated_by=test_user
+    )
+    
+    # Get the P1 property
+    p1_property = CIDOCProperty.objects.get(property_id='P1')
+    
+    # Create entity property with P1
+    entity_property = CIDOCEntityProperty.objects.create(
+        entity=entity,
+        cidoc_property=p1_property,
+        value_data="Test Value",
+        created_by=test_user,
+        updated_by=test_user
+    )
+    
+    # Verify property creation
+    assert entity_property.value == "Test Value", "Property value does not match expected"
+    
+    # Test property retrieval via reverse relationship
+    entity_properties = entity.cidocentityproperty_set.all()
+    assert len(entity_properties) == 1, "Entity should have one property"
+    assert entity_properties[0].value == "Test Value", "Retrieved property value should match"
+    
+    # Test unique constraint
+    with pytest.raises(ValidationError):
+        # Attempt to create duplicate property should fail
+        duplicate_prop = CIDOCEntityProperty(
+            entity=entity,
+            cidoc_property=p1_property,
+            value_data="Another Value", 
+            created_by=test_user,
+            updated_by=test_user
+        )
+        duplicate_prop.full_clean()  # This should raise the validation error
+
+@pytest.mark.django_db
+def test_entity_property_validation(real_entity, real_property):
+    """Test validation of entity properties"""
+    # Create an entity property
+    entity_prop = CIDOCEntityProperty(
+        entity=real_entity,
+        cidoc_property=real_property
+    )
+    
+    # Test validation only if the property has a defined range class
+    if real_property.range_class:
+        # Test with invalid value (assuming real_property is a string type)
+        if real_property.range_class.class_id.startswith('E60'):  # Number type
+            # Should raise validation error with non-numeric string
+            with pytest.raises(ValidationError):
+                entity_prop.value = "not a number"
+                entity_prop.full_clean()
+        
+        # Test with valid value
+        if real_property.range_class.class_id.startswith('E62'):  # String type
+            entity_prop.value = "Valid string value"
+            entity_prop.full_clean()  # Should not raise exception
+            assert entity_prop.value == "Valid string value"
+    else:
+        # If range_class is None, it's likely a literal. Test with a string.
+        entity_prop.value = "Literal Value"
+        entity_prop.full_clean() # Should not raise validation error
+        assert entity_prop.value == "Literal Value", "Validation failed for literal property"
+
+@pytest.mark.django_db
+def test_entity_relationship(loaded_cidoc_data, test_user):
+    """Test creation of relationships between entities"""
+    # Find valid classes for a specific relationship
+    # P7 (took place at) typically connects E5 (Event) to E53 (Place)
+    e5_class = CIDOCClass.objects.get(class_id='E5')  # Event
+    e53_class = CIDOCClass.objects.get(class_id='E53')  # Place
+    
+    # Create source entity (Event)
+    event_entity = CIDOCEntity.objects.create(
+        crm_class=e5_class.class_id,
+        created_by=test_user,
+        updated_by=test_user
+    )
+    
+    # Create target entity (Place)
+    place_entity = CIDOCEntity.objects.create(
+        crm_class=e53_class.class_id,
+        created_by=test_user,
+        updated_by=test_user
+    )
+    
+    # Create the relationship - the inverse will be created automatically
+    relationship = CIDOCRelationship.objects.create(
+        source=event_entity,
+        target=place_entity,
+        relation_type='P7',
+        created_by=test_user,
+        updated_by=test_user
+    )
+    
+    # Check that both relationships were created
+    assert relationship.source == event_entity
+    assert relationship.target == place_entity
+    assert relationship.relation_type == 'P7'
+    
+    # Verify the inverse relationship was created
+    inverse_relationship = place_entity.outgoing_relationships.get(relation_type='P7i')
+    assert inverse_relationship.source == place_entity
+    assert inverse_relationship.target == event_entity
+    assert inverse_relationship.relation_type == 'P7i'
+    
+    # Test relationship string representation
+    assert str(relationship) == f"{e5_class.class_id} --P7--> {e53_class.class_id}"
+    
+    # Test fetching relationships through related manager
+    outgoing = event_entity.outgoing_relationships.all()
+    incoming = place_entity.incoming_relationships.all()
+    
+    assert len(outgoing) == 1, "Event should have one outgoing relationship"
+    assert len(incoming) == 1, "Place should have one incoming relationship"
+    assert outgoing[0] == relationship, "Incorrect outgoing relationship"
+    assert incoming[0] == relationship, "Incorrect incoming relationship"
+
+@pytest.mark.django_db
+def test_entity_deletion(loaded_cidoc_data, test_user):
+    """Test entity deletion cascades properly"""
+    # Find a valid CIDOC class for P1 property (should be E1)
+    e1_class = CIDOCClass.objects.get(class_id='E1')
+    
+    # Create entity
+    entity = CIDOCEntity.objects.create(
+        crm_class=e1_class.class_id,
+        created_by=test_user,
+        updated_by=test_user
+    )
+    
+    # Add a property to the entity
+    property = CIDOCProperty.objects.get(property_id='P1')
+    entity_prop = CIDOCEntityProperty.objects.create(
+        entity=entity,
+        cidoc_property=property,
+        value_data="Test Value",
+        created_by=test_user,
+        updated_by=test_user
+    )
     
     # Delete the entity
-    mock_entity.delete()
+    entity_id = entity.id
+    entity.delete()
     
-    # Verify graph operations
-    mock_graph_manager.delete_node.assert_called_once_with('test_vertex_id')
+    # Verify entity was deleted
+    assert not CIDOCEntity.objects.filter(id=entity_id).exists(), "Entity was not deleted"
+    
+    # Verify property was cascade deleted
+    assert not CIDOCEntityProperty.objects.filter(entity_id=entity_id).exists(), "Entity property was not deleted"
 
-def test_update_entity_properties(mocker, mock_graph_manager, mock_entity):
-    """Test updating entity properties in the graph"""
-    # Set up the mock entity with graph manager
-    mock_entity.age_node_id = 'test_vertex_id'
-    mock_entity._graph_manager = mock_graph_manager
+@pytest.mark.django_db
+def test_get_set_property_methods(loaded_cidoc_data, test_user, test_superuser):
+    """Test get_property and set_property methods"""
+    # Create an E1 entity which supports P1 property
+    e1_class = CIDOCClass.objects.get(class_id='E1')
     
-    # Update properties
-    new_props = {'name': 'John Doe', 'age': 30}
-    result = mock_entity._graph_manager.update_node_properties('test_vertex_id', new_props)
+    entity = CIDOCEntity.objects.create(
+        crm_class=e1_class.class_id,
+        created_by=test_user,
+        updated_by=test_user
+    )
     
-    # Verify graph operations
-    mock_graph_manager.update_node_properties.assert_called_once_with('test_vertex_id', new_props)
-    assert result is True
-
-def test_graph_connection_cleanup(mocker):
-    """Test that graph connections are properly cleaned up"""
-    # Create mock graph
-    mock_graph = MagicMock(spec=CIDOCGraph)
+    # Use P1 property for testing
+    p1_property = CIDOCProperty.objects.get(property_id='P1')
     
-    # Create mock graph manager with mock graph
-    mock_manager = MagicMock(spec=GraphManager)
-    mock_manager.graph = mock_graph
+    # Set a property as superuser
+    prop = entity.set_property(test_superuser, p1_property.property_id, "Test Value")
     
-    # Mock the cleanup method instead of __del__
-    mock_manager.cleanup = MagicMock()
+    # Verify property was set
+    assert prop is not None, "Property was not set"
+    assert prop.value == "Test Value", "Property has incorrect value"
     
-    # Call cleanup method directly
-    mock_manager.cleanup()
+    # Get the property as normal user (should fail without permissions)
+    value = entity.get_property(test_user, p1_property.property_id)
+    assert value is None, "User without permissions should not be able to read property"
     
-    # Verify cleanup was called
-    mock_manager.cleanup.assert_called_once() 
+    # Add read permission to the user
+    prop.readable_by_users.add(test_user)
+    
+    # Now user should be able to read
+    value = entity.get_property(test_user, p1_property.property_id)
+    assert value == "Test Value", "User with permissions should be able to read property"
+    
+    # Try to set property as normal user (should fail without permissions)
+    try:
+        entity.set_property(test_user, p1_property.property_id, "New Value")
+        assert False, "User without permissions should not be able to set property"
+    except PermissionError:
+        # Expected behavior
+        pass
+    
+    # Add write permission to the user
+    prop.writable_by_users.add(test_user)
+    
+    # Now user should be able to write
+    new_prop = entity.set_property(test_user, p1_property.property_id, "New Value")
+    assert new_prop.value == "New Value", "User with permissions should be able to set property" 
