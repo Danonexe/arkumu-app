@@ -52,11 +52,8 @@ def validate_property_domain_range(property_def, source_class, target_class=None
               f'domain class {domain_class.class_id}')
         )
     
-    # For relationship properties, validate range class
-    if property_def.is_relationship_property:
-        if not target_class:
-            raise ValidationError(_('Target class required for relationship property'))
-            
+    # For relationship properties with a range class, validate target class
+    if property_def.range_class and target_class:
         valid_range = False
         range_class = property_def.range_class
         
@@ -69,6 +66,9 @@ def validate_property_domain_range(property_def, source_class, target_class=None
                 _(f'Invalid property range. {property_def.property_id} requires '
                   f'range class {range_class.class_id}')
             )
+    # If property has a range class but target_class is None, it's missing
+    elif property_def.range_class and not target_class:
+        raise ValidationError(_('Target class required for relationship property'))
 
 def validate_property_cardinality(property_def, entity, new_value=None):
     """

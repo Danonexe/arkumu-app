@@ -280,7 +280,7 @@ arkumu/media/
 !.envs/.local/
 # dbs
 *.sql
-
+*.sql.gz
 #fields_to_translate
 fields_to_translate.txt
 
