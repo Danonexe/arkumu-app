@@ -12,7 +12,7 @@ from rest_framework.authtoken.views import obtain_auth_token
 from django.conf.urls.i18n import i18n_patterns
 
 urlpatterns = [
-    path("", TemplateView.as_view(template_name="pages/home.html"), name="home"),
+    path("", TemplateView.as_view(template_name="pages/prueba.html"), name="home"),
     path(
         "about/",
         TemplateView.as_view(template_name="pages/about.html"),

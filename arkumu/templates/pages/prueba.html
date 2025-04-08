@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Placeholders{% endblock title %}
+
+{% block javascript %}
+  {{ block.super }}
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Obtener referencias a los elementos del DOM
+      const input = document.getElementById('interactive-input');
+      const stateIndicator = document.getElementById('state-indicator');
+
+      // Estado inicial
+      let isHovered = false;
+      let isFocused = false;
+      let isFilled = false;
+
+      // Aplicar los estilos basados en el estado actual
+      function updateStyles() {
+        // Restablecer las clases base
+        input.className = 'w-full p-4 font-mono border transition-all duration-200';
+        
+        // Aplicar estilos según el estado actual
+        if (isFocused) {
+          input.className += ' border-2 border-gray-800 ring-1 ring-gray-800';
+          stateIndicator.className = 'font-semibold text-blue-600 ml-1';
+          stateIndicator.textContent = 'Focus';
+        } else if (isFilled) {
+          input.className += ' border border-gray-300 font-semibold';
+          stateIndicator.className = 'font-semibold text-green-600 ml-1';
+          stateIndicator.textContent = 'Filled';
+        } else if (isHovered) {
+          input.className += ' border border-gray-300 bg-gray-100';
+          stateIndicator.className = 'font-semibold text-yellow-600 ml-1';
+          stateIndicator.textContent = 'Hover';
+        } else {
+          input.className += ' border border-gray-300';
+          stateIndicator.className = 'font-semibold text-gray-600 ml-1';
+          stateIndicator.textContent = 'Default';
+        }
+      }
+
+      // Event listeners
+      input.addEventListener('mouseenter', () => {
+        isHovered = true;
+        updateStyles();
+      });
+
+      input.addEventListener('mouseleave', () => {
+        isHovered = false;
+        updateStyles();
+      });
+
+      input.addEventListener('focus', () => {
+        isFocused = true;
+        updateStyles();
+      });
+
+      input.addEventListener('blur', () => {
+        isFocused = false;
+        updateStyles();
+      });
+
+      input.addEventListener('input', () => {
+        isFilled = input.value.length > 0;
+        updateStyles();
+      });
+    });
+  </script>
+{% endblock javascript %}
+
+{% block bodyclass %}bg-theme transition-colors duration-300 flex items-center justify-center min-h-screen{% endblock bodyclass %}
+
+{% block content %}
+  <div class="max-w-xl mx-auto p-6 bg-white rounded-lg shadow-sm">
+    
+    <div class="mb-6">
+      <input
+        id="interactive-input"
+        type="text"
+        placeholder="Placeholder"
+        class="w-full p-4 font-mono border border-gray-300 transition-all duration-200"
+      />
+    </div>
+  </div>
+{% endblock content %}
