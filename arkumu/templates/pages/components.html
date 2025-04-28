@@ -1,0 +1,131 @@
+{% extends "base2.html" %}
+
+{% block title %}arkumu Components{% endblock title %}
+
+{% block content %}
+<div class="w-full min-h-screen bg-arkumu-hell">
+  <div class="container mx-auto px-6 py-12">
+    <h1 class="text-3xl font-bold mb-12">Arkumu Components Catalog</h1>
+    
+    <!-- Button Components Section -->
+    <section class="mb-16">
+      <h2 class="text-2xl font-semibold mb-6 pb-2 border-b">Button Components</h2>
+      
+      <!-- Primary Button -->
+      <div class="mb-10">
+        <h3 class="text-lg font-medium mb-3">Primary Button</h3>
+        <div class="p-4 border bg-white">
+          {% include 'components/buttons/primary_button.html' with button_text="Primary Button" %}
+        </div>
+        <p class="mt-2 text-sm text-gray-600">Path: components/buttons/primary_button.html</p>
+      </div>
+      
+      <!-- Secondary Button -->
+      <div class="mb-10">
+        <h3 class="text-lg font-medium mb-3">Secondary Button</h3>
+        <div class="p-4 border bg-white">
+          {% include 'components/buttons/secondary_button.html' with button_text="Secondary Button" %}
+        </div>
+        <p class="mt-2 text-sm text-gray-600">Path: components/buttons/secondary_button.html</p>
+      </div>
+    </section>
+    
+    <!-- Header Components Section -->
+    <section class="mb-16">
+      <h2 class="text-2xl font-semibold mb-6 pb-2 border-b">Header Components</h2>
+      
+      <!-- Theme Buttons -->
+      <div class="mb-10">
+        <h3 class="text-lg font-medium mb-3">Theme Buttons</h3>
+        <div class="p-4 border bg-white">
+          {% include 'components/header/theme_buttons.html' %}
+        </div>
+        <p class="mt-2 text-sm text-gray-600">Path: components/header/theme_buttons.html</p>
+      </div>
+      
+      <!-- Search Button -->
+      <div class="mb-10">
+        <h3 class="text-lg font-medium mb-3">Search Button</h3>
+        <div class="p-4 border bg-white">
+          <div class="flex flex-col items-center w-10">
+            {% include 'components/header/search_button.html' %}
+            <span class="text-xs mt-1 font-mono">Suche</span>
+          </div>
+        </div>
+        <p class="mt-2 text-sm text-gray-600">Path: components/header/search_button.html</p>
+      </div>
+      
+      <!-- Menu Button -->
+      <div class="mb-10">
+        <h3 class="text-lg font-medium mb-3">Menu Button</h3>
+        <div class="p-4 border bg-white">
+          <div class="flex flex-col items-center w-10">
+            {% include 'components/header/menu_button.html' %}
+            <span class="text-xs mt-1 font-mono">Menü</span>
+          </div>
+        </div>
+        <p class="mt-2 text-sm text-gray-600">Path: components/header/menu_button.html</p>
+      </div>
+    </section>
+    
+    <!-- Input Components Section -->
+    <section class="mb-16">
+      <h2 class="text-2xl font-semibold mb-6 pb-2 border-b">Input Components</h2>
+      
+      <!-- Search Bar -->
+      <div class="mb-10">
+        <h3 class="text-lg font-medium mb-3">Search Bar</h3>
+        <div class="p-4 border bg-white">
+          {% include 'components/inputs/navbar.html' with placeholder_text="Suchbegriff" %}
+        </div>
+        <p class="mt-2 text-sm text-gray-600">Path: components/inputs/navbar.html</p>
+      </div>
+      
+      <!-- Text Field -->
+      <div class="mb-10">
+        <h3 class="text-lg font-medium mb-3">Text Field</h3>
+        <div class="p-4 border bg-white">
+          {% include 'components/inputs/text_field.html' with placeholder_text="Enter your text here" %}
+        </div>
+        <p class="mt-2 text-sm text-gray-600">Path: components/inputs/text_field.html</p>
+      </div>
+    </section>
+    
+    <!-- Text Components Section -->
+    <section class="mb-16">
+      <h2 class="text-2xl font-semibold mb-6 pb-2 border-b">Text Components</h2>
+      
+      <!-- Arkumu Text -->
+      <div class="mb-10">
+        <h3 class="text-lg font-medium mb-3">Arkumu Description Text</h3>
+        <div class="p-4 border bg-white">
+          {% include 'components/text/arkumu_text.html' %}
+        </div>
+        <p class="mt-2 text-sm text-gray-600">Path: components/text/arkumu_text.html</p>
+      </div>
+      
+      <!-- Dotted Line -->
+      <div class="mb-10">
+        <h3 class="text-lg font-medium mb-3">Dotted Line with Text</h3>
+        <div class="p-4 border bg-white">
+          {% include 'components/text/text_dotted_line.html' with text="Teilnehmende Hochschulen" %}
+        </div>
+        <p class="mt-2 text-sm text-gray-600">Path: components/text/text_dotted_line.html</p>
+      </div>
+    
+    <!-- Label Components Section -->
+    <section class="mb-16">
+      <h2 class="text-2xl font-semibold mb-6 pb-2 border-b">Label Components</h2>
+      
+      <!-- Black Label -->
+      <div class="mb-10">
+        <h3 class="text-lg font-medium mb-3">Black Label</h3>
+        <div class="p-4 border bg-white">
+          {% include 'components/labels/black_label.html' with label_text="Folkwang Universität der Künste" %}
+        </div>
+        <p class="mt-2 text-sm text-gray-600">Path: components/labels/black_label.html</p>
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock content %}
