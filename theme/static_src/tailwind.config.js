@@ -9,85 +9,23 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // Light Mode
-        light: {
-          bg: '#FFFFFF',
-          text: {
-            primary: '#000000',
-            secondary: '#4A4A4A',
-          },
-          button: {
-            bg: {
-              primary: '#1A1A1A',
-              secondary: '#6B6B6B',
-              outline: 'transparent',
-            },
-            text: {
-              primary: '#FFFFFF',
-              secondary: '#FFFFFF',
-              outline: '#000000',
-            },
-            border: {
-              primary: '#1A1A1A',
-              secondary: '#6B6B6B',
-              outline: '#000000',
-            }
-          }
+        arkumu: {
+          dark: '#2D2D2D',
+          'dark-hover': '#3A3A3A',
+          'dark-passive': '#656565',
+          light: '#FFFFFF',
+          'light-hover': '#E6E6E6',
+          // Nuevos colores para los botones
+          'blau': '#4285F4',       // Color azul para el botón "Blau"
+          'hell': '#F8F7F4',       // Color claro/beige para el botón "Hell"
+          'dunkel': '#1D1D1D',     // Color oscuro/negro para el botón "Dunkel"
         },
-        
-        // Dark Mode
-        dark: {
-          bg: '#1A1A1A',
-          text: {
-            primary: '#FFFFFF',
-            secondary: '#E0E0E0',
-          },
-          button: {
-            bg: {
-              primary: '#FFFFFF',
-              secondary: '#6B6B6B',
-              outline: 'transparent',
-            },
-            text: {
-              primary: '#000000',
-              secondary: '#FFFFFF',
-              outline: '#FFFFFF',
-            },
-            border: {
-              primary: '#FFFFFF',
-              secondary: '#6B6B6B',
-              outline: '#FFFFFF',
-            }
-          }
-        },
-        
-        // Blue Mode
-        blue: {
-          bg: '#FFFFFF',
-          text: {
-            primary: '#1967D2',
-            secondary: '#4285F4',
-          },
-          button: {
-            bg: {
-              primary: '#1967D2',
-              secondary: '#4285F4',
-              outline: 'transparent',
-            },
-            text: {
-              primary: '#FFFFFF',
-              secondary: '#FFFFFF',
-              outline: '#1967D2',
-            },
-            border: {
-              primary: '#1967D2',
-              secondary: '#4285F4',
-              outline: '#1967D2',
-            }
-          }
-        }
-      }
-    }
+      },
+      fontFamily: {
+        sans: ['Roboto Mono', 'monospace'],
+        mono: ['Roboto Mono', 'monospace'],
+      },
+    },
   },
   plugins: [],
 }

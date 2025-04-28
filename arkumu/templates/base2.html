@@ -1,0 +1,77 @@
+{% load static i18n %}<!DOCTYPE html>
+{% get_current_language as LANGUAGE_CODE %}
+<html lang="{{ LANGUAGE_CODE }}" class="h-full">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="x-ua-compatible" content="ie=edge" />
+    <title>
+      {% block title %}
+        arkumu
+      {% endblock title %}
+    </title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Archive der Kunst- und Musikhochschulen" />
+    <meta name="author" content="arkumu" />
+    <link rel="icon" href="{% static 'images/favicons/favicon.ico' %}" />
+    
+    {% block css %}
+      <!-- Tailwind CSS -->
+      <link href="{% static 'css/output.css' %}" rel="stylesheet" />
+      <link href="{% static 'css/project.css' %}" rel="stylesheet" />
+    {% endblock css %}
+    
+    {% block javascript %}
+      <!-- Bootstrap JS (if needed) -->
+      <script defer
+              src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.2.3/js/bootstrap.min.js"
+              integrity="sha512-1/RvZTcCDEUjY/CypiMz+iqqtaoQfAITmNSJY17Myp4Ms5mdxPS5UV7iOfdZoxcGhzFbOm6sntTKJppjvuhg4g=="
+              crossorigin="anonymous"
+              referrerpolicy="no-referrer"></script>
+      
+      <!-- Project specific Javascript -->
+      <script defer src="{% static 'js/project.js' %}"></script>
+      
+      <!-- HTMX -->
+      <script defer src="{% static 'js/htmx.min.js' %}"></script>
+    {% endblock javascript %}
+  </head>
+  <body class="h-full {% block bodyclass %}{% endblock bodyclass %}">
+    {% block body %}
+      <!-- Navbar will be added later -->
+      
+      <div class="w-full h-full px-0">
+        {% if messages %}
+          {% for message in messages %}
+            <div class="alert alert-dismissible {% if message.tags %}alert-{{ message.tags }}{% endif %}">
+              {{ message }}
+              <button type="button"
+                      class="btn-close"
+                      data-bs-dismiss="alert"
+                      aria-label="Close"></button>
+            </div>
+          {% endfor %}
+        {% endif %}
+        
+        {% block main %}
+          {% block container_type %}
+            <div class="w-full px-0">
+          {% endblock container_type %}
+          
+              {% block content %}
+                <!-- Content goes here -->
+              {% endblock content %}
+          
+          {% block container_type_end %}
+            </div>
+          {% endblock container_type_end %}
+        {% endblock main %}
+      </div>
+    {% endblock body %}
+    
+    {% block modal %}{% endblock modal %}
+    
+    {% block inline_javascript %}
+      <!-- Additional inline JavaScript can be added here -->
+    {% endblock inline_javascript %}
+  </body>
+</html>
