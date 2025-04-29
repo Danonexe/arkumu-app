@@ -126,6 +126,27 @@
         <p class="mt-2 text-sm text-gray-600">Path: components/labels/black_label.html</p>
       </div>
     </section>
+    
+    <!-- Card Components Section -->
+    <section class="mb-16">
+      <h2 class="text-2xl font-semibold mb-6 pb-2 border-b">Card Components</h2>
+      
+      <!-- Individual Card -->
+      <div class="mb-10">
+        <div class="p-4 border bg-white max-w-sm">
+          {% include 'components/cards/card.html' with year="2024" institution="Folkwang Universität der Kunst" title="Handmade in Ethiopia" subtitle="Projekt" contributor1_name="Johanna Schwer" contributor1_role="Betreuerin" contributor2_name="Judith Schanz" contributor2_role="Betreuerin" category1="Industrial Design" category2="Transformation Design" button_text="Projekt ansehen" %}
+        </div>
+      </div>
+      
+      <!-- Card Grid -->
+      <div class="mb-10">
+        <h3 class="text-lg font-medium mb-3">Project Cards Grid</h3>
+        <div class="p-4 border bg-white">{% include 'components/cards/card_grid.html' %}
+          
+        </div>
+        <p class="mt-2 text-sm text-gray-600">Path: components/cards/card_grid.html</p>
+      </div>
+    </section>
   </div>
 </div>
 {% endblock content %}

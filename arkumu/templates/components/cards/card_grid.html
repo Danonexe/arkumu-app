@@ -1,44 +1,24 @@
-<!-- Simple Card Grid -->
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+<!-- Project Cards Grid with Single Line Includes -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
   
-    <div class="card-container">
-      {% include 'components/cards/card.html' with 
-        year="2024"
-        institution="Folkwang Universität der Kunst"
-        title="Handmade in Ethiopia"
-        subtitle="Projekt"
-        button_text="Projekt ansehen"
-      %}
-    </div>
-    
-    <div class="card-container">
-      {% include 'components/cards/card.html' with 
-        year="2023"
-        institution="Hochschule für Medien"
-        title="Ein Herz aus Stahl und Plastik"
-        subtitle="Projekt" 
-        button_text="Video, Spielfilm"
-      %}
-    </div>
-    
-    <div class="card-container">
-      {% include 'components/cards/card.html' with 
-        year="2023"
-        institution="Hochschule für Musik und Tanz Köln"
-        title="Sonate für Klavier, op. 45"
-        subtitle="Partitur"
-        button_text="Instrumentalmusik"
-      %}
-    </div>
-    
-    <div class="card-container">
-      {% include 'components/cards/card.html' with 
-        year="2022"
-        institution="Hochschule für Musik und Tanz Köln"
-        title="Die schöne Müllerin"
-        subtitle="Projekt"
-        button_text="Liederzyklus"
-      %}
-    </div>
-    
+  <!-- Card 1 - Handmade in Ethiopia -->
+  <div class="card-container">
+    {% include 'components/cards/card.html' with year="2024" institution="Folkwang Universität der Kunst" title="Handmade in Ethiopia" subtitle="Projekt" contributor1_name="Johanna Schwer" contributor1_role="Betreuerin" contributor2_name="Judith Schanz" contributor2_role="Betreuerin" contributor3_name="Martina Allerbech" contributor3_role="Designerin, Beraterin" category1="Industrial Design" category2="Transformation Design" button_text="Projekt ansehen" %}
   </div>
+  
+  <!-- Card 2 - Ein Herz aus Stahl und Plastik -->
+  <div class="card-container">
+    {% include 'components/cards/card.html' with year="2023" institution="Hochschule für Medien" title="Ein Herz aus Stahl und Plastik" subtitle="Projekt" contributor1_name="Keanu Fluch" contributor1_role="Autor/in" contributor2_name="Jakob Huber" contributor2_role="Regisseur/in" additional_contributors="6 weitere" description="Immer hat nach langer Suche endlich den Parkplatz ihres Neubarons aufgetan, als es beinahe zum Zusammenstoft mit Thoman kommt. Beide wollen das Gleiche, [...]" category1="Video, Spielfilm" button_text="Projekt ansehen" %}
+  </div>
+  
+  <!-- Card 3 - Sonate für Klavier -->
+  <div class="card-container">
+    {% include 'components/cards/card.html' with year="2023" institution="Hochschule für Musik und Tanz Köln" title="Sonate für Klavier, op. 45" subtitle="Partitur" contributor1_name="Rudolf Preizle" contributor1_role="Komponist" category1="Instrumentalmusik" button_text="Projekt ansehen" %}
+  </div>
+  
+  <!-- Card 4 - Die schöne Müllerin -->
+  <div class="card-container">
+    {% include 'components/cards/card.html' with year="2022" institution="Hochschule für Musik und Tanz Köln" title="Die schöne Müllerin" subtitle="Projekt" contributor1_name="Teil von Sammlung" contributor2_name="Anonyme Projekte" category1="Liederzyklus" button_text="Projekt ansehen" %}
+  </div>
+  
+</div>
