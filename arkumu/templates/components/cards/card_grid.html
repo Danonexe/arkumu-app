@@ -1,0 +1,44 @@
+<!-- Simple Card Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+  
+    <div class="card-container">
+      {% include 'components/cards/card.html' with 
+        year="2024"
+        institution="Folkwang Universität der Kunst"
+        title="Handmade in Ethiopia"
+        subtitle="Projekt"
+        button_text="Projekt ansehen"
+      %}
+    </div>
+    
+    <div class="card-container">
+      {% include 'components/cards/card.html' with 
+        year="2023"
+        institution="Hochschule für Medien"
+        title="Ein Herz aus Stahl und Plastik"
+        subtitle="Projekt" 
+        button_text="Video, Spielfilm"
+      %}
+    </div>
+    
+    <div class="card-container">
+      {% include 'components/cards/card.html' with 
+        year="2023"
+        institution="Hochschule für Musik und Tanz Köln"
+        title="Sonate für Klavier, op. 45"
+        subtitle="Partitur"
+        button_text="Instrumentalmusik"
+      %}
+    </div>
+    
+    <div class="card-container">
+      {% include 'components/cards/card.html' with 
+        year="2022"
+        institution="Hochschule für Musik und Tanz Köln"
+        title="Die schöne Müllerin"
+        subtitle="Projekt"
+        button_text="Liederzyklus"
+      %}
+    </div>
+    
+  </div>

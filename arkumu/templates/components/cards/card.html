@@ -1,0 +1,43 @@
+<!-- Project Card Component -->
+<div class="project-card border border-gray-200 bg-white w-full mb-4">
+    <!-- Project Image -->
+    <div class="project-image w-full h-48 bg-black">
+      {% if image_url %}
+        <img src="{{ image_url }}" alt="{{ title }}" class="w-full h-full object-cover">
+      {% endif %}
+    </div>
+    
+    <!-- Year and Institution -->
+    <div class="p-2 border-t border-gray-200">
+      <div class="flex justify-between items-center">
+        <span class="text-xs font-mono text-gray-600">{{ year }}</span>
+        <span class="text-xs font-mono">{{ institution }}</span>
+      </div>
+    </div>
+    
+    <!-- Project Title -->
+    <div class="p-2 pt-0">
+      <h3 class="font-medium text-base">{{ title }}</h3>
+      <p class="text-sm text-gray-600 italic">{{ subtitle }}</p>
+    </div>
+    
+    <!-- Contributors - hardcoded for now -->
+    <div class="p-2 text-xs">
+      <div class="mb-1">Johanna Schwer [Betreuerin]</div>
+      <div class="mb-1">Judith Schanz [Betreuerin]</div>
+      <div class="mb-1">Martina Allerbech [Designerin, Beraterin]</div>
+    </div>
+    
+    <!-- Categories / Tags - hardcoded for now -->
+    <div class="p-2 text-xs space-y-2">
+      <span class="inline-block border border-gray-300 px-2 py-1 mr-2 mb-2">Industrial Design</span>
+      <span class="inline-block border border-gray-300 px-2 py-1 mr-2">Transformation Design</span>
+    </div>
+    
+    <!-- View Project Button -->
+    <div class="p-2 pb-4">
+      <button class="border border-gray-300 px-3 py-1 text-sm hover:bg-gray-100">
+        {{ button_text }}
+      </button>
+    </div>
+  </div>
