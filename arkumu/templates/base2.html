@@ -14,6 +14,15 @@
     <meta name="author" content="arkumu" />
     <link rel="icon" href="{% static 'images/favicons/favicon.ico' %}" />
     
+    <!-- Immediate theme application to prevent flash of wrong theme -->
+    <script>
+      (function() {
+        var savedTheme = localStorage.getItem('arkumu-theme') || 'light';
+        document.documentElement.classList.add('js-loaded');
+        document.body.classList.add('theme-' + savedTheme);
+      })();
+    </script>
+    
     {% block css %}
       <!-- Tailwind CSS -->
       <link href="{% static 'css/output.css' %}" rel="stylesheet" />
@@ -21,13 +30,7 @@
     {% endblock css %}
     
     {% block javascript %}
-      <!-- Bootstrap JS (if needed) -->
-      <script defer
-              src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.2.3/js/bootstrap.min.js"
-              integrity="sha512-1/RvZTcCDEUjY/CypiMz+iqqtaoQfAITmNSJY17Myp4Ms5mdxPS5UV7iOfdZoxcGhzFbOm6sntTKJppjvuhg4g=="
-              crossorigin="anonymous"
-              referrerpolicy="no-referrer"></script>
-      
+
       <!-- Project specific Javascript -->
       <script defer src="{% static 'js/project.js' %}"></script>
       
@@ -35,7 +38,7 @@
       <script defer src="{% static 'js/htmx.min.js' %}"></script>
     {% endblock javascript %}
   </head>
-  <body class="h-full bg-arkumu-hell {% block bodyclass %}{% endblock bodyclass %}">
+  <body class="h-full themed-bg {% block bodyclass %}{% endblock bodyclass %}">
     {% block body %}
       <!-- Navbar will be added later -->
       

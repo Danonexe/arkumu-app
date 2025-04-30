@@ -1,11 +1,27 @@
 {% extends "base2.html" %}
+{% load static %}
 
 {% block title %}arkumu Components{% endblock title %}
 
 {% block content %}
-<div class="w-full min-h-screen bg-arkumu-hell">
+<div class="w-full min-h-screen bg-arkumu-hell transition-colors duration-300">
   <div class="container mx-auto px-6 py-12">
-    <h1 class="text-3xl font-bold mb-12">Arkumu Components Catalog</h1>
+    <h1 class="text-3xl font-bold mb-6">Arkumu Components Catalog</h1>
+
+    
+    <!-- Themed Components Section -->
+    <section class="mb-16">
+      <h2 class="text-2xl font-semibold mb-6 pb-2 border-b">Themed Components</h2>
+      
+      <!-- Themed Button -->
+      <div class="mb-10">
+        <h3 class="text-lg font-medium mb-3">Themed Button</h3>
+        <div class="p-4 border bg-white">
+          {% include 'components/buttons/themed_button.html' with button_text="Themed Button" %}
+        </div>
+        <p class="mt-2 text-sm text-gray-600">Path: components/buttons/themed_button.html</p>
+      </div>
+    </section>
     
     <!-- Button Components Section -->
     <section class="mb-16">
@@ -150,3 +166,7 @@
   </div>
 </div>
 {% endblock content %}
+
+{% block inline_javascript %}
+<!-- Theme.js is no longer needed as it's integrated in project.js -->
+{% endblock inline_javascript %}

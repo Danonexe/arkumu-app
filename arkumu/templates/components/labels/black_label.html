@@ -1,4 +1,7 @@
-<!-- Black Background Label Component -->
-<div class="inline-block bg-black text-white px-3 py-1 font-mono text-sm">
-    {{ label_text|default:"Label Text" }}
-  </div>
+<!-- Themed Background Label Component -->
+<div class="inline-block px-3 py-1 font-mono text-sm transition-colors
+  bg-arkumu-dark text-arkumu-light
+  theme-dark:bg-arkumu-dark theme-dark:text-arkumu-light
+  theme-blue:bg-arkumu-blue theme-blue:text-arkumu-light">
+  {{ label_text|default:"Label Text" }}
+</div>

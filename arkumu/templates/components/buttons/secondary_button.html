@@ -1,5 +1,7 @@
-
-<!-- Light Button -->
-<button type="button" class="bg-white text-black border border-black px-6 py-3 font-mono">
+<!-- Theme-aware Secondary Button using pure Tailwind approach -->
+<button type="button" class="px-6 py-3 font-mono transition-colors border
+  bg-transparent text-arkumu-dark border-arkumu-dark hover:bg-arkumu-light-hover
+  theme-dark:bg-transparent theme-dark:text-arkumu-light theme-dark:border-arkumu-light theme-dark:hover:bg-opacity-10
+  theme-blue:bg-transparent theme-blue:text-arkumu-light theme-blue:border-arkumu-light theme-blue:hover:bg-opacity-10">
   {{ button_text|default:"Buttontext" }}
-  </button>
+</button>

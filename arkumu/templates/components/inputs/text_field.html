@@ -1,2 +1,7 @@
 <!-- TextField Input -->
-<input type="text" placeholder="{{ placeholder_text|default:"Placeholder" }}" class="w-full border border-gray-300 p-3 font-mono text-arkumu-dark">
+<input type="text" placeholder="{{ placeholder_text|default:"Placeholder" }}" 
+  class="w-full p-3 font-mono transition-colors
+  border border-gray-300 text-arkumu-dark bg-white
+  theme-dark:border-arkumu-dark-soft theme-dark:text-arkumu-light theme-dark:bg-arkumu-dark
+  theme-blue:border-arkumu-blue-soft theme-blue:text-arkumu-light theme-blue:bg-arkumu-blue"
+  placeholder="{{ placeholder_text|default:'Placeholder' }}">

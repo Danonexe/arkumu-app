@@ -1,0 +1,41 @@
+/* Theme System CSS Variables are defined in tailwind.config.js plugin */
+/* This file only contains component classes that use those variables */
+
+/* Theme-aware component classes */
+.themed-button {
+  background-color: var(--primary-bg);
+  color: var(--primary-text);
+}
+.themed-button:hover {
+  background-color: var(--primary-hover);
+}
+
+.themed-card {
+  background-color: var(--primary-bg);
+  color: var(--primary-text);
+  border-color: var(--primary-soft);
+}
+
+.themed-accent-button {
+  background-color: var(--accent-bg);
+  color: var(--accent-text);
+}
+.themed-accent-button:hover {
+  background-color: var(--accent-hover);
+}
+
+.themed-text {
+  color: var(--primary-text);
+}
+
+.themed-border {
+  border-color: var(--primary-soft);
+}
+
+.themed-bg {
+  background-color: var(--primary-bg);
+}
+
+.themed-passive {
+  color: var(--primary-passive);
+} 

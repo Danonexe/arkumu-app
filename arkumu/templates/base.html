@@ -16,14 +16,6 @@
         content="arkumu" />
   <link rel="icon" href="{% static 'images/favicons/favicon.ico' %}" />
   {% block css %}
-    <!-- Latest compiled and minified Bootstrap CSS 
-    <link rel="stylesheet"
-          href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.2.3/css/bootstrap.min.css"
-          integrity="sha512-SbiR/eusphKoMVVXysTKG/7VseWii+Y3FdHrt0EpKgpToZeemhqHeZeLWLhJutz/2ut2Vw1uQEj2MbRF+TVBUA=="
-          crossorigin="anonymous"
-          referrerpolicy="no-referrer" /> -->
-<!-- Your stuff: Third-party CSS libraries go here -->
-<!-- This file stores project-specific CSS -->
 
   
   <!-- Add by Daniel Tailwind CSS -->
@@ -54,10 +46,9 @@
   <!-- HTMX -->
   <script  defer src="{% static 'js/htmx.min.js' %}"></script>
 
-
 {% endblock javascript %}
 </head>
-<body class="{% block bodyclass %}{% endblock bodyclass %}">
+<body class="{% block bodyclass %}{% endblock bodyclass %} bg-arkumu-light theme-light:bg-arkumu-light theme-blue:bg-arkumu-light theme-dark:bg-arkumu-dark">
   {% block body %}
   <div class="mb-1">
     <nav class="navbar navbar-expand-md navbar-light bg-light">
