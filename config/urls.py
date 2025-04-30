@@ -13,6 +13,7 @@ from django.conf.urls.i18n import i18n_patterns
 
 urlpatterns = [
     path("", TemplateView.as_view(template_name="pages/prueba.html"), name="home"),
+    path("components/", TemplateView.as_view(template_name="pages/components.html"), name="home"),
     path(
         "about/",
         TemplateView.as_view(template_name="pages/about.html"),

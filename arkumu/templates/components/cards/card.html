@@ -1,43 +1,59 @@
-<!-- Project Card Component -->
-<div class="project-card border border-gray-200 bg-white w-full mb-4">
-    <!-- Project Image -->
-    <div class="project-image w-full h-48 bg-black">
-      {% if image_url %}
-        <img src="{{ image_url }}" alt="{{ title }}" class="w-full h-full object-cover">
-      {% endif %}
-    </div>
+<!-- Project Card Component - With Fixed Year Box -->
+<div class="project-card max-w-xs">
+  <!-- Project Image (Black Square) -->
+  <div class="project-image w-full h-48 bg-black border border-dotted border-gray-300">
+    {% if image_url %}<img src="{{ image_url }}" class="w-full h-full object-cover" alt="{{ title }}">{% endif %}
+  </div>
+  
+  <!-- Year with black border and Institution with black background -->
+  <div class="border border-black text-black text-xs py-1 px-2 font-mono inline-block mt-2">
+    {{ year|default:"2024" }}
+  </div>
+  <div class="bg-black text-white text-xs py-1 px-2 font-mono inline-block mt-2 ml-1">
+    {{ institution|default:"Folkwang Universität der Kunst" }}
+  </div>
+  
+  <!-- Gray line separator -->
+  <div class="w-full h-px bg-gray-400 my-2"></div>
+  
+  <!-- Project Title -->
+  <div class="mt-2">
+    <h3 class="font-medium text-base">{{ title|default:"Handmade in Ethiopia" }}</h3>
+    <p class="text-sm text-gray-600 underline mb-3">{{ subtitle|default:"Projekt" }}</p>
+  </div>
+  
+  <!-- Contributors -->
+  <div class="text-xs mb-4">
+    {% if contributor1_name %}<div class="mb-1">{{ contributor1_name }} [{{ contributor1_role|default:"" }}]</div>{% endif %}
+    {% if contributor2_name %}<div class="mb-1">{{ contributor2_name }} [{{ contributor2_role|default:"" }}]</div>{% endif %}
+    {% if contributor3_name %}<div class="mb-1">{{ contributor3_name }} [{{ contributor3_role|default:"" }}]</div>{% endif %}
+    {% if contributor4_name %}<div class="mb-1">{{ contributor4_name }} [{{ contributor4_role|default:"" }}]</div>{% endif %}
+    {% if additional_contributors %}<div class="mb-1">{{ additional_contributors }}</div>{% endif %}
     
-    <!-- Year and Institution -->
-    <div class="p-2 border-t border-gray-200">
-      <div class="flex justify-between items-center">
-        <span class="text-xs font-mono text-gray-600">{{ year }}</span>
-        <span class="text-xs font-mono">{{ institution }}</span>
-      </div>
-    </div>
-    
-    <!-- Project Title -->
-    <div class="p-2 pt-0">
-      <h3 class="font-medium text-base">{{ title }}</h3>
-      <p class="text-sm text-gray-600 italic">{{ subtitle }}</p>
-    </div>
-    
-    <!-- Contributors - hardcoded for now -->
-    <div class="p-2 text-xs">
+    {% if not contributor1_name and not contributor2_name and not contributor3_name and not contributor4_name and not additional_contributors %}
       <div class="mb-1">Johanna Schwer [Betreuerin]</div>
       <div class="mb-1">Judith Schanz [Betreuerin]</div>
       <div class="mb-1">Martina Allerbech [Designerin, Beraterin]</div>
-    </div>
-    
-    <!-- Categories / Tags - hardcoded for now -->
-    <div class="p-2 text-xs space-y-2">
-      <span class="inline-block border border-gray-300 px-2 py-1 mr-2 mb-2">Industrial Design</span>
-      <span class="inline-block border border-gray-300 px-2 py-1 mr-2">Transformation Design</span>
-    </div>
-    
-    <!-- View Project Button -->
-    <div class="p-2 pb-4">
-      <button class="border border-gray-300 px-3 py-1 text-sm hover:bg-gray-100">
-        {{ button_text }}
-      </button>
-    </div>
+    {% endif %}
   </div>
+  
+  <!-- Categories / Tags -->
+  <div class="text-xs mb-4">
+    {% if category1 %}<span class="inline-block border border-black px-2 py-1 mr-1 mb-2">{{ category1 }}</span>{% endif %}
+    {% if category2 %}<span class="inline-block border border-black px-2 py-1 mr-1 mb-2">{{ category2 }}</span>{% endif %}
+    {% if category3 %}<span class="inline-block border border-black px-2 py-1 mr-1 mb-2">{{ category3 }}</span>{% endif %}
+    {% if category4 %}<span class="inline-block border border-black px-2 py-1 mr-1 mb-2">{{ category4 }}</span>{% endif %}
+    
+    {% if not category1 and not category2 and not category3 and not category4 %}
+      <span class="inline-block border border-black px-2 py-1 mr-1 mb-2">Industrial Design</span>
+      <span class="inline-block border border-black px-2 py-1 mr-1 mb-2">Transformation Design</span>
+    {% endif %}
+  </div>
+  
+  <!-- View Project Button -->
+  <div class="mb-4">
+    <button class="border border-black px-3 py-1 text-sm hover:bg-gray-100">
+      {{ button_text|default:"Projekt ansehen" }}
+    </button>
+  </div>
+</div>
