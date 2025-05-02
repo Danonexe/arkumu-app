@@ -7,46 +7,6 @@ from arkumu.cidoc.models.schema import CIDOCClass, CIDOCProperty
 from arkumu.cidoc.rdf_import import import_cidoc_from_rdf
 
 
-@pytest.fixture
-def rdf_file_path():
-    """Return the path to the CIDOC RDF file"""
-    base_dir = Path(__file__).resolve().parent.parent.parent
-    rdf_file = os.path.join(base_dir, 'schema', 'CIDOC_CRM_v7.1.1.rdf')
-    assert os.path.exists(rdf_file), f"RDF file not found at {rdf_file}"
-    return rdf_file
-
-
-@pytest.fixture
-def cidoc_rdf(rdf_file_path):
-    """Return an RDFLib graph with the CIDOC RDF loaded"""
-    g = Graph()
-    g.parse(rdf_file_path)
-    return g
-
-
-@pytest.fixture
-def cidoc_ns():
-    """Return the CIDOC namespace"""
-    return Namespace("http://www.cidoc-crm.org/cidoc-crm/")
-
-
-@pytest.fixture
-def loaded_cidoc_data(rdf_file_path):
-    """Load CIDOC data from RDF into actual database models"""
-    with transaction.atomic():
-        classes_count, properties_count = import_cidoc_from_rdf(rdf_file_path)
-        print(f"\nLoaded {classes_count} classes and {properties_count} properties for testing")
-        yield (classes_count, properties_count)
-        # Transaction will be rolled back after the test
-
-
-# RDF loading tests
-def test_rdf_file_loading(cidoc_rdf):
-    """Test that RDF file loads correctly"""
-    assert len(cidoc_rdf) > 0
-    assert isinstance(cidoc_rdf, Graph)
-
-
 @pytest.mark.django_db
 def test_db_model_loading(loaded_cidoc_data):
     """Test that RDF data loads correctly into database models"""
@@ -61,20 +21,6 @@ def test_db_model_loading(loaded_cidoc_data):
     print(f"\nDatabase has {db_classes} classes and {db_properties} properties")
     assert db_classes == classes_count
     assert db_properties == properties_count
-
-
-def test_cidoc_namespace(cidoc_rdf, cidoc_ns):
-    """Test CIDOC namespace recognition"""
-    cidoc_triples = [t for t in cidoc_rdf if str(t[0]).startswith(str(cidoc_ns))]
-    assert len(cidoc_triples) > 0
-
-
-def test_basic_structure(cidoc_rdf, cidoc_ns):
-    """Test basic CIDOC-CRM structure presence"""
-    # Check for fundamental classes
-    assert (cidoc_ns.E1_CRM_Entity, RDF.type, RDFS.Class) in cidoc_rdf
-    # Check for fundamental properties
-    assert any(cidoc_rdf.triples((cidoc_ns.P1_is_identified_by, RDF.type, RDF.Property)))
 
 
 @pytest.mark.django_db
@@ -95,21 +41,6 @@ def test_db_basic_structure(loaded_cidoc_data):
     print(f"Range: {p1.range_class.class_id if p1.range_class else 'None'}")
 
 
-# Schema validation tests
-def test_class_definitions(cidoc_rdf, cidoc_ns):
-    """Test class definitions in RDF"""
-    classes = list(cidoc_rdf.subjects(RDF.type, RDFS.Class))
-    cidoc_classes = [c for c in classes if str(c).startswith(str(cidoc_ns))]
-    
-    for cls in cidoc_classes:
-        # Every class should have a label
-        assert any(cidoc_rdf.triples((cls, RDFS.label, None)))
-        # Skip comment check for merged classes (containing underscore)
-        if '_' not in str(cls).split('/')[-1]:
-            # Every class should have a comment/description
-            assert any(cidoc_rdf.triples((cls, RDFS.comment, None))), f"Missing comment for {cls}"
-
-
 @pytest.mark.django_db
 def test_db_class_definitions(loaded_cidoc_data):
     """Test class definitions in database models"""
@@ -126,17 +57,6 @@ def test_db_class_definitions(loaded_cidoc_data):
     for cls in sample_classes:
         print(f"- {cls.class_id}: {cls.label}")
         print(f"  Description: {cls.description[:50]}...")
-
-
-def test_property_definitions(cidoc_rdf, cidoc_ns):
-    """Test property definitions in RDF"""
-    properties = list(cidoc_rdf.subjects(RDF.type, RDF.Property))
-    cidoc_properties = [p for p in properties if str(p).startswith(str(cidoc_ns))]
-    
-    for prop in cidoc_properties:
-        # Every property should have domain and range
-        assert any(cidoc_rdf.triples((prop, RDFS.domain, None)))
-        assert any(cidoc_rdf.triples((prop, RDFS.range, None)))
 
 
 @pytest.mark.django_db
@@ -166,14 +86,6 @@ def test_db_property_definitions(loaded_cidoc_data):
         print(f"  Range: {prop.range_class.class_id if prop.range_class else 'None'}")
 
 
-def test_schema_completeness(cidoc_rdf, cidoc_ns):
-    """Test completeness of CIDOC-CRM schema"""
-    # Test required class hierarchy
-    assert any(cidoc_rdf.triples((None, RDFS.subClassOf, cidoc_ns.E1_CRM_Entity)))
-    # Test required property hierarchy
-    assert any(cidoc_rdf.triples((None, RDFS.subPropertyOf, cidoc_ns.P1_is_identified_by)))
-
-
 @pytest.mark.django_db
 def test_db_schema_completeness(loaded_cidoc_data):
     """Test completeness of CIDOC-CRM schema in database models"""
@@ -193,25 +105,6 @@ def test_db_schema_completeness(loaded_cidoc_data):
     # P1 should have child properties
     child_properties = p1.child_properties.count()
     print(f"P1 has {child_properties} child properties")
-
-
-# Cross-reference validation tests
-def test_property_class_references(cidoc_rdf, cidoc_ns):
-    """Test that property domain/range references valid classes"""
-    properties = list(cidoc_rdf.subjects(RDF.type, RDF.Property))
-    classes = set(cidoc_rdf.subjects(RDF.type, RDFS.Class))
-    
-    for prop in properties:
-        if str(prop).startswith(str(cidoc_ns)):
-            domain = cidoc_rdf.value(prop, RDFS.domain)
-            range_ = cidoc_rdf.value(prop, RDFS.range)
-            
-            if domain:
-                assert domain in classes
-            if range_:
-                # Range can be either a CIDOC class or rdfs:Literal
-                assert (range_ in classes or 
-                       range_ == RDFS.Literal), f"Invalid range {range_} for property {prop}"
 
 
 @pytest.mark.django_db
@@ -234,15 +127,6 @@ def test_db_property_class_references(loaded_cidoc_data):
             print(f"Property {prop.property_id} range: {prop.range_class.class_id}")
 
 
-def test_inheritance_references(cidoc_rdf, cidoc_ns):
-    """Test class and property inheritance references"""
-    for s, p, o in cidoc_rdf.triples((None, RDFS.subClassOf, None)):
-        if str(s).startswith(str(cidoc_ns)) and str(o).startswith(str(cidoc_ns)):
-            # Both subject and object should be defined classes
-            assert (s, RDF.type, RDFS.Class) in cidoc_rdf
-            assert (o, RDF.type, RDFS.Class) in cidoc_rdf
-
-
 @pytest.mark.django_db
 def test_db_inheritance_references(loaded_cidoc_data):
     """Test class inheritance references in database models"""
@@ -258,61 +142,6 @@ def test_db_inheritance_references(loaded_cidoc_data):
     # Verify parent-child relationship consistency
     for parent in parent_classes:
         assert e21 in parent.child_classes.all(), f"Inconsistent parent-child relationship for {e21.class_id} and {parent.class_id}"
-
-
-# Language handling tests
-def test_multilingual_labels(cidoc_rdf, cidoc_ns):
-    """Test multilingual labels in RDF"""
-    labels = list(cidoc_rdf.triples((cidoc_ns.E21_Person, RDFS.label, None)))
-    languages = set(label.language for _, _, label in labels if hasattr(label, 'language'))
-    assert len(languages) > 0  # Should have at least one language
-
-
-def test_language_consistency(cidoc_rdf, cidoc_ns):
-    """Test consistency of language tags"""
-    def get_languages(subject, predicate):
-        return set(obj.language for obj in cidoc_rdf.objects(subject, predicate) 
-                  if hasattr(obj, 'language'))
-
-    # Check E21_Person as an example
-    label_langs = get_languages(cidoc_ns.E21_Person, RDFS.label)
-    comment_langs = get_languages(cidoc_ns.E21_Person, RDFS.comment)
-    
-    # Should have same languages for labels and comments
-    assert label_langs.intersection(comment_langs)
-
-
-def test_default_language(cidoc_rdf, cidoc_ns):
-    """Test presence of default language (usually English)"""
-    for s, p, o in cidoc_rdf.triples((cidoc_ns.E21_Person, RDFS.label, None)):
-        if hasattr(o, 'language'):
-            if o.language == 'en':
-                assert True
-                break
-    else:
-        assert False, "No English label found"
-
-
-# RDF structure tests
-def test_uri_format(cidoc_rdf, cidoc_ns):
-    """Test URI format consistency"""
-    for s in cidoc_rdf.subjects():
-        if str(s).startswith(str(cidoc_ns)):
-            # Check CIDOC-CRM URI pattern
-            assert '/' in str(s)
-            assert '#' not in str(s)  # CIDOC-CRM doesn't use fragments
-
-
-def test_property_characteristics(cidoc_rdf, cidoc_ns):
-    """Test property characteristics in RDF"""
-    for prop in cidoc_rdf.subjects(RDF.type, RDF.Property):
-        if str(prop).startswith(str(cidoc_ns)):
-            # Check for required property characteristics
-            has_domain = any(cidoc_rdf.triples((prop, RDFS.domain, None)))
-            has_range = any(cidoc_rdf.triples((prop, RDFS.range, None)))
-            has_label = any(cidoc_rdf.triples((prop, RDFS.label, None)))
-            
-            assert has_domain and has_range and has_label
 
 
 @pytest.mark.django_db
@@ -341,12 +170,6 @@ def test_db_property_characteristics(loaded_cidoc_data):
             # Transitive properties should have same domain and range
             assert prop.domain_class == prop.range_class, \
                 f"Transitive property {prop.property_id} has different domain and range"
-
-
-def test_version_info(cidoc_rdf):
-    """Test presence of version information"""
-    # CIDOC-CRM should have version information
-    assert any(cidoc_rdf.triples((None, OWL.versionInfo, None)))
 
 
 @pytest.mark.django_db

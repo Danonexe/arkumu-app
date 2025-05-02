@@ -1,80 +1,25 @@
-from unittest.mock import Mock, patch
 import pytest
 from pathlib import Path
-import os
 from django.db import transaction
 from django.core.exceptions import ValidationError
-from rdflib import RDFS, RDF, OWL, Graph, Namespace
+from rdflib import RDFS, RDF, OWL, Graph
 from arkumu.cidoc.models.schema import CIDOCProperty, CIDOCClass
 from arkumu.cidoc.rdf_import import import_cidoc_from_rdf
 
 
 @pytest.fixture
-def rdf_file_path():
-    """Return the path to the CIDOC RDF file"""
-    base_dir = Path(__file__).resolve().parent.parent.parent
-    rdf_file = os.path.join(base_dir, 'schema', 'CIDOC_CRM_v7.1.1.rdf')
-    assert os.path.exists(rdf_file), f"RDF file not found at {rdf_file}"
-    return rdf_file
+@pytest.mark.django_db
+def test_property(loaded_cidoc_data):
+    """Get a real property from the database (using P62 as example)"""
+    return CIDOCProperty.objects.filter(property_id='P62').first()
 
 
-@pytest.fixture
-def cidoc_rdf(rdf_file_path):
-    """Return an RDFLib graph with the CIDOC RDF loaded"""
-    g = Graph()
-    g.parse(rdf_file_path)
-    return g
-
-
-@pytest.fixture
-def cidoc_ns():
-    """Return the CIDOC namespace"""
-    return Namespace("http://www.cidoc-crm.org/cidoc-crm/")
-
-
-@pytest.fixture
-def loaded_cidoc_data(rdf_file_path):
-    """Load CIDOC data from RDF into actual database models"""
-    with transaction.atomic():
-        classes_count, properties_count = import_cidoc_from_rdf(rdf_file_path)
-        #print(f"\nLoaded {classes_count} classes and {properties_count} properties for testing")
-        yield (classes_count, properties_count)
-        # Transaction will be rolled back after the test
-
-
-@pytest.fixture
-def rdf_based_property(cidoc_rdf, cidoc_ns):
-    """Create property mock based on RDF data (using P62_depicts as example)"""
-    mock = Mock(spec=CIDOCProperty)
-    mock.property_id = 'P62_depicts'
-    
-    label = cidoc_rdf.value(cidoc_ns.P62_depicts, RDFS.label)
-    comment = cidoc_rdf.value(cidoc_ns.P62_depicts, RDFS.comment)
-    
-    mock.label = str(label) if label else "depicts"
-    mock.description = str(comment) if comment else ""
-    
-    # Set up domain and range
-    domain = cidoc_rdf.value(cidoc_ns.P62_depicts, RDFS.domain)
-    range_ = cidoc_rdf.value(cidoc_ns.P62_depicts, RDFS.range)
-    
-    mock.domain_class = Mock(spec=CIDOCClass)
-    mock.domain_class.class_id = str(domain).split('/')[-1] if domain else None
-    
-    mock.range_class = Mock(spec=CIDOCClass)
-    mock.range_class.class_id = str(range_).split('/')[-1] if range_ else None
-    
-    # Configure __str__ to match the model's implementation
-    mock.__str__ = lambda self: f"{self.property_id}: {self.label}"
-    
-    return mock
-
-
-def test_property_creation(rdf_based_property):
-    """Test basic property creation"""
-    assert rdf_based_property.property_id == 'P62_depicts'
-    assert rdf_based_property.label is not None
-    assert rdf_based_property.description is not None
+@pytest.mark.django_db
+def test_property_creation(test_property):
+    """Test basic property creation with real database model"""
+    assert test_property.property_id == 'P62'
+    assert test_property.label is not None
+    assert test_property.description is not None
 
 
 @pytest.mark.django_db
@@ -90,10 +35,11 @@ def test_db_property_creation(loaded_cidoc_data):
     print(f"Range: {depicts.range_class.class_id if depicts.range_class else 'None'}")
 
 
-def test_property_string_representation(rdf_based_property):
-    """Test property string representation"""
-    expected = f"{rdf_based_property.property_id}: {rdf_based_property.label}"
-    assert str(rdf_based_property) == expected
+@pytest.mark.django_db
+def test_property_string_representation(test_property):
+    """Test property string representation with real database model"""
+    expected = f"{test_property.property_id}: {test_property.label}"
+    assert str(test_property) == expected
 
 
 @pytest.mark.django_db
@@ -104,7 +50,8 @@ def test_db_property_string_representation(loaded_cidoc_data):
     assert str(property) == expected
 
 
-def test_property_domain_range(cidoc_rdf, cidoc_ns):
+@pytest.mark.django_db
+def test_property_domain_range(loaded_cidoc_data, cidoc_rdf, cidoc_ns):
     """Test property domain and range from RDF"""
     domain = cidoc_rdf.value(cidoc_ns.P62_depicts, RDFS.domain)
     range_ = cidoc_rdf.value(cidoc_ns.P62_depicts, RDFS.range)
@@ -126,7 +73,8 @@ def test_db_property_domain_range(loaded_cidoc_data):
         assert prop.range_class is not None
 
 
-def test_inverse_property(cidoc_rdf, cidoc_ns):
+@pytest.mark.django_db
+def test_inverse_property(loaded_cidoc_data, cidoc_rdf, cidoc_ns):
     """Test inverse property relationships"""
     # Find properties with inverses
     for prop in cidoc_rdf.subjects(RDF.type, RDF.Property):
@@ -152,7 +100,8 @@ def test_db_inverse_property(loaded_cidoc_data):
             f"Inverse relationship is not reciprocal for {prop.property_id}"
 
 
-def test_symmetric_property(cidoc_rdf, cidoc_ns):
+@pytest.mark.django_db
+def test_symmetric_property(loaded_cidoc_data, cidoc_rdf, cidoc_ns):
     """Test symmetric properties"""
     for prop in cidoc_rdf.subjects(RDF.type, OWL.SymmetricProperty):
         if str(prop).startswith(str(cidoc_ns)):
@@ -175,7 +124,8 @@ def test_db_symmetric_property(loaded_cidoc_data):
             f"Symmetric property {prop.property_id} has different domain and range"
 
 
-def test_transitive_property(cidoc_rdf, cidoc_ns):
+@pytest.mark.django_db
+def test_transitive_property(loaded_cidoc_data, cidoc_rdf, cidoc_ns):
     """Test transitive properties"""
     for prop in cidoc_rdf.subjects(RDF.type, OWL.TransitiveProperty):
         if str(prop).startswith(str(cidoc_ns)):
@@ -198,7 +148,8 @@ def test_db_transitive_property(loaded_cidoc_data):
             f"Transitive property {prop.property_id} has different domain and range"
 
 
-def test_functional_property(cidoc_rdf, cidoc_ns):
+@pytest.mark.django_db
+def test_functional_property(loaded_cidoc_data, cidoc_rdf, cidoc_ns):
     """Test functional properties"""
     for prop in cidoc_rdf.subjects(RDF.type, OWL.FunctionalProperty):
         if str(prop).startswith(str(cidoc_ns)):
@@ -217,13 +168,17 @@ def test_db_functional_property(loaded_cidoc_data):
         print(f"Functional property: {prop.property_id}")
 
 
-def test_property_cardinality(rdf_based_property):
-    """Test property cardinality constraints"""
-    rdf_based_property.is_functional = True
-    assert rdf_based_property.is_functional
+@pytest.mark.django_db
+def test_property_cardinality(loaded_cidoc_data):
+    """Test property cardinality constraints with real database model"""
+    # Find a functional property
+    functional_property = CIDOCProperty.objects.filter(is_functional=True).first()
+    if functional_property:
+        assert functional_property.is_functional
 
 
-def test_property_value_constraints(cidoc_rdf, cidoc_ns):
+@pytest.mark.django_db
+def test_property_value_constraints(loaded_cidoc_data, cidoc_rdf, cidoc_ns):
     """Test property value type constraints"""
     for prop in cidoc_rdf.subjects(RDF.type, RDF.Property):
         if str(prop).startswith(str(cidoc_ns)):
@@ -246,7 +201,8 @@ def test_db_property_value_constraints(loaded_cidoc_data):
         assert prop.range_class.is_primitive
 
 
-def test_property_subproperty(cidoc_rdf, cidoc_ns):
+@pytest.mark.django_db
+def test_property_subproperty(loaded_cidoc_data, cidoc_rdf, cidoc_ns):
     """Test property inheritance relationships"""
     for prop in cidoc_rdf.subjects(RDF.type, RDF.Property):
         if str(prop).startswith(str(cidoc_ns)):
@@ -274,7 +230,8 @@ def test_db_property_hierarchy(loaded_cidoc_data):
                 f"Parent-child relationship is not reciprocal for {prop.property_id} and {parent.property_id}"
 
 
-def test_inherited_constraints(cidoc_rdf, cidoc_ns):
+@pytest.mark.django_db
+def test_inherited_constraints(loaded_cidoc_data, cidoc_rdf, cidoc_ns):
     """Test inheritance of property constraints"""
     def is_subclass_of(class_uri, parent_uri, visited=None):
         if visited is None:

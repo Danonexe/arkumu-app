@@ -4,6 +4,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.db import transaction
 from pathlib import Path
+from rdflib import Namespace, Graph
 from arkumu.cidoc.models.schema import CIDOCClass, CIDOCProperty
 from arkumu.cidoc.models.entities import CIDOCEntity, CIDOCEntityProperty, CIDOCRelationship
 from arkumu.cidoc.rdf_import import import_cidoc_from_rdf
@@ -25,11 +26,17 @@ def disable_graph_db(monkeypatch):
     monkeypatch.setattr(arkumu.cidoc.models.graph_service, 'ENABLE_GRAPH_DB', False)
     yield
 
+
+@pytest.fixture
+def cidoc_ns():
+    """Return the CIDOC namespace"""
+    return Namespace("http://www.cidoc-crm.org/cidoc-crm/")
+
 @pytest.fixture(scope='session')
 def rdf_file_path():
     """Return the path to the CIDOC RDF file"""
     base_dir = Path(__file__).resolve().parent.parent.parent.parent
-    rdf_file = os.path.join(base_dir, 'cidoc', 'schema', 'CIDOC_CRM_v7.1.1.rdf')
+    rdf_file = os.path.join(base_dir, 'arkumu', 'cidoc', 'schema', 'CIDOC_CRM_v7.1.1.rdf')
     assert os.path.exists(rdf_file), f"RDF file not found at {rdf_file}"
     return rdf_file
 
@@ -304,4 +311,11 @@ def real_relationship(db, real_entities, real_relationship_property, test_user):
         relation_type=real_relationship_property.property_id,
         created_by=test_user,
         updated_by=test_user
-    ) 
+    )
+
+@pytest.fixture
+def cidoc_rdf(rdf_file_path):
+    """Return an RDFLib graph with the CIDOC RDF loaded"""
+    g = Graph()
+    g.parse(rdf_file_path)
+    return g 

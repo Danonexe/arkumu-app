@@ -31,15 +31,6 @@ def cidoc_ns():
     return Namespace("http://www.cidoc-crm.org/cidoc-crm/")
 
 
-@pytest.fixture
-def loaded_cidoc_data(rdf_file_path):
-    """Load CIDOC data from RDF into actual database models"""
-    with transaction.atomic():
-        classes_count, properties_count = import_cidoc_from_rdf(rdf_file_path)
-        print(f"\nLoaded {classes_count} classes and {properties_count} properties for testing")
-        yield (classes_count, properties_count)
-        # Transaction will be rolled back after the test
-
 
 @pytest.mark.django_db
 def test_property_domain_range_consistency(cidoc_rdf, cidoc_ns):

@@ -1,9 +1,10 @@
 from django.conf import settings
-from arkumu.cidoc.models.schema import CIDOCGraph
 from typing import Dict, Any, Optional
-
+from arkumu.cidoc.models.graph import CIDOCGraph
 # Default setting for graph integration - can be overridden in settings.py
 ENABLE_GRAPH_DB = getattr(settings, 'ENABLE_GRAPH_DB', True)
+
+
 
 class GraphService:
     """
