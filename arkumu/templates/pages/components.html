@@ -4,7 +4,10 @@
 {% block title %}arkumu Components{% endblock title %}
 
 {% block content %}
-<div class="w-full min-h-screen bg-arkumu-hell transition-colors duration-300">
+<div class="w-full min-h-screen transition-colors duration-300
+     bg-arkumu-light
+     theme-dark:bg-arkumu-dark 
+     theme-dark:text-arkumu-light">
   <div class="container mx-auto px-6 py-12">
     <h1 class="text-3xl font-bold mb-6">Arkumu Components Catalog</h1>
 
@@ -16,10 +19,13 @@
       <!-- Themed Button -->
       <div class="mb-10">
         <h3 class="text-lg font-medium mb-3">Themed Button</h3>
-        <div class="p-4 border bg-white">
+        <div class="p-4 border transition-colors
+             bg-white
+             theme-dark:bg-arkumu-dark 
+             theme-dark:border-arkumu-light">
           {% include 'components/buttons/themed_button.html' with button_text="Themed Button" %}
         </div>
-        <p class="mt-2 text-sm text-gray-600">Path: components/buttons/themed_button.html</p>
+        <p class="mt-2 text-sm transition-colors text-gray-600 theme-dark:text-gray-400">Path: components/buttons/themed_button.html</p>
       </div>
     </section>
     
@@ -30,21 +36,52 @@
       <!-- Primary Button -->
       <div class="mb-10">
         <h3 class="text-lg font-medium mb-3">Primary Button</h3>
-        <div class="p-4 border bg-white">
+        <div class="p-4 border transition-colors
+             bg-white
+             theme-dark:bg-arkumu-dark 
+             theme-dark:border-arkumu-light">
           {% include 'components/buttons/primary_button.html' with button_text="Primary Button" %}
         </div>
-        <p class="mt-2 text-sm text-gray-600">Path: components/buttons/primary_button.html</p>
+        <p class="mt-2 text-sm transition-colors text-gray-600 theme-dark:text-gray-400">Path: components/buttons/primary_button.html</p>
       </div>
       
       <!-- Secondary Button -->
       <div class="mb-10">
         <h3 class="text-lg font-medium mb-3">Secondary Button</h3>
-        <div class="p-4 border bg-white">
+        <div class="p-4 border transition-colors
+             bg-white
+             theme-dark:bg-arkumu-dark 
+             theme-dark:border-arkumu-light">
           {% include 'components/buttons/secondary_button.html' with button_text="Secondary Button" %}
         </div>
-        <p class="mt-2 text-sm text-gray-600">Path: components/buttons/secondary_button.html</p>
+        <p class="mt-2 text-sm transition-colors text-gray-600 theme-dark:text-gray-400">Path: components/buttons/secondary_button.html</p>
       </div>
     </section>
+
+    <!-- Primary Button -->
+    <div class="mb-10">
+      <h3 class="text-lg font-medium mb-3">Primary Pill</h3>
+      <div class="p-4 border transition-colors
+           bg-white
+           theme-dark:bg-arkumu-dark 
+           theme-dark:border-arkumu-light">
+        {% include 'components/buttons/primary_pill.html' with button_text="Primary Pill" %}
+      </div>
+      <p class="mt-2 text-sm transition-colors text-gray-600 theme-dark:text-gray-400">Path: components/buttons/primary_pill.html</p>
+    </div>
+    
+    <!-- Secondary Button -->
+    <div class="mb-10">
+      <h3 class="text-lg font-medium mb-3">Secondary Pill</h3>
+      <div class="p-4 border transition-colors
+           bg-white
+           theme-dark:bg-arkumu-dark 
+           theme-dark:border-arkumu-light">
+        {% include 'components/buttons/secondary_pill.html' with button_text="Secondary Pill" %}
+      </div>
+      <p class="mt-2 text-sm transition-colors text-gray-600 theme-dark:text-gray-400">Path: components/buttons/secondary_pill.html</p>
+    </div>
+  </section>
     
     <!-- Header Components Section -->
     <section class="mb-16">
@@ -53,34 +90,43 @@
       <!-- Theme Buttons -->
       <div class="mb-10">
         <h3 class="text-lg font-medium mb-3">Theme Buttons</h3>
-        <div class="p-4 border bg-white">
+        <div class="p-4 border transition-colors
+             bg-white
+             theme-dark:bg-arkumu-dark 
+             theme-dark:border-arkumu-light">
           {% include 'components/header/theme_buttons.html' %}
         </div>
-        <p class="mt-2 text-sm text-gray-600">Path: components/header/theme_buttons.html</p>
+        <p class="mt-2 text-sm transition-colors text-gray-600 theme-dark:text-gray-400">Path: components/header/theme_buttons.html</p>
       </div>
       
       <!-- Search Button -->
       <div class="mb-10">
         <h3 class="text-lg font-medium mb-3">Search Button</h3>
-        <div class="p-4 border bg-white">
+        <div class="p-4 border transition-colors
+             bg-white
+             theme-dark:bg-arkumu-dark 
+             theme-dark:border-arkumu-light">
           <div class="flex flex-col items-center w-10">
             {% include 'components/header/search_button.html' %}
             <span class="text-xs mt-1 font-mono">Suche</span>
           </div>
         </div>
-        <p class="mt-2 text-sm text-gray-600">Path: components/header/search_button.html</p>
+        <p class="mt-2 text-sm transition-colors text-gray-600 theme-dark:text-gray-400">Path: components/header/search_button.html</p>
       </div>
       
       <!-- Menu Button -->
       <div class="mb-10">
         <h3 class="text-lg font-medium mb-3">Menu Button</h3>
-        <div class="p-4 border bg-white">
+        <div class="p-4 border transition-colors
+             bg-white
+             theme-dark:bg-arkumu-dark 
+             theme-dark:border-arkumu-light">
           <div class="flex flex-col items-center w-10">
             {% include 'components/header/menu_button.html' %}
             <span class="text-xs mt-1 font-mono">Menü</span>
           </div>
         </div>
-        <p class="mt-2 text-sm text-gray-600">Path: components/header/menu_button.html</p>
+        <p class="mt-2 text-sm transition-colors text-gray-600 theme-dark:text-gray-400">Path: components/header/menu_button.html</p>
       </div>
     </section>
     
@@ -91,19 +137,25 @@
       <!-- Search Bar -->
       <div class="mb-10">
         <h3 class="text-lg font-medium mb-3">Search Bar</h3>
-        <div class="p-4 border bg-white">
+        <div class="p-4 border transition-colors
+             bg-white
+             theme-dark:bg-arkumu-dark 
+             theme-dark:border-arkumu-light">
           {% include 'components/inputs/navbar.html' with placeholder_text="Suchbegriff" %}
         </div>
-        <p class="mt-2 text-sm text-gray-600">Path: components/inputs/navbar.html</p>
+        <p class="mt-2 text-sm transition-colors text-gray-600 theme-dark:text-gray-400">Path: components/inputs/navbar.html</p>
       </div>
       
       <!-- Text Field -->
       <div class="mb-10">
         <h3 class="text-lg font-medium mb-3">Text Field</h3>
-        <div class="p-4 border bg-white">
+        <div class="p-4 border transition-colors
+             bg-white
+             theme-dark:bg-arkumu-dark 
+             theme-dark:border-arkumu-light">
           {% include 'components/inputs/text_field.html' with placeholder_text="Enter your text here" %}
         </div>
-        <p class="mt-2 text-sm text-gray-600">Path: components/inputs/text_field.html</p>
+        <p class="mt-2 text-sm transition-colors text-gray-600 theme-dark:text-gray-400">Path: components/inputs/text_field.html</p>
       </div>
     </section>
     
@@ -114,32 +166,52 @@
       <!-- Arkumu Text -->
       <div class="mb-10">
         <h3 class="text-lg font-medium mb-3">Arkumu Description Text</h3>
-        <div class="p-4 border bg-white">
+        <div class="p-4 border transition-colors
+             bg-white
+             theme-dark:bg-arkumu-dark 
+             theme-dark:border-arkumu-light">
           {% include 'components/text/arkumu_text.html' %}
         </div>
-        <p class="mt-2 text-sm text-gray-600">Path: components/text/arkumu_text.html</p>
+        <p class="mt-2 text-sm transition-colors text-gray-600 theme-dark:text-gray-400">Path: components/text/arkumu_text.html</p>
       </div>
       
       <!-- Dotted Line -->
       <div class="mb-10">
         <h3 class="text-lg font-medium mb-3">Dotted Line with Text</h3>
-        <div class="p-4 border bg-white">
+        <div class="p-4 border transition-colors
+             bg-white
+             theme-dark:bg-arkumu-dark 
+             theme-dark:border-arkumu-light">
           {% include 'components/text/text_dotted_line.html' with text="Teilnehmende Hochschulen" %}
         </div>
-        <p class="mt-2 text-sm text-gray-600">Path: components/text/text_dotted_line.html</p>
+        <p class="mt-2 text-sm transition-colors text-gray-600 theme-dark:text-gray-400">Path: components/text/text_dotted_line.html</p>
       </div>
     
     <!-- Label Components Section -->
     <section class="mb-16">
       <h2 class="text-2xl font-semibold mb-6 pb-2 border-b">Label Components</h2>
       
-      <!-- Black Label -->
+      <!-- Tag -->
       <div class="mb-10">
-        <h3 class="text-lg font-medium mb-3">Black Label</h3>
-        <div class="p-4 border bg-white">
-          {% include 'components/labels/black_label.html' with label_text="Folkwang Universität der Künste" %}
+        <h3 class="text-lg font-medium mb-3">Tag</h3>
+        <div class="p-4 border transition-colors
+             bg-white
+             theme-dark:bg-arkumu-dark 
+             theme-dark:border-arkumu-light">
+          {% include 'components/labels/tag.html' with label_text="Folkwang Universität der Künste" %}
         </div>
-        <p class="mt-2 text-sm text-gray-600">Path: components/labels/black_label.html</p>
+        <p class="mt-2 text-sm transition-colors text-gray-600 theme-dark:text-gray-400">Path: components/labels/tag.html</p>
+      </div>
+
+      <div class="mb-10">
+        <h3 class="text-lg font-medium mb-3">Secondary Tag</h3>
+        <div class="p-4 border transition-colors
+             bg-white
+             theme-dark:bg-arkumu-dark 
+             theme-dark:border-arkumu-light">
+          {% include 'components/labels/secondary_tag.html' with label_text="Folkwang Universität der Künste" %}
+        </div>
+        <p class="mt-2 text-sm transition-colors text-gray-600 theme-dark:text-gray-400">Path: components/labels/tag.html</p>
       </div>
     </section>
     
@@ -149,7 +221,10 @@
       
       <!-- Individual Card -->
       <div class="mb-10">
-        <div class="p-4 border bg-white max-w-sm">
+        <div class="p-4 border transition-colors
+             bg-white
+             theme-dark:bg-arkumu-dark 
+             theme-dark:border-arkumu-light max-w-sm">
           {% include 'components/cards/card.html' with year="2024" institution="Folkwang Universität der Kunst" title="Handmade in Ethiopia" subtitle="Projekt" contributor1_name="Johanna Schwer" contributor1_role="Betreuerin" contributor2_name="Judith Schanz" contributor2_role="Betreuerin" category1="Industrial Design" category2="Transformation Design" button_text="Projekt ansehen" %}
         </div>
       </div>
@@ -157,10 +232,13 @@
       <!-- Card Grid -->
       <div class="mb-10">
         <h3 class="text-lg font-medium mb-3">Project Cards Grid</h3>
-        <div class="p-4 border bg-white">{% include 'components/cards/card_grid.html' %}
+        <div class="p-4 border transition-colors
+             bg-white
+             theme-dark:bg-arkumu-dark 
+             theme-dark:border-arkumu-light">{% include 'components/cards/card_grid.html' %}
           
         </div>
-        <p class="mt-2 text-sm text-gray-600">Path: components/cards/card_grid.html</p>
+        <p class="mt-2 text-sm transition-colors text-gray-600 theme-dark:text-gray-400">Path: components/cards/card_grid.html</p>
       </div>
     </section>
   </div>

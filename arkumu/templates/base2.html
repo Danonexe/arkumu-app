@@ -27,10 +27,30 @@
       <!-- Tailwind CSS -->
       <link href="{% static 'css/output.css' %}" rel="stylesheet" />
       <link href="{% static 'css/project.css' %}" rel="stylesheet" />
+      
+      <!-- Inline styles for theme background -->
+      <style>
+        body {
+          transition: background-color 0.3s ease, color 0.3s ease;
+          background-color: #FAF9F6; /* arkumu-light color - default background */
+          color: #1E1E1E; /* arkumu-dark color - default text color */
+        }
+        
+        /* Dark theme specific styles */
+        body.theme-dark {
+          background-color: #1E1E1E; /* arkumu-dark color */
+          color: #FAF9F6; /* arkumu-light color */
+        }
+        
+        /* Blue theme specific styles */
+        body.theme-blue {
+          background-color: #FAF9F6; /* Keep light background for blue theme */
+          color: #2B7EF2; /* arkumu-blue color for text */
+        }
+      </style>
     {% endblock css %}
     
     {% block javascript %}
-
       <!-- Project specific Javascript -->
       <script defer src="{% static 'js/project.js' %}"></script>
       
@@ -38,7 +58,7 @@
       <script defer src="{% static 'js/htmx.min.js' %}"></script>
     {% endblock javascript %}
   </head>
-  <body class="h-full themed-bg {% block bodyclass %}{% endblock bodyclass %}">
+  <body class="h-full {% block bodyclass %}{% endblock bodyclass %}">
     {% block body %}
       <!-- Navbar will be added later -->
       

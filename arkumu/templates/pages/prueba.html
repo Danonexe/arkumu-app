@@ -26,11 +26,17 @@
         <div class="flex items-center space-x-6">
           <div class="flex flex-col items-center">
             {% include 'components/header/search_button.html' %}
-            <span class="text-xs mt-1 font-mono">Suche</span>
+            <span class="text-xs mt-1 font-mono 
+            text-arkumu-dark
+            theme-dark:text-arkumu-light
+            theme-blue:text-arkumu-blue ">Suche</span>
           </div>
           <div class="flex flex-col items-center">
             {% include 'components/header/menu_button.html' %}
-            <span class="text-xs mt-1 font-mono">Menü</span>
+            <span class="text-xs mt-1 font-mono
+            text-arkumu-dark
+            theme-dark:text-arkumu-light
+            theme-blue:text-arkumu-blue">Menü</span>
           </div>
         </div>
       </div>
@@ -58,23 +64,23 @@
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-y-4 gap-x-8 mt-8">
           <!-- Column 1 -->
           <div>
-            {% include 'components/labels/black_label.html' with label_text="Folkwang Universität der Künste" %}
+            {% include 'components/labels/tag.html' with label_text="Folkwang Universität der Künste" %}
             <div class="mb-4"></div>
-            {% include 'components/labels/black_label.html' with label_text="Universität zu Köln" %}
+            {% include 'components/labels/tag.html' with label_text="Universität zu Köln" %}
           </div>
           
           <!-- Column 2 -->
           <div>
-            {% include 'components/labels/black_label.html' with label_text="Hochschule für Musik Detmold" %}
+            {% include 'components/labels/tag.html' with label_text="Hochschule für Musik Detmold" %}
             <div class="mb-4"></div>
-            {% include 'components/labels/black_label.html' with label_text="Kunsthochschule für Medien Köln" %}
+            {% include 'components/labels/tag.html' with label_text="Kunsthochschule für Medien Köln" %}
           </div>
           
           <!-- Column 3 -->
           <div>
-            {% include 'components/labels/black_label.html' with label_text="Robert Schumann Hochschule Düsseldorf" %}
+            {% include 'components/labels/tag.html' with label_text="Robert Schumann Hochschule Düsseldorf" %}
             <div class="mb-4"></div>
-            {% include 'components/labels/black_label.html' with label_text="Hochschule für Musik und Tanz Köln" %}
+            {% include 'components/labels/tag.html' with label_text="Hochschule für Musik und Tanz Köln" %}
           </div>
         </div>
       </div>

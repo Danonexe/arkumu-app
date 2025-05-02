@@ -1,7 +1,15 @@
-<!-- TextField Input -->
-<input type="text" placeholder="{{ placeholder_text|default:"Placeholder" }}" 
-  class="w-full p-3 font-mono transition-colors
-  border border-gray-300 text-arkumu-dark bg-white
-  theme-dark:border-arkumu-dark-soft theme-dark:text-arkumu-light theme-dark:bg-arkumu-dark
-  theme-blue:border-arkumu-blue-soft theme-blue:text-arkumu-light theme-blue:bg-arkumu-blue"
-  placeholder="{{ placeholder_text|default:'Placeholder' }}">
+<!-- TextField Input with Theme Support -->
+<input type="text" 
+       class="w-full p-3 font-mono transition-colors
+              bg-white 
+              border border-arkumu-dark
+              text-arkumu-dark
+              placeholder:text-arkumu-dark
+              theme-dark:bg-arkumu-dark
+              theme-dark:border-arkumu-light
+              theme-dark:text-arkumu-light
+              theme-dark:placeholder:text-arkumu-light
+              theme-blue:border-arkumu-blue
+              theme-blue:text-arkumu-blue
+              theme-blue:placeholder:text-arkumu-blue"
+       placeholder="{{ placeholder_text|default:'Placeholder' }}">
