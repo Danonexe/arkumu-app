@@ -1,23 +1,30 @@
-<!-- Header Component using existing includes -->
-<header class="w-full py-4 px-6">
-    <div class="container mx-auto flex items-center justify-between">
-      <!-- Left side: Logo placeholder -->
-      <div class="w-40">
-        <!-- Logo placeholder -->
+{% load static %}
+<!-- Header Component with Logo -->
+<header class="w-full py-4 px-6 transition-colors
+               text-arkumu-dark
+               theme-dark:text-arkumu-light
+               theme-blue:text-arkumu-light">
+  <div class="container mx-auto flex items-center justify-between">
+    <!-- Left side: Logo -->
+    <div class="w-40">
+      <!-- SVG Logo with theme color adaptation -->
+      <a href="/" class="block">
+        <img src="{% static 'images/arkumu-logo.svg' %}" alt="arkumu logo">
+      </a>
+    </div>
+    
+    <!-- Right side: Theme buttons and icons -->
+    <div class="flex items-center space-x-6">
+      <!-- Theme buttons -->
+      <div class="theme-buttons">
+        {% include 'components/header/theme_buttons.html' %}
       </div>
       
-      <!-- Right side: Theme buttons and icons -->
-      <div class="flex items-center space-x-6">
-        <!-- Theme buttons -->
-        <div class="theme-buttons">
-          {% include 'components/header/theme_buttons.html' %}
-        </div>
-        
-        <!-- Search and Menu icons -->
-        <div class="flex items-center space-x-4">
-          {% include 'components/header/search_button.html' %}
-          {% include 'components/header/menu_button.html' %}
-        </div>
+      <!-- Search and Menu icons -->
+      <div class="flex items-center space-x-4">
+        {% include 'components/header/search_button.html' %}
+        {% include 'components/header/menu_button.html' %}
       </div>
     </div>
-  </header>
+  </div>
+</header>
