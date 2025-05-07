@@ -1,0 +1,13 @@
+<!-- Include Theme Selection Buttons -->
+{% include 'components/header/theme_buttons.html' %}
+
+<!-- Theme-aware Button Component using Tailwind classes -->
+<button class="px-4 py-2 rounded-md transition-colors
+  bg-arkumu-light text-arkumu-dark
+  theme-dark:bg-arkumu-dark theme-dark:text-arkumu-light
+  theme-blue:bg-arkumu-blue theme-blue:text-arkumu-light
+  hover:bg-arkumu-light-hover
+  theme-dark:hover:bg-arkumu-dark-hover
+  theme-blue:hover:bg-arkumu-blue-hover">
+  {{ button_text|default:"Themed Button" }}
+</button> 

@@ -1,0 +1,15 @@
+<!-- Dotted Line Component with Theme-aware Colors -->
+<div class="w-full my-8">
+  <!-- Dotted line that spans the full width - themed with gradients -->
+  <div class="w-full h-[1px] mb-4 bg-repeat-x bg-center bg-[length:5px_1px]
+    bg-[radial-gradient(circle,var(--dot-color,#1E1E1E)_1px,rgba(0,0,0,0)_1px)]
+    [--dot-color:theme(colors.arkumu.dark)]
+    theme-dark:[--dot-color:theme(colors.arkumu.light)]
+    theme-blue:[--dot-color:theme(colors.arkumu.blue)]"></div>
+  
+  <!-- Text label below the line -->
+  <div class="text-xs font-mono
+    text-arkumu-dark
+    theme-dark:text-arkumu-light
+    theme-blue:text-arkumu-blue">{{ text|default:"Teilnehmende Hochschulen" }}</div>
+</div>

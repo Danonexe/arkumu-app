@@ -1,0 +1,105 @@
+<!-- Project Card Component - With Fixed Year Box -->
+<div class="project-card max-w-xs p-4 rounded shadow-sm">
+  <!-- Project Image (Black Square) -->
+  <div class="project-image w-full h-48 
+    bg-arkumu-dark border border-dotted border-gray-300
+    theme-dark:bg-arkumu-dark theme-dark:border-arkumu-light-soft 
+    theme-blue:bg-arkumu-blue theme-blue:border-arkumu-light-soft">
+    {% if image_url %}<img src="{{ image_url }}" class="w-full h-full object-cover" alt="{{ title }}">{% endif %}
+  </div>
+  
+  <!-- Year with border and Institution background - themed -->
+  <div class="border text-xs py-1 px-2 font-mono inline-block mt-2
+    border-arkumu-dark text-arkumu-dark
+    theme-dark:border-arkumu-light theme-dark:text-arkumu-light
+    theme-blue:border-arkumu-blue theme-blue:text-arkumu-dark">
+    {{ year|default:"2024" }}
+  </div>
+  <div class="text-xs py-1 px-2 font-mono inline-block mt-2 ml-1
+    bg-arkumu-dark text-arkumu-light
+    theme-dark:bg-arkumu-dark theme-dark:text-arkumu-light
+    theme-blue:bg-arkumu-blue theme-blue:text-arkumu-light">
+    {{ institution|default:"Folkwang Universität der Kunst" }}
+  </div>
+  
+  <!-- Gray line separator -->
+  <div class="w-full h-px my-2
+    bg-gray-400
+    theme-dark:bg-arkumu-light-soft
+    theme-blue:bg-arkumu-blue-soft"></div>
+  
+  <!-- Project Title -->
+  <div class="mt-2">
+    <h3 class="font-medium text-base
+      text-arkumu-dark
+      theme-dark:text-arkumu-light
+      theme-blue:text-arkumu-dark">
+      {{ title|default:"Handmade in Ethiopia" }}
+    </h3>
+    <p class="text-sm underline mb-3
+      text-arkumu-dark-passive
+      theme-dark:text-arkumu-light-passive
+      theme-blue:text-arkumu-blue">
+      {{ subtitle|default:"Projekt" }}
+    </p>
+  </div>
+  
+  <!-- Contributors -->
+  <div class="text-xs mb-4
+    text-arkumu-dark
+    theme-dark:text-arkumu-light
+    theme-blue:text-arkumu-dark">
+    {% if contributor1_name %}<div class="mb-1">{{ contributor1_name }} [{{ contributor1_role|default:"" }}]</div>{% endif %}
+    {% if contributor2_name %}<div class="mb-1">{{ contributor2_name }} [{{ contributor2_role|default:"" }}]</div>{% endif %}
+    {% if contributor3_name %}<div class="mb-1">{{ contributor3_name }} [{{ contributor3_role|default:"" }}]</div>{% endif %}
+    {% if contributor4_name %}<div class="mb-1">{{ contributor4_name }} [{{ contributor4_role|default:"" }}]</div>{% endif %}
+    {% if additional_contributors %}<div class="mb-1">{{ additional_contributors }}</div>{% endif %}
+    
+    {% if not contributor1_name and not contributor2_name and not contributor3_name and not contributor4_name and not additional_contributors %}
+      <div class="mb-1">Johanna Schwer [Betreuerin]</div>
+      <div class="mb-1">Judith Schanz [Betreuerin]</div>
+      <div class="mb-1">Martina Allerbech [Designerin, Beraterin]</div>
+    {% endif %}
+  </div>
+  
+  <!-- Categories / Tags -->
+  <div class="text-xs mb-4">
+    {% if category1 %}<span class="inline-block px-2 py-1 mr-1 mb-2
+      border border-arkumu-dark text-arkumu-dark
+      theme-dark:border-arkumu-light theme-dark:text-arkumu-light
+      theme-blue:border-arkumu-blue theme-blue:text-arkumu-dark">{{ category1 }}</span>{% endif %}
+    {% if category2 %}<span class="inline-block px-2 py-1 mr-1 mb-2
+      border border-arkumu-dark text-arkumu-dark
+      theme-dark:border-arkumu-light theme-dark:text-arkumu-light
+      theme-blue:border-arkumu-blue theme-blue:text-arkumu-dark">{{ category2 }}</span>{% endif %}
+    {% if category3 %}<span class="inline-block px-2 py-1 mr-1 mb-2
+      border border-arkumu-dark text-arkumu-dark
+      theme-dark:border-arkumu-light theme-dark:text-arkumu-light
+      theme-blue:border-arkumu-blue theme-blue:text-arkumu-dark">{{ category3 }}</span>{% endif %}
+    {% if category4 %}<span class="inline-block px-2 py-1 mr-1 mb-2
+      border border-arkumu-dark text-arkumu-dark
+      theme-dark:border-arkumu-light theme-dark:text-arkumu-light
+      theme-blue:border-arkumu-blue theme-blue:text-arkumu-dark">{{ category4 }}</span>{% endif %}
+    
+    {% if not category1 and not category2 and not category3 and not category4 %}
+      <span class="inline-block px-2 py-1 mr-1 mb-2
+        border border-arkumu-dark text-arkumu-dark
+        theme-dark:border-arkumu-light theme-dark:text-arkumu-light
+        theme-blue:border-arkumu-blue theme-blue:text-arkumu-dark">Industrial Design</span>
+      <span class="inline-block px-2 py-1 mr-1 mb-2
+        border border-arkumu-dark text-arkumu-dark
+        theme-dark:border-arkumu-light theme-dark:text-arkumu-light
+        theme-blue:border-arkumu-blue theme-blue:text-arkumu-dark">Transformation Design</span>
+    {% endif %}
+  </div>
+  
+  <!-- View Project Button -->
+  <div class="mb-4">
+    <button class="px-3 py-1 text-sm transition-colors
+      border border-arkumu-dark text-arkumu-dark hover:bg-arkumu-light-hover
+      theme-dark:border-arkumu-light theme-dark:text-arkumu-light theme-dark:hover:bg-arkumu-dark-hover
+      theme-blue:border-arkumu-blue theme-blue:bg-arkumu-blue theme-blue:text-arkumu-light theme-blue:hover:bg-arkumu-blue-hover">
+      {{ button_text|default:"Projekt ansehen" }}
+    </button>
+  </div>
+</div>

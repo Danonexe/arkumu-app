@@ -1,0 +1,100 @@
+{% load static i18n %}<!DOCTYPE html>
+{% get_current_language as LANGUAGE_CODE %}
+<html lang="{{ LANGUAGE_CODE }}" class="h-full">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="x-ua-compatible" content="ie=edge" />
+    <title>
+      {% block title %}
+        arkumu
+      {% endblock title %}
+    </title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Archive der Kunst- und Musikhochschulen" />
+    <meta name="author" content="arkumu" />
+    <link rel="icon" href="{% static 'images/favicons/favicon.ico' %}" />
+    
+    <!-- Immediate theme application to prevent flash of wrong theme -->
+    <script>
+      (function() {
+        var savedTheme = localStorage.getItem('arkumu-theme') || 'light';
+        document.documentElement.classList.add('js-loaded');
+        document.body.classList.add('theme-' + savedTheme);
+      })();
+    </script>
+    
+    {% block css %}
+      <!-- Tailwind CSS -->
+      <link href="{% static 'css/output.css' %}" rel="stylesheet" />
+      <link href="{% static 'css/project.css' %}" rel="stylesheet" />
+      
+      <!-- Inline styles for theme background -->
+      <style>
+        body {
+          transition: background-color 0.3s ease, color 0.3s ease;
+          background-color: #FAF9F6; /* arkumu-light color - default background */
+          color: #1E1E1E; /* arkumu-dark color - default text color */
+        }
+        
+        /* Dark theme specific styles */
+        body.theme-dark {
+          background-color: #1E1E1E; /* arkumu-dark color */
+          color: #FAF9F6; /* arkumu-light color */
+        }
+        
+        /* Blue theme specific styles */
+        body.theme-blue {
+          background-color: #FAF9F6; /* Keep light background for blue theme */
+          color: #2B7EF2; /* arkumu-blue color for text */
+        }
+      </style>
+    {% endblock css %}
+    
+    {% block javascript %}
+      <!-- Project specific Javascript -->
+      <script defer src="{% static 'js/project.js' %}"></script>
+      
+      <!-- HTMX -->
+      <script defer src="{% static 'js/htmx.min.js' %}"></script>
+    {% endblock javascript %}
+  </head>
+  <body class="h-full {% block bodyclass %}{% endblock bodyclass %}">
+    {% block body %}
+      <!-- Navbar will be added later -->
+      
+      <div class="w-full h-full px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+        {% if messages %}
+          {% for message in messages %}
+            <div class="alert alert-dismissible {% if message.tags %}alert-{{ message.tags }}{% endif %}">
+              {{ message }}
+              <button type="button"
+                      class="btn-close"
+                      data-bs-dismiss="alert"
+                      aria-label="Close"></button>
+            </div>
+          {% endfor %}
+        {% endif %}
+        
+        {% block main %}
+          {% block container_type %}
+            <div class="w-full">
+          {% endblock container_type %}
+          
+              {% block content %}
+                <!-- Content goes here -->
+              {% endblock content %}
+          
+          {% block container_type_end %}
+            </div>
+          {% endblock container_type_end %}
+        {% endblock main %}
+      </div>
+    {% endblock body %}
+    
+    {% block modal %}{% endblock modal %}
+    
+    {% block inline_javascript %}
+      <!-- Additional inline JavaScript can be added here -->
+    {% endblock inline_javascript %}
+  </body>
+</html>

@@ -12,7 +12,8 @@ from rest_framework.authtoken.views import obtain_auth_token
 from django.conf.urls.i18n import i18n_patterns
 
 urlpatterns = [
-    path("", TemplateView.as_view(template_name="pages/home.html"), name="home"),
+    path("", TemplateView.as_view(template_name="pages/prueba.html"), name="home"),
+    path("components/", TemplateView.as_view(template_name="pages/components.html"), name="home"),
     path(
         "about/",
         TemplateView.as_view(template_name="pages/about.html"),
@@ -67,6 +68,7 @@ if settings.DEBUG:
         path("500/", default_views.server_error),
     ]
     if "debug_toolbar" in settings.INSTALLED_APPS:
-        import debug_toolbar
-
-        urlpatterns = [path("__debug__/", include(debug_toolbar.urls))] + urlpatterns
+        pass
+#        import debug_toolbar
+#
+#        urlpatterns = [path("__debug__/", include(debug_toolbar.urls))] + urlpatterns
