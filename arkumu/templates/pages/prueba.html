@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="w-full min-h-screen">
-  <!-- Header with moderate vertical padding - INTEGRADO DIRECTAMENTE -->
+  <!-- Header con el contenido existente sin cambios -->
   <header class="w-full py-8 px-4 transition-colors
                text-arkumu-dark
                theme-dark:text-arkumu-light
@@ -76,27 +76,21 @@
       <div class="w-full mb-24">
         {% include 'components/text/text_dotted_line.html' with text="Teilnehmende Hochschulen" %}
         
-        <!-- Schools in three columns with balanced vertical spacing -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-y-4 gap-x-8 mt-8">
+        <!-- Responsive Schools Grid: 1 column (mobile), 2 columns (tablet), 3 columns (desktop) -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-y-6 gap-x-8 mt-8">
           <!-- Column 1 -->
           <div>
-            {% include 'components/labels/tag.html' with label_text="Folkwang Universität der Künste" %}
-            <div class="mb-4"></div>
-            {% include 'components/labels/tag.html' with label_text="Universität zu Köln" %}
+            {% include 'components/labels/tag.html' with label_text="Folkwang Universität der Künste Universität zu Köln" %}
           </div>
           
           <!-- Column 2 -->
           <div>
-            {% include 'components/labels/tag.html' with label_text="Hochschule für Musik Detmold" %}
-            <div class="mb-4"></div>
-            {% include 'components/labels/tag.html' with label_text="Kunsthochschule für Medien Köln" %}
+            {% include 'components/labels/tag.html' with label_text="Hochschule für Musik Detmold Kunsthochschule für Medien Köln" %}
           </div>
           
           <!-- Column 3 -->
           <div>
-            {% include 'components/labels/tag.html' with label_text="Robert Schumann Hochschule Düsseldorf" %}
-            <div class="mb-4"></div>
-            {% include 'components/labels/tag.html' with label_text="Hochschule für Musik und Tanz Köln" %}
+            {% include 'components/labels/tag.html' with label_text="Robert Schumann Hochschule Düsseldorf Hochschule für Musik und Tanz Köln" %}
           </div>
         </div>
       </div>
