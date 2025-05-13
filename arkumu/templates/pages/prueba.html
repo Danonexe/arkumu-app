@@ -62,22 +62,25 @@
   <!-- Main Content Area con el resto del código igual que antes -->
   <main class="w-full px-4">
     <div class="max-w-[1400px] mx-auto">
-      <!-- Description Text with wider max width -->
-      <div class="w-full max-w-[1200px] mx-auto mt-20 mb-24">
-        {% include 'components/text/arkumu_text.html' %}
-      </div>
-      
-      <!-- Search Bar with wider max width -->
-      <div class="w-full max-w-[1200px] mx-auto mb-24">
-        {% include 'components/inputs/navbar.html' with placeholder_text="Suchbegriff" %}
+      <!-- Unified container for Description Text and Search Bar -->
+      <div class="w-full max-w-[800px] mx-auto mt-20 mb-24">
+        <!-- Description Text -->
+        <div class="mb-10">
+          {% include 'components/text/arkumu_text.html' %}
+        </div>
+        
+        <!-- Search Bar -->
+        <div>
+          {% include 'components/inputs/navbar.html' with placeholder_text="Suchbegriff" %}
+        </div>
       </div>
       
       <!-- Dotted Line with Text -->
       <div class="w-full mb-24">
         {% include 'components/text/text_dotted_line.html' with text="Teilnehmende Hochschulen" %}
         
-        <!-- Responsive Schools Grid: 1 column (mobile), 2 columns (tablet), 3 columns (desktop) -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-y-6 gap-x-8 mt-8">
+        <!-- Responsive Schools Grid ajustado para los tamaños 1280w, 1728w, 2260w -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-y-6 gap-x-8 mt-8">
           <!-- Column 1 -->
           <div>
             {% include 'components/labels/tag.html' with label_text="Folkwang Universität der Künste Universität zu Köln" %}
