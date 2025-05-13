@@ -6,7 +6,7 @@ import re
 import random
 from rdflib import Graph, Namespace, RDF, RDFS, OWL
 
-from arkumu.cidoc.models.schema import CIDOCClass, CIDOCProperty
+from arkumu.cidoc.models.cidoc import CIDOCClass, CIDOCProperty
 from arkumu.cidoc.rdf_import import import_cidoc_from_rdf
 
 

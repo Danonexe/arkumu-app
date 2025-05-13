@@ -3,7 +3,7 @@ from pathlib import Path
 from django.db import transaction
 from django.core.exceptions import ValidationError
 from rdflib import RDFS, RDF, OWL, Graph
-from arkumu.cidoc.models.schema import CIDOCProperty, CIDOCClass
+from arkumu.cidoc.models.cidoc import CIDOCProperty, CIDOCClass
 from arkumu.cidoc.rdf_import import import_cidoc_from_rdf
 
 

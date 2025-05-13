@@ -4,7 +4,7 @@ from django.db import transaction, models
 from pathlib import Path
 import os
 
-from arkumu.cidoc.models.schema import CIDOCClass, CIDOCProperty
+from arkumu.cidoc.models.cidoc import CIDOCClass, CIDOCProperty
 from arkumu.cidoc.validators import (
     validate_cidoc_class,
     validate_inverse_relationship,

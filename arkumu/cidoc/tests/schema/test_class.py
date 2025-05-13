@@ -4,7 +4,7 @@ import os
 from django.db import transaction
 from django.core.exceptions import ValidationError
 
-from arkumu.cidoc.models.schema import CIDOCClass, CIDOCProperty
+from arkumu.cidoc.models.cidoc import CIDOCClass, CIDOCProperty
 from arkumu.cidoc.rdf_import import import_cidoc_from_rdf
 
 # Fixtures are now imported from conftest.py

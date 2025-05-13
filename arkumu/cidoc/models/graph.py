@@ -1,6 +1,6 @@
 
 from django.conf import settings
-from arkumu.cidoc.models.schema import UUIDModel
+from arkumu.cidoc.models.cidoc import UUIDModel
 import age
 
 

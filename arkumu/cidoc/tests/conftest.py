@@ -5,8 +5,7 @@ from django.contrib.auth.models import Group
 from django.db import transaction
 from pathlib import Path
 from rdflib import Namespace, Graph
-from arkumu.cidoc.models.schema import CIDOCClass, CIDOCProperty
-from arkumu.cidoc.models.entities import CIDOCEntity, CIDOCEntityProperty, CIDOCRelationship
+from arkumu.cidoc.models.cidoc import CIDOCClass, CIDOCProperty
 from arkumu.cidoc.rdf_import import import_cidoc_from_rdf
 import arkumu.cidoc.models.graph_service
 
@@ -249,35 +248,7 @@ def cidoc_properties(loaded_cidoc_data, cidoc_classes):
     
     return properties
 
-@pytest.fixture
-def real_entity(db, cidoc_classes, test_user):
-    """Create a real entity for testing."""
-    return CIDOCEntity.objects.create(
-        crm_class=cidoc_classes['E1'].class_id,
-        created_by=test_user,
-        updated_by=test_user
-    )
 
-@pytest.fixture
-def real_entities(db, cidoc_classes, test_user):
-    """Create multiple real entities for relationship testing."""
-    return [
-        CIDOCEntity.objects.create(
-            crm_class=cidoc_classes['E21'].class_id,
-            created_by=test_user,
-            updated_by=test_user
-        ),
-        CIDOCEntity.objects.create(
-            crm_class=cidoc_classes['E53'].class_id,
-            created_by=test_user,
-            updated_by=test_user
-        ),
-        CIDOCEntity.objects.create(
-            crm_class=cidoc_classes['E5'].class_id,
-            created_by=test_user,
-            updated_by=test_user
-        )
-    ]
 
 @pytest.fixture
 def real_property(cidoc_properties):
@@ -289,29 +260,7 @@ def real_relationship_property(cidoc_properties):
     """Get a property suitable for relationships."""
     return cidoc_properties['P7']  # Changed from P12 to P7 as we set up its domain/range
 
-@pytest.fixture
-def real_entity_with_property(db, real_entity, real_property, test_user):
-    """Create an entity with a property."""
-    CIDOCEntityProperty.objects.create(
-        entity=real_entity,
-        cidoc_property=real_property,
-        value_data='Test Entity',
-        created_by=test_user,
-        updated_by=test_user
-    )
-    return real_entity
 
-@pytest.fixture
-def real_relationship(db, real_entities, real_relationship_property, test_user):
-    """Create a real relationship for testing."""
-    # Use the event (index 2) and place (index 1) with P7 (took place at)
-    return CIDOCRelationship.objects.create(
-        source=real_entities[2],  # Event
-        target=real_entities[1],  # Place
-        relation_type=real_relationship_property.property_id,
-        created_by=test_user,
-        updated_by=test_user
-    )
 
 @pytest.fixture
 def cidoc_rdf(rdf_file_path):

@@ -5,7 +5,7 @@ from pathlib import Path
 import os
 import datetime
 
-from arkumu.cidoc.models.schema import CIDOCClass, CIDOCProperty
+from arkumu.cidoc.models.cidoc import CIDOCClass, CIDOCProperty
 from arkumu.cidoc.validators import (
     validate_property_domain_range,
     validate_property_cardinality,

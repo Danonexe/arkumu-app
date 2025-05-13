@@ -2,7 +2,7 @@ import pytest
 from pathlib import Path
 import os
 from rdflib import RDFS, RDF, OWL, Graph, Namespace
-from arkumu.cidoc.models.schema import CIDOCClass, CIDOCProperty
+from arkumu.cidoc.models.cidoc import CIDOCClass, CIDOCProperty
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from arkumu.cidoc.rdf_import import import_cidoc_from_rdf
