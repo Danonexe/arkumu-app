@@ -1,13 +1,21 @@
-<!-- Project Card Component - Improved Version -->
-<div class="project-card max-w-xs p-4">
-  <!-- Project Image (Empty with dotted border) -->
-  <div class="project-image w-full h-48 
-    bg-white border border-dashed border-gray-400 mb-2">
-    {% if image_url %}<img src="{{ image_url }}" class="w-full h-full object-cover" alt="{{ title }}">{% endif %}
+<!-- Project Card Component - Improved Version with Smaller Left Margin -->
+<div class="project-card w-full max-w-md p-4">
+  <!-- Área superior con imagen y margen izquierdo -->
+  <div class="flex mb-4">
+    <!-- Margen izquierdo (más pequeño) -->
+    <div class="w-10 mr-4"></div>
+    
+    <!-- Contenido principal (imagen) -->
+    <div class="flex-1">
+      <!-- Project Image con borde punteado -->
+      <div class="w-full h-48 border-2 border-dotted border-gray-400">
+        {% if image_url %}<img src="{{ image_url }}" class="w-full h-full object-cover" alt="{{ title }}">{% endif %}
+      </div>
+    </div>
   </div>
   
-  <!-- Year and Institution -->
-  <div class="relative">
+  <!-- Year and Institution area (formato original) -->
+  <div class="relative mb-4">
     <!-- Year value -->
     <div class="inline-block border border-black text-xs py-1 px-2 font-bold">
       {{ year|default:"2024" }}
@@ -18,57 +26,61 @@
     
     <!-- Institution background -->
     <div class="bg-black text-white text-xs py-1 px-2 font-mono inline-block">
-      {{ institution|default:"Hochschule für Musik und Tanz Köln" }}
+      {{ institution|default:"Folkwang Universität der Kunst" }}
     </div>
   </div>
   
-  <!-- Project Title - Aligned left -->
-  <div class="mt-4">
-    <h3 class="font-medium text-base">
-      {{ title|default:"Die schöne Müllerin" }}
-    </h3>
-    <p class="text-sm mb-3 underline">
-      {{ subtitle|default:"Projektart" }}
-    </p>
-  </div>
-  
-  <!-- Contributors - With underline -->
-  <div class="text-xs mb-4">
-    {% if contributor1_name %}<div class="mb-1 underline">{{ contributor1_name }} {% if contributor1_role %}[{{ contributor1_role }}]{% endif %}</div>{% endif %}
-    {% if contributor2_name %}<div class="mb-1 underline">{{ contributor2_name }} {% if contributor2_role %}[{{ contributor2_role }}]{% endif %}</div>{% endif %}
-    {% if contributor3_name %}<div class="mb-1 underline">{{ contributor3_name }} {% if contributor3_role %}[{{ contributor3_role }}]{% endif %}</div>{% endif %}
-    {% if contributor4_name %}<div class="mb-1 underline">{{ contributor4_name }} {% if contributor4_role %}[{{ contributor4_role }}]{% endif %}</div>{% endif %}
-    {% if additional_contributors %}<div class="mb-1 underline">{{ additional_contributors }}</div>{% endif %}
+  <!-- Content with left margin -->
+  <div class="flex">
+    <!-- Margen izquierdo (más pequeño) -->
+    <div class="w-10 mr-4"></div>
     
-    {% if not contributor1_name and not contributor2_name and not contributor3_name and not contributor4_name and not additional_contributors %}
-      <div class="mb-1 underline">Teil von Sammlung</div>
-      <div class="mb-1 underline">Sammlungstitel</div>
-    {% endif %}
-  </div>
-  
-  <!-- Description if available -->
-  {% if description %}
-  <div class="text-xs mb-4">
-    {{ description }}
-  </div>
-  {% endif %}
-  
-  <!-- Categories / Tags - Simplified -->
-  <div class="text-xs mb-4">
-    {% if category1 %}<span class="inline-block px-2 py-1 mr-1 mb-2 border border-black">{{ category1 }}</span>{% endif %}
-    {% if category2 %}<span class="inline-block px-2 py-1 mr-1 mb-2 border border-black">{{ category2 }}</span>{% endif %}
-    {% if category3 %}<span class="inline-block px-2 py-1 mr-1 mb-2 border border-black">{{ category3 }}</span>{% endif %}
-    {% if category4 %}<span class="inline-block px-2 py-1 mr-1 mb-2 border border-black">{{ category4 }}</span>{% endif %}
-    
-    {% if not category1 and not category2 and not category3 and not category4 %}
-      <span class="inline-block px-2 py-1 mr-1 mb-2 border border-black">Liederzyklus</span>
-    {% endif %}
-  </div>
-  
-  <!-- View Project Button - Simplified -->
-  <div class="mb-4">
-    <button class="px-3 py-1 text-xs border border-black">
-      {{ button_text|default:"Buttontext" }}
-    </button>
+    <!-- Contenido principal -->
+    <div class="flex-1">
+      <!-- Project Title - Aligned left -->
+      <div class="mb-4">
+        <h3 class="font-medium text-base">
+          {{ title|default:"Handmade in Ethiopia" }}
+        </h3>
+        <p class="text-sm mb-3 underline">
+          {{ subtitle|default:"Projekt" }}
+        </p>
+      </div>
+      
+      <!-- Contributors - With underline -->
+      <div class="text-xs mb-4">
+        {% if contributor1_name %}<div class="mb-1 underline">{{ contributor1_name }} {% if contributor1_role %}[{{ contributor1_role }}]{% endif %}</div>{% endif %}
+        {% if contributor2_name %}<div class="mb-1 underline">{{ contributor2_name }} {% if contributor2_role %}[{{ contributor2_role }}]{% endif %}</div>{% endif %}
+        {% if contributor3_name %}<div class="mb-1 underline">{{ contributor3_name }} {% if contributor3_role %}[{{ contributor3_role }}]{% endif %}</div>{% endif %}
+        {% if contributor4_name %}<div class="mb-1 underline">{{ contributor4_name }} {% if contributor4_role %}[{{ contributor4_role }}]{% endif %}</div>{% endif %}
+        {% if additional_contributors %}<div class="mb-1 underline">{{ additional_contributors }}</div>{% endif %}
+        
+        {% if not contributor1_name and not contributor2_name and not contributor3_name and not contributor4_name and not additional_contributors %}
+          <div class="mb-1 underline">Johanna Schwer [Betreuerin]</div>
+          <div class="mb-1 underline">Judith Schanz [Betreuerin]</div>
+          <div class="mb-1 underline">Martina Allerbech [Designerin, Beraterin]</div>
+        {% endif %}
+      </div>
+      
+      <!-- Categories / Tags -->
+      <div class="text-xs mb-4">
+        {% if category1 %}<span class="inline-block px-2 py-1 mr-1 mb-2 border border-black">{{ category1 }}</span>{% endif %}
+        {% if category2 %}<span class="inline-block px-2 py-1 mr-1 mb-2 border border-black">{{ category2 }}</span>{% endif %}
+        {% if category3 %}<span class="inline-block px-2 py-1 mr-1 mb-2 border border-black">{{ category3 }}</span>{% endif %}
+        {% if category4 %}<span class="inline-block px-2 py-1 mr-1 mb-2 border border-black">{{ category4 }}</span>{% endif %}
+        
+        {% if not category1 and not category2 and not category3 and not category4 %}
+          <span class="inline-block px-2 py-1 mr-1 mb-2 border border-black">Industrial Design</span>
+          <span class="inline-block px-2 py-1 mr-1 mb-2 border border-black">Transformation Design</span>
+        {% endif %}
+      </div>
+      
+      <!-- View Project Button -->
+      <div>
+        <button class="px-3 py-1 text-xs border border-black">
+          {{ button_text|default:"Projekt ansehen" }}
+        </button>
+      </div>
+    </div>
   </div>
 </div>
