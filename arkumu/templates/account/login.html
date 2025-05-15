@@ -1,0 +1,78 @@
+{% extends "account/base.html" %}
+
+{% load i18n %}
+{% load account socialaccount %}
+{% load crispy_forms_tags %}
+
+{% block head_title %}{% translate "Sign In" %}{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+  <div class="max-w-2xl mx-auto">
+    <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+      <div class="bg-arkumu-blue text-white p-4">
+        <h1 class="text-xl font-bold">{% translate "Sign In" %}</h1>
+      </div>
+      <div class="p-6">
+        
+        <!-- Institutional Login Section -->
+        <div class="mb-8 p-5 border rounded-lg bg-arkumu-light-soft">
+          <h2 class="text-xl font-medium mb-3">{% translate "Institutional Login" %}</h2>
+          <p class="text-arkumu-dark-passive mb-4">
+            {% translate "If you are affiliated with a university, please use your institutional login credentials." %}
+          </p>
+          <a href="{% url 'users:shibboleth_login' %}" class="block w-full text-center py-3 px-4 rounded-md bg-arkumu-blue hover:bg-arkumu-blue-hover text-white font-medium transition-colors">
+            {% translate "Login with your Institution" %}
+          </a>
+        </div>
+        
+        <!-- Local Login Section -->
+        <div>
+          <h2 class="text-xl font-medium mb-3">{% translate "Local Account Login" %}</h2>
+          
+          {% get_providers as socialaccount_providers %}
+          
+          {% if socialaccount_providers %}
+            <p>{% translate "Please sign in with one of your existing third party accounts:" %}</p>
+            
+            <div class="mb-4">
+              <ul class="list-none">
+                {% include "socialaccount/snippets/provider_list.html" with process="login" %}
+              </ul>
+              <div class="my-4 border-t border-b py-2 text-center text-arkumu-dark-passive">{% translate "or" %}</div>
+            </div>
+            
+            {% include "socialaccount/snippets/login_extra.html" %}
+          {% endif %}
+          
+          <form class="login" method="POST" action="{% url 'account_login' %}">
+            {% csrf_token %}
+            {{ form|crispy }}
+            {% if redirect_field_value %}
+              <input type="hidden" name="{{ redirect_field_name }}" value="{{ redirect_field_value }}" />
+            {% endif %}
+            
+            <div class="flex justify-between items-center mt-6">
+              <a class="text-arkumu-blue hover:text-arkumu-blue-hover" href="{% url 'account_reset_password' %}">
+                {% translate "Forgot Password?" %}
+              </a>
+              <button class="py-2 px-4 rounded-md bg-arkumu-blue hover:bg-arkumu-blue-hover text-white font-medium transition-colors" type="submit">
+                {% translate "Sign In" %}
+              </button>
+            </div>
+          </form>
+          
+          {% if ACCOUNT_ALLOW_REGISTRATION %}
+            <p class="mt-4 text-center">
+              {% translate "Don't have a local account?" %}
+              <a href="{{ signup_url }}" class="text-arkumu-blue hover:text-arkumu-blue-hover">
+                {% translate "Sign Up" %}
+              </a>
+            </p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} 
