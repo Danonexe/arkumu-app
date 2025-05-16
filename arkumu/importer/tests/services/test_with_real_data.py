@@ -10,7 +10,7 @@ from arkumu.cidoc.models import Resource, Triple, ResourceType
 def configure_logging():
     """Configure logging to suppress debug logs during tests."""
     logging.basicConfig()
-    logging.getLogger('arkumu.importer.services.importer').setLevel(logging.WARNING)
+    logging.getLogger('arkumu.importer.services.importer').setLevel(logging.DEBUG)
     yield
 
 @pytest.mark.django_db

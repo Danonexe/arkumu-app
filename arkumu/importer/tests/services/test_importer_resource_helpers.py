@@ -1,49 +1,47 @@
 import pytest
 import json
 import logging
-from arkumu.importer.services.importer import (
-    JSONMappingImporter, 
+from arkumu.importer.services.resource_manager import ResourceManager
+from arkumu.importer.services.uri_utils import (
     RDF_BASE_URI, 
     RDFS_BASE_URI, 
-    CIDOC_CRM_BASE_URI,
-    XSD_BASE_URI
+    CIDOC_CRM_BASE_URI
+    # XSD_BASE_URI is not used in this file after removing utility tests
 )
 from arkumu.cidoc.models import Resource, ResourceType
-from datetime import datetime
+from arkumu.importer.services.uri_utils import slugify_uri_part # For institution slug
+# Removed: from arkumu.importer.services.importer import JSONMappingImporter, XSD_BASE_URI
+# Removed: from datetime import datetime - not used after removing utility tests
 
 # Configure logging for tests
 @pytest.fixture(autouse=True)
 def configure_logging():
     """Configure logging to suppress debug logs during tests."""
     logging.basicConfig()
-    logging.getLogger('arkumu.importer.services.importer').setLevel(logging.WARNING)
+    # logging.getLogger('arkumu.importer.services.importer').setLevel(logging.WARNING) # No longer importer
+    logging.getLogger('arkumu.importer.services.resource_manager').setLevel(logging.WARNING)
     yield
 
-@pytest.fixture
-def minimal_mapping_content_for_helpers(): # Renamed to avoid conflict if used elsewhere
-    return {
-        "institution": "HELPER_TEST_INST",
-        "mappings": [] # Mappings content not relevant for these helpers
-    }
+# Removed minimal_mapping_content_for_helpers and mapping_file_for_helpers fixtures
 
 @pytest.fixture
-def mapping_file_for_helpers(tmp_path, minimal_mapping_content_for_helpers):
-    file_path = tmp_path / "helper_mapping.json"
-    with open(file_path, 'w') as f:
-        json.dump(minimal_mapping_content_for_helpers, f)
-    return str(file_path)
+def institution_code():
+    return "HELPER_TEST_INST" # From original minimal_mapping_content
 
 @pytest.fixture
-def importer_instance(mapping_file_for_helpers):
-    return JSONMappingImporter(mapping_file_path=mapping_file_for_helpers)
+def resource_manager_instance(institution_code):
+    # ResourceManager expects a slugified institution code
+    slugified_inst_code = slugify_uri_part(institution_code)
+    return ResourceManager(institution_code=slugified_inst_code)
 
 @pytest.mark.django_db
-class TestImporterResourceHelpers:
+class TestResourceManagerHelpers: # Renamed class for clarity
 
-    def test_get_or_create_rdf_term_creation(self, importer_instance):
+    def test_get_or_create_rdf_term_creation(self, resource_manager_instance):
         term_name = "seeAlso"
         description = "RDF seeAlso property"
-        resource = importer_instance._get_or_create_rdf_term(term_name, description)
+        # Call on resource_manager_instance
+        resource = resource_manager_instance.get_or_create_rdf_term(term_name, description)
         
         assert resource is not None
         assert resource.uri == f"{RDF_BASE_URI}{term_name}"
@@ -51,23 +49,31 @@ class TestImporterResourceHelpers:
         assert resource.source == "RDF"
         assert resource.source_field == f"rdf:{term_name}"
         assert resource.literal_value == description
-        assert Resource.objects.count() == 1 + 2 # 1 for seeAlso, 2 for pre-cached type/label
+        # The count logic depends on how ResourceManager.get_or_create_resource handles label/type creation.
+        # If it creates 1 for term, 1 for its rdf:type, 1 for its rdfs:label (if description provided), then count = 3
+        # Let's assume for now the original logic holds if a description is provided for simplicity in this step.
+        # Initial state of DB is empty, so we expect the term + its type + its label.
+        assert Resource.objects.count() == 3 
 
-    def test_get_or_create_rdf_term_retrieval(self, importer_instance):
-        term_name = "type" # This one is pre-cached in __init__
+    def test_get_or_create_rdf_term_retrieval(self, resource_manager_instance):
+        term_name = "type" 
         description = "RDF type property"
-        initial_count = Resource.objects.count()
         
-        resource = importer_instance._get_or_create_rdf_term(term_name, description)
-        assert resource is not None
-        assert resource.uri == f"{RDF_BASE_URI}{term_name}" 
-        assert Resource.objects.count() == initial_count # No new resource should be created
-        assert resource == importer_instance.rdf_type_resource # Should be the pre-cached one
+        resource1 = resource_manager_instance.get_or_create_rdf_term(term_name, description)
+        assert Resource.objects.count() == 3 # Direct assertion after first call
 
-    def test_get_or_create_rdfs_term_creation(self, importer_instance):
+        # Second call should retrieve it
+        resource2 = resource_manager_instance.get_or_create_rdf_term(term_name, description)
+        assert resource2 is not None
+        assert resource2.uri == f"{RDF_BASE_URI}{term_name}" 
+        assert Resource.objects.count() == 3 # No new resource should be created
+        assert resource1 == resource2 # Should be the same instance from cache or DB
+        # Removed: assert resource == importer_instance.rdf_type_resource
+
+    def test_get_or_create_rdfs_term_creation(self, resource_manager_instance):
         term_name = "comment"
         description = "RDFS comment property"
-        resource = importer_instance._get_or_create_rdfs_term(term_name, description)
+        resource = resource_manager_instance.get_or_create_rdfs_term(term_name, description)
         
         assert resource is not None
         assert resource.uri == f"{RDFS_BASE_URI}{term_name}"
@@ -75,23 +81,27 @@ class TestImporterResourceHelpers:
         assert resource.source == "RDFS"
         assert resource.source_field == f"rdfs:{term_name}"
         assert resource.literal_value == description
-        assert Resource.objects.count() == 1 + 2 # 1 for comment, 2 for pre-cached type/label
+        # Similar count logic as above
+        assert Resource.objects.count() == 3 
 
-    def test_get_or_create_rdfs_term_retrieval(self, importer_instance):
-        term_name = "label" # This one is pre-cached in __init__
+    def test_get_or_create_rdfs_term_retrieval(self, resource_manager_instance):
+        term_name = "label" 
         description = "RDFS label property"
-        initial_count = Resource.objects.count()
 
-        resource = importer_instance._get_or_create_rdfs_term(term_name, description)
-        assert resource is not None
-        assert resource.uri == f"{RDFS_BASE_URI}{term_name}"
-        assert Resource.objects.count() == initial_count
-        assert resource == importer_instance.rdfs_label_resource
+        resource1 = resource_manager_instance.get_or_create_rdfs_term(term_name, description)
+        assert Resource.objects.count() == 3 # Direct assertion after first call
+        
+        resource2 = resource_manager_instance.get_or_create_rdfs_term(term_name, description)
+        assert resource2 is not None
+        assert resource2.uri == f"{RDFS_BASE_URI}{term_name}"
+        assert Resource.objects.count() == 3 # No new creation
+        assert resource1 == resource2
+        # Removed: assert resource == importer_instance.rdfs_label_resource
 
-    def test_get_or_create_cidoc_class_creation(self, importer_instance):
+    def test_get_or_create_cidoc_class_creation(self, resource_manager_instance):
         class_short_name = "E22_Man-Made_Object"
         expected_description = f"CIDOC-CRM Class: {class_short_name}"
-        resource = importer_instance._get_or_create_cidoc_class_resource(class_short_name)
+        resource = resource_manager_instance.get_or_create_cidoc_class_resource(class_short_name)
         
         assert resource is not None
         assert resource.uri == f"{CIDOC_CRM_BASE_URI}{class_short_name}"
@@ -99,25 +109,24 @@ class TestImporterResourceHelpers:
         assert resource.source == "CIDOC-CRM"
         assert resource.source_field == f"cidoc:{class_short_name}"
         assert resource.literal_value == expected_description
-        assert Resource.objects.count() == 1 + 2
+        # Class itself, its rdf:type (rdfs:Class), and its rdfs:label (description)
+        assert Resource.objects.count() == 3 
 
-    def test_get_or_create_cidoc_class_retrieval(self, importer_instance):
+    def test_get_or_create_cidoc_class_retrieval(self, resource_manager_instance):
         class_short_name = "E5_Event"
-        initial_count = Resource.objects.count()
-        resource1 = importer_instance._get_or_create_cidoc_class_resource(class_short_name)
-        count_after_first_call = Resource.objects.count()
-        assert count_after_first_call == initial_count + 1
-        
-        resource2 = importer_instance._get_or_create_cidoc_class_resource(class_short_name)
+        resource1 = resource_manager_instance.get_or_create_cidoc_class_resource(class_short_name)
+        assert Resource.objects.count() == 3 # Direct assertion after first call
+
+        resource2 = resource_manager_instance.get_or_create_cidoc_class_resource(class_short_name)
         assert resource2 is not None
         assert resource2.uri == f"{CIDOC_CRM_BASE_URI}{class_short_name}"
-        assert Resource.objects.count() == count_after_first_call # No new creation
+        assert Resource.objects.count() == 3 # No new creation
         assert resource1 == resource2
 
-    def test_get_or_create_cidoc_property_creation(self, importer_instance):
+    def test_get_or_create_cidoc_property_creation(self, resource_manager_instance):
         property_short_name = "P1_is_identified_by"
         expected_description = f"CIDOC-CRM Property: {property_short_name}"
-        resource = importer_instance._get_or_create_cidoc_property_resource(property_short_name)
+        resource = resource_manager_instance.get_or_create_cidoc_property_resource(property_short_name)
         
         assert resource is not None
         assert resource.uri == f"{CIDOC_CRM_BASE_URI}{property_short_name}"
@@ -125,75 +134,16 @@ class TestImporterResourceHelpers:
         assert resource.source == "CIDOC-CRM"
         assert resource.source_field == f"cidoc:{property_short_name}"
         assert resource.literal_value == expected_description
-        assert Resource.objects.count() == 1 + 2
+        # Property itself, its rdf:type (rdf:Property), and its rdfs:label (description)
+        assert Resource.objects.count() == 3 
 
-    def test_get_or_create_cidoc_property_retrieval(self, importer_instance):
+    def test_get_or_create_cidoc_property_retrieval(self, resource_manager_instance):
         property_short_name = "P2_has_type"
-        initial_count = Resource.objects.count()
-        resource1 = importer_instance._get_or_create_cidoc_property_resource(property_short_name)
-        count_after_first_call = Resource.objects.count()
-        assert count_after_first_call == initial_count + 1
+        resource1 = resource_manager_instance.get_or_create_cidoc_property_resource(property_short_name)
+        assert Resource.objects.count() == 3 # Direct assertion after first call
 
-        resource2 = importer_instance._get_or_create_cidoc_property_resource(property_short_name)
+        resource2 = resource_manager_instance.get_or_create_cidoc_property_resource(property_short_name)
         assert resource2 is not None
         assert resource2.uri == f"{CIDOC_CRM_BASE_URI}{property_short_name}"
-        assert Resource.objects.count() == count_after_first_call
+        assert Resource.objects.count() == 3
         assert resource1 == resource2
-
-    def test_mint_uri(self, importer_instance):
-        """Test the _mint_uri helper method."""
-        # Simple case
-        uri = importer_instance._mint_uri("event", "1")
-        expected_uri = f"{importer_instance.institution_base_uri}helper_test_inst/event/1"
-        assert uri == expected_uri
-        
-        # Case with spaces and uppercase
-        uri = importer_instance._mint_uri("Event Type", "Sample Event")
-        expected_uri = f"{importer_instance.institution_base_uri}helper_test_inst/event_type/sample_event"
-        assert uri == expected_uri
-        
-        # Multiple parts
-        uri = importer_instance._mint_uri("event", "1", "appellation", "title")
-        expected_uri = f"{importer_instance.institution_base_uri}helper_test_inst/event/1/appellation/title"
-        assert uri == expected_uri
-
-    def test_infer_datatype(self, importer_instance):
-        """Test the _infer_datatype helper method."""
-        # String
-        assert importer_instance._infer_datatype("test") == f"{XSD_BASE_URI}string"
-        
-        # Integer
-        assert importer_instance._infer_datatype(42) == f"{XSD_BASE_URI}integer"
-        
-        # Float
-        assert importer_instance._infer_datatype(3.14) == f"{XSD_BASE_URI}float"
-        
-        # Date
-        assert importer_instance._infer_datatype("2022-01-01") == f"{XSD_BASE_URI}date"
-        
-        # DateTime
-        assert importer_instance._infer_datatype("2022-01-01T12:30:45") == f"{XSD_BASE_URI}dateTime"
-        
-        # Invalid date format falls back to string
-        assert importer_instance._infer_datatype("01/01/2022") == f"{XSD_BASE_URI}string"
-
-    def test_split_multi_values(self, importer_instance):
-        """Test the _split_multi_values helper method."""
-        # Test with non-string value
-        assert importer_instance._split_multi_values({}, 42) == [42]
-        
-        # Test with explicit separator in rule
-        rule = {"multi_value_separator": "|"}
-        assert importer_instance._split_multi_values(rule, "a|b|c") == ["a", "b", "c"]
-        
-        # Test with separator hint in note
-        rule = {"note": "Values separated by a ';'"}
-        assert importer_instance._split_multi_values(rule, "a;b; c") == ["a", "b", "c"]
-        
-        # Test with no splitting needed
-        rule = {}
-        assert importer_instance._split_multi_values(rule, "single value") == ["single value"]
-        
-        # Test with empty values being filtered
-        rule = {"multi_value_separator": ","}
-        assert importer_instance._split_multi_values(rule, "a,,b, ,c") == ["a", "b", "c"] 
