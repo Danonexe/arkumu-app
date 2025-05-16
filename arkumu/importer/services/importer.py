@@ -359,7 +359,7 @@ class JSONMappingImporter:
                 for sub_rule_idx, sub_rule in enumerate(object_properties):
                     logger.debug(f"Row {row_num}: RDR object_property rule {sub_rule_idx + 1}")
                     try:
-                        self._process_sub_rule(sub_rule, row_data, rdr_object, source_value, rdr_uri_slugified_column)
+                        self._process_sub_rule(sub_rule, row_data, rdr_object, source_value, rdr_uri_slugified_column, row_num)
                     except Exception as e:
                         logger.error(f"Row {row_num}: Error processing sub-rule for RDR {rdr_object.uri}: {e} Rule: {sub_rule}", exc_info=True)
         else:
@@ -377,39 +377,47 @@ class JSONMappingImporter:
             return
             
         # Handle multi-value columns - use data_utils.split_multi_values
-        source_values = split_multi_values(rule, source_values_raw)
+        # The function expects the rule object and the value
+        # Add the delimiter as multi_value_separator in the rule if needed
+        rule_with_delimiter = rule.copy()
+        if 'delimiter' in rule and 'multi_value_separator' not in rule:
+            rule_with_delimiter['multi_value_separator'] = rule['delimiter']
+            
+        source_values = split_multi_values(rule_with_delimiter, source_values_raw)
+        
+        # Skip if no values after splitting
         if not source_values:
             logger.debug(f"Row {row_num}: Skipping rule: no values after splitting for '{source_column_name}'")
             return
-
-        predicate_short_name = rule.get('predicate') or rule.get('property')
-        if not predicate_short_name:
-            logger.warning(f"Row {row_num}: Skipping rule: no 'predicate' or 'property' defined for column '{source_column_name}'")
-            return
+            
+        # Get predicate Resource for this mapping
+        property_name = rule.get('property') or rule.get('predicate')
         
-        logger.debug(f"Row {row_num}: Getting predicate resource for '{predicate_short_name}'")
-        predicate_resource = None
-        if predicate_short_name == "rdf:type":
-            predicate_resource = self.rdf_type_resource
-        elif predicate_short_name == "rdfs:label":
-            predicate_resource = self.rdfs_label_resource
+        # Handle different types of properties based on namespace
+        pred_resource = None
+        if property_name == "rdf:type":
+            pred_resource = self.rdf_type_resource
+        elif property_name == "rdfs:label":
+            pred_resource = self.rdfs_label_resource
+        elif property_name == "owl:sameAs":
+            pred_resource = self.owl_sameas_resource
         else:
-            actual_prop_name_for_lookup = predicate_short_name.split(':')[-1] # Handles "cidoc:Pxx" or "Pxx"
-            predicate_resource = self.resource_manager.get_or_create_cidoc_property_resource(actual_prop_name_for_lookup)
+            # Default case: assume it's a CIDOC property
+            # Extract the property name without namespace prefix (e.g., "P1_is_identified_by" from "cidoc:P1_is_identified_by")
+            actual_prop_name = property_name.split(':')[-1]
+            pred_resource = self.resource_manager.get_or_create_cidoc_property_resource(actual_prop_name)
         
-        if not predicate_resource:
-            logger.error(f"Row {row_num}: Could not get or create predicate resource for '{predicate_short_name}'. Skipping rule for this column.")
+        if not pred_resource:
+            logger.warning(f"Row {row_num}: Skip rule - could not create predicate resource for '{property_name}'")
             return
-
-        # Special handling for rdfs:label properties that have range: "literal"
-        is_literal_label = predicate_resource == self.rdfs_label_resource and rule.get('range') == 'literal'
-        
+            
+        logger.debug(f"Row {row_num}: Getting predicate resource for '{property_name}'")
+            
+        # For each value in source_values (might be just one if not multi-valued)
         for source_value in source_values:
-            # Skip empty values
-            if isinstance(source_value, str) and not source_value.strip():
-                logger.debug(f"Row {row_num}: Skipping empty string value for column '{source_column_name}'")
-                continue
-                
+            # Special case: Direct attachment of rdfs:label literals 
+            is_literal_label = (property_name == 'rdfs:label' and rule.get('range') == 'literal')
+            
             logger.debug(f"Row {row_num}: Processing source value: '{source_value}' for column '{source_column_name}'")
             
             # --- Special case: Direct literal label attachment --- 
@@ -428,53 +436,141 @@ class JSONMappingImporter:
                     defaults={'source': self.institution_code, 'source_field': f"direct_label_for_main_subject={source_value}"}
                 )
                 
-                Triple.objects.get_or_create(
-                    subject=event_subject_resource,
-                    predicate=self.rdfs_label_resource,
-                    object=direct_literal_resource
-                )
-                logger.debug(f"Row {row_num}: Added direct rdfs:label '{str(source_value)}' to main subject {event_subject_resource.uri}")
-            
-            # --- RDR Creation: Always create an RDR for the source_value --- 
-            rdr_creation_result = self._create_rdr_for_value(source_column_name, source_value, row_num)
-            if not rdr_creation_result:
-                logger.warning(f"Row {row_num}: RDR creation failed for column '{source_column_name}', value '{source_value}'. Skipping this value.")
-                continue # Skip to the next source_value
-            
-            rdr_object, rdr_uri_slugified_column = rdr_creation_result # Unpack after successful creation
-            object_for_main_triple = rdr_object 
-            # Original logger.debug for RDR creation is now inside _create_rdr_for_value
-            # logger.debug(f"Row {row_num}: Created RDR: {rdr_object.uri} as object for main triple") # Can be removed or kept if double logging is fine
-            # --- End RDR Creation ---
-
-            # Conditionally label the RDR if the main rule implied a literal object
-            self._conditionally_label_rdr_object(rdr_object, rule, row_data, source_value, predicate_resource, rdr_uri_slugified_column, row_num)
-
-            # Apply further semantic meaning TO THE RDR (rdr_object)
-            self._apply_additional_semantics_to_rdr(rdr_object, rule, row_data, source_value, rdr_uri_slugified_column, row_num)
-
-            # Create the final triple connecting event_subject_resource -> predicate_resource -> RDR_object
-            # Skip creating this link for rdfs:label with range: "literal" as we've already added the direct literal
-            if not is_literal_label:
-                if object_for_main_triple: # Should always be the rdr_object now
-                    triple, created = Triple.objects.get_or_create(
+                if direct_literal_resource:
+                    label_triple = Triple.objects.create(
                         subject=event_subject_resource,
-                        predicate=predicate_resource,
-                        object=object_for_main_triple # This is the RDR
+                        predicate=self.rdfs_label_resource,
+                        object=direct_literal_resource
                     )
-                    logger.debug(f"Row {row_num}: Created main triple: {triple.subject.uri} -> {triple.predicate.uri} -> {triple.object.uri}")
+                    logger.debug(f"Row {row_num}: Added direct rdfs:label '{source_value}' to main subject {event_subject_resource.uri}")
+            
+            # --- Standard RDR Creation for all properties ---
+            # (We still create the RDR even for literal labels, just don't link it directly)
+            try:
+                # Create RDR for standard case
+                logger.debug(f"Row {row_num}: Attempting to create RDR for column '{source_column_name}', value '{source_value}'")
+                
+                # IMPORTANT: For URI fields, use the value directly as part of the RDR URI
+                # For non-URI fields, follow the institutionalized pattern
+                rdr_resource = None
+                
+                # Check if this is a URI field with special handling
+                if rule.get('range') == 'uri' and rule.get('uri_prefix'):
+                    # For URI fields with prefix, create a local RDR but link it to the external URI
+                    external_uri = f"{rule.get('uri_prefix')}{source_value}"
+                    
+                    # Create RDR resource
+                    rdr_resource = self.resource_manager.get_or_create_resource(
+                        uri=mint_uri(self.institution_base_uri, self.institution_code_slug, 
+                                    slugify_uri_part(source_column_name), 
+                                    slugify_uri_part(source_value)),
+                        resource_type=ResourceType.IRI,
+                        defaults={'source': self.institution_code, 'source_field': f"{source_column_name}_rdr={source_value}"}
+                    )
+                    
+                    # Create external URI resource
+                    external_uri_resource = self.resource_manager.get_or_create_resource(
+                        uri=external_uri,
+                        resource_type=ResourceType.IRI,
+                        defaults={'source': self.institution_code, 'source_field': f"{source_column_name}_external_uri_link={source_value}"}
+                    )
+                    
+                    # Link RDR to external URI with owl:sameAs
+                    Triple.objects.create(
+                        subject=rdr_resource,
+                        predicate=self.owl_sameas_resource,
+                        object=external_uri_resource
+                    )
+                    logger.debug(f"Row {row_num}: Linked RDR {rdr_resource.uri} owl:sameAs {external_uri_resource.uri}")
                 else:
-                    # This case should not be reached if RDR creation is robust
-                    logger.warning(f"Row {row_num}: No RDR object was set for source value: '{source_value}'. Main triple not created.")
-            else:
-                logger.debug(f"Row {row_num}: Skipping creation of RDR linking triple for rdfs:label with range: 'literal'. Only direct literal is linked.")
+                    # Standard RDR creation
+                    rdr_resource = self.resource_manager.get_or_create_resource(
+                        uri=mint_uri(self.institution_base_uri, self.institution_code_slug, 
+                                    slugify_uri_part(source_column_name), 
+                                    slugify_uri_part(source_value)),
+                        resource_type=ResourceType.IRI,
+                        defaults={'source': self.institution_code, 'source_field': f"{source_column_name}_rdr={source_value}"}
+                    )
+                
+                if not rdr_resource:
+                    logger.warning(f"Row {row_num}: Failed to create RDR for '{source_column_name}={source_value}'")
+                    continue
+                    
+                logger.debug(f"Row {row_num}: Successfully created/got RDR: {rdr_resource.uri}")
+                
+                # Apply RDR labeling according to rule
+                if rule.get('range') == 'literal':
+                    # For literal ranges, use the source value as the label
+                    literal_language = infer_language(rule, row_data)
+                    
+                    logger.debug(f"Row {row_num}: RDR {rdr_resource.uri} will get an rdfs:label as original rule intended a literal.")
+                    
+                    # Create a literal resource and link it to the RDR
+                    label_resource = self.resource_manager.get_or_create_resource(
+                        literal_value=str(source_value),
+                        resource_type=ResourceType.LITERAL,
+                        literal_language=literal_language,
+                        defaults={'source': self.institution_code, 'source_field': f"{source_column_name}_label={source_value}"}
+                    )
+                    
+                    # Attach the label to the RDR
+                    if label_resource:
+                        Triple.objects.create(
+                            subject=rdr_resource,
+                            predicate=self.rdfs_label_resource,
+                            object=label_resource
+                        )
+                        logger.debug(f"Row {row_num}: Added rdfs:label '{source_value}' to RDR {rdr_resource.uri}")
+                else:
+                    # For non-literal ranges, don't automatically label from source value
+                    logger.debug(f"Row {row_num}: RDR {rdr_resource.uri} will not be auto-labeled based on main rule predicate/range.")
+                
+                # Add additional semantics to RDR based on rule
+                logger.debug(f"Row {row_num}: Applying additional semantics to RDR {rdr_resource.uri}")
+                
+                # 1. Apply typing if specified
+                range_class = rule.get('range')
+                if range_class and range_class not in ['uri', 'literal']:
+                    logger.debug(f"Row {row_num}: Typing RDR {rdr_resource.uri} as {range_class}")
+                    self._apply_typing_to_resource(rdr_resource, range_class)
+                    
+                # 2. Apply external URI linking if specified and not already handled
+                if rule.get('range') == 'uri' and rule.get('uri_prefix') and not rule.get('multi_valued'):
+                    # Already handled above for multi-valued
+                    pass  
+                    
+                # 3. Apply object properties if specified
+                if rule.get('object_properties'):
+                    logger.debug(f"Row {row_num}: Processing {len(rule['object_properties'])} object_properties for RDR {rdr_resource.uri}")
+                    
+                    for idx, sub_rule in enumerate(rule['object_properties'], 1):
+                        logger.debug(f"Row {row_num}: RDR object_property rule {idx}")
+                        self._process_sub_rule(sub_rule, row_data, rdr_resource, source_value, source_column_name, row_num)
+                else:
+                    logger.debug(f"Row {row_num}: No further specific semantic action (type, sameAs, obj_props) for RDR {rdr_resource.uri} from this main rule.")
+                
+                # Create the main triple (subject → predicate → RDR)
+                # Skip for rdfs:label with range:literal as we've already done direct attachment
+                if not (is_literal_label and rule.get('range') == 'literal'):
+                    main_triple = Triple.objects.create(
+                        subject=event_subject_resource,
+                        predicate=pred_resource,
+                        object=rdr_resource
+                    )
+                    logger.debug(f"Row {row_num}: Created main triple: {event_subject_resource.uri} -> {pred_resource.uri} -> {rdr_resource.uri}")
+                else:
+                    logger.debug(f"Row {row_num}: Skipping creation of RDR linking triple for rdfs:label with range: 'literal'. Only direct literal is linked.")
+                    
+            except Exception as e:
+                logger.error(f"Row {row_num}: Error processing rule source '{source_column_name}': {e}")
 
-    def _process_sub_rule(self, sub_rule, row_data, subject_resource, parent_source_value, parent_intermediate_uri_part):
+    def _process_sub_rule(self, sub_rule, row_data, subject_resource, parent_source_value, parent_intermediate_uri_part, row_num=None):
         """
         Processes a sub-rule defined in 'object_properties'.
         Creates triples where subject_resource (an intermediate IRI) is the subject.
         parent_source_value is the value from the parent rule's source_column, usable via 'use_parent_value'.
         parent_intermediate_uri_part is the ALREADY SLUGIFIED uri part from parent rule's object_class for context in minting.
+        row_num is the original row number for logging purposes.
         """
         sub_source_column = sub_rule.get('source_column')
         sub_value_raw = None
@@ -489,11 +585,13 @@ class JSONMappingImporter:
             sub_value_raw = parent_source_value
             logger.debug(f"Sub-rule: using parent_source_value '{sub_value_raw}'")
         else:
-            logger.warning(f"Sub-rule for {subject_resource.uri} lacks 'source_column', 'fixed_value', or 'use_parent_value'. Sub-rule: {sub_rule}")
+            row_log = f" for row {row_num}" if row_num else ""
+            logger.warning(f"Sub-rule for {subject_resource.uri}{row_log} lacks 'source_column', 'fixed_value', or 'use_parent_value'. Sub-rule: {sub_rule}")
             return
 
         if sub_value_raw is None: # Note: allow empty strings if that's intended (e.g. for fixed_value="")
-            logger.debug(f"Skipping sub-rule: value is None. Sub-rule: {sub_rule}")
+            row_log = f" for row {row_num}" if row_num else ""
+            logger.debug(f"Skipping sub-rule{row_log}: value is None. Sub-rule: {sub_rule}")
             return
 
         # Use data_utils.split_multi_values
@@ -501,7 +599,8 @@ class JSONMappingImporter:
 
         sub_predicate_short_name = sub_rule.get('predicate') or sub_rule.get('property')
         if not sub_predicate_short_name:
-            logger.warning(f"Skipping sub-rule for {subject_resource.uri}: no 'predicate' or 'property' defined. Sub-rule: {sub_rule}")
+            row_log = f" for row {row_num}" if row_num else ""
+            logger.warning(f"Skipping sub-rule for {subject_resource.uri}{row_log}: no 'predicate' or 'property' defined. Sub-rule: {sub_rule}")
             return
 
         sub_predicate_resource = None
@@ -621,5 +720,24 @@ class JSONMappingImporter:
                 # logger.debug(f"Row {row_num}: Created triple: {triple.subject.uri} -> {triple.predicate.uri} -> {getattr(triple.object, 'uri', getattr(triple.object, 'literal_value', None))}")
             else:
                 logger.warning(f"Sub-rule: no object resource created for predicate '{sub_predicate_short_name}', value '{sub_value}' on {subject_resource.uri}")
+
+    def _apply_typing_to_resource(self, resource, class_name):
+        """
+        Adds rdf:type triple to a resource with the specified CIDOC-CRM class.
+        Args:
+            resource: The Resource object to type
+            class_name: The CIDOC-CRM class name (e.g., 'E42_Identifier', 'E52_Time-Span')
+        """
+        logger.debug(f"Typing resource {resource.uri} as {class_name}")
+        try:
+            cidoc_class = self.resource_manager.get_or_create_cidoc_class_resource(class_name)
+            Triple.objects.get_or_create(
+                subject=resource,
+                predicate=self.rdf_type_resource,
+                object=cidoc_class
+            )
+            logger.debug(f"Successfully typed resource {resource.uri} as {class_name}")
+        except Exception as e:
+            logger.error(f"Failed to type resource {resource.uri} as {class_name}: {e}", exc_info=True)
 
 

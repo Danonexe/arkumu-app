@@ -154,7 +154,7 @@ def test_import_single_row_from_mapping_and_show_details(external_csv_data, exte
     if stats['errors']:
         print("Errors during import:")
         for error_info in stats['errors']:
-            print(f"- Row {error_info['row_num_original']}: {error_info['error']} (Data: {error_info.get('row_data')})")
+            print(f"- Row {error_info['row']}: {error_info['error']} (Data: {error_info.get('data')})")
 
     # Print all created resources and triples
     _print_all_created_data("Data Created from Single Row Import")
@@ -171,6 +171,107 @@ def test_import_single_row_from_mapping_and_show_details(external_csv_data, exte
         assert Triple.objects.count() > initial_triple_count, "Successful import of one row did not create any triples."
     else:
         print("Warning: The single row import was not successful. Check errors above.")
+
+    # Generate a Turtle representation of the RDF graph
+    print("\n--- Turtle Representation of RDF Graph ---")
+    
+    # Define common prefixes
+    prefixes = {
+        'rdf': 'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
+        'rdfs': 'http://www.w3.org/2000/01/rdf-schema#',
+        'owl': 'http://www.w3.org/2002/07/owl#',
+        'xsd': 'http://www.w3.org/2001/XMLSchema#',
+        'crm': 'http://cidoc-crm.org/cidoc-crm/'
+    }
+    
+    # Print prefixes
+    for prefix, uri in prefixes.items():
+        print(f"@prefix {prefix}: <{uri}> .")
+    print("")
+    
+    # Group triples by subject for cleaner Turtle representation
+    subjects = {}
+    for t in Triple.objects.all():
+        if t.subject.uri not in subjects:
+            subjects[t.subject.uri] = []
+        subjects[t.subject.uri].append(t)
+    
+    # Process each subject and its predicates
+    for subject_uri, triples in subjects.items():
+        print(f"<{subject_uri}>")
+        
+        # Group by predicate for multi-valued properties
+        predicates = {}
+        for t in triples:
+            if t.predicate.uri not in predicates:
+                predicates[t.predicate.uri] = []
+            predicates[t.predicate.uri].append(t.object)
+        
+        # Sort predicates with rdf:type first, then alphabetically
+        sorted_predicates = sorted(predicates.keys(), 
+                                  key=lambda p: (0 if p == 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type' else 1, p))
+        
+        # Process each predicate
+        for i, predicate_uri in enumerate(sorted_predicates):
+            is_last_predicate = i == len(sorted_predicates) - 1
+            
+            # Format the predicate using the shortest prefix possible
+            short_predicate = predicate_uri
+            for prefix, uri in prefixes.items():
+                if predicate_uri.startswith(uri):
+                    short_predicate = predicate_uri.replace(uri, f"{prefix}:")
+                    break
+            
+            # Start the predicate line
+            if len(predicates[predicate_uri]) == 1:
+                # Single value
+                obj = predicates[predicate_uri][0]
+                if obj.resource_type == ResourceType.IRI:
+                    print(f"    {short_predicate}  <{obj.uri}>{';' if not is_last_predicate else '.'}")
+                else:  # Literal
+                    literal_repr = f'"{obj.literal_value}"'
+                    
+                    # Special case for rdf:type that should point to a CIDOC class
+                    if predicate_uri == 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type' and 'CIDOC-CRM Class:' in obj.literal_value:
+                        cidoc_class = obj.literal_value.replace('CIDOC-CRM Class: ', '')
+                        literal_repr = f"crm:{cidoc_class}"
+                    elif obj.literal_language:
+                        literal_repr += f"@{obj.literal_language}"
+                    elif obj.literal_datatype:
+                        short_datatype = obj.literal_datatype
+                        for prefix, uri in prefixes.items():
+                            if obj.literal_datatype.startswith(uri):
+                                short_datatype = obj.literal_datatype.replace(uri, f"{prefix}:")
+                                break
+                        literal_repr += f"^^{short_datatype}"
+                    print(f"    {short_predicate}  {literal_repr}{';' if not is_last_predicate else '.'}")
+            else:
+                # Multiple values for same predicate
+                print(f"    {short_predicate}")
+                for j, obj in enumerate(predicates[predicate_uri]):
+                    is_last_value = j == len(predicates[predicate_uri]) - 1
+                    if obj.resource_type == ResourceType.IRI:
+                        print(f"        <{obj.uri}>{' ;' if is_last_value and not is_last_predicate else ' ,' if not is_last_value else ' .'}")
+                    else:  # Literal
+                        literal_repr = f'"{obj.literal_value}"'
+                        
+                        # Special case for rdf:type that should point to a CIDOC class
+                        if predicate_uri == 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type' and 'CIDOC-CRM Class:' in obj.literal_value:
+                            cidoc_class = obj.literal_value.replace('CIDOC-CRM Class: ', '')
+                            literal_repr = f"crm:{cidoc_class}"
+                        elif obj.literal_language:
+                            literal_repr += f"@{obj.literal_language}"
+                        elif obj.literal_datatype:
+                            short_datatype = obj.literal_datatype
+                            for prefix, uri in prefixes.items():
+                                if obj.literal_datatype.startswith(uri):
+                                    short_datatype = obj.literal_datatype.replace(uri, f"{prefix}:")
+                                    break
+                            literal_repr += f"^^{short_datatype}"
+                        print(f"        {literal_repr}{' ;' if is_last_value and not is_last_predicate else ' ,' if not is_last_value else ' .'}")
+        print("")
+    
+    print("--- End of Turtle Representation ---")
 
     print(f"--- Test End ---\n")
 
