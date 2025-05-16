@@ -169,13 +169,28 @@ class JSONMappingImporter:
         """
         logger.debug(f"Starting atomic import for row {row_num}")
         
-        # A. Create/Identify the Main Subject Resource
-        original_id_val = row_data.get('id') or row_data.get('Ereignis-ID') or f"row_{row_num}" # Fallback
-        logger.debug(f"Using ID: {original_id_val} for row {row_num}")
+        # A. Create/Identify the Main Subject Resource using anchor_column if defined
+        original_id_val = None
+        
+        # Check for anchor_column in mapping configuration
+        anchor_column = self.mapping_config.get("anchor_column")
+        if anchor_column and anchor_column in row_data:
+            original_id_val = row_data[anchor_column]
+            logger.info(f"Using anchor column '{anchor_column}' with value '{original_id_val}' for row {row_num}")
+        
+        # Fallbacks if anchor_column not found or empty
+        if not original_id_val:
+            original_id_val = row_data.get('id') or row_data.get('Ereignis-ID') or f"row_{row_num}" # Legacy fallbacks
+            logger.debug(f"No anchor_column defined or empty value - using fallback ID: {original_id_val} for row {row_num}")
         
         # Use primary subject class name for context in URI
         # Assumes source_field like "cidoc:E7_Activity" or just "E7_Activity"
         primary_class_name_part = primary_subject_class_resource.source_field.split(':')[-1]
+        
+        # Extract just the part after the underscore for more semantic URIs (e.g. "Activity" from "E7_Activity")
+        if '_' in primary_class_name_part:
+            primary_class_name_part = primary_class_name_part.split('_', 1)[1]
+            logger.debug(f"Using semantic part of class name for URI: {primary_class_name_part}")
         
         # Use uri_utils.mint_uri
         subject_uri = mint_uri(self.institution_base_uri, self.institution_code_slug, 
@@ -386,6 +401,9 @@ class JSONMappingImporter:
             logger.error(f"Row {row_num}: Could not get or create predicate resource for '{predicate_short_name}'. Skipping rule for this column.")
             return
 
+        # Special handling for rdfs:label properties that have range: "literal"
+        is_literal_label = predicate_resource == self.rdfs_label_resource and rule.get('range') == 'literal'
+        
         for source_value in source_values:
             # Skip empty values
             if isinstance(source_value, str) and not source_value.strip():
@@ -393,6 +411,29 @@ class JSONMappingImporter:
                 continue
                 
             logger.debug(f"Row {row_num}: Processing source value: '{source_value}' for column '{source_column_name}'")
+            
+            # --- Special case: Direct literal label attachment --- 
+            if is_literal_label:
+                logger.debug(f"Row {row_num}: Attaching direct rdfs:label literal to main subject for value: '{source_value}'")
+                literal_language = infer_language(rule, row_data)
+                literal_datatype = None
+                if not literal_language:
+                    literal_datatype = f"{XSD_BASE_URI}string"
+                
+                direct_literal_resource = self.resource_manager.get_or_create_resource(
+                    literal_value=str(source_value),
+                    resource_type=ResourceType.LITERAL,
+                    literal_language=literal_language,
+                    literal_datatype=literal_datatype,
+                    defaults={'source': self.institution_code, 'source_field': f"direct_label_for_main_subject={source_value}"}
+                )
+                
+                Triple.objects.get_or_create(
+                    subject=event_subject_resource,
+                    predicate=self.rdfs_label_resource,
+                    object=direct_literal_resource
+                )
+                logger.debug(f"Row {row_num}: Added direct rdfs:label '{str(source_value)}' to main subject {event_subject_resource.uri}")
             
             # --- RDR Creation: Always create an RDR for the source_value --- 
             rdr_creation_result = self._create_rdr_for_value(source_column_name, source_value, row_num)
@@ -413,16 +454,20 @@ class JSONMappingImporter:
             self._apply_additional_semantics_to_rdr(rdr_object, rule, row_data, source_value, rdr_uri_slugified_column, row_num)
 
             # Create the final triple connecting event_subject_resource -> predicate_resource -> RDR_object
-            if object_for_main_triple: # Should always be the rdr_object now
-                triple, created = Triple.objects.get_or_create(
-                    subject=event_subject_resource,
-                    predicate=predicate_resource,
-                    object=object_for_main_triple # This is the RDR
-                )
-                logger.debug(f"Row {row_num}: Created main triple: {triple.subject.uri} -> {triple.predicate.uri} -> {triple.object.uri}")
+            # Skip creating this link for rdfs:label with range: "literal" as we've already added the direct literal
+            if not is_literal_label:
+                if object_for_main_triple: # Should always be the rdr_object now
+                    triple, created = Triple.objects.get_or_create(
+                        subject=event_subject_resource,
+                        predicate=predicate_resource,
+                        object=object_for_main_triple # This is the RDR
+                    )
+                    logger.debug(f"Row {row_num}: Created main triple: {triple.subject.uri} -> {triple.predicate.uri} -> {triple.object.uri}")
+                else:
+                    # This case should not be reached if RDR creation is robust
+                    logger.warning(f"Row {row_num}: No RDR object was set for source value: '{source_value}'. Main triple not created.")
             else:
-                # This case should not be reached if RDR creation is robust
-                logger.warning(f"Row {row_num}: No RDR object was set for source value: '{source_value}'. Main triple not created.")
+                logger.debug(f"Row {row_num}: Skipping creation of RDR linking triple for rdfs:label with range: 'literal'. Only direct literal is linked.")
 
     def _process_sub_rule(self, sub_rule, row_data, subject_resource, parent_source_value, parent_intermediate_uri_part):
         """
