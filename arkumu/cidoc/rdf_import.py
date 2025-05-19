@@ -1,6 +1,6 @@
 import rdflib
 from django.db import transaction
-from arkumu.cidoc.models.schema import CIDOCClass, CIDOCProperty
+from arkumu.cidoc.models.cidoc import CIDOCClass, CIDOCProperty
 import re
 
 def extract_id(uri_or_str, pattern=r'(P\d+[i]?)'):

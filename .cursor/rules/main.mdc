@@ -1,0 +1,14 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+- Avoid complexity
+- Question every requirement
+- Simplify and optimize
+- work on fixing tests as long as there are issues
+- use pytest for testing with brief tests and no classes
+- Continue operations unless explicit stop command given
+- Don't create fallback implementations
+- If there's an error, raise it and don't hide it by switching to a fallback
+- Fix the actual issue instead of relying on fallbacks
