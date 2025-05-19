@@ -4,8 +4,7 @@ reading the primary class from the mapping, and displaying all created RDF entit
 import pytest
 import logging
 import os
-import json # For loading mapping directly if needed, or importer handles it
-from arkumu.cidoc.models import Resource, Triple, ResourceType
+from arkumu.metadata.models import Resource, Triple, ResourceType
 from arkumu.importer.services.importer import JSONMappingImporter # Assuming this is the correct path
 
 # Configure logging for tests - can be shared from a conftest.py or defined here

@@ -11,7 +11,7 @@ from arkumu.importer.services.importer import (
     XSD_BASE_URI
 )
 from arkumu.importer.services.uri_utils import slugify_uri_part, mint_uri
-from arkumu.cidoc.models import Resource, Triple, ResourceType
+from arkumu.metadata.models import Resource, Triple, ResourceType
 
 # Configure logging for tests
 @pytest.fixture(autouse=True)

@@ -8,7 +8,7 @@ from arkumu.importer.services.uri_utils import (
     CIDOC_CRM_BASE_URI
     # XSD_BASE_URI is not used in this file after removing utility tests
 )
-from arkumu.cidoc.models import Resource, ResourceType
+from arkumu.metadata.models import Resource, ResourceType
 from arkumu.importer.services.uri_utils import slugify_uri_part # For institution slug
 # Removed: from arkumu.importer.services.importer import JSONMappingImporter, XSD_BASE_URI
 # Removed: from datetime import datetime - not used after removing utility tests

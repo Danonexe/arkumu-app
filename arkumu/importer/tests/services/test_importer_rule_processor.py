@@ -13,7 +13,7 @@ from arkumu.importer.services.uri_utils import (
     slugify_uri_part,
     mint_uri
 )
-from arkumu.cidoc.models import Resource, Triple, ResourceType
+from arkumu.metadata.models import Resource, Triple, ResourceType
 
 # Helper functions for common assertions
 def _assert_rdr_uri(rdr_resource, expected_uri_prefix, col_name_for_uri, value_for_uri, importer_inst_slug):

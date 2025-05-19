@@ -1,5 +1,5 @@
 import logging
-from arkumu.cidoc.models import Resource, ResourceType, Triple # Assuming Triple might be used here later for convenience
+from arkumu.metadata.models import Resource, ResourceType, Triple 
 from arkumu.importer.services.uri_utils import (
     RDF_BASE_URI, RDFS_BASE_URI, CIDOC_CRM_BASE_URI, OWL_BASE_URI
 )

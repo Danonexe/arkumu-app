@@ -1,7 +1,7 @@
 import json
 import logging
 from django.db import transaction
-from arkumu.cidoc.models import Resource, ResourceType, Triple
+from arkumu.metadata.models import ResourceType, Triple
 
 from arkumu.importer.services.uri_utils import (
     RDF_BASE_URI, RDFS_BASE_URI, CIDOC_CRM_BASE_URI, XSD_BASE_URI, OWL_BASE_URI, DEFAULT_INSTITUTION_BASE_URI,

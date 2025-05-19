@@ -5,7 +5,7 @@ import logging
 # from arkumu.importer.services.importer import JSONMappingImporter, DEFAULT_INSTITUTION_BASE_URI # Old import
 from arkumu.importer.services.importer import JSONMappingImporter # Keep JSONMappingImporter
 from arkumu.importer.services.uri_utils import DEFAULT_INSTITUTION_BASE_URI # New import for constant
-from arkumu.cidoc.models import Resource
+from arkumu.metadata.models import Resource
 # For type checking of Resource instances       
 
 # Configure logging for tests
