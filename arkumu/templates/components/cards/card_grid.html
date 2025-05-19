@@ -1,11 +1,15 @@
 <!-- Project Cards Grid with Single Line Includes -->
+{% load static %}
+
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6
   p-6 rounded-lg">
   
   <!-- Card 1 - Handmade in Ethiopia -->
-  <div class="card-container">
-    {% include 'components/cards/card.html' with year="2024" image="static 'images/arkumu-logo.svg'" institution="Folkwang Universität der Kunst" title="Handmade in Ethiopia" subtitle="Projekt" contributor1_name="Johanna Schwer" contributor1_role="Betreuerin" contributor2_name="Judith Schanz" contributor2_role="Betreuerin" contributor3_name="Martina Allerbech" contributor3_role="Designerin, Beraterin" category1="Industrial Design" category2="Transformation Design" button_text="Projekt ansehen" %}
-  </div>
+  {% with image_url=static 'images/arkumu-logo.svg' %}
+    <div class="card-container">
+      {% include 'components/cards/card.html' with year="2024" image=image_url institution="Folkwang Universität der Kunst" title="Handmade in Ethiopia" subtitle="Projekt" contributor1_name="Johanna Schwer" contributor1_role="Betreuerin" contributor2_name="Judith Schanz" contributor2_role="Betreuerin" contributor3_name="Martina Allerbech" contributor3_role="Designerin, Beraterin" category1="Industrial Design" category2="Transformation Design" button_text="Projekt ansehen" %}
+    </div>
+  {% endwith %}
   
   <!-- Card 2 - Ein Herz aus Stahl und Plastik -->
   <div class="card-container">
