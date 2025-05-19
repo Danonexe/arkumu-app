@@ -10,7 +10,7 @@ def validate_cidoc_class(entity_class, declared_class):
         entity_class: CIDOCClass instance or str class ID of the entity
         declared_class: str class_id (e.g., 'E22')
     """
-    from .models.schema import CIDOCClass
+    from .models.cidoc import CIDOCClass
     
     if not entity_class:
         raise ValidationError(_('Entity must have a CIDOC-CRM class'))
@@ -48,7 +48,7 @@ def validate_property_domain_range(property_def, source_class, target_class=None
         target_class: CIDOCClass instance or str class ID for relationship properties
         value: The property value for primitive properties
     """
-    from .models.schema import CIDOCClass
+    from .models.cidoc import CIDOCClass
     
     # Validate domain
     if not property_def.domain_class:
@@ -240,7 +240,7 @@ def validate_cidoc_entity(class_id):
     Args:
         class_id: str class identifier (e.g., 'E22')
     """
-    from .models.schema import CIDOCClass
+    from .models.cidoc import CIDOCClass
     
     if not class_id:
         raise ValidationError(_('Entity must have a CIDOC-CRM class'))
@@ -263,7 +263,7 @@ def validate_cidoc_relationship(property_id, source_class, target_class):
         source_class: str or CIDOCClass instance of source
         target_class: str or CIDOCClass instance of target
     """
-    from .models.schema import CIDOCProperty, CIDOCClass
+    from .models.cidoc import CIDOCProperty, CIDOCClass
     
     if not property_id:
         raise ValidationError(_('Relationship must have a CIDOC-CRM property'))
@@ -313,7 +313,7 @@ def get_valid_properties_for_class(class_id):
     Returns:
         List[CIDOCProperty]: List of valid properties
     """
-    from .models.schema import CIDOCClass, CIDOCProperty
+    from .models.cidoc import CIDOCClass, CIDOCProperty
     
     # Always use short class ID format (E21 not E21_Person)
     short_class_id = class_id.split('_')[0] if '_' in class_id else class_id
@@ -336,3 +336,63 @@ def get_valid_properties_for_class(class_id):
         
     except CIDOCClass.DoesNotExist:
         return []  # Return empty list if class not found 
+
+def validate_value_for_range(value_data, range_class):
+    """
+    Validates that a JSON value_data field conforms to the CIDOC-CRM range class constraints.
+    
+    Args:
+        value_data: Dict containing JSON data for a literal value
+        range_class: CIDOCClass instance representing the range type
+    
+    Raises:
+        ValidationError: If validation fails
+    """
+    if not value_data:
+        return  # Allow empty values
+        
+    if not range_class:
+        return  # No validation if no range class
+    
+    # For consistency, we expect value_data to have a 'value' key
+    if not isinstance(value_data, dict) or 'value' not in value_data:
+        raise ValidationError(_('Literal values must have a "value" field'))
+        
+    # Extract the actual value to validate
+    value = value_data['value']
+    
+    # For primitive literals, validate based on the class type
+    range_class_id = range_class.class_id.lower()
+    
+    # Number validation
+    if 'number' in range_class_id or range_class_id == 'e60':
+        try:
+            float(value)  # Just check if convertible to float
+        except (ValueError, TypeError):
+            raise ValidationError(_('Value must be a number'))
+            
+    # Date/time validation
+    elif 'time' in range_class_id or 'date' in range_class_id or range_class_id == 'e61':
+        if not isinstance(value, str):
+            raise ValidationError(_('Date/time values must be strings in ISO format'))
+            
+        try:
+            # Try to parse it - we don't save the result, just verify it's valid
+            if 'T' in value:
+                datetime.datetime.fromisoformat(value)
+            else:
+                datetime.date.fromisoformat(value)
+        except ValueError:
+            raise ValidationError(_('Invalid date/time format'))
+            
+    # GeoJSON validation
+    elif 'spacetime' in range_class_id or 'geo' in range_class_id or range_class_id == 'e95':
+        if not isinstance(value, dict):
+            raise ValidationError(_('Spacetime/Geo data must be a valid GeoJSON object'))
+        
+        # Basic check for GeoJSON structure
+        if 'type' not in value:
+            raise ValidationError(_('GeoJSON must have a "type" field'))
+    
+    # For string literals or other types, no special validation needed
+    return 
