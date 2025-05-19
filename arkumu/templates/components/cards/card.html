@@ -1,4 +1,5 @@
 <!-- Project Card Component - Improved Version with Smaller Left Margin -->
+{% load static %}
 <div class="project-card w-full max-w-md p-4">
   <!-- Área superior con imagen y margen izquierdo -->
   <div class="flex mb-4">
@@ -9,7 +10,7 @@
     <div class="flex-1">
       <!-- Project Image con borde punteado -->
       <div class="w-full h-48 border-2 border-dotted border-gray-400">
-        {% if image %}<img src="{{ image }}" class="w-full h-full object-cover" alt="{{ title }}">{% endif %}
+        {% if image %}<img src="{% static image %}" class="w-full h-full object-cover" alt="{{ title }}">{% endif %}      
       </div>
     </div>
   </div>
