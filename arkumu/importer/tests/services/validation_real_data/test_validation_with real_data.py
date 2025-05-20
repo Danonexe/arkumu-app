@@ -77,19 +77,19 @@ def test_external_mapping_validation(external_mapping_file, external_csv_file, e
     print(f"Against CSV: {csv_file}")
     print(f"With related data from: {data_dir}")
     
-    # Run full validation including references
-    report = validator.validate_references(
+    # Use the combined validate_mapping function to get detailed column validation
+    result = validate_mapping(
         mapping_file,
         csv_file,
-        data_dir=data_dir
+        data_dir=data_dir,
+        strict=False,  # Don't fail on warnings
+        print_output=True  # Print the detailed report
     )
-    
-    print(f"\nExternal validation report:\n{report.summary()}")
     
     # Log validation results for manual inspection
     # Don't assert anything here since we don't know if the external files are valid
-    print(f"Validation {'passed' if report.is_valid else 'failed'} with {len(report.errors)} errors and {len(report.warnings)} warnings")
-    
+    print(f"Validation {'passed' if result else 'failed'}")
+
 
 def test_file_paths_exist(sample_mapping_file, sample_csv_file, sample_related_data_dir):
     """Test that fixture file paths actually exist and can be accessed."""

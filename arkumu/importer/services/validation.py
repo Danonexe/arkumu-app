@@ -3,9 +3,9 @@ import json
 import polars as pl
 import os
 from pathlib import Path
-from typing import Dict, List, Set, Optional, Any, Tuple
+from typing import Dict, List, Set, Optional, Any, Tuple, Union
 
-from arkumu.importer.services.validation_utils import ValidationReport
+from arkumu.importer.services.validation_utils import ValidationReport, ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -52,12 +52,13 @@ class MappingValidator:
         
         for csv_file in csv_files:
             try:
-                # Try with comma delimiter first, then semicolon if that fails
+                # Try with semicolon delimiter first, then comma if that fails
                 try:
-                    df = pl.read_csv(csv_file, infer_schema_length=0)
+                    # Set truncate_ragged_lines=True to handle irregular CSV files with inconsistent columns
+                    df = pl.read_csv(csv_file, separator=';', infer_schema_length=0, truncate_ragged_lines=True)
                 except Exception:
-                    # If comma fails, try semicolon
-                    df = pl.read_csv(csv_file, separator=';', infer_schema_length=0)
+                    # If semicolon fails, try comma
+                    df = pl.read_csv(csv_file, infer_schema_length=0, truncate_ragged_lines=True)
                 
                 table_name = csv_file.stem
                 
@@ -188,13 +189,17 @@ class MappingValidator:
             report.add_error("MAPPING_LOAD_ERROR", f"Error loading mapping file: {e}")
             return report
         
-        # Get CSV settings if present
-        csv_settings = mapping.get('csv_settings', {})
-        delimiter = csv_settings.get('delimiter', ',')
+        # Get CSV settings if present - check both new column_delimiter and legacy csv_settings
+        delimiter = mapping.get('column_delimiter', ';')  # Default to semicolon
+        if 'csv_settings' in mapping:
+            # Fall back to csv_settings if provided (for backward compatibility)
+            delimiter = mapping['csv_settings'].get('delimiter', delimiter)
         
         # Load CSV
         try:
-            df = pl.read_csv(csv_file, separator=delimiter, infer_schema_length=0)
+            # Set truncate_ragged_lines=True to handle irregular CSV files with inconsistent columns
+            df = pl.read_csv(csv_file, separator=delimiter, infer_schema_length=0, 
+                          truncate_ragged_lines=True)
         except Exception as e:
             report.add_error("CSV_LOAD_ERROR", f"Error loading CSV file: {e}")
             return report
@@ -285,9 +290,11 @@ class MappingValidator:
             report.add_error("MAPPING_LOAD_ERROR", f"Error loading mapping file: {e}")
             return report
         
-        # Get CSV settings if present
-        csv_settings = mapping.get('csv_settings', {})
-        delimiter = csv_settings.get('delimiter', ',')
+        # Get CSV settings if present - check both new column_delimiter and legacy csv_settings
+        delimiter = mapping.get('column_delimiter', ';')  # Default to semicolon
+        if 'csv_settings' in mapping:
+            # Fall back to csv_settings if provided (for backward compatibility)
+            delimiter = mapping['csv_settings'].get('delimiter', delimiter)
         
         # First validate the mapping (without data - just structure)
         structure_report = self.validate_mapping_file(mapping_file)
@@ -298,7 +305,9 @@ class MappingValidator:
         
         # Load CSV data
         try:
-            df = pl.read_csv(csv_file, separator=delimiter, infer_schema_length=0)
+            # Set truncate_ragged_lines=True to handle irregular CSV files with inconsistent columns
+            df = pl.read_csv(csv_file, separator=delimiter, infer_schema_length=0, 
+                          truncate_ragged_lines=True)
         except Exception as e:
             report.add_error("CSV_LOAD_ERROR", f"Error loading CSV file: {e}")
             return report
@@ -387,7 +396,8 @@ class MappingValidator:
 
 
 def validate_mapping(mapping_file: str, csv_file: str, data_dir: Optional[str] = None,
-                    related_sources: Optional[Dict] = None, strict: bool = True) -> bool:
+                    related_sources: Optional[Dict] = None, strict: bool = True,
+                    print_output: bool = True) -> Union[bool, ValidationReport]:
     """
     Convenience function to validate a mapping file against data
     
@@ -397,19 +407,202 @@ def validate_mapping(mapping_file: str, csv_file: str, data_dir: Optional[str] =
         data_dir: Directory containing related data files
         related_sources: Optional pre-loaded related sources
         strict: If True, fail on any error or warning
+        print_output: If True, print validation report to stdout
         
     Returns:
-        bool: True if validation passed, False otherwise
+        If print_output is True: bool indicating if validation passed
+        If print_output is False: ValidationReport with detailed results
     """
     validator = MappingValidator()
     
-    # Do full validation including references
-    report = validator.validate_references(mapping_file, csv_file, related_sources, data_dir)
+    # First get the detailed column validation report (without printing)
+    column_report = validate_mapping_columns(mapping_file, csv_file, print_output=False)
     
-    # Print the report
-    print(report.summary())
+    # Then do full validation including references
+    ref_report = validator.validate_references(mapping_file, csv_file, related_sources, data_dir)
     
-    if strict:
-        return report.is_valid and not report.warnings
+    # Merge the reports
+    merged_report = ValidationReport()
+    merged_report.errors.extend(column_report.errors)
+    merged_report.errors.extend(ref_report.errors)
+    merged_report.warnings.extend(column_report.warnings)
+    merged_report.warnings.extend(ref_report.warnings)
+    
+    # Store column details in the report
+    merged_report.details = getattr(column_report, 'details', {})
+    
+    if print_output:
+        # Print the complete report
+        merged_report.print_report()
+        
+        if strict:
+            return merged_report.is_valid and not merged_report.warnings
+        else:
+            return merged_report.is_valid
     else:
-        return report.is_valid
+        # Return the full report for API usage
+        return merged_report
+
+def validate_mapping_columns(mapping_file: str, csv_file: str, print_output: bool = True) -> ValidationReport:
+    """
+    Perform a detailed validation of whether all columns in the mapping exist in the CSV file.
+    
+    Args:
+        mapping_file: Path to the mapping file
+        csv_file: Path to the CSV file
+        print_output: Whether to print the report to stdout
+        
+    Returns:
+        ValidationReport with detailed status of each mapped column
+    """
+    report = ValidationReport()
+    # Initialize details dictionary
+    report.details = {
+        'columns': {
+            'total': 0,
+            'referenced': 0,
+            'missing': 0,
+            'unmapped': 0,
+        },
+        'anchor_column': None,
+        'column_data': [],
+        'unmapped_columns': []
+    }
+    
+    # Load mapping
+    try:
+        with open(mapping_file, 'r', encoding='utf-8') as f:
+            mapping = json.load(f)
+    except Exception as e:
+        report.add_error("MAPPING_LOAD_ERROR", f"Error loading mapping file: {e}")
+        return report
+    
+    # Get CSV settings if present - check both column_delimiter and legacy csv_settings
+    delimiter = mapping.get('column_delimiter', ';')  # Default to semicolon
+    if 'csv_settings' in mapping:
+        # Fall back to csv_settings if provided (for backward compatibility)
+        delimiter = mapping['csv_settings'].get('delimiter', delimiter)
+    
+    # Load CSV
+    try:
+        # Set truncate_ragged_lines=True to handle irregular CSV files with inconsistent columns
+        df = pl.read_csv(csv_file, separator=delimiter, infer_schema_length=0, 
+                      truncate_ragged_lines=True)
+    except Exception as e:
+        report.add_error("CSV_LOAD_ERROR", f"Error loading CSV file: {e}")
+        return report
+    
+    # Get the list of columns in the CSV
+    csv_columns = set(df.columns)
+    report.details['columns']['total'] = len(csv_columns)
+    
+    # Get institution name from mapping
+    institution = mapping.get("institution", "Unknown")
+    report.details['institution'] = institution
+    report.details['csv_file'] = csv_file
+    
+    # First check anchor column
+    anchor_column = mapping.get("anchor_column")
+    if anchor_column:
+        anchor_data = {"name": anchor_column, "found": anchor_column in csv_columns}
+        report.details['anchor_column'] = anchor_data
+        
+        if anchor_column in csv_columns:
+            # How many distinct values?
+            unique_count = len(df[anchor_column].unique())
+            anchor_data["unique_count"] = unique_count
+            anchor_data["total_rows"] = len(df)
+        else:
+            report.add_error(
+                "MISSING_ANCHOR_COLUMN",
+                f"Anchor column '{anchor_column}' not found in CSV", 
+                field=anchor_column
+            )
+    
+    # Track all referenced columns and missing columns
+    all_referenced_columns = set()
+    missing_columns = set()
+    
+    # Check all mapping rules
+    for i, rule in enumerate(mapping.get("mappings", [])):
+        source_column = rule.get("source_column")
+        property_name = rule.get("property", "Unknown")
+        range_value = rule.get("range", "Unknown")
+        
+        if source_column:
+            all_referenced_columns.add(source_column)
+            column_data = {
+                "name": source_column,
+                "found": source_column in csv_columns,
+                "property": property_name,
+                "range": range_value
+            }
+            
+            # Check if column exists
+            if source_column in csv_columns:
+                # Calculate statistics
+                non_null_count = df.filter(df[source_column].is_not_null()).shape[0]
+                non_null_percent = (non_null_count / len(df)) * 100 if len(df) > 0 else 0
+                
+                column_data["non_null_count"] = non_null_count
+                column_data["total_rows"] = len(df)
+                column_data["non_null_percent"] = non_null_percent
+                
+                if rule.get("object_column"):
+                    column_data["references_table"] = rule.get("object_column")
+            else:
+                missing_columns.add(source_column)
+                report.add_error(
+                    "MISSING_SOURCE_COLUMN",
+                    f"Source column '{source_column}' not found in CSV",
+                    rule=rule,
+                    field=source_column
+                )
+            
+            report.details['column_data'].append(column_data)
+                
+        # Check for sub-columns in object_properties
+        if "object_properties" in rule and isinstance(rule["object_properties"], list):
+            for sub_rule in rule["object_properties"]:
+                sub_source_column = sub_rule.get("source_column")
+                if sub_source_column:
+                    all_referenced_columns.add(sub_source_column)
+                    sub_column_data = {
+                        "name": sub_source_column,
+                        "found": sub_source_column in csv_columns,
+                        "is_sub_column": True,
+                        "parent_column": source_column,
+                        "property": sub_rule.get("property", "Unknown")
+                    }
+                    
+                    if sub_source_column not in csv_columns:
+                        missing_columns.add(sub_source_column)
+                        report.add_error(
+                            "MISSING_SUB_SOURCE_COLUMN",
+                            f"Sub-rule source column '{sub_source_column}' not found in CSV",
+                            rule=sub_rule,
+                            field=sub_source_column
+                        )
+                    
+                    report.details['column_data'].append(sub_column_data)
+    
+    # Update statistics
+    report.details['columns']['referenced'] = len(all_referenced_columns)
+    report.details['columns']['missing'] = len(missing_columns)
+    
+    # Check for unmapped columns
+    unmapped_columns = csv_columns - all_referenced_columns
+    report.details['columns']['unmapped'] = len(unmapped_columns)
+    report.details['unmapped_columns'] = sorted(list(unmapped_columns))
+    
+    if unmapped_columns:
+        report.add_warning(
+            "UNMAPPED_CSV_COLUMNS",
+            f"Found {len(unmapped_columns)} columns in CSV not used in mapping",
+            field=", ".join(sorted(unmapped_columns))
+        )
+    
+    if print_output:
+        report.print_report()
+    
+    return report
