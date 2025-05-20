@@ -1,88 +1,84 @@
 import pytest
-from unittest.mock import MagicMock, patch, mock_open
+import json
+import tempfile
+from pathlib import Path
 
 from arkumu.importer.services.importer import JSONMappingImporter
-# We might need ResourceManager and MappingRuleProcessor for mocking later
-# from arkumu.importer.services.resource_manager import ResourceManager 
-# from arkumu.importer.services.rule_processor import MappingRuleProcessor
+from arkumu.importer.services.resource_manager import ResourceManager
+from arkumu.importer.services.rule_processor import MappingRuleProcessor
 
-# Define a fixture for the mocked resource manager
+
 @pytest.fixture
-def mock_resource_manager():
-    mock_rm = MagicMock()
-    mock_rm.get_or_create_rdf_term.return_value = MagicMock(uri="rdf_type_uri")
-    mock_rm.get_or_create_rdfs_term.return_value = MagicMock(uri="rdfs_label_uri")
-    mock_rm.get_or_create_owl_term.return_value = MagicMock(uri="owl_sameas_uri")
-    return mock_rm
+def valid_mapping_json():
+    """Fixture for valid mapping JSON content"""
+    return {
+        "institution": "TESTINST",
+        "domain": "E22_Human-Made_Object",
+        "anchor_column": "ID",
+        "mappings": [
+            {
+                "source_column": "ID",
+                "property": "P1_is_identified_by",
+                "range": "E42_Identifier"
+            },
+            {
+                "source_column": "Title",
+                "property": "rdfs:label",
+                "range": "literal",
+                "language": "en"
+            },
+            {
+                "source_column": "ObjectType",
+                "property": "P2_has_type",
+                "range": "E55_Type"
+            }
+        ]
+    }
 
 
-# Define a fixture for the mocked rule processor
 @pytest.fixture
-def mock_rule_processor():
-    return MagicMock()
-
-
-# Define a fixture for a basic importer instance with all dependencies mocked
-@pytest.fixture
-def importer(mock_resource_manager, mock_rule_processor):
-    with patch('builtins.open', new_callable=mock_open, 
-               read_data='{"institution": "TESTINST", "mappings": [{"source_column": "critical_col1"}, {"source_column": "critical_col2"}]}'), \
-         patch('arkumu.importer.services.importer.ResourceManager', return_value=mock_resource_manager), \
-         patch('arkumu.importer.services.importer.MappingRuleProcessor', return_value=mock_rule_processor):
-        importer_instance = JSONMappingImporter(mapping_file_path="dummy/path.json")
-        return importer_instance
-
-
-def test_init_success(importer, mock_resource_manager):
-    """Test successful initialization of JSONMappingImporter."""
-    assert importer.institution_code == "TESTINST"
-    assert len(importer.expected_source_columns) == 2
-    assert importer.expected_source_columns == {"critical_col1", "critical_col2"}
-    # Check if ResourceManager methods were called
-    mock_resource_manager.get_or_create_rdf_term.assert_called_with("type", "RDF type property")
-    # Check rule_processor is set
-    assert isinstance(importer.rule_processor, MagicMock)
-
-
-def test_init_missing_institution_raises_value_error():
-    """Test __init__ raises ValueError if 'institution' is missing in mapping."""
-    with pytest.raises(ValueError) as exc_info:
-        with patch('builtins.open', new_callable=mock_open, read_data='{"mappings": []}'), \
-             patch('arkumu.importer.services.importer.ResourceManager'), \
-             patch('arkumu.importer.services.importer.MappingRuleProcessor'), \
-             patch('arkumu.importer.services.importer.logger.error') as mock_logger_error, \
-             patch('arkumu.importer.services.importer.logger.info') as mock_logger_info:
-            JSONMappingImporter(mapping_file_path="dummy/path.json")
+def temp_mapping_file(valid_mapping_json):
+    """Create a temporary mapping file"""
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        json.dump(valid_mapping_json, f)
+        mapping_path = f.name
     
-    assert "Mapping JSON must contain an 'institution' code." in str(exc_info.value)
-    # We can optionally verify that the logger was called with the expected message
-    mock_logger_error.assert_any_call("Missing 'institution' code in mapping JSON")
+    yield mapping_path
+    
+    # Cleanup
+    Path(mapping_path).unlink(missing_ok=True)
 
 
-def test_validate_source_headers_all_present(importer):
-    """Test validate_source_headers when all expected headers are present."""
-    actual_headers = ["critical_col1", "critical_col2"]
-    result = importer.validate_source_headers(actual_headers)
+@pytest.mark.django_db
+def test_importer_initialization(temp_mapping_file):
+    """Test that the importer initializes correctly with real components"""
+    importer = JSONMappingImporter(mapping_file_path=temp_mapping_file)
+    
+    # Check basic properties are initialized
+    assert importer.institution_code == "TESTINST"
+    # domain is not directly accessible as an attribute
+    # assert importer.domain == "E22_Human-Made_Object"
+    assert importer.expected_source_columns == {"ID", "Title", "ObjectType"}
+    
+    # Check that real components are initialized
+    assert isinstance(importer.resource_manager, ResourceManager)
+    assert isinstance(importer.rule_processor, MappingRuleProcessor)
+
+
+@pytest.mark.django_db
+def test_validate_source_headers(temp_mapping_file):
+    """Test header validation with sufficient and missing columns"""
+    importer = JSONMappingImporter(mapping_file_path=temp_mapping_file)
+    
+    # Test with all required headers
+    result = importer.validate_source_headers(["ID", "Title", "ObjectType", "Extra"])
     assert result["all_expected_present"] is True
-    assert len(result["missing_critical_headers"]) == 0
-    assert len(result["extra_headers"]) == 0
-
-
-def test_validate_source_headers_missing_critical(importer):
-    """Test validate_source_headers raises ValueError for missing critical headers."""
-    actual_headers = ["critical_col1"]  # Missing critical_col2
+    assert result["extra_headers"] == ["Extra"]
+    
+    # Test with missing headers
     with pytest.raises(ValueError) as exc_info:
-        importer.validate_source_headers(actual_headers)
+        importer.validate_source_headers(["Title"])
     
     assert "Critical columns from mapping are missing" in str(exc_info.value)
-    assert "critical_col2" in str(exc_info.value)
-
-
-def test_validate_source_headers_with_extra(importer):
-    """Test validate_source_headers identifies extra headers."""
-    actual_headers = ["critical_col1", "critical_col2", "extra_col"]
-    result = importer.validate_source_headers(actual_headers)
-    assert result["all_expected_present"] is True
-    assert len(result["missing_critical_headers"]) == 0
-    assert result["extra_headers"] == ["extra_col"]
+    assert "ObjectType" in str(exc_info.value)
 

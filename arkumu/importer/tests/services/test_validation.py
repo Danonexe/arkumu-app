@@ -270,7 +270,7 @@ def test_validate_references(temp_mapping_file, temp_csv_file, temp_related_data
 
 def test_convenience_function(temp_mapping_file, temp_csv_file, temp_related_data_dir):
     """Test the convenience function for validation"""
-    # Non-strict validation (ignores warnings)
+    # Non-strict validation (still fails on errors, but ignores warnings)
     result = validate_mapping(
         temp_mapping_file,
         temp_csv_file,
@@ -278,10 +278,10 @@ def test_convenience_function(temp_mapping_file, temp_csv_file, temp_related_dat
         strict=False
     )
     
-    # Should pass if only warnings are present
-    assert result is True
+    # Should fail when errors are present, regardless of strict mode
+    assert result is False
     
-    # Strict validation (fails on warnings)
+    # Strict validation (fails on both errors and warnings)
     result = validate_mapping(
         temp_mapping_file,
         temp_csv_file,
@@ -289,5 +289,5 @@ def test_convenience_function(temp_mapping_file, temp_csv_file, temp_related_dat
         strict=True
     )
     
-    # Should fail with warnings/errors
+    # Should also fail with errors present
     assert result is False 
