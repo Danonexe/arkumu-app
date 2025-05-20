@@ -13,7 +13,9 @@ from arkumu.importer.services.data_utils import (
     infer_datatype,
     infer_language,
     split_multi_values,
-    lookup_related_data
+    lookup_related_data,
+    normalize_csv_data_nfc,
+    normalize_dict_values_nfc
 )
 from arkumu.importer.services.resource_manager import ResourceManager
 from arkumu.importer.services.rule_processor import MappingRuleProcessor
@@ -79,7 +81,16 @@ class JSONMappingImporter:
             self.expected_source_columns = extract_expected_source_columns(self.mappings)
             logger.debug(f"Extracted {len(self.expected_source_columns)} expected source columns")
             
-            self.related_sources = related_sources or {}
+            # Store related sources with NFC normalization
+            self.related_sources = {}
+            if related_sources:
+                logger.debug(f"Normalizing {len(related_sources)} related data sources with NFC")
+                for source_key, source_data in related_sources.items():
+                    if isinstance(source_data, list):
+                        self.related_sources[source_key] = normalize_csv_data_nfc(source_data)
+                    else:
+                        self.related_sources[source_key] = source_data  # Keep as is if not a list
+            
             self.strict_references = strict_references
             logger.debug(f"Initialized with {len(self.related_sources)} related sources and strict_references={strict_references}")
 
@@ -209,7 +220,7 @@ class JSONMappingImporter:
         # Uses self.expected_source_columns which is instance data
         return validate_source_headers(self.expected_source_columns, csv_fieldnames)
 
-    def import_data(self, source_data_iterator, primary_subject_class_short_name, strict_references=None, validate_first=True, csv_file_path=None):
+    def import_data(self, source_data_iterator, primary_subject_class_short_name, strict_references=None, validate_first=True, csv_file_path=None, apply_nfc=True):
         """
         Imports data from a source iterator based on the loaded mapping.
         Assumes headers have been pre-validated if necessary.
@@ -221,6 +232,7 @@ class JSONMappingImporter:
             strict_references: Override the instance setting for strict reference checking
             validate_first: If True, validate the mapping before importing
             csv_file_path: Path to the CSV file for validation
+            apply_nfc: If True, apply NFC normalization to all string values in data (default: True)
             
         Returns:
             dict: Statistics about the import process including success and error counts
@@ -270,8 +282,22 @@ class JSONMappingImporter:
             "reference_errors": 0,
             "errors": []
         }
+        
+        # Apply NFC normalization to input data if requested
+        normalized_data_iterator = source_data_iterator
+        if apply_nfc:
+            logger.info("Applying NFC normalization to all input data")
+            if isinstance(source_data_iterator, list):
+                normalized_data_iterator = normalize_csv_data_nfc(source_data_iterator)
+            else:
+                # For non-list iterators, we'll normalize each row as we process it
+                logger.info("Will normalize each row individually during processing")
 
-        for i, row_data in enumerate(source_data_iterator):
+        for i, original_row_data in enumerate(normalized_data_iterator):
+            # Apply NFC normalization to individual row if needed
+            row_data = original_row_data
+            if apply_nfc and not isinstance(source_data_iterator, list):
+                row_data = normalize_dict_values_nfc(original_row_data)
             row_num = i + 1
             stats["total_rows"] += 1
             logger.info(f"Processing row {row_num}")

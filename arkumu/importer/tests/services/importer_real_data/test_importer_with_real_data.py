@@ -52,16 +52,12 @@ def test_import_with_external_files():
     
     # Load the data
     try:
-        # Read CSV data directly
-        print(f"Loading CSV file: {csv_path}")
-        delimiter = ";"  # Default delimiter for our CSVs
+        # Read CSV data with NFC normalization
+        print(f"Loading CSV file with NFC normalization: {csv_path}")
+        from arkumu.importer.services.data_utils import read_csv_with_nfc
         
-        # Load CSV with polars
-        df = pl.read_csv(csv_path, separator=delimiter, infer_schema_length=0, 
-                       truncate_ragged_lines=True)
-        
-        # Convert to list of dictionaries
-        csv_data = df.to_dicts()
+        # Load CSV with NFC normalization
+        csv_data = read_csv_with_nfc(csv_path)
         
         # Create importer with the mapping file
         print(f"Loading mapping file: {mapping_path}")
