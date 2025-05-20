@@ -1,8 +1,8 @@
 import json
 import logging
 from django.db import transaction
-from arkumu.metadata.models import ResourceType, Triple
 
+from arkumu.metadata.models import Resource, ResourceType, Triple
 from arkumu.importer.services.uri_utils import (
     RDF_BASE_URI, RDFS_BASE_URI, CIDOC_CRM_BASE_URI, XSD_BASE_URI, OWL_BASE_URI, DEFAULT_INSTITUTION_BASE_URI,
     slugify_uri_part, mint_uri
@@ -17,6 +17,7 @@ from arkumu.importer.services.data_utils import (
 )
 from arkumu.importer.services.resource_manager import ResourceManager
 from arkumu.importer.services.rule_processor import MappingRuleProcessor
+from arkumu.importer.services.validation import MappingValidator
 
 # Setup logger
 logger = logging.getLogger(__name__)
@@ -38,6 +39,8 @@ class JSONMappingImporter:
     """
     def __init__(self, mapping_file_path, institution_base_uri=None, related_sources=None, strict_references=False):
         logger.info(f"Initializing JSONMappingImporter with mapping file: {mapping_file_path}")
+        self.mapping_file_path = mapping_file_path
+        
         try:
             with open(mapping_file_path, 'r') as f:
                 self.mapping_config = json.load(f)
@@ -95,6 +98,42 @@ class JSONMappingImporter:
             logger.exception(f"Failed to initialize JSONMappingImporter: {str(e)}")
             raise
 
+    def validate_mapping_against_csv(self, csv_file_path, data_dir=None, strict=True):
+        """
+        Validates the mapping configuration against a CSV file before import.
+        
+        Args:
+            csv_file_path: Path to the CSV file to validate against
+            data_dir: Directory containing related data files for reference validation
+            strict: If True, validation will fail on warnings
+            
+        Returns:
+            tuple: (is_valid, report) - is_valid is boolean, report is ValidationReport
+        """
+        logger.info(f"Validating mapping {self.mapping_file_path} against CSV {csv_file_path}")
+        
+        # Create validator
+        validator = MappingValidator()
+        
+        # Validate mapping structure, source columns, and references
+        report = validator.validate_references(
+            self.mapping_file_path,
+            csv_file_path,
+            related_sources=self.related_sources,
+            data_dir=data_dir
+        )
+        
+        # Print summary for logging
+        logger.info(report.summary())
+        
+        # Determine if validation passed based on strict mode
+        is_valid = report.is_valid
+        if strict and report.warnings:
+            is_valid = False
+            logger.warning("Validation failed in strict mode due to warnings")
+        
+        return is_valid, report
+
     def validate_source_headers(self, actual_source_headers):
         """
         Validates a list of actual source headers against expected headers from the mapping.
@@ -135,7 +174,7 @@ class JSONMappingImporter:
         # Uses self.expected_source_columns which is instance data
         return validate_source_headers(self.expected_source_columns, csv_fieldnames)
 
-    def import_data(self, source_data_iterator, primary_subject_class_short_name, strict_references=None):
+    def import_data(self, source_data_iterator, primary_subject_class_short_name, strict_references=None, validate_first=True, csv_file_path=None):
         """
         Imports data from a source iterator based on the loaded mapping.
         Assumes headers have been pre-validated if necessary.
@@ -145,10 +184,29 @@ class JSONMappingImporter:
             primary_subject_class_short_name: The CIDOC-CRM short name for the main entity 
                                             being described by each row (e.g., "E7_Activity").
             strict_references: Override the instance setting for strict reference checking
+            validate_first: If True, validate the mapping before importing
+            csv_file_path: Path to the CSV file for validation
             
         Returns:
             dict: Statistics about the import process including success and error counts
         """
+        # Validate references first if requested
+        if validate_first and csv_file_path:
+            is_valid, report = self.validate_mapping_against_csv(
+                csv_file_path, 
+                strict=(strict_references if strict_references is not None else self.strict_references)
+            )
+            if not is_valid:
+                logger.error("Validation failed. Import aborted.")
+                return {
+                    "validation_passed": False,
+                    "validation_report": report.summary(),
+                    "total_rows": 0,
+                    "successful_rows": 0,
+                    "failed_rows": 0,
+                    "errors": ["Import aborted due to validation failures"]
+                }
+        
         if strict_references is not None:
             # Override the instance setting if provided
             original_strict_setting = self.strict_references
@@ -169,6 +227,7 @@ class JSONMappingImporter:
         
         # Statistics counters
         stats = {
+            "validation_passed": True,
             "total_rows": 0,
             "successful_rows": 0,
             "failed_rows": 0,
