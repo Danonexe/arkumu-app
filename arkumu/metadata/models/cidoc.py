@@ -1,8 +1,7 @@
-from django.db import models, transaction
+from django.db import models
 from django.conf import settings
 from django.utils import timezone
 import uuid
-import age
 
 class UUIDModel(models.Model):
     """Abstract base class for tracking"""
