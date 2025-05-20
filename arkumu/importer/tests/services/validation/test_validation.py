@@ -2,7 +2,7 @@ import pytest
 import os
 import json
 import tempfile
-import pandas as pd
+import polars as pl
 from arkumu.importer.services.validation import MappingValidator, validate_mapping
 from arkumu.importer.services.validation_utils import ValidationError, ValidationReport
 
@@ -122,8 +122,8 @@ def temp_invalid_mapping_file(invalid_mapping_data):
 def temp_csv_file(valid_csv_data):
     """Create a temporary CSV file"""
     with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
-        df = pd.DataFrame(valid_csv_data)
-        df.to_csv(f.name, index=False)
+        df = pl.DataFrame(valid_csv_data)
+        df.write_csv(f.name)
         csv_path = f.name
     
     yield csv_path
@@ -140,8 +140,8 @@ def temp_related_data_dir(related_source_data):
         # Create a CSV file for each related source
         for source_name, data in related_source_data.items():
             file_path = os.path.join(temp_dir, f"{source_name}.csv")
-            df = pd.DataFrame(data)
-            df.to_csv(file_path, index=False)
+            df = pl.DataFrame(data)
+            df.write_csv(file_path)
         
         yield temp_dir
 

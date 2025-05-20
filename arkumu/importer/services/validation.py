@@ -1,6 +1,6 @@
 import logging
 import json
-import pandas as pd
+import polars as pl
 import os
 from pathlib import Path
 from typing import Dict, List, Set, Optional, Any, Tuple
@@ -52,18 +52,24 @@ class MappingValidator:
         
         for csv_file in csv_files:
             try:
-                df = pd.read_csv(csv_file, dtype=str)
+                # Try with comma delimiter first, then semicolon if that fails
+                try:
+                    df = pl.read_csv(csv_file, infer_schema_length=0)
+                except Exception:
+                    # If comma fails, try semicolon
+                    df = pl.read_csv(csv_file, separator=';', infer_schema_length=0)
+                
                 table_name = csv_file.stem
                 
                 # Store all rows as a list of dictionaries for reference lookup
-                related_sources[table_name] = df.to_dict(orient='records')
+                related_sources[table_name] = df.to_dicts()
                 
                 # Also add specific column indices for faster lookup
                 # For example, if there's an ID column, create a dedicated lookup dict
                 id_columns = [col for col in df.columns if col.lower().endswith('id')]
                 for id_col in id_columns:
                     related_sources[f"{table_name}_{id_col}"] = {
-                        str(row[id_col]): row for _, row in df.iterrows() if pd.notna(row[id_col])
+                        str(row[id_col]): row for row in df.to_dicts() if row[id_col] is not None
                     }
                 
             except Exception as e:
@@ -182,9 +188,13 @@ class MappingValidator:
             report.add_error("MAPPING_LOAD_ERROR", f"Error loading mapping file: {e}")
             return report
         
+        # Get CSV settings if present
+        csv_settings = mapping.get('csv_settings', {})
+        delimiter = csv_settings.get('delimiter', ',')
+        
         # Load CSV
         try:
-            df = pd.read_csv(csv_file, dtype=str)
+            df = pl.read_csv(csv_file, separator=delimiter, infer_schema_length=0)
         except Exception as e:
             report.add_error("CSV_LOAD_ERROR", f"Error loading CSV file: {e}")
             return report
@@ -267,13 +277,6 @@ class MappingValidator:
         """
         report = ValidationReport()
         
-        # First validate the mapping and CSV
-        basic_report = self.validate_mapping_against_data(mapping_file, csv_file)
-        if not basic_report.is_valid:
-            report.errors.extend(basic_report.errors)
-            report.warnings.extend(basic_report.warnings)
-            return report
-        
         # Load mapping
         try:
             with open(mapping_file, 'r', encoding='utf-8') as f:
@@ -282,9 +285,20 @@ class MappingValidator:
             report.add_error("MAPPING_LOAD_ERROR", f"Error loading mapping file: {e}")
             return report
         
+        # Get CSV settings if present
+        csv_settings = mapping.get('csv_settings', {})
+        delimiter = csv_settings.get('delimiter', ',')
+        
+        # First validate the mapping (without data - just structure)
+        structure_report = self.validate_mapping_file(mapping_file)
+        if not structure_report.is_valid:
+            report.errors.extend(structure_report.errors)
+            report.warnings.extend(structure_report.warnings)
+            return report
+        
         # Load CSV data
         try:
-            df = pd.read_csv(csv_file, dtype=str)
+            df = pl.read_csv(csv_file, separator=delimiter, infer_schema_length=0)
         except Exception as e:
             report.add_error("CSV_LOAD_ERROR", f"Error loading CSV file: {e}")
             return report
@@ -311,7 +325,7 @@ class MappingValidator:
         
         return report
     
-    def _validate_references_in_rule(self, rule: Dict, df: pd.DataFrame, 
+    def _validate_references_in_rule(self, rule: Dict, df: pl.DataFrame, 
                                     related_sources: Dict, report: ValidationReport):
         """Validate references for a single rule across all rows"""
         
@@ -330,8 +344,8 @@ class MappingValidator:
             )
             return
         
-        # Get all values from the source column
-        all_values = df[source_column].dropna()
+        # Get all values from the source column (excluding nulls)
+        all_values = df.filter(df[source_column].is_not_null())[source_column].to_list()
         
         # Handle multi-valued fields
         if multi_valued:
@@ -341,7 +355,7 @@ class MappingValidator:
                 if val and isinstance(val, str):
                     all_references.extend([ref.strip() for ref in val.split(delimiter) if ref.strip()])
         else:
-            all_references = [str(val) for val in all_values if val]
+            all_references = [str(val) for val in all_values if val is not None]
         
         # Validate each reference
         reference_source = related_sources[object_column]
@@ -351,7 +365,7 @@ class MappingValidator:
             missing_references = [ref for ref in all_references if ref not in reference_source]
         else:
             # List-based lookup using 'id' field
-            reference_ids = {str(item.get('id', '')) for item in reference_source}
+            reference_ids = {str(item.get('id', '')) for item in reference_source if item.get('id') is not None}
             missing_references = [ref for ref in all_references if ref not in reference_ids]
         
         # Report missing references
