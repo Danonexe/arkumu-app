@@ -60,11 +60,13 @@ def test_convenience_function(sample_mapping_file, sample_csv_file, sample_relat
     assert result is False
 
 
+@pytest.mark.django_db
 def test_external_mapping_validation(external_mapping_file, external_csv_file, external_data_dir, validator):
     """
     Test validation with external files provided via command line or environment variables.
     
     This test is skipped if the external files are not provided.
+    Uses django_db mark to allow database access for reference validation.
     """
     try:
         mapping_file = external_mapping_file()

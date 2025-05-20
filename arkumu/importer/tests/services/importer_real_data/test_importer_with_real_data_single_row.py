@@ -35,7 +35,7 @@ def _print_all_created_data(title="Created Data"):
 
 
 @pytest.mark.django_db
-def test_import_single_row_from_mapping_and_show_details(external_csv_data, external_mapping_importer):
+def test_import_single_row_from_mapping_and_show_details():
     """
     Test import of a single data row using external CSV and mapping files,
     determining primary_class from the mapping, and showing all created data.
@@ -44,6 +44,8 @@ def test_import_single_row_from_mapping_and_show_details(external_csv_data, exte
     CSV_TEST_FILE=/path/to/data.csv MAPPING_TEST_FILE=/path/to/mapping.json
     or --external-csv=/path/to/data.csv --external-mapping=/path/to/mapping.json
     """
+    import json
+    import polars as pl
     # Get file paths (copied from test_with_real_data.py)
     csv_path = os.environ.get('CSV_TEST_FILE')
     mapping_path = os.environ.get('MAPPING_TEST_FILE')
@@ -88,14 +90,25 @@ def test_import_single_row_from_mapping_and_show_details(external_csv_data, exte
         print(f"Debug: Error trying to list directory /external_data/fuk/: {e_ls}")
     # ---- End of directory listing ----
 
-    # Load the data and importer
+    # Load the data and importer directly
     try:
-        csv_data = external_csv_data(csv_path)
-        if not csv_data:
-            print(f"Debug: Skipping test because CSV data from '{csv_path}' is empty or could not be loaded.")
-            pytest.skip("CSV data is empty or could not be loaded.")
+        # Read CSV data directly
+        print(f"Debug: Reading CSV file: {csv_path}")
+        delimiter = ";"  # Default delimiter for our CSVs
         
-        importer = external_mapping_importer(mapping_path)
+        # Load CSV with polars
+        df = pl.read_csv(csv_path, separator=delimiter, infer_schema_length=0, 
+                        truncate_ragged_lines=True)
+        
+        # Convert to list of dictionaries
+        csv_data = df.to_dicts()
+        if not csv_data:
+            print(f"Debug: Skipping test because CSV data from '{csv_path}' is empty.")
+            pytest.skip("CSV data is empty.")
+        
+        # Create importer with the mapping file path
+        print(f"Debug: Creating importer with mapping file: {mapping_path}")
+        importer = JSONMappingImporter(mapping_path)
         
     except FileNotFoundError as e:
         print(f"Debug: Skipping test due to FileNotFoundError during setup: {e}")

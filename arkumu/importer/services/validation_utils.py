@@ -141,9 +141,8 @@ class ValidationReport:
             
             # Print reference tables with clear DB status
             if reference_tables:
-                print("\n=== REFERENCED TABLES STATUS ===")
-                print(f"{'TABLE NAME':<35} {'DB STATUS':<20} {'REFERENCED BY COLUMN'}")
-                print("-" * 80)
+                print(f"\n{'TABLE NAME':<35} {'DATABASE STATUS':<25} {'REFERENCED BY COLUMN'}")
+                print("-" * 85)
                 
                 for table_name, table_info in reference_tables.items():
                     status = table_info.get('db_status', 'UNKNOWN')
@@ -151,19 +150,21 @@ class ValidationReport:
                     
                     # Clear visual indicators
                     if status == 'FOUND_IN_DB':
-                        status_text = f"✅ FOUND IN DATABASE"
+                        status_text = f"✅ FOUND"
                     elif status == 'NOT_FOUND_IN_DB':
-                        status_text = f"❌ NOT FOUND IN DB"
+                        status_text = f"❌ NOT FOUND - Import Required"
+                    elif status == 'VALIDATION_UNAVAILABLE':
+                        status_text = f"⚠️ VALIDATION UNAVAILABLE"
                     else:
                         status_text = f"⚠️ STATUS UNKNOWN"
                         
-                    print(f"{table_name:<35} {status_text:<20} {referenced_by}")
+                    print(f"{table_name:<35} {status_text:<25} {referenced_by}")
                     
                     # If we have detailed info, show it
                     if 'ref_info' in table_info:
                         ref_info = table_info['ref_info']
                         if 'values_to_check' in ref_info:
-                            print(f"   - References to validate: {ref_info['values_to_check']}")
+                            print(f"   - References to check: {ref_info['values_to_check']}")
                         if 'error' in ref_info:
                             print(f"   - Error: {ref_info['error']}")
             
@@ -197,6 +198,8 @@ class ValidationReport:
                         references = f"{references} ❌"
                     elif ref_status == 'FOUND_IN_DB':
                         references = f"{references} ✅"
+                    elif ref_status == 'VALIDATION_UNAVAILABLE':
+                        references = f"{references} ⚠️"
                     else:
                         references = f"{references} ⚠️"
                 

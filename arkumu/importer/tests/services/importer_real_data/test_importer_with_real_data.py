@@ -14,7 +14,7 @@ def configure_logging():
     yield
 
 @pytest.mark.django_db
-def test_import_with_external_files(external_csv_data, external_mapping_importer):
+def test_import_with_external_files():
     """
     Test import using external CSV and mapping files.
     
@@ -26,6 +26,8 @@ def test_import_with_external_files(external_csv_data, external_mapping_importer
     2. Using command line arguments:
        pytest arkumu/importer/tests/services/test_with_real_data.py::test_import_with_external_files -v --external-csv=/path/to/data.csv --external-mapping=/path/to/mapping.json
     """
+    import polars as pl
+    from arkumu.importer.services.importer import JSONMappingImporter
     # First check environment variables
     csv_path = os.environ.get('CSV_TEST_FILE')
     mapping_path = os.environ.get('MAPPING_TEST_FILE')
@@ -50,8 +52,20 @@ def test_import_with_external_files(external_csv_data, external_mapping_importer
     
     # Load the data
     try:
-        csv_data = external_csv_data(csv_path)
-        importer = external_mapping_importer(mapping_path)
+        # Read CSV data directly
+        print(f"Loading CSV file: {csv_path}")
+        delimiter = ";"  # Default delimiter for our CSVs
+        
+        # Load CSV with polars
+        df = pl.read_csv(csv_path, separator=delimiter, infer_schema_length=0, 
+                       truncate_ragged_lines=True)
+        
+        # Convert to list of dictionaries
+        csv_data = df.to_dicts()
+        
+        # Create importer with the mapping file
+        print(f"Loading mapping file: {mapping_path}")
+        importer = JSONMappingImporter(mapping_path)
         
         # Log some information about the data being processed
         print(f"\nProcessing CSV data with {len(csv_data)} rows")
@@ -129,7 +143,7 @@ def test_import_with_external_files(external_csv_data, external_mapping_importer
 
 
 @pytest.mark.django_db
-def test_import_with_multiple_sources(external_csv_data, external_mapping_importer):
+def test_import_with_multiple_sources():
     """
     Test import using multiple related data sources.
     
@@ -141,6 +155,8 @@ def test_import_with_multiple_sources(external_csv_data, external_mapping_import
     Using command line arguments:
     pytest arkumu/importer/tests/services/test_with_real_data.py::test_import_with_multiple_sources -v --primary-data=/path/to/events.csv --related-data=/path/to/participants.csv --mapping=/path/to/mapping.json
     """
+    import polars as pl
+    from arkumu.importer.services.importer import JSONMappingImporter
     # First check environment variables
     primary_data_path = os.environ.get('PRIMARY_DATA_FILE')
     related_data_path = os.environ.get('RELATED_DATA_FILE')
@@ -164,8 +180,24 @@ def test_import_with_multiple_sources(external_csv_data, external_mapping_import
     
     # Load the data
     try:
-        primary_data = external_csv_data(primary_data_path)
-        related_data = external_csv_data(related_data_path)
+        # Read primary CSV data
+        print(f"Loading primary CSV file: {primary_data_path}")
+        delimiter = ";"  # Default delimiter for our CSVs
+        
+        # Load CSV with polars
+        primary_df = pl.read_csv(primary_data_path, separator=delimiter, infer_schema_length=0, 
+                               truncate_ragged_lines=True)
+        
+        # Convert to list of dictionaries
+        primary_data = primary_df.to_dicts()
+        
+        # Read related CSV data
+        print(f"Loading related CSV file: {related_data_path}")
+        related_df = pl.read_csv(related_data_path, separator=delimiter, infer_schema_length=0, 
+                               truncate_ragged_lines=True)
+        
+        # Convert to list of dictionaries
+        related_data = related_df.to_dicts()
         
         # Log info about the data files
         print(f"\nProcessing primary CSV data with {len(primary_data)} rows")
@@ -181,7 +213,8 @@ def test_import_with_multiple_sources(external_csv_data, external_mapping_import
         
         print(f"Related sources: {list(related_sources.keys())}")
         
-        importer = external_mapping_importer(
+        # Create importer directly with mapping file and related sources
+        importer = JSONMappingImporter(
             mapping_path, 
             related_sources=related_sources
         )

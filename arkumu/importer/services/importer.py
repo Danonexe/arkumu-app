@@ -37,13 +37,21 @@ class JSONMappingImporter:
         related_sources: Dictionary of related data sources for reference validation
         strict_references: If True, invalid references will be skipped (default: False)
     """
-    def __init__(self, mapping_file_path, institution_base_uri=None, related_sources=None, strict_references=False):
-        logger.info(f"Initializing JSONMappingImporter with mapping file: {mapping_file_path}")
-        self.mapping_file_path = mapping_file_path
+    def __init__(self, mapping_file_path_or_config, institution_base_uri=None, related_sources=None, strict_references=False):
+        logger.info(f"Initializing JSONMappingImporter")
         
         try:
-            with open(mapping_file_path, 'r') as f:
-                self.mapping_config = json.load(f)
+            # Check if the input is a dictionary (pre-loaded config) or a file path
+            if isinstance(mapping_file_path_or_config, dict):
+                logger.debug("Using pre-loaded mapping configuration")
+                self.mapping_config = mapping_file_path_or_config
+                self.mapping_file_path = None
+            else:
+                # Assume it's a file path
+                logger.debug(f"Loading mapping from file: {mapping_file_path_or_config}")
+                self.mapping_file_path = mapping_file_path_or_config
+                with open(mapping_file_path_or_config, 'r') as f:
+                    self.mapping_config = json.load(f)
             
             self.institution_code = self.mapping_config.get("institution")
             if not self.institution_code:
@@ -110,18 +118,45 @@ class JSONMappingImporter:
         Returns:
             tuple: (is_valid, report) - is_valid is boolean, report is ValidationReport
         """
-        logger.info(f"Validating mapping {self.mapping_file_path} against CSV {csv_file_path}")
+        logger.info(f"Validating mapping against CSV {csv_file_path}")
         
         # Create validator
         validator = MappingValidator()
         
-        # Validate mapping structure, source columns, and references
-        report = validator.validate_references(
-            self.mapping_file_path,
-            csv_file_path,
-            related_sources=self.related_sources,
-            data_dir=data_dir
-        )
+        if self.mapping_file_path:
+            # Validate mapping structure, source columns, and references using file path
+            logger.debug(f"Validating using mapping file path: {self.mapping_file_path}")
+            report = validator.validate_references(
+                self.mapping_file_path,
+                csv_file_path,
+                related_sources=self.related_sources,
+                data_dir=data_dir
+            )
+        else:
+            # For pre-loaded configurations, we need to write to a temporary file
+            import tempfile
+            import os
+            
+            logger.debug("Creating temporary file for validation of pre-loaded mapping")
+            with tempfile.NamedTemporaryFile(mode='w+', suffix='.json', delete=False) as tmp:
+                json.dump(self.mapping_config, tmp)
+                tmp_path = tmp.name
+            
+            try:
+                # Use the temporary file for validation
+                report = validator.validate_references(
+                    tmp_path,
+                    csv_file_path,
+                    related_sources=self.related_sources,
+                    data_dir=data_dir
+                )
+            finally:
+                # Clean up the temporary file
+                try:
+                    os.unlink(tmp_path)
+                except Exception as e:
+                    logger.warning(f"Failed to delete temporary mapping file {tmp_path}: {e}")
+        
         
         # Print summary for logging
         logger.info(report.summary())

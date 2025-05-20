@@ -341,13 +341,13 @@ class MappingValidator:
                            related_sources: Optional[Dict] = None,
                            data_dir: Optional[str] = None) -> ValidationReport:
         """
-        Validate all references in a mapping file against data
+        Validate references in a mapping file against database resources
         
         Args:
             mapping_file: Path to the mapping file
             csv_file: Path to the CSV data file
-            related_sources: Dict of pre-loaded related sources
-            data_dir: Directory containing related data files
+            related_sources: Optional pre-loaded related sources (deprecated)
+            data_dir: Optional directory with related data (deprecated)
             
         Returns:
             ValidationReport with results
@@ -387,17 +387,8 @@ class MappingValidator:
         # Store the mapping file path for reference validation
         self.mapping_file_path = mapping_file
         
-        # Load related sources if not provided
-        institution = mapping.get("institution")
-        if related_sources is None and data_dir:
-            related_sources = self.load_related_sources(institution, data_dir, mapping_file_path=mapping_file)
-        
-        if not related_sources:
-            report.add_warning(
-                "NO_RELATED_SOURCES",
-                "No related sources provided or loaded for reference validation"
-            )
-            return report
+        # We should only validate against the database, not CSV files
+        # The related_sources and data_dir params are deprecated
         
         # Validate references in each mapping rule
         for i, rule in enumerate(mapping.get("mappings", [])):
@@ -405,7 +396,7 @@ class MappingValidator:
             source_column = rule.get("source_column")
             
             if object_column and source_column and source_column in df.columns:
-                self._validate_references_in_rule(rule, df, related_sources, report)
+                self._validate_references_in_rule(rule, df, {}, report)  # Empty dict for related_sources
         
         return report
     
@@ -430,7 +421,7 @@ class MappingValidator:
             'status': 'NOT_FOUND'
         }
         
-        # Instead of looking for CSV files, check if resources exist in the database
+        # Check if resources exist in the database (this is the only correct approach)
         try:
             # Import the Django models we need for database access
             from arkumu.metadata.models import Resource, ResourceType
@@ -463,7 +454,7 @@ class MappingValidator:
                 report.add_warning(
                     "MISSING_REFERENCE_SOURCE",
                     f"No resources found in database for '{object_column}' with institution '{institution}'. "
-                    "This reference table might not have been imported yet.",
+                    "This reference table must be imported before this data can be imported.",
                     rule=rule,
                     field=object_column
                 )
@@ -476,23 +467,15 @@ class MappingValidator:
                 
         except ImportError:
             # If we're in a test environment or Django is not available
-            logger.warning(f"Django import error - falling back to checking related sources for '{object_column}'")
+            logger.warning(f"Django import error - cannot validate references to '{object_column}' in database")
             
-            # Try checking related sources as a backup strategy
-            if object_column in related_sources:
-                logger.info(f"Found '{object_column}' in related CSV sources (fallback method)")
-                reference_info['status'] = 'FOUND_IN_RELATED_CSV'
-                reference_info['exists_in_db'] = True  # Not technically DB but similar purpose
-                reference_info['reference_count'] = len(related_sources[object_column])
-            else:
-                # Not found in either database or related sources
-                report.add_warning(
-                    "REFERENCE_NOT_FOUND",
-                    f"Reference table '{object_column}' not found in database or CSV files",
-                    rule=rule,
-                    field=object_column
-                )
-                reference_info['status'] = 'NOT_FOUND_ANYWHERE'
+            report.add_warning(
+                "DB_VALIDATION_UNAVAILABLE",
+                f"Database validation for reference table '{object_column}' not available in this environment.",
+                rule=rule,
+                field=object_column
+            )
+            reference_info['status'] = 'VALIDATION_UNAVAILABLE'
             
         except Exception as e:
             # Any other error during database access
@@ -504,11 +487,7 @@ class MappingValidator:
             )
             reference_info['status'] = 'ERROR'
             reference_info['error'] = str(e)
-            report.details['references'][object_column] = reference_info
-            return
-        
-        # If we got here, check was performed - record the info
-        
+            
         # Get all values from the source column (excluding nulls)
         all_values = df.filter(df[source_column].is_not_null())[source_column].to_list()
         
