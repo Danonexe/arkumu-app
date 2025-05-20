@@ -28,14 +28,16 @@ class MappingValidator:
         """
         self.data_loader = data_loader
         self.related_sources = {}
+        self.mapping_file_path = None  # Will be set when validating references
         
-    def load_related_sources(self, institution: str, data_dir: str) -> Dict:
+    def load_related_sources(self, institution: str, data_dir: str, mapping_file_path: str = None) -> Dict:
         """
         Load related sources for reference validation
         
         Args:
             institution: Institution code
             data_dir: Directory containing data files
+            mapping_file_path: Optional path to mapping file to extract needed references
             
         Returns:
             Dict of related sources
@@ -46,24 +48,91 @@ class MappingValidator:
         
         related_sources = {}
         
-        # Simple implementation to find and load CSVs in the directory
+        # Look for various file types, not just CSVs
         data_path = Path(data_dir)
-        csv_files = list(data_path.glob("*.csv"))
+        supported_extensions = ["csv", "tsv", "txt"] # Limit to common text formats
         
-        for csv_file in csv_files:
+        # Use common normalization from uri_utils if available
+        try:
+            from arkumu.importer.services.uri_utils import slugify_uri_part
+        except ImportError:
+            # Fall back to simple normalization if uri_utils is not available
+            def slugify_uri_part(text):
+                if not text:
+                    return ""
+                return text.lower().replace(' ', '_').replace('-', '_')
+                
+        # If mapping file is provided, extract needed object_columns
+        needed_references = set()
+        if mapping_file_path:
             try:
-                # Try with semicolon delimiter first, then comma if that fails
-                try:
-                    # Set truncate_ragged_lines=True to handle irregular CSV files with inconsistent columns
-                    df = pl.read_csv(csv_file, separator=';', infer_schema_length=0, truncate_ragged_lines=True)
-                except Exception:
-                    # If semicolon fails, try comma
-                    df = pl.read_csv(csv_file, infer_schema_length=0, truncate_ragged_lines=True)
+                with open(mapping_file_path, 'r') as f:
+                    mapping = json.load(f)
+                    # Extract all object_column references from mappings
+                    for rule in mapping.get("mappings", []):
+                        if "object_column" in rule:
+                            needed_references.add(rule["object_column"])
+                            
+                logger.info(f"Extracted {len(needed_references)} needed references from mapping: {', '.join(needed_references)}")
+            except Exception as e:
+                logger.warning(f"Could not extract references from mapping file: {e}")
+        
+        # First collect all data files
+        data_files = []
+        for ext in supported_extensions:
+            data_files.extend(list(data_path.glob(f"*.{ext}")))
+        
+        logger.info(f"Found {len(data_files)} potential data files in {data_dir}")
+        loaded_count = 0
+        
+        for data_file in data_files:
+            file_ext = data_file.suffix.lower()
+            table_name = data_file.stem
+            
+            # Skip files that aren't needed if we have a mapping file with references
+            if needed_references and not any(ref.lower() in table_name.lower() for ref in needed_references):
+                logger.debug(f"Skipping {data_file} - not referenced in mapping")
+                continue
                 
-                table_name = csv_file.stem
+            try:
+                if file_ext == '.csv' or file_ext == '.tsv' or file_ext == '.txt':
+                    # Determine separator based on extension
+                    separator = '\t' if file_ext == '.tsv' else ';'
+                    
+                    # Try with determined separator first, then comma if that fails
+                    try:
+                        df = pl.read_csv(data_file, separator=separator, infer_schema_length=0, 
+                                      truncate_ragged_lines=True)
+                    except Exception:
+                        # If initial separator fails, try comma
+                        df = pl.read_csv(data_file, separator=',', infer_schema_length=0, 
+                                      truncate_ragged_lines=True)
+                else:
+                    # Skip other file types
+                    logger.debug(f"Skipping unsupported file type: {data_file}")
+                    continue
                 
-                # Store all rows as a list of dictionaries for reference lookup
+                # Add data to related_sources under multiple keys for better matching
+                # 1. Original name
                 related_sources[table_name] = df.to_dicts()
+                loaded_count += 1
+                
+                # 2. Normalized name (using the same normalization as the importer would)
+                normalized_name = slugify_uri_part(table_name)
+                if normalized_name and normalized_name != table_name:
+                    related_sources[normalized_name] = df.to_dicts()
+                
+                # 3. Common variations
+                variations = [
+                    table_name.lower(),
+                    table_name.replace(" ", "_"),
+                    table_name.replace("-", "_"),
+                    table_name.replace(" ", ""),
+                    table_name.replace("-", "")
+                ]
+                for variant in variations:
+                    if variant and variant != table_name and variant != normalized_name:
+                        related_sources[variant] = df.to_dicts()
                 
                 # Also add specific column indices for faster lookup
                 # For example, if there's an ID column, create a dedicated lookup dict
@@ -73,9 +142,12 @@ class MappingValidator:
                         str(row[id_col]): row for row in df.to_dicts() if row[id_col] is not None
                     }
                 
+                logger.info(f"Loaded '{table_name}' with {len(df)} rows into related_sources")
+                
             except Exception as e:
-                logger.warning(f"Failed to load related source {csv_file}: {e}")
+                logger.warning(f"Failed to load related source {data_file}: {e}")
         
+        logger.info(f"Loaded {loaded_count} distinct reference tables with {len(related_sources)} total lookup variants")
         return related_sources
     
     def validate_mapping_file(self, mapping_file: str) -> ValidationReport:
@@ -312,10 +384,13 @@ class MappingValidator:
             report.add_error("CSV_LOAD_ERROR", f"Error loading CSV file: {e}")
             return report
         
+        # Store the mapping file path for reference validation
+        self.mapping_file_path = mapping_file
+        
         # Load related sources if not provided
         institution = mapping.get("institution")
         if related_sources is None and data_dir:
-            related_sources = self.load_related_sources(institution, data_dir)
+            related_sources = self.load_related_sources(institution, data_dir, mapping_file_path=mapping_file)
         
         if not related_sources:
             report.add_warning(
@@ -343,15 +418,96 @@ class MappingValidator:
         multi_valued = rule.get("multi_valued", False)
         delimiter = rule.get("delimiter", ",") if multi_valued else None
         
-        # Check if the object_column exists in related_sources
-        if object_column not in related_sources:
+        # Initialize references info in report details if it doesn't exist
+        if 'references' not in report.details:
+            report.details['references'] = {}
+            
+        reference_info = {
+            'name': object_column,
+            'source_column': source_column,
+            'exists_in_db': False,
+            'reference_count': 0,
+            'status': 'NOT_FOUND'
+        }
+        
+        # Instead of looking for CSV files, check if resources exist in the database
+        try:
+            # Import the Django models we need for database access
+            from arkumu.metadata.models import Resource, ResourceType
+            
+            # Get the institution from the mapping file
+            with open(self.mapping_file_path, 'r') as f:
+                mapping = json.load(f)
+                institution = mapping.get("institution", "")
+            
+            if not institution:
+                report.add_warning(
+                    "MISSING_INSTITUTION",
+                    "Mapping file is missing the 'institution' field needed for reference validation",
+                    rule=rule
+                )
+                reference_info['status'] = 'MISSING_INSTITUTION'
+                report.details['references'][object_column] = reference_info
+                return
+                
+            # Check if any resources exist for this institution that reference this object column
+            # We look for resources where source_field contains object_column
+            reference_resources = Resource.objects.filter(
+                source=institution, 
+                source_field__contains=object_column
+            )
+            
+            reference_count = reference_resources.count()
+            if reference_count == 0:
+                # No resources found that match this reference
+                report.add_warning(
+                    "MISSING_REFERENCE_SOURCE",
+                    f"No resources found in database for '{object_column}' with institution '{institution}'. "
+                    "This reference table might not have been imported yet.",
+                    rule=rule,
+                    field=object_column
+                )
+                reference_info['status'] = 'NOT_FOUND_IN_DB'
+            else:
+                logger.info(f"Found {reference_count} resources in database for '{object_column}' with institution '{institution}'")
+                reference_info['exists_in_db'] = True
+                reference_info['reference_count'] = reference_count
+                reference_info['status'] = 'FOUND_IN_DB'
+                
+        except ImportError:
+            # If we're in a test environment or Django is not available
+            logger.warning(f"Django import error - falling back to checking related sources for '{object_column}'")
+            
+            # Try checking related sources as a backup strategy
+            if object_column in related_sources:
+                logger.info(f"Found '{object_column}' in related CSV sources (fallback method)")
+                reference_info['status'] = 'FOUND_IN_RELATED_CSV'
+                reference_info['exists_in_db'] = True  # Not technically DB but similar purpose
+                reference_info['reference_count'] = len(related_sources[object_column])
+            else:
+                # Not found in either database or related sources
+                report.add_warning(
+                    "REFERENCE_NOT_FOUND",
+                    f"Reference table '{object_column}' not found in database or CSV files",
+                    rule=rule,
+                    field=object_column
+                )
+                reference_info['status'] = 'NOT_FOUND_ANYWHERE'
+            
+        except Exception as e:
+            # Any other error during database access
             report.add_warning(
-                "MISSING_REFERENCE_SOURCE",
-                f"Reference source '{object_column}' not found in related sources",
+                "REFERENCE_VALIDATION_ERROR",
+                f"Error validating reference '{object_column}': {str(e)}",
                 rule=rule,
                 field=object_column
             )
+            reference_info['status'] = 'ERROR'
+            reference_info['error'] = str(e)
+            report.details['references'][object_column] = reference_info
             return
+        
+        # If we got here, check was performed - record the info
         
         # Get all values from the source column (excluding nulls)
         all_values = df.filter(df[source_column].is_not_null())[source_column].to_list()
@@ -366,33 +522,17 @@ class MappingValidator:
         else:
             all_references = [str(val) for val in all_values if val is not None]
         
-        # Validate each reference
-        reference_source = related_sources[object_column]
+        # Store info about references
+        reference_info['values_to_check'] = len(all_references)
+        report.details['references'][object_column] = reference_info
         
-        if isinstance(reference_source, dict):
-            # Dict-based lookup
-            missing_references = [ref for ref in all_references if ref not in reference_source]
-        else:
-            # List-based lookup using 'id' field
-            reference_ids = {str(item.get('id', '')) for item in reference_source if item.get('id') is not None}
-            missing_references = [ref for ref in all_references if ref not in reference_ids]
-        
-        # Report missing references
-        if missing_references:
-            for ref in missing_references[:10]:  # Limit to first 10 for readability
-                report.add_error(
-                    "INVALID_REFERENCE",
-                    f"Reference '{ref}' for '{object_column}' not found in related sources",
-                    rule=rule
-                )
-            
-            if len(missing_references) > 10:
-                report.add_warning(
-                    "MANY_INVALID_REFERENCES",
-                    f"Found {len(missing_references)} invalid references for '{object_column}', "
-                    "only showing first 10",
-                    rule=rule
-                )
+        # For now, we don't check individual reference values, just record overall status
+        report.add_info(
+            "REFERENCE_TABLE_STATUS",
+            f"Table '{object_column}': {'Found' if reference_info['exists_in_db'] else 'Not found'} in database. "
+            f"There are {len(all_references)} references from source column '{source_column}'.",
+            rule=rule
+        )
 
 
 def validate_mapping(mapping_file: str, csv_file: str, data_dir: Optional[str] = None,

@@ -38,6 +38,7 @@ class ValidationReport:
     def __init__(self):
         self.errors: List[ValidationError] = []
         self.warnings: List[ValidationError] = []
+        self.info: List[ValidationError] = []  # New field for informational messages
         self.details: Dict = {}  # Additional structured details about the validation
         
     @property
@@ -51,6 +52,11 @@ class ValidationReport:
     def add_warning(self, error_type: str, message: str, rule: Optional[Dict] = None, 
                     field: Optional[str] = None, row: Optional[int] = None):
         self.warnings.append(ValidationError(error_type, message, rule, field, row))
+        
+    def add_info(self, info_type: str, message: str, rule: Optional[Dict] = None, 
+                field: Optional[str] = None, row: Optional[int] = None):
+        """Add an informational message to the report"""
+        self.info.append(ValidationError(info_type, message, rule, field, row))
     
     def summary(self) -> str:
         """Return a string summary of validation results"""
@@ -63,6 +69,9 @@ class ValidationReport:
         
         if self.warnings:
             result.append(f"⚠️ Found {len(self.warnings)} warnings")
+            
+        if self.info:
+            result.append(f"ℹ️ {len(self.info)} informational messages")
         
         # Add detailed errors
         if self.errors:
@@ -75,6 +84,12 @@ class ValidationReport:
             result.append("\nWarnings:")
             for warning in self.warnings:
                 result.append(f"  - {str(warning)}")
+                
+        # Add informational messages
+        if self.info:
+            result.append("\nInformation:")
+            for info in self.info:
+                result.append(f"  - {str(info)}")
                 
         return "\n".join(result)
     
@@ -102,6 +117,56 @@ class ValidationReport:
                 else:
                     print(f"\n❌ Anchor column '{anchor_data.get('name')}' - MISSING")
             
+            # Get column data and referenced tables
+            regular_columns = [c for c in self.details.get('column_data', []) 
+                              if not c.get('is_sub_column', False)]
+            
+            # Extract reference tables from column data
+            reference_tables = {}
+            for column in regular_columns:
+                references = column.get('references_table')
+                if references and references != '-':
+                    reference_tables[references] = {
+                        'referenced_by': column.get('name'),
+                        'db_status': 'UNKNOWN'  # Default status
+                    }
+            
+            # Update reference status from DB checks if available
+            if 'references' in self.details:
+                for ref_name, ref_info in self.details['references'].items():
+                    if ref_name in reference_tables:
+                        db_found = ref_info.get('exists_in_db', False)
+                        reference_tables[ref_name]['db_status'] = 'FOUND_IN_DB' if db_found else 'NOT_FOUND_IN_DB'
+                        reference_tables[ref_name]['ref_info'] = ref_info
+            
+            # Print reference tables with clear DB status
+            if reference_tables:
+                print("\n=== REFERENCED TABLES STATUS ===")
+                print(f"{'TABLE NAME':<35} {'DB STATUS':<20} {'REFERENCED BY COLUMN'}")
+                print("-" * 80)
+                
+                for table_name, table_info in reference_tables.items():
+                    status = table_info.get('db_status', 'UNKNOWN')
+                    referenced_by = table_info.get('referenced_by', '')
+                    
+                    # Clear visual indicators
+                    if status == 'FOUND_IN_DB':
+                        status_text = f"✅ FOUND IN DATABASE"
+                    elif status == 'NOT_FOUND_IN_DB':
+                        status_text = f"❌ NOT FOUND IN DB"
+                    else:
+                        status_text = f"⚠️ STATUS UNKNOWN"
+                        
+                    print(f"{table_name:<35} {status_text:<20} {referenced_by}")
+                    
+                    # If we have detailed info, show it
+                    if 'ref_info' in table_info:
+                        ref_info = table_info['ref_info']
+                        if 'values_to_check' in ref_info:
+                            print(f"   - References to validate: {ref_info['values_to_check']}")
+                        if 'error' in ref_info:
+                            print(f"   - Error: {ref_info['error']}")
+            
             # Print MAPPED columns in a table format
             print("\n=== MAPPING COLUMNS TABLE ===")
             
@@ -110,9 +175,6 @@ class ValidationReport:
             print("-" * 110)
             
             # Print mapped columns details
-            regular_columns = [c for c in self.details.get('column_data', []) 
-                               if not c.get('is_sub_column', False)]
-            
             for column in regular_columns:
                 name = column.get('name', '')
                 status = "✅ FOUND" if column.get('found', False) else "❌ MISSING"
@@ -127,6 +189,16 @@ class ValidationReport:
                     coverage = "N/A"
                     
                 references = column.get('references_table', '-')
+                
+                # Indicate reference DB status in the column table
+                if references != '-' and references in reference_tables:
+                    ref_status = reference_tables[references].get('db_status', 'UNKNOWN')
+                    if ref_status == 'NOT_FOUND_IN_DB':
+                        references = f"{references} ❌"
+                    elif ref_status == 'FOUND_IN_DB':
+                        references = f"{references} ✅"
+                    else:
+                        references = f"{references} ⚠️"
                 
                 print(f"{name:<30} {status:<8} {property_name:<30} {range_value:<20} {coverage:<15} {references}")
             
@@ -146,7 +218,7 @@ class ValidationReport:
                     property_name = column.get('property', 'Unknown')
                     
                     print(f"{name:<30} {status:<8} {parent:<30} {property_name:<30}")
-                    
+            
             # Print unmapped columns in a table format
             unmapped = self.details.get('unmapped_columns', [])
             if unmapped:
