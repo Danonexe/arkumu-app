@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from typing import Dict, List, Set, Optional, Any, Tuple, Union
 
-from arkumu.importer.services.validation_utils import ValidationReport, ValidationError
+from arkumu.importer.services.validation.validation_utils import ValidationReport
 
 logger = logging.getLogger(__name__)
 

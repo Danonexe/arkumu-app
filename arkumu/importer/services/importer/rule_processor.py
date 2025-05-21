@@ -1,14 +1,13 @@
 import logging
 from arkumu.metadata.models import ResourceType, Triple
-from arkumu.importer.services.uri_utils import (
+from arkumu.importer.services.importer.uri_utils import (
     XSD_BASE_URI,
     slugify_uri_part, mint_uri
 )
-from arkumu.importer.services.data_utils import (
+from arkumu.importer.services.importer.data_utils import (
     infer_datatype,
     infer_language,
     split_multi_values,
-    lookup_related_data
 )
 
 logger = logging.getLogger(__name__)

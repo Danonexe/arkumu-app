@@ -6,7 +6,7 @@ RDFS_BASE_URI = "http://www.w3.org/2000/01/rdf-schema#"
 CIDOC_CRM_BASE_URI = "http://cidoc-crm.org/cidoc-crm/"
 XSD_BASE_URI = "http://www.w3.org/2001/XMLSchema#"
 OWL_BASE_URI = "http://www.w3.org/2002/07/owl#"
-DEFAULT_INSTITUTION_BASE_URI = "http://arkumu.nrw/data/" # Ensure it ends with a slash if that's the convention
+DEFAULT_INSTITUTION_BASE_URI = "http://arkumu.nrw/data/" 
 
 def slugify_uri_part(value_str):
     """

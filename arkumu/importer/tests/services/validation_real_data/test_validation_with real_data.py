@@ -2,8 +2,7 @@ import pytest
 import os
 from pathlib import Path
 
-from arkumu.importer.services.validation import MappingValidator, validate_mapping
-from arkumu.importer.services.validation_utils import ValidationReport
+from arkumu.importer.services.validation.validation import  validate_mapping
 
 
 def test_validation_with_sample_data(validator, sample_mapping_file, sample_csv_file, sample_related_data_dir):

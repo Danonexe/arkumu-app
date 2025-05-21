@@ -3,9 +3,9 @@ import json
 import tempfile
 from pathlib import Path
 
-from arkumu.importer.services.importer import JSONMappingImporter
-from arkumu.importer.services.resource_manager import ResourceManager
-from arkumu.importer.services.rule_processor import MappingRuleProcessor
+from arkumu.importer.services.importer.importer import JSONMappingImporter
+from arkumu.importer.services.importer.resource_manager import ResourceManager
+from arkumu.importer.services.importer.rule_processor import MappingRuleProcessor
 
 
 @pytest.fixture
@@ -52,7 +52,7 @@ def temp_mapping_file(valid_mapping_json):
 @pytest.mark.django_db
 def test_importer_initialization(temp_mapping_file):
     """Test that the importer initializes correctly with real components"""
-    importer = JSONMappingImporter(mapping_file_path=temp_mapping_file)
+    importer = JSONMappingImporter(temp_mapping_file)
     
     # Check basic properties are initialized
     assert importer.institution_code == "TESTINST"
@@ -68,16 +68,16 @@ def test_importer_initialization(temp_mapping_file):
 @pytest.mark.django_db
 def test_validate_source_headers(temp_mapping_file):
     """Test header validation with sufficient and missing columns"""
-    importer = JSONMappingImporter(mapping_file_path=temp_mapping_file)
+    importer = JSONMappingImporter(temp_mapping_file)
     
     # Test with all required headers
-    result = importer.validate_source_headers(["ID", "Title", "ObjectType", "Extra"])
+    result = importer.validate_csv_headers(["ID", "Title", "ObjectType", "Extra"])
     assert result["all_expected_present"] is True
     assert result["extra_headers"] == ["Extra"]
     
     # Test with missing headers
     with pytest.raises(ValueError) as exc_info:
-        importer.validate_source_headers(["Title"])
+        importer.validate_csv_headers(["Title"])
     
     assert "Critical columns from mapping are missing" in str(exc_info.value)
     assert "ObjectType" in str(exc_info.value)

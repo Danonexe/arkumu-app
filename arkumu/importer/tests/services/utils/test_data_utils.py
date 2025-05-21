@@ -2,7 +2,7 @@ import pytest
 import os
 import tempfile
 import unicodedata
-from arkumu.importer.services.data_utils import (
+from arkumu.importer.services.importer.data_utils import (
     normalize_string_nfc,
     normalize_dict_values_nfc,
     normalize_csv_data_nfc,

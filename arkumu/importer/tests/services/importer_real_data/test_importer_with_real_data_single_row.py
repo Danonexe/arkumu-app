@@ -5,7 +5,7 @@ import pytest
 import logging
 import os
 from arkumu.metadata.models import Resource, Triple, ResourceType
-from arkumu.importer.services.importer import JSONMappingImporter # Assuming this is the correct path
+from arkumu.importer.services.importer.importer import JSONMappingImporter 
 
 # Configure logging for tests - can be shared from a conftest.py or defined here
 @pytest.fixture(autouse=True)

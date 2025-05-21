@@ -5,7 +5,7 @@ import json
 import tempfile
 from pathlib import Path
 
-from arkumu.importer.services.validation import MappingValidator
+from arkumu.importer.services.validation.validation import MappingValidator
 
 
 def pytest_addoption(parser):

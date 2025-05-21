@@ -1,10 +1,10 @@
 import pytest
 from unittest.mock import patch, call, ANY
 
-from arkumu.importer.services import rule_processor as rule_processor_module
-from arkumu.importer.services.rule_processor import MappingRuleProcessor
+from arkumu.importer.services.importer import rule_processor as rule_processor_module
+from arkumu.importer.services.importer.rule_processor import MappingRuleProcessor
 from arkumu.metadata.models import ResourceType, Triple
-from arkumu.importer.services.resource_manager import ResourceManager
+from arkumu.importer.services.importer.resource_manager import ResourceManager
 
 
 @pytest.fixture

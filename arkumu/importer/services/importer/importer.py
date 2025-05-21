@@ -2,24 +2,22 @@ import json
 import logging
 from django.db import transaction
 
-from arkumu.metadata.models import Resource, ResourceType, Triple
-from arkumu.importer.services.uri_utils import (
-    RDF_BASE_URI, RDFS_BASE_URI, CIDOC_CRM_BASE_URI, XSD_BASE_URI, OWL_BASE_URI, DEFAULT_INSTITUTION_BASE_URI,
+from arkumu.metadata.models import ResourceType, Triple
+from arkumu.importer.services.importer.uri_utils import (
+ XSD_BASE_URI, DEFAULT_INSTITUTION_BASE_URI,
     slugify_uri_part, mint_uri
 )
-from arkumu.importer.services.data_utils import (
+from arkumu.importer.services.importer.data_utils import (
     extract_expected_source_columns,
     validate_source_headers,
-    infer_datatype,
     infer_language,
-    split_multi_values,
     lookup_related_data,
     normalize_csv_data_nfc,
     normalize_dict_values_nfc
 )
-from arkumu.importer.services.resource_manager import ResourceManager
-from arkumu.importer.services.rule_processor import MappingRuleProcessor
-from arkumu.importer.services.validation import MappingValidator
+from arkumu.importer.services.importer.resource_manager import ResourceManager
+from arkumu.importer.services.importer.rule_processor import MappingRuleProcessor
+from arkumu.importer.services.validation.validation import MappingValidator, validate_mapping_columns, validate_mapping
 
 # Setup logger
 logger = logging.getLogger(__name__)
@@ -113,6 +111,9 @@ class JSONMappingImporter:
                 strict_references=self.strict_references
             )
 
+            # Create a validator instance for validation operations
+            self.validator = MappingValidator()
+
         except Exception as e:
             logger.exception(f"Failed to initialize JSONMappingImporter: {str(e)}")
             raise
@@ -131,13 +132,11 @@ class JSONMappingImporter:
         """
         logger.info(f"Validating mapping against CSV {csv_file_path}")
         
-        # Create validator
-        validator = MappingValidator()
-        
+        # Delegate to the validator directly
         if self.mapping_file_path:
             # Validate mapping structure, source columns, and references using file path
             logger.debug(f"Validating using mapping file path: {self.mapping_file_path}")
-            report = validator.validate_references(
+            report = self.validator.validate_references(
                 self.mapping_file_path,
                 csv_file_path,
                 related_sources=self.related_sources,
@@ -155,7 +154,7 @@ class JSONMappingImporter:
             
             try:
                 # Use the temporary file for validation
-                report = validator.validate_references(
+                report = self.validator.validate_references(
                     tmp_path,
                     csv_file_path,
                     related_sources=self.related_sources,
@@ -168,7 +167,6 @@ class JSONMappingImporter:
                 except Exception as e:
                     logger.warning(f"Failed to delete temporary mapping file {tmp_path}: {e}")
         
-        
         # Print summary for logging
         logger.info(report.summary())
         
@@ -180,45 +178,59 @@ class JSONMappingImporter:
         
         return is_valid, report
 
-    def validate_source_headers(self, actual_source_headers):
-        """
-        Validates a list of actual source headers against expected headers from the mapping.
-        Args:
-            actual_source_headers (list or set): The headers found in the source data (e.g., CSV headers).
-        Returns:
-            dict: A dictionary with 'missing_critical_headers' and 'extra_headers'.
-                  Raises ValueError if critical headers are missing.
-        """
-        logger.info(f"Validating {len(actual_source_headers)} source headers against {len(self.expected_source_columns)} expected columns")
-        actual_headers_set = set(actual_source_headers)
-        missing_critical = self.expected_source_columns - actual_headers_set
-        extra_headers = actual_headers_set - self.expected_source_columns
-
-        if missing_critical:
-            missing_list = sorted(list(missing_critical))
-            logger.error(f"Critical columns missing: {', '.join(missing_list)}")
-            raise ValueError(
-                f"Critical columns from mapping are missing in the source data headers: "
-                f"{missing_list}. Please check the source file or mapping."
-            )
-        
-        if extra_headers:
-            logger.info(f"Found {len(extra_headers)} extra headers not in mapping: {', '.join(sorted(list(extra_headers)))}")
-        else:
-            logger.info("All headers match expected columns exactly")
-            
-        result = {
-            "missing_critical_headers": list(missing_critical), # Will be empty if error not raised
-            "extra_headers": sorted(list(extra_headers)),
-            "all_expected_present": not bool(missing_critical)
-        }
-        return result
-
     def validate_csv_headers(self, csv_fieldnames):
-        """Validates CSV field names against expected columns. Wrapper for data_utils function."""
+        """
+        Validates CSV field names against expected columns.
+        
+        Args:
+            csv_fieldnames: List of field names from CSV
+            
+        Returns:
+            dict: A dictionary with validation results
+        """
         logger.info(f"Validating CSV headers: {csv_fieldnames}")
-        # Uses self.expected_source_columns which is instance data
-        return validate_source_headers(self.expected_source_columns, csv_fieldnames)
+        # Basic column presence validation
+        basic_validation = validate_source_headers(self.expected_source_columns, csv_fieldnames)
+        
+        # If we have a mapping file path, we can also use validate_mapping_columns 
+        # for more detailed column analysis
+        if self.mapping_file_path and hasattr(csv_fieldnames, '__iter__') and len(csv_fieldnames) > 0:
+            try:
+                # Create a temporary CSV just for validation
+                import tempfile
+                import csv
+                
+                with tempfile.NamedTemporaryFile(mode='w+', suffix='.csv', delete=False) as tmp:
+                    temp_csv_writer = csv.writer(tmp, delimiter=';')
+                    temp_csv_writer.writerow(csv_fieldnames)
+                    temp_csv_path = tmp.name
+                    
+                try:
+                    # Run the more comprehensive column validation
+                    detailed_report = validate_mapping_columns(
+                        self.mapping_file_path,
+                        temp_csv_path,
+                        print_output=False
+                    )
+                    
+                    # Merge the detailed report with the basic validation results
+                    if hasattr(detailed_report, 'details') and 'columns' in detailed_report.details:
+                        basic_validation['column_details'] = detailed_report.details
+                    
+                    logger.debug("Extended column validation completed")
+                    
+                finally:
+                    # Clean up the temporary file
+                    try:
+                        import os
+                        os.unlink(temp_csv_path)
+                    except Exception as e:
+                        logger.warning(f"Failed to delete temporary CSV file: {e}")
+                
+            except Exception as e:
+                logger.warning(f"Extended column validation failed: {e}")
+        
+        return basic_validation
 
     def import_data(self, source_data_iterator, primary_subject_class_short_name, strict_references=None, validate_first=True, csv_file_path=None, apply_nfc=True):
         """
@@ -239,15 +251,38 @@ class JSONMappingImporter:
         """
         # Validate references first if requested
         if validate_first and csv_file_path:
-            is_valid, report = self.validate_mapping_against_csv(
-                csv_file_path, 
-                strict=(strict_references if strict_references is not None else self.strict_references)
-            )
+            # Use the validate_mapping function which provides a more comprehensive validation
+            if self.mapping_file_path:
+                logger.info(f"Validating mapping file against CSV data before import")
+                report = validate_mapping(
+                    self.mapping_file_path,
+                    csv_file_path,
+                    strict=(strict_references if strict_references is not None else self.strict_references),
+                    print_output=False
+                )
+            else:
+                # For pre-loaded configurations, we need to use our instance method
+                logger.info(f"Validating pre-loaded mapping against CSV data before import")
+                is_valid, report = self.validate_mapping_against_csv(
+                    csv_file_path, 
+                    strict=(strict_references if strict_references is not None else self.strict_references)
+                )
+                
+            # Check if validation passed
+            if isinstance(report, bool):  # If validate_mapping returned a boolean
+                is_valid = report
+                report_summary = "Validation failed" if not is_valid else "Validation passed"
+            else:  # If it returned a ValidationReport
+                is_valid = report.is_valid
+                if strict_references and report.warnings:
+                    is_valid = False
+                report_summary = report.summary() if hasattr(report, 'summary') else str(report)
+                
             if not is_valid:
                 logger.error("Validation failed. Import aborted.")
                 return {
                     "validation_passed": False,
-                    "validation_report": report.summary(),
+                    "validation_report": report_summary,
                     "total_rows": 0,
                     "successful_rows": 0,
                     "failed_rows": 0,
@@ -282,7 +317,7 @@ class JSONMappingImporter:
             "reference_errors": 0,
             "errors": []
         }
-        
+
         # Apply NFC normalization to input data if requested
         normalized_data_iterator = source_data_iterator
         if apply_nfc:

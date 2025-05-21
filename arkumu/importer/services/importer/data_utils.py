@@ -1,8 +1,8 @@
 import logging
 from datetime import datetime
-from arkumu.importer.services.uri_utils import XSD_BASE_URI # For infer_datatype
+from arkumu.importer.services.importer.uri_utils import XSD_BASE_URI # For infer_datatype
 import unicodedata
-from typing import Dict, List, Set, Union, Any, Optional
+from typing import Dict, List,  Any
 
 # It's common to use the module's logger for utility functions
 # or allow a logger to be passed in if more specific context is needed from the caller.
