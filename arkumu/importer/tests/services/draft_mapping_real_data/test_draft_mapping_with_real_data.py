@@ -2,8 +2,7 @@ import os
 import glob
 import json
 import pytest
-from arkumu.importer.services.analyzer.analyze_csv import analyze_csv_data
-from arkumu.importer.services.draft_mapping.draft_mapping import generate_draft_mapping
+from arkumu.importer.services.draft_mapping.draft_mapping import generate_draft_mapping_from_csvs
 from arkumu.importer.services.draft_mapping.output import write_draft_mappings_to_files
 
 @pytest.mark.skipif("REAL_DATA_DIR" not in os.environ, reason="Set REAL_DATA_DIR to run this test")
@@ -14,8 +13,7 @@ def test_generate_draft_mappings_with_real_data():
     csv_files = glob.glob(os.path.join(data_dir, "*.csv"))
     assert csv_files, "No CSV files found in the data directory"
 
-    analysis_report = analyze_csv_data(csv_files, delimiter=';')
-    draft_mappings = generate_draft_mapping(analysis_report, institution="REALDATA", domain="TODO")
+    draft_mappings = generate_draft_mapping_from_csvs(csv_files, institution="REALDATA", domain="TODO", delimiter=';')
 
     # Write mapping files to the same directory as the CSVs
     write_draft_mappings_to_files(draft_mappings, data_dir)

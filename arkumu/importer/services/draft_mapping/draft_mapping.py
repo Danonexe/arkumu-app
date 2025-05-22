@@ -1,90 +1,72 @@
-from typing import Dict, Any
-from arkumu.importer.services.analyzer.analyze_csv import GlobalAnalysisReport
+from typing import Dict, Any, List
+import os
+from arkumu.importer.services.analyzer.table_structure import (
+    get_table_column_dict, mark_primary_keys, mark_foreign_keys
+)
 
-def generate_draft_mapping(
-    analysis_report: GlobalAnalysisReport,
+def generate_draft_mapping_from_csvs(
+    csv_file_paths: List[str],
     institution: str = "TODO",
     domain: str = "TODO",
-    anchor_column_strategy: str = "most_unique",  # or 'first', etc.
+    delimiter: str = ';'
 ) -> Dict[str, Any]:
     """
-    Generate a draft mapping JSON for each CSV file based on the analysis report.
+    Generate a draft mapping JSON for each CSV file based on table/column/PK/FK analysis.
     Returns a dict: {csv_file_name: mapping_json_dict}
+    delimiter: The column delimiter to use when reading CSVs (default ';').
     """
-    # Build a lookup for relationships for quick access
-    rels_by_source = {}
-    for rel in analysis_report.relationships:
-        rels_by_source.setdefault((rel.source_file, rel.source_column), []).append(rel)
+    table_dict = get_table_column_dict(csv_file_paths, delimiter=delimiter)
+    pk_dict = mark_primary_keys(table_dict, csv_file_paths, delimiter=delimiter)
+    fk_dict = mark_foreign_keys(pk_dict, csv_file_paths, delimiter=delimiter)
 
     result = {}
-    for report in analysis_report.intra_csv_reports:
-        # Suggest anchor_column: most unique, non-null column
-        anchor_column = None
-        max_uniqueness = 0
-        for col in report.column_profiles:
-            if col.null_count == 0 and col.unique_count > max_uniqueness:
-                anchor_column = col.name
-                max_uniqueness = col.unique_count
-        if not anchor_column and report.column_profiles:
-            anchor_column = report.column_profiles[0].name
-
-        # Suggest column_delimiter if any column is multi-valued
-        column_delimiter = None
-        for col in report.column_profiles:
-            if col.is_multivalued and col.detected_delimiter:
-                column_delimiter = col.detected_delimiter
+    for path in csv_file_paths:
+        file_name = os.path.basename(path)
+        # Use the slugified table name as the key for fk_dict
+        table_name = os.path.splitext(file_name)[0]
+        slug_table_name = None
+        # Find the matching slugified table name
+        for t in fk_dict.keys():
+            if t == table_name or file_name.startswith(t):
+                slug_table_name = t
                 break
-
+        if not slug_table_name:
+            # Fallback: slugify the table name
+            from arkumu.importer.services.importer.uri_utils import slugify_uri_part
+            slug_table_name = slugify_uri_part(table_name)
+        columns = fk_dict.get(slug_table_name, [])
+        # Find anchor column (PK)
+        anchor_column = None
+        for col in columns:
+            if col.get('is_pk'):
+                anchor_column = col['name']
+                break
+        if not anchor_column and columns:
+            anchor_column = columns[0]['name']
         # Build mappings
         mappings = []
-        for col in report.column_profiles:
+        for col in columns:
             mapping_entry = {
-                "source_column": col.name,
+                "source_column": col['name'],
                 "property": "",  # Placeholder
-                "range": "",      # Placeholder
+                "range": "",     # Placeholder
             }
             notes = []
-            if col.is_multivalued:
-                mapping_entry["multi_valued"] = True
-                mapping_entry["delimiter"] = col.detected_delimiter
-                notes.append(f"Multi-valued column, delimiter: '{col.detected_delimiter}'")
-            
-            # Add relationship notes and object_column for foreign keys
-            rels = rels_by_source.get((report.file_path, col.name), [])
-            for rel in rels:
-                # Use more definitive language for foreign keys
-                if rel.is_foreign_key:
-                    notes.append(f"Foreign key to {rel.target_file}:{rel.target_column}")
-                else:
-                    notes.append(f"Reference to {rel.target_file}:{rel.target_column}")
-                # Add object_column for foreign key relationships
-                mapping_entry["object_column"] = rel.target_column
-            
-            # Use more definitive language for primary keys
-            col_lower = col.name.lower()
-            if col.unique_count == report.num_rows and col.null_count == 0:
-                # Check for ID or UUID column patterns
-                if (col_lower.endswith('_id') or col_lower.endswith('-id') or 
-                    col_lower == 'id' or col_lower.endswith('_uuid') or 
-                    col_lower.endswith('-uuid') or col_lower == 'uuid'):
-                    notes.append("Primary key")
-                else:
-                    # Still definitive but different wording for non-standard names
-                    notes.append("Unique identifier (primary key)")
-            # Add note for high-uniqueness columns that aren't quite primary keys
-            elif col.unique_count > 0 and col.unique_count / report.num_rows > 0.95:
-                notes.append("Nearly unique identifier (possible alternate key)")
-            
+            if col.get('is_pk'):
+                notes.append("Primary key")
+            if col.get('is_fk'):
+                ref = col.get('references')
+                if ref:
+                    notes.append(f"Foreign key to {ref[0]}:{ref[1]}")
+                    mapping_entry["object_column"] = ref[1]
             if notes:
                 mapping_entry["note"] = "; ".join(notes)
             mappings.append(mapping_entry)
-
         mapping_json = {
             "institution": institution,
             "domain": domain,
             "anchor_column": anchor_column,
-            "column_delimiter": column_delimiter,
             "mappings": mappings
         }
-        result[report.file_path] = mapping_json
+        result[file_name] = mapping_json
     return result

@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime
+import re
 from arkumu.importer.services.importer.uri_utils import XSD_BASE_URI # For infer_datatype
 import unicodedata
 from typing import Dict, List,  Any
@@ -254,3 +255,9 @@ def read_csv_with_nfc(file_path: str, delimiter: str = ';', **csv_options) -> Li
     
     # Normalize all string values
     return normalize_csv_data_nfc(data) 
+
+
+
+def normalize_name(name: str) -> str:
+    """Normalize a name for comparison: lowercase, remove non-alphanum, replace spaces/underscores with nothing."""
+    return re.sub(r'[^a-z0-9]', '', name.lower())
