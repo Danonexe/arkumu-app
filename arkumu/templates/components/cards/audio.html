@@ -1,0 +1,71 @@
+<!-- Audio Player Component with Theme Support -->
+<div class="audio-player-container mb-6">
+  <!-- Waveform Container -->
+  <div class="relative w-full h-24 mb-3 transition-colors
+              bg-arkumu-light border border-arkumu-dark
+              theme-dark:bg-arkumu-dark theme-dark:border-arkumu-light
+              theme-blue:bg-arkumu-light theme-blue:border-arkumu-blue">
+    
+    <!-- Simulación de forma de onda -->
+    <div class="absolute inset-0 p-2 flex items-end justify-center space-x-1">
+      <!-- Líneas de la forma de onda -->
+      <div class="w-1 bg-arkumu-dark theme-dark:bg-arkumu-light theme-blue:bg-arkumu-blue" style="height: 40%"></div>
+      <div class="w-1 bg-arkumu-dark theme-dark:bg-arkumu-light theme-blue:bg-arkumu-blue" style="height: 60%"></div>
+      <div class="w-1 bg-arkumu-dark theme-dark:bg-arkumu-light theme-blue:bg-arkumu-blue" style="height: 80%"></div>
+      <div class="w-1 bg-arkumu-dark theme-dark:bg-arkumu-light theme-blue:bg-arkumu-blue" style="height: 70%"></div>
+      <div class="w-1 bg-arkumu-dark theme-dark:bg-arkumu-light theme-blue:bg-arkumu-blue" style="height: 90%"></div>
+      <div class="w-1 bg-arkumu-dark theme-dark:bg-arkumu-light theme-blue:bg-arkumu-blue" style="height: 50%"></div>
+      <div class="w-1 bg-arkumu-dark theme-dark:bg-arkumu-light theme-blue:bg-arkumu-blue" style="height: 85%"></div>
+      <div class="w-1 bg-arkumu-dark theme-dark:bg-arkumu-light theme-blue:bg-arkumu-blue" style="height: 30%"></div>
+      <div class="w-1 bg-arkumu-dark theme-dark:bg-arkumu-light theme-blue:bg-arkumu-blue" style="height: 75%"></div>
+      <div class="w-1 bg-arkumu-dark theme-dark:bg-arkumu-light theme-blue:bg-arkumu-blue" style="height: 65%"></div>
+      <!-- Repetir el patrón para más líneas -->
+    </div>
+  </div>
+  
+  <!-- Controles de audio -->
+  <div class="flex items-center space-x-3">
+    <!-- Botón Play -->
+    <button class="w-8 h-8 flex items-center justify-center transition-colors
+                  bg-arkumu-light text-arkumu-dark border border-arkumu-dark
+                  theme-dark:bg-arkumu-dark theme-dark:text-arkumu-light theme-dark:border-arkumu-light
+                  theme-blue:bg-arkumu-light theme-blue:text-arkumu-blue theme-blue:border-arkumu-blue">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+        <polygon points="5,3 19,12 5,21"></polygon>
+      </svg>
+    </button>
+    
+    <span class="text-xs font-mono transition-colors
+                 text-arkumu-dark
+                 theme-dark:text-arkumu-light
+                 theme-blue:text-arkumu-blue">
+      Play
+    </span>
+    
+    <!-- Botón Pause -->
+    <button class="w-8 h-8 flex items-center justify-center transition-colors
+                  bg-arkumu-light text-arkumu-dark border border-arkumu-dark
+                  theme-dark:bg-arkumu-dark theme-dark:text-arkumu-light theme-dark:border-arkumu-light
+                  theme-blue:bg-arkumu-light theme-blue:text-arkumu-blue theme-blue:border-arkumu-blue">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+        <rect x="6" y="4" width="4" height="16"></rect>
+        <rect x="14" y="4" width="4" height="16"></rect>
+      </svg>
+    </button>
+    
+    <span class="text-xs font-mono transition-colors
+                 text-arkumu-dark
+                 theme-dark:text-arkumu-light
+                 theme-blue:text-arkumu-blue">
+      Pause
+    </span>
+  </div>
+  
+  <!-- Título del evento -->
+  <p class="mt-2 text-sm underline transition-colors
+            text-arkumu-dark
+            theme-dark:text-arkumu-light
+            theme-blue:text-arkumu-blue">
+    {{ audio_title|default:"Ereignis Titel" }}
+  </p>
+</div>

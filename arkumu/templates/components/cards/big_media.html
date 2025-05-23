@@ -1,0 +1,23 @@
+<!-- Large Media Component with Theme Support -->
+<div class="media-large-container mb-6">
+  <!-- Media Container -->
+  <div class="relative w-full h-64 md:h-80 lg:h-96 transition-colors
+              bg-arkumu-dark
+              theme-dark:bg-arkumu-light
+              theme-blue:bg-arkumu-blue">
+    
+    <!-- Imagen/Video placeholder -->
+    {% if media_url %}
+      <img src="{{ media_url }}" class="w-full h-full object-cover" alt="{{ media_title }}">
+    {% endif %}
+    
+  </div>
+  
+  <!-- Título del evento -->
+  <p class="mt-2 text-sm underline transition-colors
+            text-arkumu-dark
+            theme-dark:text-arkumu-light
+            theme-blue:text-arkumu-blue">
+    {{ media_title|default:"Ereignis Titel" }}
+  </p>
+</div>

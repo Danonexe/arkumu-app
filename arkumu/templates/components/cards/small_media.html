@@ -1,0 +1,60 @@
+<!-- Small Media Component with Theme Support -->
+<div class="media-small-container">
+  <!-- Media Container -->
+  <div class="relative w-full h-32 md:h-40 transition-colors
+              bg-arkumu-dark
+              theme-dark:bg-arkumu-light
+              theme-blue:bg-arkumu-blue mb-2">
+    
+    <!-- Imagen/Video placeholder -->
+    {% if media_url %}
+      <img src="{{ media_url }}" class="w-full h-full object-cover" alt="{{ media_title }}">
+    {% endif %}
+    
+    <!-- Controles de reproducción -->
+    <div class="absolute bottom-2 left-2 flex items-center space-x-2">
+      <!-- Botón Play -->
+      <button class="w-6 h-6 flex items-center justify-center transition-colors
+                    bg-arkumu-light text-arkumu-dark border border-arkumu-dark
+                    theme-dark:bg-arkumu-dark theme-dark:text-arkumu-light theme-dark:border-arkumu-light
+                    theme-blue:bg-arkumu-light theme-blue:text-arkumu-blue theme-blue:border-arkumu-blue">
+        <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
+          <polygon points="5,3 19,12 5,21"></polygon>
+        </svg>
+      </button>
+      
+      <span class="text-xs font-mono transition-colors
+                   text-arkumu-light
+                   theme-dark:text-arkumu-dark
+                   theme-blue:text-arkumu-light">
+        Play
+      </span>
+      
+      <!-- Botón Pause -->
+      <button class="w-6 h-6 flex items-center justify-center transition-colors
+                    bg-arkumu-light text-arkumu-dark border border-arkumu-dark
+                    theme-dark:bg-arkumu-dark theme-dark:text-arkumu-light theme-dark:border-arkumu-light
+                    theme-blue:bg-arkumu-light theme-blue:text-arkumu-blue theme-blue:border-arkumu-blue">
+        <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
+          <rect x="6" y="4" width="4" height="16"></rect>
+          <rect x="14" y="4" width="4" height="16"></rect>
+        </svg>
+      </button>
+      
+      <span class="text-xs font-mono transition-colors
+                   text-arkumu-light
+                   theme-dark:text-arkumu-dark
+                   theme-blue:text-arkumu-light">
+        Pause
+      </span>
+    </div>
+  </div>
+  
+  <!-- Título del evento -->
+  <p class="text-xs underline transition-colors
+            text-arkumu-dark
+            theme-dark:text-arkumu-light
+            theme-blue:text-arkumu-blue">
+    {{ media_title|default:"Ereignis Titel" }}
+  </p>
+</div>

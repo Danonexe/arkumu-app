@@ -1,0 +1,36 @@
+<!-- Tab Navigation Component with Theme Support -->
+<div class="w-full mb-8">
+  <div class="flex">
+    <!-- Tab activo -->
+    <button class="px-4 py-2 font-mono text-sm transition-colors
+                  bg-arkumu-dark text-arkumu-light 
+                  theme-dark:bg-arkumu-light theme-dark:text-arkumu-dark
+                  theme-blue:bg-arkumu-blue theme-blue:text-arkumu-light
+                  {{ active_tab == 'overview'|yesno:'':'border border-r-0 border-b-0' }}">
+      {{ tab1_text|default:"Übersicht" }}
+    </button>
+    
+    <!-- Tabs inactivos -->
+    <button class="px-4 py-2 font-mono text-sm transition-colors
+                  border border-r-0 border-b-0
+                  text-arkumu-dark border-arkumu-dark bg-arkumu-light
+                  theme-dark:text-arkumu-light theme-dark:border-arkumu-light theme-dark:bg-arkumu-dark
+                  theme-blue:text-arkumu-blue theme-blue:border-arkumu-blue theme-blue:bg-arkumu-light">
+      {{ tab2_text|default:"Ereignisliste" }}
+    </button>
+    
+    <button class="px-4 py-2 font-mono text-sm transition-colors
+                  border border-r-0 border-b-0
+                  text-arkumu-dark border-arkumu-dark bg-arkumu-light
+                  theme-dark:text-arkumu-light theme-dark:border-arkumu-light theme-dark:bg-arkumu-dark
+                  theme-blue:text-arkumu-blue theme-blue:border-arkumu-blue theme-blue:bg-arkumu-light">
+      {{ tab3_text|default:"Metadaten" }}
+    </button>
+  </div>
+  
+  <!-- Línea horizontal -->
+  <div class="w-full h-px transition-colors
+              bg-arkumu-dark
+              theme-dark:bg-arkumu-light
+              theme-blue:bg-arkumu-blue"></div>
+</div>
