@@ -139,13 +139,13 @@ def generate_draft_mapping_from_csvs(
                     selected_anchor = id_columns[0]
                 else:
                     selected_anchor = headers[0]
-            
-            # Detect if this is likely a relationship table
-            is_relationship_table = False
-            fk_columns = [h for h in headers if h.lower().endswith('_fk') or h.lower().endswith('_id') and h != selected_anchor]
-            if len(fk_columns) >= 2 and len(headers) <= len(fk_columns) + 4:  # +4 for ID, timestamps, etc.
-                is_relationship_table = True
                 
+                # Detect if this is likely a relationship table
+                is_relationship_table = False
+                fk_columns = [h for h in headers if h.lower().endswith('_fk') or h.lower().endswith('_id') and h != selected_anchor]
+                if len(fk_columns) >= 2 and len(headers) <= len(fk_columns) + 4:  # +4 for ID, timestamps, etc.
+                    is_relationship_table = True
+                    
             mappings = []
             for i, col_name in enumerate(columns):
                 col_slug = slugified_headers[i]
@@ -182,7 +182,7 @@ def generate_draft_mapping_from_csvs(
                 if is_multi_valued_column_csv(path, col_slug, delimiter=delimiter, field_delimiter=field_delimiter, has_quoted_fields=has_quoted_fields):
                     mapping_entry["multi_valued"] = True
                     mapping_entry["delimiter"] = field_delimiter
-                
+                    
                 mappings.append(mapping_entry)
             
             mapping_json = {
