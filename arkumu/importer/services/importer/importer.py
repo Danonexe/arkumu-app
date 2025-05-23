@@ -413,6 +413,14 @@ class JSONMappingImporter:
             }
         )
 
+        # Check if we've resolved a placeholder
+        if hasattr(event_subject_resource, 'is_placeholder') and event_subject_resource.is_placeholder is False:
+            # This was a placeholder that was just resolved
+            logger.info(f"Row {row_num}: Resolved placeholder resource with URI {subject_uri}")
+            
+            # Check for additional placeholders that might refer to this entity from other tables
+            self._check_and_resolve_related_placeholders(event_subject_resource, row_data, anchor_column, original_id_val, row_num)
+
         # Assert primary type for the event subject
         logger.debug(f"Asserting rdf:type {primary_subject_class_resource.uri} for subject")
         Triple.objects.get_or_create(
@@ -425,8 +433,52 @@ class JSONMappingImporter:
         rule_count = len(self.mappings)
         logger.debug(f"Processing {rule_count} mapping rules for row {row_num}")
         for rule_idx, rule in enumerate(self.mappings):
-            logger.debug(f"Processing rule {rule_idx+1}/{rule_count} for row {row_num}")
-            self.rule_processor.process_mapping_rule(rule, row_data, event_subject_resource, row_num, stats)
+            # Ensure every rule has a property
+            property_uri = rule.get('property')
+            if not property_uri:
+                column_name = rule.get('source_column')
+                property_uri = f"arkumu:column_{slugify_uri_part(column_name)}"
+                rule['property'] = property_uri  # Update the rule for downstream use
+
+            # Ensure the property resource exists and is of type PROPERTY
+            predicate_resource = self.resource_manager.get_or_create_resource(
+                uri=property_uri,
+                defaults={'resource_type': ResourceType.PROPERTY, 'source': self.institution_code}
+            )
+
+            # Process the source column according to the rule
+            source_column = rule.get('source_column')
+            if source_column in row_data:
+                source_value = row_data[source_column]
+                
+                # If we're using a fallback property (original property was empty), ensure we link directly
+                if property_uri.startswith('arkumu:column_'):
+                    logger.debug(f"Row {row_num}: Using fallback property {property_uri} for column {source_column}")
+                    
+                    # For unmapped columns, create a simple literal and link it directly
+                    if source_value is not None:
+                        # Create literal resource for the value
+                        literal_resource = self.resource_manager.get_or_create_resource(
+                            literal_value=str(source_value),
+                            resource_type=ResourceType.LITERAL,
+                            defaults={
+                                'source': self.institution_code,
+                                'source_field': f"unmapped_{source_column}={source_value}"
+                            }
+                        )
+                        
+                        # Create triple linking subject to literal using fallback property
+                        Triple.objects.get_or_create(
+                            subject=event_subject_resource,
+                            predicate=predicate_resource,
+                            object=literal_resource
+                        )
+                        logger.debug(f"Row {row_num}: Linked unmapped column {source_column}={source_value} using fallback property")
+
+            # Pass the rule to the rule processor (let it resolve the property as usual)
+            self.rule_processor.process_mapping_rule(
+                rule, row_data, event_subject_resource, row_num, stats
+            )
             
         logger.debug(f"Completed atomic import for row {row_num}")
         return event_subject_resource
@@ -571,5 +623,108 @@ class JSONMappingImporter:
                         logger.error(f"Row {row_num}: Error processing sub-rule for RDR {rdr_object.uri}: {e} Rule: {sub_rule}", exc_info=True)
         else:
             logger.debug(f"Row {row_num}: No further specific semantic action (type, sameAs, obj_props) for RDR {rdr_object.uri} from this main rule.")
+
+    def _check_and_resolve_related_placeholders(self, resource, row_data, anchor_column, id_value, row_num):
+        """
+        Check for related placeholders that might refer to this entity and update them.
+        This is useful when placeholders were created during cross-references.
+        
+        Args:
+            resource: The main resource that might have been a placeholder
+            row_data: The row data being imported
+            anchor_column: The anchor column name
+            id_value: The ID value from the anchor column
+            row_num: The row number being processed
+        """
+        try:
+            # Try to find placeholders in source_field that reference this table/column/ID
+            table_name = self.mapping_config.get("table_name", "").lower()
+            if not table_name:
+                # Try to guess table name from path if available
+                if hasattr(self, 'mapping_file_path') and self.mapping_file_path:
+                    import os
+                    table_name = os.path.basename(self.mapping_file_path).split('.')[0].lower()
+            
+            if not table_name:
+                return
+                
+            # Look for placeholders with source_field patterns like "PLACEHOLDER:TableName_ID=value"
+            placeholder_pattern = f"PLACEHOLDER:{table_name}_"
+            placeholder_resources = Resource.objects.filter(
+                source_field__startswith=placeholder_pattern,
+                is_placeholder=True
+            )
+            
+            for placeholder in placeholder_resources:
+                # Extract column and value from source_field
+                try:
+                    source_parts = placeholder.source_field.split('=')
+                    if len(source_parts) == 2:
+                        placeholder_value = source_parts[1]
+                        if str(placeholder_value) == str(id_value):
+                            logger.info(f"Row {row_num}: Found related placeholder {placeholder.uri} for {table_name}={id_value}")
+                            
+                            # Mark as no longer a placeholder
+                            placeholder.is_placeholder = False
+                            placeholder.source_field = f"RESOLVED:{placeholder.source_field[11:]}"  # Remove "PLACEHOLDER:" prefix
+                            placeholder.save()
+                except Exception as e:
+                    logger.warning(f"Row {row_num}: Error parsing placeholder source_field: {e}", exc_info=True)
+        except Exception as e:
+            logger.warning(f"Row {row_num}: Error checking related placeholders: {e}", exc_info=True)
+
+    def get_remaining_placeholders(self):
+        """
+        Returns information about remaining placeholders in the database.
+        This is useful after importing all tables to identify missing data.
+        
+        Returns:
+            dict: Dictionary with counts and details of remaining placeholders
+        """
+        result = {
+            "total_placeholders": 0,
+            "by_table": {},
+            "placeholders": []
+        }
+        
+        try:
+            # Get all placeholders
+            placeholders = self.resource_manager.get_all_placeholders()
+            result["total_placeholders"] = placeholders.count()
+            
+            for placeholder in placeholders:
+                placeholder_info = {
+                    "uri": placeholder.uri,
+                    "source_field": placeholder.source_field
+                }
+                
+                # Try to extract table and ID information
+                if placeholder.source_field and placeholder.source_field.startswith("PLACEHOLDER:"):
+                    source_parts = placeholder.source_field[11:].split('=')  # Remove "PLACEHOLDER:" prefix
+                    if len(source_parts) == 2:
+                        column = source_parts[0]
+                        value = source_parts[1]
+                        
+                        # Extract table name from column name (e.g., "TableName_ID" -> "TableName")
+                        table_parts = column.split('_')
+                        if len(table_parts) > 0:
+                            table_name = table_parts[0]
+                            
+                            # Update table counter
+                            if table_name not in result["by_table"]:
+                                result["by_table"][table_name] = 0
+                            result["by_table"][table_name] += 1
+                            
+                            # Add to placeholder details
+                            placeholder_info["table"] = table_name
+                            placeholder_info["column"] = column
+                            placeholder_info["value"] = value
+                
+                result["placeholders"].append(placeholder_info)
+                
+        except Exception as e:
+            logger.error(f"Error getting remaining placeholders: {e}", exc_info=True)
+            
+        return result
 
 

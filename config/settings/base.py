@@ -90,6 +90,7 @@ LOCAL_APPS = [
     "arkumu.users",
     "arkumu.metadata",
     "arkumu.importer",
+    "arkumu.rest",
 ]
 # https://docs.djangoproject.com/en/dev/ref/settings/#installed-apps
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

@@ -15,6 +15,13 @@ class Triple(UUIDModel):
             models.Index(fields=['subject', 'predicate']),
             models.Index(fields=['object']),
         ]
+        # Add uniqueness constraint to prevent duplicate triples
+        constraints = [
+            models.UniqueConstraint(
+                fields=['subject', 'predicate', 'object'],
+                name='unique_triple'
+            )
+        ]
     
     def clean(self):
         """Validate the triple based on resource types."""

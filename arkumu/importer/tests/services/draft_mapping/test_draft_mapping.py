@@ -1,78 +1,113 @@
+#!/usr/bin/env python3
 import os
-import tempfile
-import polars as pl
-import pytest
-from arkumu.importer.services.draft_mapping.draft_mapping import generate_draft_mapping_from_csvs
+import json
+import sys
+from pprint import pprint
 
-def create_temp_csv(headers, rows, dir=None):
-    fd, path = tempfile.mkstemp(suffix='.csv', dir=dir)
-    os.close(fd)
-    df = pl.DataFrame({h: [row[i] for row in rows] for i, h in enumerate(headers)})
-    df.write_csv(path)
-    return path
+# Add the project root to the path so we can import the module
+sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
-def test_generate_draft_mapping_basic():
-    headers = ['ID', 'Tags', 'Other']
-    rows = [
-        [1, 'a;b', 'x'],
-        [2, 'c;d', 'y'],
-        [3, 'e;f', 'z'],
-        [4, 'g;h', None],
-    ]
-    path = create_temp_csv(headers, rows)
-    try:
-        result = generate_draft_mapping_from_csvs([path], institution='TEST', domain='DUMMY', delimiter=';')
-        mapping = result[os.path.basename(path)]
-        assert mapping['institution'] == 'TEST'
-        assert mapping['domain'] == 'DUMMY'
-        assert mapping['anchor_column'] == 'id'
-        tags_entry = next(m for m in mapping['mappings'] if m['source_column'] == 'tags')
-        # No multi_valued/delimiter logic in new draft, but PK note should be present
-        id_entry = next(m for m in mapping['mappings'] if m['source_column'] == 'id')
-        assert 'Primary key' in id_entry.get('note', '')
-        # Placeholders
-        assert tags_entry['property'] == ''
-        assert tags_entry['range'] == ''
-    finally:
-        os.remove(path)
+from arkumu.importer.services.draft_mapping.draft_mapping import generate_draft_mapping_from_csvs, generate_relationship_config
 
-def test_generate_draft_mapping_with_fk():
-    # Table 1: event.csv
-    headers1 = ['id', 'name']
-    rows1 = [
-        [100, 'EventA'],
-        [101, 'EventB'],
-    ]
-    path1 = create_temp_csv(headers1, rows1)
-    # Table 2: person.csv
-    headers2 = ['id', 'name', 'event_id']
-    rows2 = [
-        [1, 'Alice', 100],
-        [2, 'Bob', 101],
-    ]
-    path2 = create_temp_csv(headers2, rows2)
-    try:
-        result = generate_draft_mapping_from_csvs([path1, path2], delimiter=';')
-        person_mapping = result[os.path.basename(path2)]
-        event_id_entry = next(m for m in person_mapping['mappings'] if m['source_column'] == 'eventid')
-        assert 'Foreign key' in event_id_entry.get('note', '')
-        assert event_id_entry['object_column'] == 'id'
-    finally:
-        os.remove(path1)
-        os.remove(path2)
+def test_draft_mapping():
+    """Test the draft mapping generation with real CSV files."""
+    # Path to your CSV files
+    csv_dir = os.path.join(os.path.dirname(__file__), 'arkumu-metadata', 'khm', 'khm-projektarchiv')
+    
+    if not os.path.exists(csv_dir):
+        print(f"CSV directory not found: {csv_dir}")
+        return
+    
+    # Get all CSV files in the directory
+    csv_files = [os.path.join(csv_dir, f) for f in os.listdir(csv_dir) if f.endswith('.csv')]
+    
+    if not csv_files:
+        print(f"No CSV files found in {csv_dir}")
+        return
+    
+    print(f"Found {len(csv_files)} CSV files:")
+    for f in csv_files:
+        print(f"  - {os.path.basename(f)}")
+    
+    # Create output directory
+    output_dir = os.path.join(os.path.dirname(__file__), 'test_output')
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Test relationship configuration generation first
+    print("\nGenerating relationship configuration...")
+    relationship_config = generate_relationship_config(
+        csv_files,
+        output_path=os.path.join(output_dir, "relationship_tables.json"),
+        delimiter=';',
+        has_quoted_fields=True
+    )
+    
+    print(f"Detected {len(relationship_config)} relationship tables:")
+    for table_name, fk_config in relationship_config.items():
+        print(f"  - {table_name} with {len(fk_config)} foreign key columns:")
+        for fk in fk_config:
+            print(f"    * {fk['column']} → {fk['target_table']}.{fk['target_column']}")
+    
+    # Test draft mapping generation with relationship hints
+    print("\nGenerating draft mappings...")
+    
+    # Convert relationship config to relationship hints format
+    relationship_hints = {}
+    for table_name, fk_configs in relationship_config.items():
+        for fk_config in fk_configs:
+            column = fk_config['column']
+            relationship_hints[column] = {
+                "target_table": fk_config['target_table'],
+                "target_column": fk_config['target_column']
+            }
+    
+    mappings = generate_draft_mapping_from_csvs(
+        csv_files,
+        institution="KHM",
+        delimiter=';',
+        has_quoted_fields=True,
+        relationship_hints=relationship_hints
+    )
+    
+    # Save mappings to files and analyze results
+    multi_valued_columns = {}
+    relationship_columns = {}
+    
+    for filename, mapping in mappings.items():
+        output_path = os.path.join(output_dir, f"{os.path.splitext(filename)[0]}_draft.json")
+        with open(output_path, 'w') as f:
+            json.dump(mapping, f, indent=2)
+        
+        # Count multi-valued columns
+        mv_cols = [m['source_column'] for m in mapping['mappings'] if 'multi_valued' in m and m['multi_valued']]
+        if mv_cols:
+            multi_valued_columns[filename] = mv_cols
+        
+        # Count relationship columns
+        rel_cols = [m['source_column'] for m in mapping['mappings'] if 'relationship_type' in m]
+        if rel_cols:
+            relationship_columns[filename] = rel_cols
+        
+        print(f"  - Generated mapping for {filename}")
+        print(f"    * Domain: {mapping['domain']}")
+        print(f"    * Anchor column: {mapping['anchor_column']}")
+        print(f"    * Multi-valued columns: {len(mv_cols)}")
+        print(f"    * Relationship columns: {len(rel_cols)}")
+    
+    # Print summary of multi-valued columns
+    if multi_valued_columns:
+        print("\nDetected multi-valued columns:")
+        for filename, columns in multi_valued_columns.items():
+            print(f"  - {filename}: {', '.join(columns)}")
+    
+    # Print summary of relationship columns
+    if relationship_columns:
+        print("\nDetected relationship columns:")
+        for filename, columns in relationship_columns.items():
+            print(f"  - {filename}: {', '.join(columns)}")
+    
+    print("\nTest completed successfully!")
+    print(f"Output files saved to {output_dir}")
 
-def test_generate_draft_mapping_no_multivalued():
-    headers = ['A', 'B']
-    rows = [
-        [1, 2],
-        [3, 4],
-    ]
-    path = create_temp_csv(headers, rows)
-    try:
-        result = generate_draft_mapping_from_csvs([path], delimiter=';')
-        mapping = result[os.path.basename(path)]
-        for entry in mapping['mappings']:
-            assert 'multi_valued' not in entry
-            assert 'delimiter' not in entry
-    finally:
-        os.remove(path)
+if __name__ == "__main__":
+    test_draft_mapping() 

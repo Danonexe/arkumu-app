@@ -48,6 +48,7 @@ class MappingRuleProcessor:
     def _validate_reference(self, object_column, reference_value, row_num):
         """
         Validates that a referenced entity exists before creating a relationship.
+        If the referenced entity doesn't exist, creates a placeholder resource.
         
         Args:
             object_column: The column/model being referenced
@@ -55,26 +56,59 @@ class MappingRuleProcessor:
             row_num: Current row number for logging
             
         Returns:
-            bool: True if reference is valid, False otherwise
+            bool: True if reference is valid or placeholder was created, False if creation failed
         """
         if not object_column or not reference_value:
             return False
         
         # Check if target entity exists in related_sources
+        reference_found = False
         if object_column in self.related_sources:
             # Look for the reference value in the appropriate dataset
             dataset = self.related_sources[object_column]
             if isinstance(dataset, dict):
                 # If we have a dictionary of entities
-                return str(reference_value) in dataset
+                reference_found = str(reference_value) in dataset
             elif isinstance(dataset, list):
                 # If we have a list of entity dictionaries
                 for item in dataset:
                     if str(item.get('id', '')) == str(reference_value):
-                        return True
+                        reference_found = True
+                        break
         
-        logger.warning(f"Row {row_num}: Referenced entity {object_column}={reference_value} not found in related sources")
-        return False
+        if reference_found:
+            logger.debug(f"Row {row_num}: Found referenced entity {object_column}={reference_value} in related sources")
+            return True
+        
+        # Reference not found, create a placeholder resource
+        try:
+            # Extract the table name from the column name (common pattern is TableName_ID)
+            table_name_parts = object_column.split('_')
+            table_name = table_name_parts[0] if len(table_name_parts) > 0 else "unknown"
+            
+            # Create a predictable URI for the resource using the same pattern that would be used when it's actually imported
+            placeholder_uri = mint_uri(
+                self.institution_base_uri,
+                self.institution_code_slug,
+                table_name.lower(),  # Assume lowercase table name in URI
+                reference_value
+            )
+            
+            placeholder = self.resource_manager.get_or_create_resource(
+                uri=placeholder_uri,
+                defaults={
+                    'resource_type': ResourceType.IRI,
+                    'source': self.institution_code,
+                    'source_field': f"PLACEHOLDER:{object_column}={reference_value}",
+                    'is_placeholder': True
+                }
+            )
+            
+            logger.info(f"Row {row_num}: Created placeholder for referenced entity {object_column}={reference_value} with URI {placeholder_uri}")
+            return True
+        except Exception as e:
+            logger.error(f"Row {row_num}: Failed to create placeholder for {object_column}={reference_value}: {e}", exc_info=True)
+            return False
 
     def process_mapping_rule(self, rule, row_data, event_subject_resource, row_num, stats=None):
         source_column_name = rule.get('source_column')
