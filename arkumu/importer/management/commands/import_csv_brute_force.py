@@ -1,7 +1,7 @@
 import os
 import json
 from django.core.management.base import BaseCommand, CommandError
-from arkumu.importer.services.importer.bulk_import import brute_force_import_csv, brute_force_import_relationship_csv
+from arkumu.importer.services.importer.bulk_import import import_csv_as_cells, import_relationship_csv
 
 
 class Command(BaseCommand):
@@ -64,7 +64,7 @@ class Command(BaseCommand):
             
             # Import based on table type
             if is_relationship:
-                stats = brute_force_import_relationship_csv(
+                stats = import_relationship_csv(
                     file_path,
                     dataset_name,
                     fk_columns,
@@ -74,7 +74,7 @@ class Command(BaseCommand):
                     has_quoted_fields=has_quoted_fields
                 )
             else:
-                stats = brute_force_import_csv(
+                stats = import_csv_as_cells(
                     file_path,
                     dataset_name,
                     institution=institution,

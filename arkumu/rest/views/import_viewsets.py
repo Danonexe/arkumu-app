@@ -40,7 +40,7 @@ class ImportViewSet(viewsets.GenericViewSet):
     
     @extend_schema(
         operation_id='import_directory',
-        description='Import all CSV files from a directory. Automatically detects relationships and handles file uploads.',
+        description='Import all CSV files from a directory with automatic foreign key detection and placeholder-based reference resolution. No manual configuration required.',
         request=DirectoryImportSerializer,
         responses={200: dict},
         examples=[
@@ -68,13 +68,14 @@ class ImportViewSet(viewsets.GenericViewSet):
     )
     def import_directory(self, request):
         """
-        Import all CSV files from a directory.
+        Import all CSV files from a directory with automatic reference detection.
         
         This endpoint will:
         1. Scan the directory for CSV files
-        2. Auto-detect relationship tables
-        3. Import regular tables first, then relationship tables
-        4. Handle file uploads if S3 config is provided
+        2. Process all files uniformly with automatic foreign key detection
+        3. Create placeholders for missing references
+        4. Resolve placeholders when referenced entities are imported
+        5. Handle file uploads if S3 config is provided
         """
         serializer = DirectoryImportSerializer(data=request.data)
         if not serializer.is_valid():
@@ -95,7 +96,6 @@ class ImportViewSet(viewsets.GenericViewSet):
         base_uri = validated_data.get('base_uri', 'http://arkumu.org/data')
         delimiter = validated_data.get('delimiter', ';')
         has_quoted_fields = validated_data.get('has_quoted_fields', False)
-        relationship_config_path = validated_data.get('relationship_config_path')
         file_columns = validated_data.get('file_columns', {})
         files_base_directory = validated_data.get('files_base_directory', directory_path)
         
@@ -135,7 +135,6 @@ class ImportViewSet(viewsets.GenericViewSet):
                 base_uri=base_uri,
                 delimiter=delimiter,
                 has_quoted_fields=has_quoted_fields,
-                relationship_config_path=relationship_config_path,
                 file_columns=file_columns,
                 files_base_directory=files_base_directory,
                 upload_service=upload_service

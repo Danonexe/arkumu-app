@@ -16,7 +16,7 @@ MAX_INDEXED_VALUE_SIZE = 2500
 # Regular expression to detect btree index size errors
 BTREE_SIZE_ERROR_PATTERN = re.compile(r"index row size \d+ exceeds btree .* maximum \d+ for index")
 
-def brute_force_import_csv(
+def import_csv_as_cells(
     csv_file_path: str,
     dataset_name: str,
     institution: str = "DEFAULT",
@@ -27,7 +27,8 @@ def brute_force_import_csv(
     max_value_size: int = MAX_INDEXED_VALUE_SIZE
 ) -> Dict[str, Any]:
     """
-    Import a CSV file using a brute force approach that creates:
+    Import a CSV file by creating individual resources for each cell.
+    This approach treats each cell as a separate entity with:
     1. One resource for the dataset
     2. One resource for each cell
     3. One literal resource for each cell value
@@ -59,77 +60,106 @@ def brute_force_import_csv(
     truncated_values_log = []
     
     try:
+        logger.info(f"Starting import_csv_as_cells for {dataset_name}")
         # Create or get common resources
         dataset_uri = f"{base_uri}/datasets/{dataset_name}"
+        logger.info(f"Dataset URI: {dataset_uri}")
         
-        with transaction.atomic():
-            # Create the main dataset resource
-            dataset = Resource.objects.create(
-                uri=dataset_uri,
-                resource_type=ResourceType.IRI,
-                source=institution,
-                name=dataset_name
-            )
-            stats["resources_created"] += 1
-            
-            # Get or create common properties
-            has_part = Resource.objects.get_or_create(
-                uri="http://purl.org/dc/terms/hasPart",
-                resource_type=ResourceType.PROPERTY,
-                name="hasPart",
-                source=institution
-            )[0]
-            if has_part.pk is None:
-                stats["resources_created"] += 1
+        # Get common properties using Django ORM - but handle potential transaction issues
+        logger.info(f"Getting common properties using Django ORM")
+        
+        # The issue might be that we're in a test transaction that's interfering
+        # Let's try using update_or_create instead of get_or_create
+        from django.db import transaction
+        
+        try:
+            # Force a new transaction to avoid any existing transaction issues
+            with transaction.atomic():
+                has_part, created = Resource.objects.update_or_create(
+                    uri="http://purl.org/dc/terms/hasPart",
+                    defaults={
+                        "resource_type": ResourceType.PROPERTY,
+                        "name": "hasPart",
+                        "source": institution,
+                        "is_placeholder": False
+                    }
+                )
+                if created:
+                    stats["resources_created"] += 1
                 
-            rdf_value = Resource.objects.get_or_create(
-                uri="http://www.w3.org/1999/02/22-rdf-syntax-ns#value",
-                resource_type=ResourceType.PROPERTY,
-                name="value",
-                source=institution
-            )[0]
-            if rdf_value.pk is None:
-                stats["resources_created"] += 1
+                rdf_value, created = Resource.objects.update_or_create(
+                    uri="http://www.w3.org/1999/02/22-rdf-syntax-ns#value",
+                    defaults={
+                        "resource_type": ResourceType.PROPERTY,
+                        "name": "value",
+                        "source": institution,
+                        "is_placeholder": False
+                    }
+                )
+                if created:
+                    stats["resources_created"] += 1
                 
-            rdf_type = Resource.objects.get_or_create(
-                uri="http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
-                resource_type=ResourceType.PROPERTY,
-                name="type",
-                source=institution
-            )[0]
-            if rdf_type.pk is None:
-                stats["resources_created"] += 1
+                rdf_type, created = Resource.objects.update_or_create(
+                    uri="http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+                    defaults={
+                        "resource_type": ResourceType.PROPERTY,
+                        "name": "type",
+                        "source": institution,
+                        "is_placeholder": False
+                    }
+                )
+                if created:
+                    stats["resources_created"] += 1
                 
-            # Create a class for cells
-            cell_class = Resource.objects.get_or_create(
-                uri=f"{base_uri}/classes/Cell",
-                resource_type=ResourceType.CLASS,
-                name="Cell",
-                source=institution
-            )[0]
-            if cell_class.pk is None:
-                stats["resources_created"] += 1
+                cell_class, created = Resource.objects.update_or_create(
+                    uri=f"{base_uri}/classes/Cell",
+                    defaults={
+                        "resource_type": ResourceType.CLASS,
+                        "name": "Cell",
+                        "source": institution,
+                        "is_placeholder": False
+                    }
+                )
+                if created:
+                    stats["resources_created"] += 1
+
+                logger.info(f"Creating main dataset resource")
+                # Create the main dataset resource
+                dataset, created = Resource.objects.update_or_create(
+                    uri=dataset_uri,
+                    defaults={
+                        "resource_type": ResourceType.IRI,
+                        "name": dataset_name,
+                        "source": institution,
+                        "is_placeholder": False
+                    }
+                )
+                if created:
+                    stats["resources_created"] += 1
+                
+                logger.info(f"Dataset resource ready with ID: {dataset.id}")
+                
+        except Exception as e:
+            logger.error(f"Error creating common properties: {e}")
+            raise
         
         # Process the CSV file
         with open(csv_file_path, newline='', encoding='utf-8') as f:
             quoting = csv.QUOTE_ALL if has_quoted_fields else csv.QUOTE_MINIMAL
             reader = csv.DictReader(f, delimiter=delimiter, quoting=quoting)
             
-            # Process in batches
-            batch_resources = []
-            batch_triples = []
-            
             for row_num, row in enumerate(reader):
                 stats["rows_processed"] += 1
                 row_id = row.get('id', row.get('ID', str(row_num)))
                 
-                for column_name, value in row.items():
-                    if value and value.strip():  # Skip empty values
-                        stats["cells_processed"] += 1
-                        value = value.strip()
-                        
-                        try:
-                            with transaction.atomic():
+                # Create one transaction per row (not per cell)
+                try:
+                    with transaction.atomic():
+                        for column_name, value in row.items():
+                            if value and value.strip():  # Skip empty values
+                                stats["cells_processed"] += 1
+                                value = value.strip()
+                                
                                 # Create a unique resource for each cell
                                 cell_resource = Resource.objects.create(
                                     uri=f"{dataset_uri}/{column_name}/{row_id}",
@@ -208,96 +238,13 @@ def brute_force_import_csv(
                                 )
                                 stats["triples_created"] += 1
                                 
-                        except (IntegrityError, DataError) as e:
-                            error_str = str(e)
-                            # Check if this is a btree index size error
-                            if BTREE_SIZE_ERROR_PATTERN.search(error_str):
-                                logger.warning(f"Btree index size error for {column_name} in row {row_id}. Error: {error_str}")
-                                logger.warning(f"Retrying with more aggressive truncation for {dataset_name}.{column_name}[{row_id}]")
-                                
-                                try:
-                                    # Try again with a more aggressively truncated value
-                                    with transaction.atomic():
-                                        # Create cell resource
-                                        cell_resource = Resource.objects.create(
-                                            uri=f"{dataset_uri}/{column_name}/{row_id}",
-                                            resource_type=ResourceType.IRI,
-                                            source=institution,
-                                            name=column_name
-                                        )
-                                        stats["resources_created"] += 1
-                                        
-                                        # Link cell to dataset
-                                        Triple.objects.create(
-                                            subject=dataset,
-                                            predicate=has_part,
-                                            object=cell_resource
-                                        )
-                                        stats["triples_created"] += 1
-                                        
-                                        # Set cell type
-                                        Triple.objects.create(
-                                            subject=cell_resource,
-                                            predicate=rdf_type,
-                                            object=cell_class
-                                        )
-                                        stats["triples_created"] += 1
-                                        
-                                        # Truncate value more aggressively
-                                        original_byte_size = len(value.encode('utf-8'))
-                                        truncated_value = value[:max_value_size // 4].encode('utf-8')[:max_value_size // 2].decode('utf-8', errors='ignore')
-                                        truncated_byte_size = len(truncated_value.encode('utf-8'))
-                                        truncated_value += f"... (truncated from {len(value)} chars, {original_byte_size} bytes)"
-                                        
-                                        # Create literal for the truncated value
-                                        value_resource = Resource.objects.create(
-                                            resource_type=ResourceType.LITERAL,
-                                            source=institution,
-                                            name=column_name,
-                                            value=truncated_value,
-                                            datatype="http://www.w3.org/2001/XMLSchema#string"
-                                        )
-                                        stats["resources_created"] += 1
-                                        stats["truncated_values"] += 1
-                                        
-                                        # Link cell to its value
-                                        Triple.objects.create(
-                                            subject=cell_resource,
-                                            predicate=rdf_value,
-                                            object=value_resource
-                                        )
-                                        stats["triples_created"] += 1
-                                        
-                                        # Add to truncation log with special flag for aggressive truncation
-                                        truncation_info = {
-                                            "table": dataset_name,
-                                            "column": column_name,
-                                            "row_id": row_id,
-                                            "original_length_chars": len(value),
-                                            "truncated_length_chars": len(truncated_value),
-                                            "original_size_bytes": original_byte_size,
-                                            "truncated_size_bytes": truncated_byte_size,
-                                            "truncation_percentage": round((1 - truncated_byte_size/original_byte_size) * 100, 2),
-                                            "aggressive_truncation": True,
-                                            "error": error_str
-                                        }
-                                        truncated_values_log.append(truncation_info)
-                                        
-                                        logger.info(
-                                            f"Successfully imported with aggressive truncation: {dataset_name}.{column_name}[{row_id}] - "
-                                            f"Original: {len(value)} chars ({original_byte_size} bytes), "
-                                            f"Truncated: {len(truncated_value)} chars ({truncated_byte_size} bytes), "
-                                            f"Reduced by: {truncation_info['truncation_percentage']}%"
-                                        )
-                                except Exception as e2:
-                                    logger.error(f"Error on second attempt for {column_name} in row {row_id}: {e2}")
-                                    stats["errors"] += 1
-                            else:
-                                logger.error(f"Database error processing cell {column_name} in row {row_id}: {e}")
-                                stats["errors"] += 1
-                        except Exception as e:
-                            logger.error(f"Error processing cell {column_name} in row {row_id}: {e}")
-                            stats["errors"] += 1
+                except (IntegrityError, DataError) as e:
+                    error_str = str(e)
+                    logger.error(f"Database error processing row {row_id}: {e}")
+                    stats["errors"] += 1
+                except Exception as e:
+                    logger.error(f"Error processing row {row_id}: {e}")
+                    stats["errors"] += 1
                             
                 # Log progress every 100 rows
                 if row_num % 100 == 0:
@@ -343,11 +290,14 @@ def brute_force_import_csv(
     
     except Exception as e:
         logger.error(f"Error importing CSV {csv_file_path}: {e}")
+        logger.error(f"Exception type: {type(e).__name__}")
+        import traceback
+        logger.error(f"Full traceback: {traceback.format_exc()}")
         stats["errors"] += 1
         return stats
 
 
-def brute_force_import_relationship_csv(
+def import_relationship_csv(
     csv_file_path: str,
     dataset_name: str,
     fk_columns: List[Dict[str, str]],
