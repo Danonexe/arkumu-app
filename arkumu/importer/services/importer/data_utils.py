@@ -4,6 +4,9 @@ import re
 from arkumu.importer.services.importer.uri_utils import XSD_BASE_URI # For infer_datatype
 import unicodedata
 from typing import Dict, List,  Any
+import os
+import csv
+import io
 
 # It's common to use the module's logger for utility functions
 # or allow a logger to be passed in if more specific context is needed from the caller.
@@ -97,6 +100,89 @@ def infer_language(rule, row_data):
         
     logger.debug("No language identified")
     return None
+
+def is_truly_multi_valued_cell(value: str, delimiter: str = ',', quote_char: str = '"') -> bool:
+    """
+    Check if a cell value is truly multi-valued by parsing it as CSV to handle quoted fields correctly.
+    
+    This function addresses the issue where cells enclosed in quotes might contain delimiters
+    that are not meant to be multi-value separators.
+    
+    Args:
+        value: The cell value to check
+        delimiter: The delimiter used to separate multiple values (default: comma)
+        quote_char: The quote character used to enclose fields (default: double quote)
+        
+    Returns:
+        True if the cell contains multiple values, False otherwise
+        
+    Examples:
+        >>> is_truly_multi_valued_cell('apple,banana,cherry')
+        True
+        >>> is_truly_multi_valued_cell('"apple, with comma",banana')
+        True
+        >>> is_truly_multi_valued_cell('"apple, with comma"')
+        False
+        >>> is_truly_multi_valued_cell('single value')
+        False
+    """
+    if not isinstance(value, str) or not value.strip():
+        return False
+    
+    # If there's no delimiter in the value, it's definitely not multi-valued
+    if delimiter not in value:
+        return False
+    
+    try:
+        # Use CSV reader to properly parse the value, handling quotes correctly
+        csv_reader = csv.reader([value], delimiter=delimiter, quotechar=quote_char)
+        parsed_values = next(csv_reader)
+        
+        # If we get more than one value after proper CSV parsing, it's multi-valued
+        # Also filter out empty strings that might result from trailing delimiters
+        non_empty_values = [v.strip() for v in parsed_values if v.strip()]
+        return len(non_empty_values) > 1
+        
+    except Exception as e:
+        logger.warning(f"Error parsing cell value for multi-value detection: {e}")
+        # Fallback to simple delimiter check if CSV parsing fails
+        return delimiter in value
+
+def split_multi_valued_cell(value: str, delimiter: str = ',', quote_char: str = '"') -> List[str]:
+    """
+    Split a multi-valued cell into individual values, handling quoted fields correctly.
+    
+    Args:
+        value: The cell value to split
+        delimiter: The delimiter used to separate multiple values (default: comma)
+        quote_char: The quote character used to enclose fields (default: double quote)
+        
+    Returns:
+        List of individual values, with whitespace stripped and empty values removed
+        
+    Examples:
+        >>> split_multi_valued_cell('apple,banana,cherry')
+        ['apple', 'banana', 'cherry']
+        >>> split_multi_valued_cell('"apple, with comma",banana')
+        ['apple, with comma', 'banana']
+        >>> split_multi_valued_cell('"single value"')
+        ['single value']
+    """
+    if not isinstance(value, str) or not value.strip():
+        return []
+    
+    try:
+        # Use CSV reader to properly parse the value, handling quotes correctly
+        csv_reader = csv.reader([value], delimiter=delimiter, quotechar=quote_char)
+        parsed_values = next(csv_reader)
+        
+        # Strip whitespace and filter out empty values
+        return [v.strip() for v in parsed_values if v.strip()]
+        
+    except Exception as e:
+        logger.warning(f"Error parsing cell value for splitting: {e}")
+        # Fallback to simple split if CSV parsing fails
+        return [v.strip() for v in value.split(delimiter) if v.strip()]
 
 def split_multi_values(rule, value):
     """Splits a value into multiple values if needed based on the rule."""
@@ -255,8 +341,6 @@ def read_csv_with_nfc(file_path: str, delimiter: str = ';', **csv_options) -> Li
     
     # Normalize all string values
     return normalize_csv_data_nfc(data) 
-
-
 
 def normalize_name(name: str) -> str:
     """Normalize a name for comparison: lowercase, remove non-alphanum, replace spaces/underscores with nothing."""
