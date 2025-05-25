@@ -41,20 +41,21 @@ class MockUploadService:
 @pytest.mark.django_db
 def test_import_with_file_paths():
     """
-    Test import using real CSV files with file path columns and relationship handling.
+    Test import using real CSV files with file path columns.
+    All data is imported as literals without relationship resolution.
     
     This test can be run in two ways:
     
     1. Using environment variables:
-       CSV_DIR=/path/to/csv/dir FILE_COLUMNS_CONFIG=/path/to/file_columns.json RELATIONSHIP_CONFIG=/path/to/relationship_config.json FILES_BASE_DIR=/path/to/files pytest arkumu/importer/tests/services/importer_real_data/test_importer_workflow_with_real_data.py::test_import_with_file_paths -v
+       CSV_DIR=/path/to/csv/dir FILE_COLUMNS_CONFIG=/path/to/file_columns.json FILES_BASE_DIR=/path/to/files pytest arkumu/importer/tests/services/importer_real_data/test_importer_workflow_with_real_data.py::test_import_with_file_paths -v
     
     2. Using command line arguments:
-       pytest arkumu/importer/tests/services/importer_real_data/test_importer_workflow_with_real_data.py::test_import_with_file_paths -v --csv-dir=/path/to/csv/dir --file-columns-config=/path/to/file_columns.json --relationship-config=/path/to/relationship_config.json --files-base-dir=/path/to/files
+       pytest arkumu/importer/tests/services/importer_real_data/test_importer_workflow_with_real_data.py::test_import_with_file_paths -v --csv-dir=/path/to/csv/dir --file-columns-config=/path/to/file_columns.json --files-base-dir=/path/to/files
     """
     # First check environment variables
     csv_dir = os.environ.get('CSV_DIR')
     file_columns_config_path = os.environ.get('FILE_COLUMNS_CONFIG')
-    relationship_config_path = os.environ.get('RELATIONSHIP_CONFIG')
+    relationship_config_path = os.environ.get('RELATIONSHIP_CONFIG')  # Legacy - no longer used
     files_base_dir = os.environ.get('FILES_BASE_DIR')
     
     # If not found, check command line arguments
@@ -71,9 +72,9 @@ def test_import_with_file_paths():
             elif arg == '--file-columns-config' and i+1 < len(sys.argv):
                 file_columns_config_path = sys.argv[i+1]
             elif arg.startswith('--relationship-config='):
-                relationship_config_path = arg.split('=', 1)[1]
+                relationship_config_path = arg.split('=', 1)[1]  # Legacy - no longer used
             elif arg == '--relationship-config' and i+1 < len(sys.argv):
-                relationship_config_path = sys.argv[i+1]
+                relationship_config_path = sys.argv[i+1]  # Legacy - no longer used
             elif arg.startswith('--files-base-dir='):
                 files_base_dir = arg.split('=', 1)[1]
             elif arg == '--files-base-dir' and i+1 < len(sys.argv):
@@ -119,8 +120,9 @@ def test_import_with_file_paths():
     initial_triple_count = Triple.objects.count()
     
     # Run the import
-    print(f"\nStarting import from {csv_dir} with file path handling")
+    print(f"\nStarting import from {csv_dir} (all data imported as literals)")
     print(f"Files base directory: {files_base_dir}")
+    print(f"Note: All data will be imported as literals without relationship resolution")
     
     stats = ImportWorkflowService.import_csv_directory(
         directory_path=csv_dir,
@@ -145,6 +147,7 @@ def test_import_with_file_paths():
     print(f"\nResource creation:")
     print(f"New resources created: {new_resources}")
     print(f"New triples created: {new_triples}")
+    print(f"All data imported as literals - relationships can be processed in post-processing")
     
     # Check for file uploads
     print(f"\nFiles uploaded: {stats.get('files_uploaded', 0)}")
@@ -178,6 +181,10 @@ def test_import_with_file_paths():
     if any(file_columns.values()):
         assert stats.get('files_uploaded', 0) > 0, "No files were uploaded"
         assert file_url_triples.count() > 0, "No file URL triples were created"
+    
+    print(f"\n✅ SUCCESS: Import completed with simplified approach!")
+    print(f"📊 {new_resources} resources and {new_triples} triples created")
+    print(f"🔗 All data imported as literals - ready for post-processing relationship creation")
 
 
 
