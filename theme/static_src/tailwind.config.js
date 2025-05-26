@@ -43,6 +43,7 @@ module.exports = {
     },
   },
   plugins: [
+    require("daisyui"),
     function({ addBase, theme }) {
       addBase({
         ':root': {
@@ -81,4 +82,26 @@ module.exports = {
       addVariant('theme-blue', '.theme-blue &');
     }
   ],
+  daisyui: {
+    themes: [
+      {
+        light: {
+          ...require("daisyui/src/theming/themes")["light"],
+          primary: "#2B7EF2",
+          secondary: "#EBEBEB",
+          accent: "#5498F7",
+          neutral: "#1E1E1E",
+          "base-100": "#FAF9F6",
+        },
+        dark: {
+          ...require("daisyui/src/theming/themes")["dark"],
+          primary: "#2B7EF2",
+          secondary: "#434343",
+          accent: "#5498F7",
+          neutral: "#FAF9F6",
+          "base-100": "#1E1E1E",
+        },
+      },
+    ],
+  },
 }
