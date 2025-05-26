@@ -3,22 +3,20 @@ import logging
 from typing import Dict, List, Any, Optional
 
 from arkumu.importer.services.importer.bulk_import import import_csv_as_cells
-# PlaceholderManager no longer used - relationships handled in post-processing
-from arkumu.importer.services.importer.reference_resolver import ReferenceResolver
 from arkumu.importer.services.importer.file_handler import FileHandler
+from arkumu.importer.services.importer.smart_bulk_updater import SmartBulkUpdater, UpdateStrategy
 
 logger = logging.getLogger(__name__)
 
 class ImportWorkflowService:
     """
-    Main orchestration service for CSV import workflow with placeholder-based reference resolution.
-    All CSV files are processed uniformly with automatic foreign key detection.
+    Main orchestration service for CSV import workflow.
+    Supports both fast bulk import (default) and smart bulk updates (for existing data).
     """
     
     def __init__(self):
-        # No longer using placeholder manager
-        self.reference_resolver = ReferenceResolver()
         self.file_handler = FileHandler()
+        self.smart_updater = SmartBulkUpdater()
     
     @staticmethod
     def import_csv(
@@ -30,41 +28,82 @@ class ImportWorkflowService:
         has_quoted_fields: bool = False,
         file_columns: Optional[List[str]] = None,
         files_base_directory: Optional[str] = None,
-        upload_service = None
+        upload_service = None,
+        link_row_cells: bool = True,
+        link_to_first_column: bool = False,
+        use_smart_updater: bool = False,
+        update_strategy: UpdateStrategy = UpdateStrategy.SKIP_EXISTING,
+        timestamp_column: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Import a single CSV file with automatic placeholder-based reference resolution.
+        Import a single CSV file.
+        
+        Args:
+            csv_path: Path to the CSV file
+            dataset_name: Name for the dataset
+            institution: Institution code
+            base_uri: Base URI for generated resources
+            delimiter: CSV column delimiter
+            has_quoted_fields: Whether fields in the CSV are quoted
+            file_columns: List of file column names
+            files_base_directory: Base directory for file uploads
+            upload_service: Service for uploading files
+            link_row_cells: Whether to create links between cells in the same row
+            link_to_first_column: If True, use the first column as the anchor for row links
+            use_smart_updater: If True, use smart bulk updater (slower but handles existing data)
+            update_strategy: Strategy for handling existing data (only used if use_smart_updater=True)
+            timestamp_column: Column name for timestamp-based updates (only used if use_smart_updater=True)
+            
+        Returns:
+            Dict with import statistics
         """
         logger.info(f"🚀 Starting import of CSV file: {csv_path}")
         logger.info(f"   Dataset: {dataset_name}")
         logger.info(f"   Institution: {institution}")
+        logger.info(f"   Link row cells: {link_row_cells}")
+        logger.info(f"   Link to first column: {link_to_first_column}")
+        logger.info(f"   Use smart updater: {use_smart_updater}")
         
         if not dataset_name:
             dataset_name = os.path.splitext(os.path.basename(csv_path))[0]
             logger.info(f"   Auto-detected dataset name: {dataset_name}")
         
         try:
-            # No longer tracking placeholders - all data imported as literals
-            logger.info(f"📋 Processing with simplified import (no placeholder handling)")
-            stats = ImportWorkflowService._import_csv_with_placeholder_handling(
-                csv_path,
-                dataset_name,
-                institution=institution,
-                base_uri=base_uri,
-                delimiter=delimiter,
-                has_quoted_fields=has_quoted_fields,
-                file_columns=file_columns,
-                files_base_directory=files_base_directory,
-                upload_service=upload_service
-            )
-            
-            # No longer tracking placeholders - all data imported as literals
-            logger.info(f"📊 All data imported as literals - no placeholders created")
-            
-            logger.info(f"✅ Successfully imported {csv_path}")
-            logger.info(f"📊 Final stats: {stats}")
-            
-            return stats
+            # Route to appropriate importer based on flag
+            if use_smart_updater:
+                logger.info(f"📋 Using smart bulk updater for existing data handling")
+                return ImportWorkflowService.import_csv_with_smart_updates(
+                    csv_path=csv_path,
+                    dataset_name=dataset_name,
+                    institution=institution,
+                    base_uri=base_uri,
+                    delimiter=delimiter,
+                    has_quoted_fields=has_quoted_fields,
+                    update_strategy=update_strategy,
+                    timestamp_column=timestamp_column,
+                    analyze_first=True
+                )
+            else:
+                # Default: Use fast bulk import
+                logger.info(f"📋 Using fast bulk import (default)")
+                stats = ImportWorkflowService._process_csv_import(
+                    csv_path,
+                    dataset_name,
+                    institution=institution,
+                    base_uri=base_uri,
+                    delimiter=delimiter,
+                    has_quoted_fields=has_quoted_fields,
+                    file_columns=file_columns,
+                    files_base_directory=files_base_directory,
+                    upload_service=upload_service,
+                    link_row_cells=link_row_cells,
+                    link_to_first_column=link_to_first_column
+                )
+                
+                logger.info(f"✅ Successfully imported {csv_path}")
+                logger.info(f"📊 Final stats: {stats}")
+                
+                return stats
             
         except Exception as e:
             logger.error(f"❌ Error importing {csv_path}: {e}")
@@ -80,16 +119,47 @@ class ImportWorkflowService:
         relationship_config_path: Optional[str] = None,
         file_columns: Optional[Dict[str, List[str]]] = None,
         files_base_directory: Optional[str] = None,
-        upload_service=None
+        upload_service=None,
+        link_row_cells: bool = True,
+        link_to_first_column: bool = False,
+        use_smart_updater: bool = False,
+        update_strategy: UpdateStrategy = UpdateStrategy.SKIP_EXISTING,
+        timestamp_column: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Import all CSV files in a directory with automatic placeholder-based reference resolution.
-        Regular tables are processed with automatic foreign key detection.
+        Import all CSV files in a directory.
+        Regular tables are processed with bulk import.
         Relationship tables (if configured) are processed to create explicit relationships.
+        
+        Args:
+            directory_path: Path to directory containing CSV files
+            institution: Institution code
+            base_uri: Base URI for generated resources
+            delimiter: CSV column delimiter
+            has_quoted_fields: Whether fields in the CSV are quoted
+            relationship_config_path: Path to JSON file with relationship configurations
+            file_columns: Dict mapping dataset names to file column lists
+            files_base_directory: Base directory for file uploads
+            upload_service: Service for uploading files
+            link_row_cells: Whether to create links between cells in the same row
+            link_to_first_column: If True, use the first column as the anchor for row links
+            use_smart_updater: If True, use smart bulk updater for all files
+            update_strategy: Strategy for handling existing data (only used if use_smart_updater=True)
+            timestamp_column: Column name for timestamp-based updates (only used if use_smart_updater=True)
+            
+        Returns:
+            Dict with aggregate import statistics
         """
-        logger.info(f"�� Starting directory import from: {directory_path}")
+        logger.info(f" Starting directory import from: {directory_path}")
         logger.info(f"   Institution: {institution}")
         logger.info(f"   Base URI: {base_uri}")
+        logger.info(f"   Link row cells: {link_row_cells}")
+        logger.info(f"   Link to first column: {link_to_first_column}")
+        logger.info(f"   Use smart updater: {use_smart_updater}")
+        if use_smart_updater:
+            logger.info(f"   Update strategy: {update_strategy.value}")
+            if timestamp_column:
+                logger.info(f"   Timestamp column: {timestamp_column}")
         # Load relationship configuration if provided
         relationship_config = {}
         if relationship_config_path and os.path.exists(relationship_config_path):
@@ -130,6 +200,7 @@ class ImportWorkflowService:
             "files_processed": 0,
             "resources_created": 0,
             "triples_created": 0,
+            "row_links_created": 0,
             "files_uploaded": 0,
             "upload_errors": 0,
             "errors": 0
@@ -166,17 +237,22 @@ class ImportWorkflowService:
                     if dataset_file_columns:
                         logger.info(f"📎 File columns configured: {dataset_file_columns}")
                     
-                    # Import as regular table with placeholder handling
+                    # Import as regular table
                     file_stats = ImportWorkflowService.import_csv(
                         csv_path=csv_path,
                         dataset_name=dataset_name,
-                institution=institution,
-                base_uri=base_uri,
-                delimiter=delimiter,
-                has_quoted_fields=has_quoted_fields,
+                        institution=institution,
+                        base_uri=base_uri,
+                        delimiter=delimiter,
+                        has_quoted_fields=has_quoted_fields,
                         file_columns=dataset_file_columns,
-                files_base_directory=files_base_directory,
-                        upload_service=upload_service
+                        files_base_directory=files_base_directory,
+                        upload_service=upload_service,
+                        link_row_cells=link_row_cells,
+                        link_to_first_column=link_to_first_column,
+                        use_smart_updater=use_smart_updater,
+                        update_strategy=update_strategy,
+                        timestamp_column=timestamp_column
                     )
                 
                 # No longer tracking placeholders - all data imported as literals
@@ -199,12 +275,131 @@ class ImportWorkflowService:
                 
         logger.info(f"🎯 Directory import completed!")
         logger.info(f"📊 Final aggregate stats: {aggregate_stats}")
-        logger.info(f"📊 All data imported as literals - relationships can be processed in post-processing")
+        if not use_smart_updater:
+            logger.info(f"📊 Used fast bulk import - relationships can be processed in post-processing")
+        else:
+            logger.info(f"📊 Used smart bulk updater with {update_strategy.value} strategy")
         
         return aggregate_stats
     
     @staticmethod
-    def _import_csv_with_placeholder_handling(
+    def import_csv_with_smart_updates(
+        csv_path: str,
+        dataset_name: Optional[str] = None,
+        institution: str = "DEFAULT",
+        base_uri: str = "http://arkumu.org/data",
+        delimiter: str = ';',
+        has_quoted_fields: bool = False,
+        update_strategy: UpdateStrategy = UpdateStrategy.SKIP_EXISTING,
+        timestamp_column: Optional[str] = None,
+        analyze_first: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Import a CSV file with intelligent update handling.
+        This method provides a more sophisticated approach to handling existing data.
+        
+        Args:
+            csv_path: Path to the CSV file
+            dataset_name: Name for the dataset
+            institution: Institution code
+            base_uri: Base URI for generated resources
+            delimiter: CSV column delimiter
+            has_quoted_fields: Whether fields in the CSV are quoted
+            update_strategy: Strategy for handling existing data
+            timestamp_column: Column name for timestamp-based updates
+            analyze_first: Whether to perform analysis before import
+            
+        Returns:
+            Dict with import statistics and analysis
+        """
+        logger.info(f"🚀 Starting smart import of CSV file: {csv_path}")
+        logger.info(f"   Dataset: {dataset_name}")
+        logger.info(f"   Institution: {institution}")
+        logger.info(f"   Update strategy: {update_strategy.value}")
+        
+        if not dataset_name:
+            dataset_name = os.path.splitext(os.path.basename(csv_path))[0]
+            logger.info(f"   Auto-detected dataset name: {dataset_name}")
+        
+        try:
+            # Initialize smart updater
+            smart_updater = SmartBulkUpdater(
+                default_strategy=update_strategy,
+                timestamp_column=timestamp_column,
+                institution=institution,
+                base_uri=base_uri
+            )
+            
+            # Read CSV data
+            import csv
+            csv_data = []
+            with open(csv_path, newline='', encoding='utf-8') as f:
+                quoting = csv.QUOTE_ALL if has_quoted_fields else csv.QUOTE_MINIMAL
+                reader = csv.DictReader(f, delimiter=delimiter, quoting=quoting)
+                csv_data = list(reader)
+            
+            logger.info(f"📊 Loaded {len(csv_data)} rows from CSV")
+            
+            result = {
+                "dataset_name": dataset_name,
+                "rows_in_csv": len(csv_data),
+                "strategy_used": update_strategy.value
+            }
+            
+            # Perform analysis if requested
+            if analyze_first:
+                logger.info(f"🔍 Analyzing dataset changes...")
+                analysis = smart_updater.analyze_dataset_changes(dataset_name, csv_data)
+                result["analysis"] = analysis
+                
+                logger.info(f"📋 Analysis results:")
+                logger.info(f"   Total rows: {analysis['total_rows']}")
+                logger.info(f"   New resources: {analysis['new_resources']}")
+                logger.info(f"   Existing resources: {analysis['existing_resources']}")
+                logger.info(f"   Potential updates: {analysis['potential_updates']}")
+                
+                if analysis["recommendations"]:
+                    logger.info(f"💡 Recommendations:")
+                    for rec in analysis["recommendations"]:
+                        logger.info(f"   - {rec}")
+                
+                # Auto-adjust strategy based on analysis
+                if (update_strategy == UpdateStrategy.SKIP_EXISTING and 
+                    analysis["potential_updates"] > 0):
+                    logger.warning(f"⚠️ Found {analysis['potential_updates']} potential updates, "
+                                 f"but strategy is SKIP_EXISTING. Consider using UPDATE_VALUES.")
+            
+            # Execute the import
+            logger.info(f"🔧 Executing smart bulk import...")
+            stats = smart_updater.import_csv_with_smart_updates(
+                csv_data, dataset_name, update_strategy
+            )
+            
+            # Convert stats to dict for consistent return format
+            result["stats"] = {
+                "rows_processed": stats.rows_processed,
+                "cells_processed": stats.cells_processed,
+                "resources_created": stats.resources_created,
+                "resources_updated": stats.resources_updated,
+                "resources_skipped": stats.resources_skipped,
+                "triples_created": stats.triples_created,
+                "triples_updated": stats.triples_updated,
+                "triples_skipped": stats.triples_skipped,
+                "errors": stats.errors
+            }
+            
+            logger.info(f"✅ Smart import completed successfully!")
+            logger.info(f"📊 Results: {stats.resources_created} created, "
+                       f"{stats.resources_updated} updated, {stats.resources_skipped} skipped")
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"❌ Error in smart import {csv_path}: {e}")
+            raise
+    
+    @staticmethod
+    def _process_csv_import(
         file_path: str,
         dataset_name: str,
         institution: str = "DEFAULT",
@@ -213,12 +408,14 @@ class ImportWorkflowService:
         has_quoted_fields: bool = False,
         file_columns: List[str] = None,
         files_base_directory: str = None,
-        upload_service = None
+        upload_service = None,
+        link_row_cells: bool = True,
+        link_to_first_column: bool = False
     ) -> Dict[str, Any]:
         """
-        Import a CSV file with placeholder handling for references.
+        Process a CSV file import with cell creation and row linking.
         """
-        logger.info(f"🔧 Starting _import_csv_with_placeholder_handling for {file_path}")
+        logger.info(f"🔧 Starting CSV import processing for {file_path}")
         
         # First, perform regular CSV import
         logger.info(f"🔧 Step 1: Calling import_csv_as_cells for {dataset_name}")
@@ -227,6 +424,8 @@ class ImportWorkflowService:
         logger.info(f"   🌐 Base URI: {base_uri}")
         logger.info(f"   📊 Delimiter: '{delimiter}'")
         logger.info(f"   📝 Has quoted fields: {has_quoted_fields}")
+        logger.info(f"   🔗 Link row cells: {link_row_cells}")
+        logger.info(f"   🔗 Link to first column: {link_to_first_column}")
         
         stats = import_csv_as_cells(
             file_path,
@@ -234,7 +433,9 @@ class ImportWorkflowService:
             institution=institution,
             base_uri=base_uri,
             delimiter=delimiter,
-            has_quoted_fields=has_quoted_fields
+            has_quoted_fields=has_quoted_fields,
+            link_row_cells=link_row_cells,
+            link_to_first_column=link_to_first_column
         )
         
         logger.info(f"✅ Step 1 completed: import_csv_as_cells finished")
@@ -242,10 +443,9 @@ class ImportWorkflowService:
         logger.info(f"   📊 Cells processed: {stats.get('cells_processed', 0)}")
         logger.info(f"   📊 Resources created: {stats.get('resources_created', 0)}")
         logger.info(f"   📊 Triples created: {stats.get('triples_created', 0)}")
+        logger.info(f"   📊 Row links created: {stats.get('row_links_created', 0)}")
         logger.info(f"   📊 Errors: {stats.get('errors', 0)}")
         logger.info(f"   📊 Truncated values: {stats.get('truncated_values', 0)}")
-        
-        # No longer tracking placeholders - all data imported as literals
         
         # Skip reference processing - we'll handle relationships in a separate phase
         logger.info(f"🔧 Step 2: Skipping reference processing (will be handled in post-processing)")
@@ -281,7 +481,7 @@ class ImportWorkflowService:
                 missing_components.append("files_base_directory")
             logger.info(f"   ❌ Missing: {', '.join(missing_components)}")
         
-        logger.info(f"🔧 _import_csv_with_placeholder_handling completed for {file_path}")
+        logger.info(f"🔧 CSV import processing completed for {file_path}")
         return stats
     
     # _process_references_and_placeholders method removed - no longer using placeholders
@@ -348,5 +548,7 @@ class ImportWorkflowService:
             stats["files_uploaded"] = 0
         if "upload_errors" not in stats:
             stats["upload_errors"] = 0
+        if "row_links_created" not in stats:
+            stats["row_links_created"] = 0
         
         return stats

@@ -182,6 +182,118 @@ def test_import_with_file_paths():
         assert stats.get('files_uploaded', 0) > 0, "No files were uploaded"
         assert file_url_triples.count() > 0, "No file URL triples were created"
     
+    # Query and display the first row of the first dataset
+    print(f"\n🔍 FIRST ROW ANALYSIS:")
+    
+    # Debug: Show what resources were actually created
+    print(f"\n🔍 DEBUG - Analyzing created resources:")
+    print(f"Total resources in database: {Resource.objects.count()}")
+    
+    # Show sample of IRI resources
+    iri_resources = Resource.objects.filter(resource_type="IRI").order_by('uri')[:10]
+    print(f"Sample IRI resources ({iri_resources.count()} total):")
+    for res in iri_resources:
+        print(f"  - {res.uri}")
+    
+    # Show sample of LITERAL resources  
+    literal_resources = Resource.objects.filter(resource_type="LITERAL").order_by('id')[:5]
+    print(f"\nSample LITERAL resources ({Resource.objects.filter(resource_type='LITERAL').count()} total):")
+    for res in literal_resources:
+        value_preview = res.value[:30] + "..." if res.value and len(res.value) > 30 else res.value
+        print(f"  - {res.name}: {value_preview}")
+    
+    # Get the first dataset (alphabetically)
+    first_csv_file = sorted(csv_files)[0]
+    first_dataset_name = os.path.splitext(first_csv_file)[0]
+    
+    print(f"\n📋 Examining first row of dataset: {first_dataset_name}")
+    
+    # Debug: Try different URI patterns
+    dataset_uri_patterns = [
+        f"http://test.arkumu.org/data/TEST/datasets/{first_dataset_name}/",
+        f"http://test.arkumu.org/data/TEST/datasets/{first_dataset_name}",
+        f"http://test.arkumu.org/data/datasets/{first_dataset_name}/",
+        f"http://test.arkumu.org/data/datasets/{first_dataset_name}",
+    ]
+    
+    cell_resources = None
+    used_pattern = None
+    
+    for pattern in dataset_uri_patterns:
+        test_resources = Resource.objects.filter(
+            uri__startswith=pattern,
+            resource_type="IRI"
+        )
+        print(f"Pattern '{pattern}': {test_resources.count()} matches")
+        if test_resources.exists() and cell_resources is None:
+            cell_resources = test_resources.order_by('uri')
+            used_pattern = pattern
+            break
+    
+    if cell_resources and cell_resources.exists():
+        print(f"\n✅ Found {cell_resources.count()} cell resources using pattern: {used_pattern}")
+        
+        # Show first few cell URIs
+        print("First few cell URIs:")
+        for cell in cell_resources[:5]:
+            print(f"  - {cell.uri}")
+        
+        # Extract row IDs from URIs and get the first one
+        row_ids = set()
+        for cell in cell_resources:
+            # URI format: .../datasets/{dataset}/{column}/{row_id}
+            uri_parts = cell.uri.split('/')
+            if len(uri_parts) >= 3:
+                row_id = uri_parts[-1]
+                row_ids.add(row_id)
+        
+        if row_ids:
+            first_row_id = sorted(row_ids)[0]
+            print(f"\n📍 First row ID: {first_row_id}")
+            print(f"All row IDs: {sorted(list(row_ids))[:10]}...")  # Show first 10
+            
+            # Get all cells for this row
+            first_row_cells = Resource.objects.filter(
+                uri__startswith=used_pattern,
+                uri__endswith=f"/{first_row_id}",
+                resource_type="IRI"
+            ).order_by('uri')
+            
+            print(f"\n📊 Found {first_row_cells.count()} cells in first row:")
+            
+            # For each cell, get its value through triples
+            for cell in first_row_cells:
+                # Extract column name from URI
+                uri_parts = cell.uri.split('/')
+                column_name = uri_parts[-2] if len(uri_parts) >= 2 else "unknown"
+                
+                # Find the value triple for this cell
+                value_triple = Triple.objects.filter(
+                    subject=cell,
+                    predicate__uri="http://www.w3.org/1999/02/22-rdf-syntax-ns#value"
+                ).first()
+                
+                if value_triple:
+                    value = value_triple.object.value
+                    # Truncate long values for display
+                    display_value = value[:50] + "..." if len(value) > 50 else value
+                    print(f"  📋 {column_name}: {display_value}")
+                else:
+                    print(f"  ❌ {column_name}: <no value found>")
+        else:
+            print("❌ No row IDs found in dataset")
+    else:
+        print("❌ No cell resources found for this dataset with any pattern")
+        
+        # Additional debug: Show what URIs actually exist
+        print("\n🔍 Additional debug - All IRI URIs containing the dataset name:")
+        dataset_related = Resource.objects.filter(
+            uri__icontains=first_dataset_name,
+            resource_type="IRI"
+        )[:10]
+        for res in dataset_related:
+            print(f"  - {res.uri}")
+    
     print(f"\n✅ SUCCESS: Import completed with simplified approach!")
     print(f"📊 {new_resources} resources and {new_triples} triples created")
     print(f"🔗 All data imported as literals - ready for post-processing relationship creation")
