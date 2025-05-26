@@ -1,7 +1,12 @@
 volumes:
   arkumu_local_postgres_data: {}
   arkumu_local_postgres_data_backups: {}
+  arkumu_local_redis_data: {}
+  minio_data: {}
   
+networks:
+  arkumu_network:
+    driver: bridge
 
 services:
   django:
@@ -10,8 +15,10 @@ services:
       dockerfile: ./compose/local/django/Dockerfile
     image: arkumu_local_django
     container_name: arkumu_local_django
+    restart: unless-stopped
     depends_on:
       - postgres
+      - minio
     volumes:
       - .:/app:z
     env_file:
@@ -23,6 +30,8 @@ services:
     environment:
       # DISABLE_CACHE: 1 = cache disabled (no caching), 0 = cache enabled (with caching)
       - DISABLE_CACHE=0
+    networks:
+      - arkumu_network
 
   postgres:
     build:
@@ -30,18 +39,68 @@ services:
       dockerfile: ./compose/production/postgres/Dockerfile
     image: arkumu_production_postgres
     container_name: arkumu_local_postgres
+    restart: unless-stopped
     volumes:
       - arkumu_local_postgres_data:/var/lib/postgresql/data
       - arkumu_local_postgres_data_backups:/backups
     env_file:
       - ./.envs/.local/.postgres
+    networks:
+      - arkumu_network
+
+  minio:
+    image: minio/minio
+    container_name: arkumu_minio
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_API_ALLOW_CORS_ORIGIN: "*"
+      MINIO_BROWSER_REDIRECT_URL: "http://localhost:9001"
+      MINIO_DOMAIN_NAME: "localhost:9000"
+      MINIO_LOGGER: "console"
+      MINIO_LOGGER_LEVEL: "debug"
+      MINIO_CORS_ALLOW_ORIGINS: "*"
+      MINIO_CORS_ALLOW_METHODS: "GET,PUT,POST,DELETE,OPTIONS"
+      MINIO_CORS_ALLOW_HEADERS: "*"
+      MINIO_CORS_EXPOSE_HEADERS: "ETag"
+      MINIO_CORS_MAX_AGE_SECONDS: "3600"
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - arkumu_network
+
   node:
-      image: node:latest
-      container_name: node_tailwind_builder_new
-      depends_on:
-        - django
-      working_dir: /app/theme/static_src 
-      volumes:
-        - .:/app:z
-      command: /bin/sh -c "npm install && npm run dev"
-      tty: true
+    image: node:latest
+    container_name: arkumu_node_tailwind
+    restart: unless-stopped
+    depends_on:
+      - django
+    working_dir: /app/theme/static_src 
+    volumes:
+      - .:/app:z
+    command: /bin/sh -c "npm install && npm run dev"
+    tty: true
+    networks:
+      - arkumu_network
+
+  redis:
+    image: "redis:latest"
+    container_name: arkumu_redis
+    restart: unless-stopped
+    volumes:
+      - arkumu_local_redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - arkumu_network
+    command: redis-server --appendonly yes

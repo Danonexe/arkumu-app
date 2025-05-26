@@ -8,10 +8,16 @@ class S3ConfigSerializer(serializers.Serializer):
     base_url = serializers.CharField(required=False)
 
 class DirectoryImportSerializer(serializers.Serializer):
-    """Simplified serializer for importing all CSV files from a directory with automatic reference detection."""
+    """Serializer for importing CSV files either from a directory path or from an uploaded ZIP file."""
     directory_path = serializers.CharField(
-        required=True,
-        help_text="Path to directory containing CSV files to import"
+        required=False,
+        allow_null=True,
+        help_text="Path to directory containing CSV files to import (server-side path)"
+    )
+    zip_file = serializers.FileField(
+        required=False,
+        allow_null=True,
+        help_text="ZIP file containing CSV files to import"
     )
     institution = serializers.CharField(
         required=False,
@@ -44,6 +50,12 @@ class DirectoryImportSerializer(serializers.Serializer):
         help_text="Base directory for resolving file paths (defaults to directory_path)"
     )
     s3_config = S3ConfigSerializer(required=False, allow_null=True)
+    
+    def validate(self, data):
+        """Validate that either directory_path or zip_file is provided."""
+        if not data.get('directory_path') and not data.get('zip_file'):
+            raise serializers.ValidationError("Either directory_path or zip_file must be provided")
+        return data
 
 class ClearDatabaseSerializer(serializers.Serializer):
     """Serializer for clearing database data."""

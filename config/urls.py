@@ -25,6 +25,7 @@ urlpatterns = [
     path("accounts/", include("allauth.urls")),
     # Your stuff: custom urls includes go here
     path('metadata/', include('arkumu.metadata.urls', namespace='metadata')),
+    path('storage/', include('arkumu.storage.urls', namespace='storage')),
     # Media files
     *static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT),    
     # i18n
