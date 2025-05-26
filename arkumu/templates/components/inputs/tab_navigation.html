@@ -1,0 +1,56 @@
+<!-- Tab Navigation Component with Dynamic Active State -->
+<div class="tab-navigation w-full mb-8">
+  <div class="flex space-x-3">
+    
+    <!-- Tab 1 - Übersicht -->
+    <button class="px-4 py-2 font-mono text-sm transition-colors
+                  {% if active_tab == '1' or active_tab == 'overview' %}
+                    bg-arkumu-dark text-arkumu-light 
+                    theme-dark:bg-arkumu-light theme-dark:text-arkumu-dark
+                    theme-blue:bg-arkumu-blue theme-blue:text-arkumu-light
+                  {% else %}
+                    border border-arkumu-dark text-arkumu-dark bg-arkumu-light
+                    theme-dark:border-arkumu-light theme-dark:text-arkumu-light theme-dark:bg-arkumu-dark
+                    theme-blue:border-arkumu-blue theme-blue:text-arkumu-blue theme-blue:bg-arkumu-light
+                    hover:bg-opacity-10
+                  {% endif %}">
+      {{ tab1_text|default:"Übersicht" }}
+    </button>
+    
+    <!-- Tab 2 - Ereignisliste -->
+    <button class="px-4 py-2 font-mono text-sm transition-colors
+                  {% if active_tab == '2' or active_tab == 'ereignisliste' %}
+                    bg-arkumu-dark text-arkumu-light 
+                    theme-dark:bg-arkumu-light theme-dark:text-arkumu-dark
+                    theme-blue:bg-arkumu-blue theme-blue:text-arkumu-light
+                  {% else %}
+                    border border-arkumu-dark text-arkumu-dark bg-arkumu-light
+                    theme-dark:border-arkumu-light theme-dark:text-arkumu-light theme-dark:bg-arkumu-dark
+                    theme-blue:border-arkumu-blue theme-blue:text-arkumu-blue theme-blue:bg-arkumu-light
+                    hover:bg-opacity-10
+                  {% endif %}">
+      {{ tab2_text|default:"Ereignisliste" }}
+    </button>
+    
+    <!-- Tab 3 - Metadaten -->
+    <button class="px-4 py-2 font-mono text-sm transition-colors
+                  {% if active_tab == '3' or active_tab == 'metadaten' %}
+                    bg-arkumu-dark text-arkumu-light 
+                    theme-dark:bg-arkumu-light theme-dark:text-arkumu-dark
+                    theme-blue:bg-arkumu-blue theme-blue:text-arkumu-light
+                  {% else %}
+                    border border-arkumu-dark text-arkumu-dark bg-arkumu-light
+                    theme-dark:border-arkumu-light theme-dark:text-arkumu-light theme-dark:bg-arkumu-dark
+                    theme-blue:border-arkumu-blue theme-blue:text-arkumu-blue theme-blue:bg-arkumu-light
+                    hover:bg-opacity-10
+                  {% endif %}">
+      {{ tab3_text|default:"Metadaten" }}
+    </button>
+  </div>
+  
+  <!-- Línea horizontal -->
+  <div class="w-full h-px transition-colors
+              bg-arkumu-dark
+              theme-dark:bg-arkumu-light
+              theme-blue:bg-arkumu-blue"></div>
+</div>

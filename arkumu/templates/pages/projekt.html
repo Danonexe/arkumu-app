@@ -64,7 +64,7 @@
                text-arkumu-dark
                theme-dark:text-arkumu-light
                theme-blue:text-arkumu-blue">
-    <div class="w-full max-w-[800px] lg:max-w-[1000px] xl:max-w-[1200px] mx-auto">
+    <div class="w-full max-w-7xl mx-auto">
       
       <!-- Year and Institution Header (Componente más grande) -->
       {% include 'components/text/projekt_title.html' with  year_range="Year first Ereignis to latest Ereignis" institution="Hochschule" %}
@@ -211,17 +211,7 @@
       </div>
       
       <!-- Tab Navigation -->
-      <div class="w-full mb-8">
-        <div class="flex">
-          {% include 'components/buttons/primary_button.html' with button_text="Übersicht" %}
-          {% include 'components/buttons/secondary_button.html' with button_text="Ereignisliste" %}
-          {% include 'components/buttons/secondary_button.html' with button_text="Metadaten" %}
-        </div>
-        <div class="w-full h-px transition-colors
-                    bg-arkumu-dark
-                    theme-dark:bg-arkumu-light
-                    theme-blue:bg-arkumu-blue"></div>
-      </div>
+      {% include 'components/inputs/tab_navigation.html' with active_tab="1" %}
       
       <!-- Media Gallery Section -->
       <div class="media-gallery-section w-full mb-8">
@@ -231,29 +221,31 @@
           
           <!-- Primera fila - Media grandes -->
           <div>
-            {% include 'components/cards/big_media.html' with media_title="Ereignis Titel" %}
+            {% include 'components/media/big_media.html' with media_title="Ereignis Titel" %}
           </div>
           
           <div>
-            {% include 'components/cards/big_media.html' with media_title="Ereignis Titel" %}
+            {% include 'components/media/big_media.html' with media_title="Ereignis Titel" %}
           </div>
         </div>
         
         <!-- Segunda fila - Grid de 4 elementos pequeños -->
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          {% include 'components/cards/small_media.html' with media_title="Ereignis Titel" %}
-          {% include 'components/cards/small_media.html' with media_title="Ereignis Titel" %}
-          {% include 'components/cards/small_media.html' with media_title="Ereignis Titel" %}
-          {% include 'components/cards/small_media.html' with media_title="Ereignis Titel" %}
+          {% include 'components/media/small_media.html' with media_title="Ereignis Titel" %}
+          {% include 'components/media/small_media.html' with media_title="Ereignis Titel" %}
+          {% include 'components/media/small_media.html' with media_title="Ereignis Titel" %}
+          {% include 'components/media/small_media.html' with media_title="Ereignis Titel" %}
         </div>
         
         <!-- Audio Player -->
-        {% include 'components/cards/audio.html' with audio_title="Ereignis Titel" %}
+        {% include 'components/media/audio.html' with audio_title="Ereignis Titel" %}
         
       </div>
       
-      <!-- Línea de puntos final -->
-      {% include 'components/text/text_dotted_line.html' with text="Projekte in Relation" %}
+       <!-- Línea de puntos final con margen superior -->
+      <div class="mt-20">
+        {% include 'components/text/text_dotted_line.html' with text="Projekte in Relation" %}
+      </div>
       
     </div>
   </main>

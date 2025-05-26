@@ -56,32 +56,43 @@
         </div>
         <p class="mt-2 text-sm transition-colors text-gray-600 theme-dark:text-gray-400">Path: components/buttons/secondary_button.html</p>
       </div>
-    </section>
 
-    <!-- Primary Button -->
-    <div class="mb-10">
-      <h3 class="text-lg font-medium mb-3">Primary Pill</h3>
-      <div class="p-4 border transition-colors
-           bg-white
-           theme-dark:bg-arkumu-dark 
-           theme-dark:border-arkumu-light">
-        {% include 'components/buttons/primary_pill.html' with button_text="Primary Pill" %}
+      <!-- Small Secondary Button -->
+      <div class="mb-10">
+        <h3 class="text-lg font-medium mb-3">Small Secondary Button</h3>
+        <div class="p-4 border transition-colors
+             bg-white
+             theme-dark:bg-arkumu-dark 
+             theme-dark:border-arkumu-light">
+          {% include 'components/buttons/small_secondary_button.html' with button_text="Small Secondary Button" %}
+        </div>
+        <p class="mt-2 text-sm transition-colors text-gray-600 theme-dark:text-gray-400">Path: components/buttons/small_secondary_button.html</p>
       </div>
-      <p class="mt-2 text-sm transition-colors text-gray-600 theme-dark:text-gray-400">Path: components/buttons/primary_pill.html</p>
-    </div>
-    
-    <!-- Secondary Button -->
-    <div class="mb-10">
-      <h3 class="text-lg font-medium mb-3">Secondary Pill</h3>
-      <div class="p-4 border transition-colors
-           bg-white
-           theme-dark:bg-arkumu-dark 
-           theme-dark:border-arkumu-light">
-        {% include 'components/buttons/secondary_pill.html' with button_text="Secondary Pill" %}
+
+      <!-- Primary Pill -->
+      <div class="mb-10">
+        <h3 class="text-lg font-medium mb-3">Primary Pill</h3>
+        <div class="p-4 border transition-colors
+             bg-white
+             theme-dark:bg-arkumu-dark 
+             theme-dark:border-arkumu-light">
+          {% include 'components/buttons/primary_pill.html' with button_text="Primary Pill" %}
+        </div>
+        <p class="mt-2 text-sm transition-colors text-gray-600 theme-dark:text-gray-400">Path: components/buttons/primary_pill.html</p>
       </div>
-      <p class="mt-2 text-sm transition-colors text-gray-600 theme-dark:text-gray-400">Path: components/buttons/secondary_pill.html</p>
-    </div>
-  </section>
+      
+      <!-- Secondary Pill -->
+      <div class="mb-10">
+        <h3 class="text-lg font-medium mb-3">Secondary Pill</h3>
+        <div class="p-4 border transition-colors
+             bg-white
+             theme-dark:bg-arkumu-dark 
+             theme-dark:border-arkumu-light">
+          {% include 'components/buttons/secondary_pill.html' with button_text="Secondary Pill" %}
+        </div>
+        <p class="mt-2 text-sm transition-colors text-gray-600 theme-dark:text-gray-400">Path: components/buttons/secondary_pill.html</p>
+      </div>
+    </section>
     
     <!-- Header Components Section -->
     <section class="mb-16">
@@ -146,6 +157,23 @@
         <p class="mt-2 text-sm transition-colors text-gray-600 theme-dark:text-gray-400">Path: components/inputs/navbar.html</p>
       </div>
       
+
+      <!-- Tab Navigator -->
+      <div class="mb-10">
+        <h3 class="text-lg font-medium mb-3">Tab Navigator</h3>
+        <div class="p-4 border transition-colors
+             bg-white
+             theme-dark:bg-arkumu-dark 
+             theme-dark:border-arkumu-light">
+          {% include 'components/inputs/tab_navigation.html' with active_tab="1" %}
+          <br>
+          {% include 'components/inputs/tab_navigation.html' with active_tab="2" %}
+          <br>
+          {% include 'components/inputs/tab_navigation.html' with active_tab="3" %}
+        </div>
+        <p class="mt-2 text-sm transition-colors text-gray-600 theme-dark:text-gray-400">Path: components/inputs/tab_navigation.html</p>
+      </div>
+
       <!-- Text Field -->
       <div class="mb-10">
         <h3 class="text-lg font-medium mb-3">Text Field</h3>
@@ -174,6 +202,18 @@
         </div>
         <p class="mt-2 text-sm transition-colors text-gray-600 theme-dark:text-gray-400">Path: components/text/arkumu_text.html</p>
       </div>
+
+      <!-- Project Title -->
+      <div class="mb-10">
+        <h3 class="text-lg font-medium mb-3">Project Title Header</h3>
+        <div class="p-4 border transition-colors
+             bg-white
+             theme-dark:bg-arkumu-dark 
+             theme-dark:border-arkumu-light">
+          {% include 'components/text/projekt_title.html' with year_range="Year first Ereignis to latest Ereignis" institution="Hochschule" %}
+        </div>
+        <p class="mt-2 text-sm transition-colors text-gray-600 theme-dark:text-gray-400">Path: components/text/projekt_title.html</p>
+      </div>
       
       <!-- Dotted Line -->
       <div class="mb-10">
@@ -186,6 +226,7 @@
         </div>
         <p class="mt-2 text-sm transition-colors text-gray-600 theme-dark:text-gray-400">Path: components/text/text_dotted_line.html</p>
       </div>
+    </section>
     
     <!-- Label Components Section -->
     <section class="mb-16">
@@ -211,7 +252,7 @@
              theme-dark:border-arkumu-light">
           {% include 'components/labels/secondary_tag.html' with label_text="Folkwang Universität der Künste" %}
         </div>
-        <p class="mt-2 text-sm transition-colors text-gray-600 theme-dark:text-gray-400">Path: components/labels/tag.html</p>
+        <p class="mt-2 text-sm transition-colors text-gray-600 theme-dark:text-gray-400">Path: components/labels/secondary_tag.html</p>
       </div>
     </section>
     
@@ -221,12 +262,14 @@
       
       <!-- Individual Card -->
       <div class="mb-10">
+        <h3 class="text-lg font-medium mb-3">Project Card</h3>
         <div class="p-4 border transition-colors
              bg-white
              theme-dark:bg-arkumu-dark 
              theme-dark:border-arkumu-light max-w-sm">
           {% include 'components/cards/card.html' with year="2024" institution="Folkwang Universität der Kunst" title="Handmade in Ethiopia" subtitle="Projekt" contributor1_name="Johanna Schwer" contributor1_role="Betreuerin" contributor2_name="Judith Schanz" contributor2_role="Betreuerin" category1="Industrial Design" category2="Transformation Design" button_text="Projekt ansehen" %}
         </div>
+        <p class="mt-2 text-sm transition-colors text-gray-600 theme-dark:text-gray-400">Path: components/cards/card.html</p>
       </div>
       
       <!-- Card Grid -->
@@ -235,10 +278,85 @@
         <div class="p-4 border transition-colors
              bg-white
              theme-dark:bg-arkumu-dark 
-             theme-dark:border-arkumu-light">{% include 'components/cards/card_grid.html' %}
-          
+             theme-dark:border-arkumu-light">
+          {% include 'components/cards/card_grid.html' %}
         </div>
         <p class="mt-2 text-sm transition-colors text-gray-600 theme-dark:text-gray-400">Path: components/cards/card_grid.html</p>
+      </div>
+    </section>
+
+    <!-- Media Components Section -->
+    <section class="mb-16">
+      <h2 class="text-2xl font-semibold mb-6 pb-2 border-b">Media Components</h2>
+      
+      <!-- Big Media -->
+      <div class="mb-10">
+        <h3 class="text-lg font-medium mb-3">Large Media Player</h3>
+        <div class="p-4 border transition-colors
+             bg-white
+             theme-dark:bg-arkumu-dark 
+             theme-dark:border-arkumu-light max-w-md">
+          {% include 'components/media/big_media.html' with media_title="Ereignis Titel" %}
+        </div>
+        <p class="mt-2 text-sm transition-colors text-gray-600 theme-dark:text-gray-400">Path: components/media/big_media.html</p>
+      </div>
+
+      <!-- Small Media -->
+      <div class="mb-10">
+        <h3 class="text-lg font-medium mb-3">Small Media Player</h3>
+        <div class="p-4 border transition-colors
+             bg-white
+             theme-dark:bg-arkumu-dark 
+             theme-dark:border-arkumu-light max-w-xs">
+          {% include 'components/media/small_media.html' with media_title="Ereignis Titel" %}
+        </div>
+        <p class="mt-2 text-sm transition-colors text-gray-600 theme-dark:text-gray-400">Path: components/media/small_media.html</p>
+      </div>
+
+      <!-- Audio Player -->
+      <div class="mb-10">
+        <h3 class="text-lg font-medium mb-3">Audio Player</h3>
+        <div class="p-4 border transition-colors
+             bg-white
+             theme-dark:bg-arkumu-dark 
+             theme-dark:border-arkumu-light max-w-lg">
+          {% include 'components/media/audio.html' with audio_title="Ereignis Titel" %}
+        </div>
+        <p class="mt-2 text-sm transition-colors text-gray-600 theme-dark:text-gray-400">Path: components/media/audio.html</p>
+      </div>
+    </section>
+
+    <!-- Event Components Section -->
+    <section class="mb-16">
+      <h2 class="text-2xl font-semibold mb-6 pb-2 border-b">Event Components</h2>
+      
+      <!-- Event Item -->
+      <div class="mb-10">
+        <h3 class="text-lg font-medium mb-3">Event Item</h3>
+        <div class="p-4 border transition-colors
+             bg-white
+             theme-dark:bg-arkumu-dark 
+             theme-dark:border-arkumu-light">
+          {% include 'components/media/event_item.html' with beginn_ende="2024-01-15 bis 2024-01-20" ereignistyp="Workshop" ereignistitel="Digitale Kunstformen" akteur1="Maria Schmidt" akteur2="Prof. Dr. Weber" button_text="Details ansehen" %}
+        </div>
+        <p class="mt-2 text-sm transition-colors text-gray-600 theme-dark:text-gray-400">Path: components/media/event_item.html</p>
+      </div>
+    </section>
+
+    <!-- Table Components Section -->
+    <section class="mb-16">
+      <h2 class="text-2xl font-semibold mb-6 pb-2 border-b">Table Components</h2>
+      
+      <!-- Data Table -->
+      <div class="mb-10">
+        <h3 class="text-lg font-medium mb-3">Data Table</h3>
+        <div class="p-4 border transition-colors
+             bg-white
+             theme-dark:bg-arkumu-dark 
+             theme-dark:border-arkumu-light">
+          {% include 'components/media/event_list.html' with table_title="Allgemein" row1_label="Kommentar DE" row1_value="Plain Text" row1_required=True row2_label="Kommentar EN" row2_value="Plain Text" row3_label="Sprache Titel" row3_value="Link" row3_type="link" row3_url="/title-link/" row4_label="Sprache Untertitel" row4_value="Link" row4_type="link" row4_url="/subtitle-link/" row5_label="Zusätzliche Information" row5_value="Mehr Details" %}
+        </div>
+        <p class="mt-2 text-sm transition-colors text-gray-600 theme-dark:text-gray-400">Path: components/media/event_list.html</p>
       </div>
     </section>
   </div>
