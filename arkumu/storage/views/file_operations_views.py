@@ -1,13 +1,16 @@
 import logging
 import os
 import mimetypes
-from django.shortcuts import render, redirect
+import tempfile
+from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse, HttpResponse
 from django.urls import reverse
 
 from arkumu.storage.services.bucket_service import BucketService
+from arkumu.importer.services.importer.import_workflow import ImportWorkflowService
+from arkumu.importer.services.importer.smart_bulk_updater import UpdateStrategy
 
 logger = logging.getLogger(__name__)
 
@@ -430,4 +433,181 @@ def delete_object(request, bucket_type, object_type, object_path):
             
         # Only add Django messages for non-HTMX requests
         messages.error(request, error_message)
-        return JsonResponse({"success": False, "error": error_message}) 
+        return JsonResponse({"success": False, "error": error_message})
+
+
+@login_required
+def ingest_file(request):
+    """
+    Ingest a CSV file using the ImportWorkflowService
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    
+    try:
+        # Get parameters from POST data
+        organization_slug = request.POST.get('organization')
+        file_path = request.POST.get('file_path')
+        
+        if not organization_slug:
+            return JsonResponse({'error': 'Organization parameter is required'}, status=400)
+        
+        if not file_path:
+            return JsonResponse({'error': 'File path parameter is required'}, status=400)
+        
+        # Validate organization against predefined organizations
+        bucket_service = BucketService()
+        valid_orgs = [org['slug'] for org in bucket_service.PREDEFINED_ORGANIZATIONS]
+        if organization_slug not in valid_orgs:
+            return JsonResponse({'error': f'Invalid organization: {organization_slug}'}, status=400)
+        
+        # Get bucket name for organization
+        bucket_name = bucket_service.get_organization_bucket(organization_slug)
+        
+        # Check if it's a CSV file
+        if not file_path.lower().endswith('.csv'):
+            return JsonResponse({'error': 'Only CSV files can be ingested'}, status=400)
+        
+        # Download file to temporary location
+        with tempfile.NamedTemporaryFile(mode='w+b', suffix='.csv', delete=False) as temp_file:
+            temp_path = temp_file.name
+            
+        try:
+            # Download from S3 using bucket service
+            bucket_service.s3_client.download_file(bucket_name, file_path, temp_path)
+            
+            # Extract dataset name from file path
+            dataset_name = os.path.splitext(os.path.basename(file_path))[0]
+            
+            logger.info(f"Starting ingest of {file_path} as dataset '{dataset_name}' for organization {organization_slug}")
+            
+            # Import using ImportWorkflowService with smart updater to prevent duplicates
+            result = ImportWorkflowService.import_csv(
+                csv_path=temp_path,
+                dataset_name=dataset_name,
+                institution=organization_slug.upper(),
+                base_uri="http://arkumu.org/data",
+                delimiter=';',
+                has_quoted_fields=True,
+                link_row_cells=True,
+                link_to_first_column=False,
+                use_smart_updater=True,
+                update_strategy=UpdateStrategy.SKIP_EXISTING
+            )
+            
+            # Clean up temp file
+            os.unlink(temp_path)
+            
+            # Return HTMX-friendly toast notification for success
+            if request.headers.get('HX-Request') == 'true':
+                return render(request, "partials/toast_notification.html", {
+                    "message": f"Successfully ingested {dataset_name} from {file_path}",
+                    "type": "success"
+                })
+            
+            return JsonResponse({
+                'success': True,
+                'message': f'Successfully ingested {dataset_name} from {file_path}',
+                'file_path': file_path,
+                'dataset_name': dataset_name,
+                'stats': result
+            })
+            
+        except Exception as e:
+            # Clean up temp file on error
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+            raise
+        
+    except Exception as e:
+        error_message = f'Failed to ingest {file_path}: {str(e)}'
+        logger.error(f"Ingest error for {file_path}: {e}", exc_info=True)
+        
+        # Check if it's a database integrity error from concurrent imports
+        if 'ForeignKeyViolation' in str(e) or 'IntegrityError' in str(e):
+            error_message = f'Database conflict while ingesting {file_path}. This may be due to concurrent imports of the same data. Please try again.'
+        
+        # Return HTMX-friendly toast notification for error
+        if request.headers.get('HX-Request') == 'true':
+            return render(request, "partials/toast_notification.html", {
+                "message": error_message,
+                "type": "error"
+            })
+        
+        return JsonResponse({
+            'error': error_message,
+            'file_path': file_path,
+            'dataset_name': dataset_name if 'dataset_name' in locals() else 'unknown'
+        }, status=500)
+
+
+@login_required
+def reset_database(request):
+    """
+    Reset the database by deleting all Resource and Triple records.
+    This is useful for development and testing.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    
+    try:
+        from arkumu.metadata.models.resource import Resource
+        from arkumu.metadata.models.triples import Triple
+        from django.db import transaction
+        
+        with transaction.atomic():
+            # Delete all triples first (due to foreign key constraints)
+            triple_count = Triple.objects.count()
+            Triple.objects.all().delete()
+            
+            # Delete all resources
+            resource_count = Resource.objects.count()
+            Resource.objects.all().delete()
+            
+        logger.info(f"Database reset completed: deleted {triple_count} triples and {resource_count} resources")
+        
+        # Return HTMX-friendly response
+        if request.headers.get('HX-Request') == 'true':
+            from django.template.loader import render_to_string
+            success_html = f"""
+            <div class="alert alert-success">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div>
+                    <h3 class="font-bold">Database Reset Successful!</h3>
+                    <div class="text-xs">Deleted {triple_count} triples and {resource_count} resources</div>
+                </div>
+            </div>
+            """
+            return HttpResponse(success_html)
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Database reset successful! Deleted {triple_count} triples and {resource_count} resources.',
+            'triples_deleted': triple_count,
+            'resources_deleted': resource_count
+        })
+        
+    except Exception as e:
+        error_message = f'Failed to reset database: {str(e)}'
+        logger.error(f"Database reset error: {e}", exc_info=True)
+        
+        # Return HTMX-friendly error response
+        if request.headers.get('HX-Request') == 'true':
+            error_html = f"""
+            <div class="alert alert-error">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+                <div>
+                    <h3 class="font-bold">Database Reset Failed!</h3>
+                    <div class="text-xs">{error_message}</div>
+                </div>
+            </div>
+            """
+            return HttpResponse(error_html, status=500)
+        
+        return JsonResponse({
+            'error': error_message
+        }, status=500) 

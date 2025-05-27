@@ -32,7 +32,7 @@
 
 {% endblock javascript %}
 </head>
-<body class="min-h-screen bg-base-100">
+<body class="min-h-screen bg-base-100" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
   {% block body %}
   
   <!-- Navbar -->

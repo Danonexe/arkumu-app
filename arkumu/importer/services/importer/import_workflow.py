@@ -434,8 +434,8 @@ class ImportWorkflowService:
             base_uri=base_uri,
             delimiter=delimiter,
             has_quoted_fields=has_quoted_fields,
-            link_row_cells=link_row_cells,
-            link_to_first_column=link_to_first_column
+            link_cells_to_rows=link_row_cells,
+            link_topology="first_column" if link_to_first_column else "row"
         )
         
         logger.info(f"✅ Step 1 completed: import_csv_as_cells finished")

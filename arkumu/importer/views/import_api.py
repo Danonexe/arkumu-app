@@ -10,6 +10,8 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from django.views.decorators.http import require_POST
+from django.http import HttpResponse
 
 from arkumu.importer.services.importer.import_workflow import ImportWorkflowService
 from arkumu.importer.services.file_upload.s3_upload_service import S3UploadService
@@ -18,6 +20,58 @@ logger = logging.getLogger(__name__)
 
 # Default file columns config path
 DEFAULT_FILE_COLUMNS_CONFIG_PATH = os.path.join(settings.BASE_DIR, 'file_columns_config.json')
+
+# Dashboard ingest view
+@require_POST
+def ingest_file(request):
+    """View for ingesting a file directly from the dashboard"""
+    try:
+        # Get file path and organization from request
+        file_path = request.POST.get('file_path')
+        organization = request.POST.get('organization')
+        
+        if not file_path:
+            return HttpResponse(
+                '<div class="alert alert-error mt-2">No file path provided</div>',
+                status=400
+            )
+            
+        # Determine dataset name from file path
+        file_name = os.path.basename(file_path)
+        dataset_name = os.path.splitext(file_name)[0]
+        
+        # Log what we're about to do
+        logger.info(f"Importing file {file_path} for organization {organization}")
+        logger.info(f"Dataset name determined as: {dataset_name}")
+        
+        # Create workflow service instance and call it directly
+        workflow_service = ImportWorkflowService()
+        
+        # Execute the import
+        stats = workflow_service.import_csv(
+            csv_path=file_path,
+            dataset_name=dataset_name,
+            institution=organization,
+            base_uri=f"http://arkumu.org/data/{organization}",
+            delimiter=';',
+            has_quoted_fields=False
+        )
+        
+        # Return success message with stats
+        return HttpResponse(
+            f'<div class="alert alert-success mt-2 text-xs">'
+            f'<div>File imported successfully!</div>'
+            f'<div>Created {stats.get("resources_created", 0)} resources with '
+            f'{stats.get("triples_created", 0)} triples</div>'
+            f'</div>'
+        )
+        
+    except Exception as e:
+        logger.error(f"Error ingesting file: {e}", exc_info=True)
+        return HttpResponse(
+            f'<div class="alert alert-error mt-2 text-xs">Error: {str(e)}</div>',
+            status=500
+        )
 
 
 class CSVImportView(APIView):

@@ -29,6 +29,12 @@ urlpatterns = [
     path("organizations/browse/", file_operations_views.organization_contents, name="organization_contents_browse"),
     path("organizations/<str:organization>/", file_operations_views.organization_contents, name="organization_contents"),
     
+    # CSV ingest endpoint
+    path("ingest-file/", file_operations_views.ingest_file, name="ingest_file"),
+    
+    # Database reset endpoint
+    path("reset-database/", file_operations_views.reset_database, name="reset_database"),
+    
     # Presigned URL API endpoints
     path("presigned-urls/", views.get_presigned_urls, name="get_presigned_urls"),
     path("verify-uploads/", views.mark_uploads_complete, name="mark_uploads_complete"),
