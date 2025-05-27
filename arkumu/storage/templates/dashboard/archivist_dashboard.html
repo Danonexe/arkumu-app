@@ -29,9 +29,6 @@
                 <form id="streaming-upload-form" enctype="multipart/form-data">
                     {% csrf_token %}
                     
-                    <!-- Hidden input for folder name -->
-                    <input type="hidden" id="folder-name" name="folder_name" value="">
-                    
                     <!-- Organization selection -->
                     <div class="form-control mb-2">
                         <label class="label">
@@ -46,19 +43,57 @@
                         </select>
                     </div>
                     
-                    <div class="form-control">
+                    <!-- Base folder selection (data or metadata) -->
+                    <div class="form-control mb-2">
                         <label class="label">
-                            <span class="label-text">Files</span>
+                            <span class="label-text">Base Folder</span>
+                        </label>
+                        <select id="base-folder" name="base_folder" class="select select-bordered w-full select-sm" required>
+                            <option value="" disabled selected>Choose a folder...</option>
+                            <option value="data">data</option>
+                            <option value="metadata">metadata</option>
+                        </select>
+                        <div class="text-xs text-gray-500 mt-1">
+                            Files can only be uploaded to these base folders
+                        </div>
+                    </div>
+                    
+                    <!-- Upload type selection -->
+                    <div class="form-control mb-2">
+                        <label class="label">
+                            <span class="label-text">Upload Type</span>
+                        </label>
+                        <div class="flex gap-2">
+                            <label class="flex-1">
+                                <input type="radio" name="upload-type" value="files" class="radio radio-sm radio-primary" checked />
+                                <span class="ml-2">Files</span>
+                            </label>
+                            <label class="flex-1">
+                                <input type="radio" name="upload-type" value="folder" class="radio radio-sm radio-primary" />
+                                <span class="ml-2">Folder</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <!-- Upload Files section -->
+                    <div id="files-upload-section" class="form-control">
+                        <label class="label">
+                            <span class="label-text">Select Files</span>
                         </label>
                         <input type="file" id="file-input" name="files" multiple class="file-input file-input-bordered file-input-sm w-full" />
                         <div class="text-xs text-gray-500 mt-1">
-                            Multiple files or folder
+                            Select multiple files at once
                         </div>
-                        <div class="form-control mt-2">
-                            <label class="cursor-pointer label justify-start gap-2">
-                                <input type="checkbox" id="folder-mode" class="checkbox checkbox-primary checkbox-sm" />
-                                <span class="label-text">Upload folder structure</span>
-                            </label>
+                    </div>
+                    
+                    <!-- Upload Folder section (initially hidden) -->
+                    <div id="folder-upload-section" class="form-control hidden">
+                        <label class="label">
+                            <span class="label-text">Select Folder</span>
+                        </label>
+                        <input type="file" id="folder-input" webkitdirectory directory multiple class="file-input file-input-bordered file-input-sm w-full" />
+                        <div class="text-xs text-gray-500 mt-1">
+                            Upload an entire folder with its structure
                         </div>
                     </div>
                     
@@ -70,7 +105,7 @@
                     </div>
                     
                     <div class="form-control mt-4">
-                        <button type="button" id="upload-button" class="btn btn-primary btn-sm">Upload Files</button>
+                        <button type="button" id="upload-button" class="btn btn-primary btn-sm">Upload</button>
                     </div>
                 </form>
                 
@@ -149,31 +184,35 @@
     // Global variables - make sure selectedFiles is properly accessible
     window.selectedFiles = [];
     
-    // Handle folder mode toggle
-    document.getElementById('folder-mode').addEventListener('change', function() {
-        const fileInput = document.getElementById('file-input');
-        const helpText = fileInput.nextElementSibling;
-        
-        if (this.checked) {
-            fileInput.setAttribute('webkitdirectory', '');
-            fileInput.setAttribute('directory', '');
-            helpText.textContent = 'Select a folder to preserve its structure';
-        } else {
-            fileInput.removeAttribute('webkitdirectory');
-            fileInput.removeAttribute('directory');
-            helpText.textContent = 'Multiple files or folder';
-        }
-        
-        // Clear current selection when switching modes
-        fileInput.value = '';
-        window.selectedFiles = [];
-        document.getElementById('selected-files-info').classList.add('hidden');
+    // Handle upload type toggle
+    const fileUploadSection = document.getElementById('files-upload-section');
+    const folderUploadSection = document.getElementById('folder-upload-section');
+    const uploadTypeRadios = document.querySelectorAll('input[name="upload-type"]');
+    
+    // Add event listeners to radio buttons
+    uploadTypeRadios.forEach(radio => {
+        radio.addEventListener('change', function() {
+            if (this.value === 'files') {
+                fileUploadSection.classList.remove('hidden');
+                folderUploadSection.classList.add('hidden');
+                // Clear selection
+                document.getElementById('folder-input').value = '';
+            } else if (this.value === 'folder') {
+                fileUploadSection.classList.add('hidden');
+                folderUploadSection.classList.remove('hidden');
+                // Clear selection
+                document.getElementById('file-input').value = '';
+            }
+            // Reset info
+            window.selectedFiles = [];
+            document.getElementById('selected-files-info').classList.add('hidden');
+        });
     });
     
     // Handle file selection
-    document.getElementById('file-input').addEventListener('change', function() {
+    function handleFileSelection(fileInput) {
         console.log('File input changed!');
-        const files = this.files;
+        const files = fileInput.files;
         console.log('Files selected:', files.length);
         if (files.length > 0) {
             let totalSize = 0;
@@ -183,11 +222,6 @@
                 totalSize += files[i].size;
             }
             
-            // Generate folder name based on date
-            const now = new Date();
-            const folderName = `upload-${now.getFullYear()}-${(now.getMonth()+1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}-${now.getHours().toString().padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}`;
-            document.getElementById('folder-name').value = folderName;
-            
             // Store selected files in window scope
             window.selectedFiles = Array.from(files);
             
@@ -196,6 +230,15 @@
             document.getElementById('file-count').textContent = `${files.length} files selected`;
             document.getElementById('total-size').textContent = formatBytes(totalSize);
         }
+    }
+    
+    // Add event listeners to file inputs
+    document.getElementById('file-input').addEventListener('change', function() {
+        handleFileSelection(this);
+    });
+    
+    document.getElementById('folder-input').addEventListener('change', function() {
+        handleFileSelection(this);
     });
     
     // Format bytes to human-readable size
@@ -235,7 +278,14 @@
         
         if (!window.selectedFiles || window.selectedFiles.length === 0) {
             console.log('No files selected, showing error');
-            showErrorMessage('Please select files to upload.');
+            showErrorMessage('Please select files or a folder to upload.');
+            return;
+        }
+        
+        // Check if base folder is selected
+        const baseFolder = document.getElementById('base-folder').value;
+        if (!baseFolder) {
+            showErrorMessage('Please select a base folder (data or metadata).');
             return;
         }
         
@@ -247,9 +297,9 @@
             
             // Create form data
             const formData = new FormData();
-            const folderName = document.getElementById('folder-name').value;
-            console.log('Folder name:', folderName);
-            formData.append('folder_name', folderName);
+            
+            // Set the base folder as the folder_name
+            formData.append('folder_name', baseFolder);
             
             // Add organization if present
             const organizationInput = document.getElementById('organization-upload');
@@ -261,6 +311,9 @@
             // Check CSRF token
             const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
             console.log('CSRF token found:', !!csrfToken);
+            
+            // Determine if we're in folder mode
+            const isFolderMode = document.querySelector('input[name="upload-type"]:checked').value === 'folder';
             
             // Add all files to form data
             for (let i = 0; i < window.selectedFiles.length; i++) {
@@ -339,7 +392,7 @@
         } finally {
             // Re-enable button
             button.disabled = false;
-            button.textContent = 'Upload Files';
+            button.textContent = 'Upload';
         }
     });
     

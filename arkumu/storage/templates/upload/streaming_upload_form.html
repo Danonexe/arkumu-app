@@ -15,9 +15,6 @@
             <form id="streaming-upload-form" enctype="multipart/form-data">
                 {% csrf_token %}
                 
-                <!-- Hidden input for folder name -->
-                <input type="hidden" id="folder-name" name="folder_name" value="">
-                
                 <!-- Organization selection -->
                 {% if organization %}
                 <input type="hidden" id="organization" name="organization" value="{{ organization }}">
@@ -42,10 +39,25 @@
                         <option value="det">Hochschule für Musik Detmold</option>
                     </select>
                     <div class="label">
-                        <span class="label-text-alt">Leave empty to upload to the default ingest bucket</span>
+                        <span class="label-text-alt">Choose the organization bucket</span>
                     </div>
                 </div>
                 {% endif %}
+                
+                <!-- Base folder selection (data or metadata) -->
+                <div class="form-control mb-4">
+                    <label class="label">
+                        <span class="label-text">Select Base Folder</span>
+                    </label>
+                    <select id="base-folder" name="base_folder" class="select select-bordered w-full" required>
+                        <option value="" disabled selected>Choose a folder...</option>
+                        <option value="data">data</option>
+                        <option value="metadata">metadata</option>
+                    </select>
+                    <div class="label">
+                        <span class="label-text-alt">You can only upload to these base folders</span>
+                    </div>
+                </div>
                 
                 <div class="form-control">
                     <label class="label">
@@ -156,11 +168,6 @@
                 totalSize += files[i].size;
             }
             
-            // Generate folder name based on date
-            const now = new Date();
-            const folderName = `upload-${now.getFullYear()}-${(now.getMonth()+1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}-${now.getHours().toString().padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}`;
-            document.getElementById('folder-name').value = folderName;
-            
             // Store selected files in window scope
             window.selectedFiles = Array.from(files);
             
@@ -212,6 +219,13 @@
             return;
         }
         
+        // Check if base folder is selected
+        const baseFolder = document.getElementById('base-folder').value;
+        if (!baseFolder) {
+            showErrorMessage('Please select a base folder (data or metadata).');
+            return;
+        }
+        
         try {
             // Disable button and show progress
             button.disabled = true;
@@ -220,9 +234,9 @@
             
             // Create form data
             const formData = new FormData();
-            const folderName = document.getElementById('folder-name').value;
-            console.log('Folder name:', folderName);
-            formData.append('folder_name', folderName);
+            
+            // Set the base folder as the folder_name to use
+            formData.append('folder_name', baseFolder);
             
             // Add organization if present
             const organizationInput = document.getElementById('organization');
@@ -235,10 +249,27 @@
             const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
             console.log('CSRF token found:', !!csrfToken);
             
+            // Handle folder mode
+            const isFolderMode = document.getElementById('folder-mode').checked;
+            
             // Add all files to form data
             for (let i = 0; i < window.selectedFiles.length; i++) {
                 const file = window.selectedFiles[i];
-                formData.append('files', file);
+                
+                if (isFolderMode) {
+                    // For folder mode, keep the path but ensure it's inside the base folder
+                    // The path in webkitRelativePath starts with the folder name
+                    if (file.webkitRelativePath) {
+                        // Create a new File object with the modified path that includes the base folder
+                        formData.append('files', file);
+                    } else {
+                        // Fallback if webkitRelativePath is not available
+                        formData.append('files', file);
+                    }
+                } else {
+                    // For normal mode, files go directly to the base folder
+                    formData.append('files', file);
+                }
                 
                 // Update progress periodically
                 if (i % 10 === 0 || i === window.selectedFiles.length - 1) {
