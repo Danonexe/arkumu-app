@@ -1,5 +1,5 @@
 import logging
-from django.shortcuts import render, redirect
+from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
 from django.urls import reverse
 
@@ -7,6 +7,7 @@ from django.urls import reverse
 from arkumu.storage.views.presigned_url_views import get_presigned_urls, mark_uploads_complete
 from arkumu.storage.views.dashboard_views import archivist_dashboard
 from arkumu.storage.views.direct_upload_views import direct_upload, process_upload
+from arkumu.storage.views.streaming_upload_views import streaming_upload_form
 
 logger = logging.getLogger(__name__)
 
@@ -14,12 +15,13 @@ logger = logging.getLogger(__name__)
 @login_required
 def upload_form(request):
     """
-    Render the upload form for uploading folders to the ingest bucket.
+    Use the streaming upload form directly.
     
-    This is a simple view that renders the upload form HTML template.
-    No business logic is performed here.
+    The old upload form using presigned URLs is now deprecated.
+    This view directly calls the streaming upload form view.
     """
-    return render(request, "upload/upload_form.html")
+    logger.info(f"User {request.user.username} accessing upload form, using streaming upload")
+    return streaming_upload_form(request)
 
 
 @login_required

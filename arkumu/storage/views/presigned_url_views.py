@@ -277,51 +277,42 @@ def mark_uploads_complete(request):
 @require_http_methods(["POST"])
 def initialize_multipart_upload(request):
     """
-    Initialize a multipart upload to S3.
+    Return a message directing users to the streaming upload endpoint.
     
-    This view is called to start a multipart upload process for large files.
-    It initializes the upload in S3 and returns an upload ID that will be used
-    for subsequent part uploads.
+    This view is now deprecated as direct multipart uploads are no longer supported.
+    It returns a message directing users to the streaming upload endpoint.
     """
     try:
         # Parse request data
         data = json.loads(request.body)
         file_name = data.get("file_name")
-        file_type = data.get("file_type")
-        path_prefix = data.get("path_prefix")
         
-        # Validate required fields
-        if not file_name or not file_type:
-            error_message = "File name and type are required"
-            logger.warning(error_message)
-            return JsonResponse({"success": False, "error": error_message})
+        logger.warning(f"Legacy multipart upload initialization requested for {file_name}, but this method is deprecated.")
         
-        logger.info(f"Initializing multipart upload for {file_name}")
-        
-        # Use the upload service to initialize the multipart upload
-        upload_service = get_upload_service()
-        result = upload_service.initialize_multipart_upload(
-            file_name=file_name,
-            file_type=file_type,
-            path_prefix=path_prefix
-        )
-        
-        if result["success"]:
-            logger.info(f"Multipart upload initialized with ID: {result['upload_id']}")
-            return JsonResponse(result)
-        else:
-            logger.error(f"Failed to initialize multipart upload: {result.get('error')}")
-            return JsonResponse(result)
+        # Return a message directing users to the streaming upload endpoint
+        return JsonResponse({
+            "success": False, 
+            "error": "Direct multipart uploads are no longer supported. Please use the streaming upload endpoint instead.",
+            "redirect_to": "/storage/upload/streaming/"
+        }, status=301)  # 301 Moved Permanently
     
     except json.JSONDecodeError:
         error_message = "Invalid JSON data"
         logger.warning(error_message)
-        return JsonResponse({"success": False, "error": error_message})
+        return JsonResponse({
+            "success": False, 
+            "error": error_message,
+            "redirect_to": "/storage/upload/streaming/"
+        }, status=301)
     
     except Exception as e:
         error_message = f"Error initializing multipart upload: {str(e)}"
         logger.error(error_message)
-        return JsonResponse({"success": False, "error": error_message})
+        return JsonResponse({
+            "success": False, 
+            "error": error_message,
+            "redirect_to": "/storage/upload/streaming/"
+        }, status=301)
 
 
 @login_required

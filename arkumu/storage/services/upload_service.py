@@ -690,4 +690,68 @@ class UploadService(BaseStorageService):
             multipart_threshold=multipart_threshold,
             max_concurrency=max_concurrency,
             multipart_chunksize=multipart_chunksize
-        ) 
+        )
+
+    def initialize_multipart_upload(self, file_name: str, file_type: str, path_prefix: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Legacy method - multipart uploads are now handled through streaming.
+        This method returns an error indicating that streaming upload should be used instead.
+        """
+        logger.warning(f"Legacy multipart upload initialization requested for {file_name}, but this method is deprecated.")
+        return {
+            'success': False,
+            'error': 'Direct multipart uploads are no longer supported. Please use the streaming upload endpoint instead.',
+            'file_name': file_name,
+            'alternative': 'Use upload_django_file() or upload_file_stream() methods with the optimized parameters'
+        }
+        
+    def get_upload_part_urls(self, s3_key: str, upload_id: str, part_count: int, expiration: int = 3600) -> Dict[str, Any]:
+        """
+        Legacy method - multipart uploads are now handled through streaming.
+        This method returns an error indicating that streaming upload should be used instead.
+        """
+        logger.warning(f"Legacy part upload URLs requested for {s3_key}, but this method is deprecated.")
+        return {
+            'success': False,
+            'error': 'Direct multipart uploads are no longer supported. Please use the streaming upload endpoint instead.',
+            's3_key': s3_key,
+            'alternative': 'Use upload_django_file() or upload_file_stream() methods with the optimized parameters'
+        }
+        
+    def complete_multipart_upload(self, s3_key: str, upload_id: str, parts: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Legacy method - multipart uploads are now handled through streaming.
+        This method returns an error indicating that streaming upload should be used instead.
+        """
+        logger.warning(f"Legacy multipart upload completion requested for {s3_key}, but this method is deprecated.")
+        return {
+            'success': False,
+            'error': 'Direct multipart uploads are no longer supported. Please use the streaming upload endpoint instead.',
+            's3_key': s3_key,
+            'alternative': 'Use upload_django_file() or upload_file_stream() methods with the optimized parameters'
+        }
+        
+    def abort_multipart_upload(self, s3_key: str, upload_id: str) -> Dict[str, Any]:
+        """
+        Legacy method - multipart uploads are now handled through streaming.
+        This method returns a success response since there's nothing to abort.
+        """
+        logger.warning(f"Legacy multipart upload abort requested for {s3_key}, but this method is deprecated.")
+        return {
+            'success': True,
+            'message': 'No action needed as direct multipart uploads are no longer supported.',
+            's3_key': s3_key
+        }
+        
+    def list_multipart_uploads(self) -> Dict[str, Any]:
+        """
+        Legacy method - multipart uploads are now handled through streaming.
+        This method returns an empty list since there are no legacy multipart uploads.
+        """
+        logger.warning("Legacy multipart uploads listing requested, but this method is deprecated.")
+        return {
+            'success': True,
+            'uploads': [],
+            'count': 0,
+            'message': 'Direct multipart uploads are no longer supported.'
+        } 

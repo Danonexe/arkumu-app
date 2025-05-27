@@ -52,7 +52,7 @@ def streaming_upload_form(request):
         # Initialize upload service
         upload_service = UploadService()
         
-        # Upload files using optimized parallel streaming
+        # Process each file to preserve folder structure
         result = upload_service.upload_batch_django_files_optimized(
             uploaded_files=uploaded_files,
             path_prefix=folder_name,
