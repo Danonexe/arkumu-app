@@ -7,26 +7,23 @@ ARG BUILD_ENVIRONMENT=local
 
 # Install apt packages
 RUN apt-get update && apt-get install --no-install-recommends -y \
-  # dependencies for building Python packages
-  build-essential \
-  # psycopg dependencies
-  libpq-dev \
-  # needed for uv installer
-  curl \
-  && rm -rf /var/lib/apt/lists/*
+    # dependencies for building Python packages
+    build-essential \
+    # psycopg dependencies
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install uv
-ADD --chmod=755 https://astral.sh/uv/install.sh /install.sh
-RUN /install.sh && rm /install.sh
-ENV PATH="/root/.local/bin:${PATH}"
+# Install uv using the more reliable COPY method from official image
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 # Requirements are installed here to ensure they will be cached.
 COPY ./requirements .
 
-# Install Python dependencies
-RUN uv pip install --system -r ${BUILD_ENVIRONMENT}.txt
+# Install Python dependencies with cache mounting
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --system -r ${BUILD_ENVIRONMENT}.txt
 
-# Python 'run' stage
+# Python 'run' stage  
 FROM python AS python-run-stage
 ARG BUILD_ENVIRONMENT=local
 ARG APP_HOME=/app
@@ -37,26 +34,26 @@ WORKDIR ${APP_HOME}
 
 # devcontainer dependencies and utils
 RUN apt-get update && apt-get install --no-install-recommends -y \
-  sudo git bash-completion nano ssh
+    sudo git bash-completion nano ssh
 
 # Create devcontainer user and add it to sudoers
 RUN groupadd --gid 1000 dev-user \
-  && useradd --uid 1000 --gid dev-user --shell /bin/bash --create-home dev-user \
-  && echo dev-user ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/dev-user \
-  && chmod 0440 /etc/sudoers.d/dev-user
+    && useradd --uid 1000 --gid dev-user --shell /bin/bash --create-home dev-user \
+    && echo dev-user ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/dev-user \
+    && chmod 0440 /etc/sudoers.d/dev-user
 
 # Install required system dependencies
 RUN apt-get update && apt-get install --no-install-recommends -y \
-  # psycopg dependencies
-  libpq-dev \
-  wait-for-it \
-  # Translations dependencies
-  gettext \
-  # cleaning up unused files
-  && apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false \
-  && rm -rf /var/lib/apt/lists/*
+    # psycopg dependencies
+    libpq-dev \
+    wait-for-it \
+    # Translations dependencies
+    gettext \
+    # cleaning up unused files
+    && apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy Python packages from build stage
+# Copy Python packages from build stage - SAME Python base image ensures compatibility
 COPY --from=python-build-stage /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=python-build-stage /usr/local/bin /usr/local/bin
 
