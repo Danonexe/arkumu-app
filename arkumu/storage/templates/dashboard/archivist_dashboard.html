@@ -4,19 +4,18 @@
 {% load static %}
 
 <div class="container mx-auto px-4 py-8">
-    <div class="hero mb-8">
+    <div class="hero mb-4">
         <div class="hero-content text-center">
             <div>
                 <h1 class="text-4xl font-bold">Archivist Dashboard</h1>
-                <p class="py-4 text-base-content/70">Manage organization digital assets</p>
+                <p class="py-2 text-base-content/70">Manage organization digital assets</p>
             </div>
         </div>
     </div>
     
-
-    <!-- Main Actions -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        <!-- Upload Files Card -->
+    <!-- Main Content Area with Upload Form and Browser -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Upload Form (Smaller) -->
         <div class="card bg-base-100 shadow-xl">
             <div class="card-body">
                 <h2 class="card-title">
@@ -25,70 +24,342 @@
                     </svg>
                     Upload Files
                 </h2>
-                <p>Upload files to an organization bucket</p>
-                <div class="card-actions justify-end">
-                    <a href="{% url 'storage:streaming_upload_form' %}" class="btn btn-primary">
-                        Start Upload
-                    </a>
+                
+                <!-- Embedded Upload Form -->
+                <form id="streaming-upload-form" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    
+                    <!-- Hidden input for folder name -->
+                    <input type="hidden" id="folder-name" name="folder_name" value="">
+                    
+                    <!-- Organization selection -->
+                    <div class="form-control mb-2">
+                        <label class="label">
+                            <span class="label-text">Organization</span> 
+                        </label>
+                        <select id="organization-upload" name="organization" class="select select-bordered w-full select-sm">
+                            <option value="rsh">Robert Schumann Hochschule Düsseldorf</option>
+                            <option value="khm">Kunsthochschule für Medien Köln</option>
+                            <option value="fuk">Folkwang Universität der Künste</option>
+                            <option value="hmt">Hochschule für Musik und Tanz Köln</option>
+                            <option value="det">Hochschule für Musik Detmold</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text">Files</span>
+                        </label>
+                        <input type="file" id="file-input" name="files" multiple class="file-input file-input-bordered file-input-sm w-full" />
+                        <div class="text-xs text-gray-500 mt-1">
+                            Multiple files or folder
+                        </div>
+                        <div class="form-control mt-2">
+                            <label class="cursor-pointer label justify-start gap-2">
+                                <input type="checkbox" id="folder-mode" class="checkbox checkbox-primary checkbox-sm" />
+                                <span class="label-text">Upload folder structure</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div id="selected-files-info" class="mt-2 hidden">
+                        <div class="flex justify-between">
+                            <span class="font-semibold text-sm" id="file-count">0 files selected</span>
+                            <span class="font-semibold text-sm" id="total-size">0 bytes</span>
+                        </div>
+                    </div>
+                    
+                    <div class="form-control mt-4">
+                        <button type="button" id="upload-button" class="btn btn-primary btn-sm">Upload Files</button>
+                    </div>
+                </form>
+                
+                <div id="upload-progress" class="mt-2 hidden">
+                    <div class="flex justify-between mb-1 text-sm">
+                        <span id="progress-text">Uploading...</span>
+                        <span id="progress-percentage">0%</span>
+                    </div>
+                    <progress class="progress progress-primary w-full" id="progress-bar" value="0" max="100"></progress>
                 </div>
+                
+                <div id="upload-status" class="mt-2"></div>
             </div>
         </div>
 
-    
-    <!-- Organization Browser -->
-    <div class="card bg-base-100 shadow-xl">
-        <div class="card-body">
-            <h2 class="card-title mb-6">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                </svg>
-                Browse Organization Files
-            </h2>
-            
-            <!-- Organization Selection -->
-            <div class="form-control max-w-md mb-6">
-                <label class="label">
-                    <span class="label-text">Select an organization</span>
-                </label>
-                <select id="organization-select" class="select select-bordered w-full"
-                        hx-get="/storage/organizations/browse/"
-                        hx-target="#file-browser-content"
-                        hx-trigger="change"
-                        hx-include="this"
-                        name="organization">
-                    <option value="">Choose organization...</option>
-                    {% for org in organizations %}
-                        <option value="{{ org.slug }}">
-                            {{ org.name }}{% if org.exists %} ✓{% endif %}
-                        </option>
-                    {% empty %}
-                        <option value="rsh">Robert Schumann Hochschule Düsseldorf</option>
-                        <option value="khm">Kunsthochschule für Medien Köln</option>
-                        <option value="fuk">Folkwang Universität der Künste</option>
-                        <option value="hmt">Hochschule für Musik und Tanz Köln</option>
-                        <option value="det">Hochschule für Musik Detmold</option>
-                    {% endfor %}
-                </select>
-                <div class="label">
-                    <span class="label-text-alt">✓ indicates bucket already exists</span>
-                </div>
-            </div>
-            
-            <!-- File Browser Content -->
-            <div id="file-browser-content">
-                <div class="alert alert-info">
+        <!-- Organization Browser (Larger, spans 2 columns) -->
+        <div class="card bg-base-100 shadow-xl lg:col-span-2">
+            <div class="card-body">
+                <h2 class="card-title mb-4">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
                     </svg>
-                    <span>Select an organization to browse its files</span>
+                    Organization Files
+                </h2>
+                
+                <!-- Organization Selection -->
+                <div class="form-control max-w-md mb-4">
+                    <label class="label">
+                        <span class="label-text">Select an organization</span>
+                    </label>
+                    <select id="organization-select" class="select select-bordered w-full"
+                            hx-get="/storage/organizations/browse/"
+                            hx-target="#file-browser-content"
+                            hx-trigger="change"
+                            hx-include="this"
+                            name="organization">
+                        <option value="">Choose organization...</option>
+                        {% for org in organizations %}
+                            <option value="{{ org.slug }}">
+                                {{ org.name }}{% if org.exists %} ✓{% endif %}
+                            </option>
+                        {% empty %}
+                            <option value="rsh">Robert Schumann Hochschule Düsseldorf</option>
+                            <option value="khm">Kunsthochschule für Medien Köln</option>
+                            <option value="fuk">Folkwang Universität der Künste</option>
+                            <option value="hmt">Hochschule für Musik und Tanz Köln</option>
+                            <option value="det">Hochschule für Musik Detmold</option>
+                        {% endfor %}
+                    </select>
+                    <div class="label">
+                        <span class="label-text-alt">✓ indicates bucket already exists</span>
+                    </div>
+                </div>
+                
+                <!-- File Browser Content -->
+                <div id="file-browser-content" class="min-h-[300px]">
+                    <div class="alert alert-info">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span>Select an organization to browse its files</span>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
-    
-
 </div>
 
+<!-- Include the S3 client and multipart upload handler scripts -->
+<script src="{% static 'js/src/s3/s3-client.js' %}"></script>
+<script src="{% static 'js/src/s3/multipart-upload.js' %}"></script>
 
-
+<script>
+    console.log('JavaScript is loading...');
+    
+    // Global variables - make sure selectedFiles is properly accessible
+    window.selectedFiles = [];
+    
+    // Handle folder mode toggle
+    document.getElementById('folder-mode').addEventListener('change', function() {
+        const fileInput = document.getElementById('file-input');
+        const helpText = fileInput.nextElementSibling;
+        
+        if (this.checked) {
+            fileInput.setAttribute('webkitdirectory', '');
+            fileInput.setAttribute('directory', '');
+            helpText.textContent = 'Select a folder to preserve its structure';
+        } else {
+            fileInput.removeAttribute('webkitdirectory');
+            fileInput.removeAttribute('directory');
+            helpText.textContent = 'Multiple files or folder';
+        }
+        
+        // Clear current selection when switching modes
+        fileInput.value = '';
+        window.selectedFiles = [];
+        document.getElementById('selected-files-info').classList.add('hidden');
+    });
+    
+    // Handle file selection
+    document.getElementById('file-input').addEventListener('change', function() {
+        console.log('File input changed!');
+        const files = this.files;
+        console.log('Files selected:', files.length);
+        if (files.length > 0) {
+            let totalSize = 0;
+            
+            // Calculate total size
+            for (let i = 0; i < files.length; i++) {
+                totalSize += files[i].size;
+            }
+            
+            // Generate folder name based on date
+            const now = new Date();
+            const folderName = `upload-${now.getFullYear()}-${(now.getMonth()+1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}-${now.getHours().toString().padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}`;
+            document.getElementById('folder-name').value = folderName;
+            
+            // Store selected files in window scope
+            window.selectedFiles = Array.from(files);
+            
+            // Update UI
+            document.getElementById('selected-files-info').classList.remove('hidden');
+            document.getElementById('file-count').textContent = `${files.length} files selected`;
+            document.getElementById('total-size').textContent = formatBytes(totalSize);
+        }
+    });
+    
+    // Format bytes to human-readable size
+    function formatBytes(bytes, decimals = 2) {
+        if (bytes === 0) return '0 Bytes';
+        
+        const k = 1024;
+        const dm = decimals < 0 ? 0 : decimals;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+        
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+    }
+    
+    // Show error message
+    function showErrorMessage(message) {
+        const statusArea = document.getElementById('upload-status');
+        statusArea.innerHTML = `<div class="alert alert-error">${message}</div>`;
+    }
+    
+    // Update upload progress
+    function updateUploadProgress(message, percentage) {
+        document.getElementById('upload-progress').classList.remove('hidden');
+        document.getElementById('progress-text').textContent = message;
+        document.getElementById('progress-percentage').textContent = `${Math.round(percentage)}%`;
+        document.getElementById('progress-bar').value = percentage;
+    }
+    
+    // Add event listener for the upload button
+    document.getElementById('upload-button').addEventListener('click', async function() {
+        console.log('Upload button clicked!');
+        const button = this;
+        const statusArea = document.getElementById('upload-status');
+        
+        console.log('Selected files:', window.selectedFiles);
+        
+        if (!window.selectedFiles || window.selectedFiles.length === 0) {
+            console.log('No files selected, showing error');
+            showErrorMessage('Please select files to upload.');
+            return;
+        }
+        
+        try {
+            // Disable button and show progress
+            button.disabled = true;
+            button.innerHTML = '<span class="loading loading-spinner"></span> Uploading...';
+            updateUploadProgress('Preparing upload...', 0);
+            
+            // Create form data
+            const formData = new FormData();
+            const folderName = document.getElementById('folder-name').value;
+            console.log('Folder name:', folderName);
+            formData.append('folder_name', folderName);
+            
+            // Add organization if present
+            const organizationInput = document.getElementById('organization-upload');
+            if (organizationInput && organizationInput.value) {
+                console.log('Organization:', organizationInput.value);
+                formData.append('organization', organizationInput.value);
+            }
+            
+            // Check CSRF token
+            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+            console.log('CSRF token found:', !!csrfToken);
+            
+            // Add all files to form data
+            for (let i = 0; i < window.selectedFiles.length; i++) {
+                const file = window.selectedFiles[i];
+                formData.append('files', file);
+                
+                // Update progress periodically
+                if (i % 10 === 0 || i === window.selectedFiles.length - 1) {
+                    const percentage = (i / window.selectedFiles.length) * 30; // Use first 30% for preparation
+                    updateUploadProgress(`Preparing files (${i+1}/${window.selectedFiles.length})...`, percentage);
+                    // Allow UI to update
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                }
+            }
+            
+            // Send the upload request
+            updateUploadProgress('Uploading files to server...', 30);
+            console.log('Sending POST request to:', '{% url "storage:streaming_upload_form" %}');
+            const response = await fetch('{% url "storage:streaming_upload_form" %}', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': csrfToken
+                }
+            });
+            
+            console.log('Response status:', response.status);
+            console.log('Response ok:', response.ok);
+            
+            updateUploadProgress('Processing response...', 95);
+            
+            // Handle response
+            let result;
+            try {
+                const responseText = await response.text();
+                console.log('Response text:', responseText);
+                result = JSON.parse(responseText);
+                console.log('Parsed result:', result);
+            } catch (parseError) {
+                console.error('Error parsing JSON:', parseError);
+                throw new Error('Invalid response from server');
+            }
+            
+            if (result.success) {
+                // Show success message
+                statusArea.innerHTML = `<div class="alert alert-success">Upload completed successfully!</div>`;
+                
+                // Complete progress
+                updateUploadProgress('Upload complete!', 100);
+                
+                // Refresh the file browser if an organization was selected
+                const selectedOrg = organizationInput?.value;
+                if (selectedOrg) {
+                    // Set the browser organization selector to match the upload org
+                    const browserOrgSelect = document.getElementById('organization-select');
+                    if (browserOrgSelect) {
+                        browserOrgSelect.value = selectedOrg;
+                        // Trigger the HTMX request to refresh the file list
+                        htmx.trigger(browserOrgSelect, 'change');
+                    }
+                }
+            } else {
+                // Show error message
+                statusArea.innerHTML = `<div class="alert alert-error">
+                    <p>Upload failed: ${result.error || 'Unknown error'}</p>
+                    ${result.failures ? `<p class="mt-2">Failed files: ${result.failures.length}</p>` : ''}
+                </div>`;
+                
+                // Update progress
+                updateUploadProgress('Upload failed', 100);
+            }
+        } catch (error) {
+            console.error('Upload error:', error);
+            statusArea.innerHTML = `<div class="alert alert-error">Upload failed: ${error.message}</div>`;
+            updateUploadProgress('Upload failed', 100);
+        } finally {
+            // Re-enable button
+            button.disabled = false;
+            button.textContent = 'Upload Files';
+        }
+    });
+    
+    // Sync organization selections
+    document.getElementById('organization-select').addEventListener('change', function() {
+        const uploadOrgSelect = document.getElementById('organization-upload');
+        if (uploadOrgSelect && this.value) {
+            uploadOrgSelect.value = this.value;
+        }
+    });
+    
+    document.getElementById('organization-upload').addEventListener('change', function() {
+        const browserOrgSelect = document.getElementById('organization-select');
+        if (browserOrgSelect && this.value) {
+            browserOrgSelect.value = this.value;
+            // Trigger HTMX to refresh the file browser
+            htmx.trigger(browserOrgSelect, 'change');
+        }
+    });
+    
+    console.log('JavaScript finished loading');
+</script>
 {% endblock %}

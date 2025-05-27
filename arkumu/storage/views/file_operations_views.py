@@ -115,12 +115,27 @@ def organization_contents(request, organization=None):
         if is_htmx_request or is_browse_url:
             # Return partial template for HTMX
             logger.info("Returning partial template for HTMX or browse URL")
-            return render(request, "dashboard/organization_files_partial.html", {
-                "organization": organization,
-                "bucket_name": bucket_name,
-                "contents": contents,
-                "prefix": prefix
-            })
+            
+            # If we have a prefix (navigating into subfolders), use the organization folder contents template
+            # to avoid duplicating the header. Otherwise, use the full organization files template.
+            if prefix:
+                # Transform contents to match the organization_folder_contents_partial.html expected format
+                structure = {
+                    "children": contents
+                }
+                return render(request, "dashboard/organization_folder_contents_partial.html", {
+                    "structure": structure,
+                    "organization": organization,
+                    "bucket_type": f"org-{organization}"
+                })
+            else:
+                # Initial load - show full template with header
+                return render(request, "dashboard/organization_files_partial.html", {
+                    "organization": organization,
+                    "bucket_name": bucket_name,
+                    "contents": contents,
+                    "prefix": prefix
+                })
         
         # Prepare breadcrumbs for navigation
         breadcrumbs = []
@@ -284,7 +299,10 @@ def move_to_production(request, folder_path):
         
         # If HTMX request, return error message
         if request.headers.get('HX-Request') == 'true':
-            return HttpResponse(error_message, status=500)
+            return render(request, "partials/toast_notification.html", {
+                "message": error_message,
+                "type": "error"
+            })
         
         # Regular request - redirect to dashboard
         return redirect(reverse('storage:archivist_dashboard'))
@@ -376,29 +394,40 @@ def delete_object(request, bucket_type, object_type, object_path):
         if result.get("success", False):
             success_message = f"Successfully deleted {object_type} '{object_path}'"
             logger.info(success_message)
-            messages.success(request, success_message)
             
             if request.headers.get('HX-Request') == 'true':
-                # Return an empty response with 200 OK instead of 204 No Content
-                return HttpResponse("", status=200)  # Empty string but status 200
+                # For HTMX requests, return a toast notification
+                # The element will be removed from the DOM by hx-swap="outerHTML"
+                # and the toast will show the success message
+                return render(request, "partials/toast_notification.html", {
+                    "message": success_message,
+                    "type": "success"
+                })
             
+            # Only add Django messages for non-HTMX requests
+            messages.success(request, success_message)
             return JsonResponse({"success": True, "message": success_message})
         else:
             error_message = f"Failed to delete {object_type}: {result.get('error', 'Unknown error')}"
             logger.error(error_message)
-            messages.error(request, error_message)
             
             if request.headers.get('HX-Request') == 'true':
-                return HttpResponse(error_message, status=400)
+                return render(request, "partials/toast_notification.html", {
+                    "message": error_message,
+                    "type": "error"
+                })
                 
+            # Only add Django messages for non-HTMX requests
+            messages.error(request, error_message)
             return JsonResponse({"success": False, "error": error_message})
             
     except Exception as e:
         error_message = f"Error deleting {object_type}: {str(e)}"
         logger.exception(error_message)
-        messages.error(request, error_message)
         
         if request.headers.get('HX-Request') == 'true':
             return HttpResponse(error_message, status=500)
             
+        # Only add Django messages for non-HTMX requests
+        messages.error(request, error_message)
         return JsonResponse({"success": False, "error": error_message}) 
