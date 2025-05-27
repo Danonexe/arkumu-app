@@ -3,316 +3,92 @@
 {% block content %}
 {% load static %}
 
-<div class="container mx-auto px-4">
-    <!-- Theme Switcher -->
-    <div class="flex justify-end mt-4">
-        <div class="dropdown dropdown-end">
-            <div tabindex="0" role="button" class="btn btn-ghost m-1">
-                <span class="mr-2">Theme</span>
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-                </svg>
-            </div>
-            <ul tabindex="0" class="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-52">
-                <li><button class="theme-item" data-theme="light">Light</button></li>
-                <li><button class="theme-item" data-theme="dark">Dark</button></li>
-            </ul>
-        </div>
-    </div>
-
-    <div class="hero py-4">
+<div class="container mx-auto px-4 py-8">
+    <div class="hero mb-8">
         <div class="hero-content text-center">
             <div>
-                <h1 class="text-3xl font-bold">Archivist Dashboard</h1>
-                <p class="py-2 text-base-content/70">Manage your digital assets in one place</p>
+                <h1 class="text-4xl font-bold">Archivist Dashboard</h1>
+                <p class="py-4 text-base-content/70">Manage organization digital assets</p>
             </div>
         </div>
     </div>
     
-    <div id="indicator" class="hidden fixed top-0 left-0 w-full h-1 bg-primary"></div>
-    
-    <!-- Stats cards -->
-    <div class="stats shadow w-full mb-6">
-        <div class="stat">
-            <div class="stat-figure text-primary">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-            </div>
-            <div class="stat-title">Ingest Files</div>
-            <div class="stat-value text-primary" id="ingest-count">0</div>
-            <div class="stat-desc">Files awaiting processing</div>
-        </div>
-        
-        <div class="stat">
-            <div class="stat-figure text-secondary">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-                </svg>
-            </div>
-            <div class="stat-title">Production Files</div>
-            <div class="stat-value text-secondary" id="production-count">0</div>
-            <div class="stat-desc">Files in production</div>
-        </div>
-    </div>
-    
-    <!-- Upload button -->
-    <div class="flex justify-center mb-6">
-        <a href="{% url 'storage:streaming_upload_form' %}" class="btn btn-primary">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-            </svg>
-            Upload Files to S3
-        </a>
-    </div>
-    
-    <!-- Message display section -->
-    <div id="message-container" class="toast toast-top toast-center my-4 {% if not message %}hidden{% endif %}">
-        <div id="message-content" class="alert alert-success">
-            {{ message }}
-        </div>
-    </div>
-    
-    <div class="divider"></div>
-    
-    <!-- Tabs for switching between buckets -->
-    <div class="tabs tabs-boxed mb-4">
-        <a class="tab tab-active" id="tab-ingest" onclick="switchTab('ingest')">Ingest Bucket</a>
-        <a class="tab" id="tab-production" onclick="switchTab('production')">Production Bucket</a>
-    </div>
-    
-    <!-- Content containers -->
-    <div class="grid grid-cols-1 gap-4">
-        <div id="ingest-container">
-            <div class="card bg-base-100 shadow-xl">
-                <div class="card-body">
-                    <h2 class="card-title flex justify-between">
-                        Ingest Bucket
-                        <div class="badge badge-primary">New</div>
-                    </h2>
-                    <div id="ingest-structure" class="mt-4">
-                        {% include "dashboard/folder_structure_partial.html" with structure=ingest_structure bucket_type="ingest" %}
-                        {% if not ingest_structure %}
-                            <div class="alert alert-info">
-                                <div>
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
-                                    <span>No files or folders found.</span>
-                                </div>
-                            </div>
-                        {% endif %}
-                    </div>
+
+    <!-- Main Actions -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <!-- Upload Files Card -->
+        <div class="card bg-base-100 shadow-xl">
+            <div class="card-body">
+                <h2 class="card-title">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                    </svg>
+                    Upload Files
+                </h2>
+                <p>Upload files to an organization bucket</p>
+                <div class="card-actions justify-end">
+                    <a href="{% url 'storage:streaming_upload_form' %}" class="btn btn-primary">
+                        Start Upload
+                    </a>
                 </div>
             </div>
         </div>
-        
-        <div id="production-container" class="hidden">
-            <div class="card bg-base-100 shadow-xl">
-                <div class="card-body">
-                    <h2 class="card-title flex justify-between">
-                        Production Bucket
-                        <div class="badge badge-secondary">Live</div>
-                    </h2>
-                    <div id="production-structure" class="mt-4">
-                        {% include "dashboard/folder_structure_partial.html" with structure=production_structure bucket_type="production" %}
-                        {% if not production_structure %}
-                            <div class="alert alert-info">
-                                <div>
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
-                                    <span>No files or folders found.</span>
-                                </div>
-                            </div>
-                        {% endif %}
-                    </div>
+
+    
+    <!-- Organization Browser -->
+    <div class="card bg-base-100 shadow-xl">
+        <div class="card-body">
+            <h2 class="card-title mb-6">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                </svg>
+                Browse Organization Files
+            </h2>
+            
+            <!-- Organization Selection -->
+            <div class="form-control max-w-md mb-6">
+                <label class="label">
+                    <span class="label-text">Select an organization</span>
+                </label>
+                <select id="organization-select" class="select select-bordered w-full"
+                        hx-get="/storage/organizations/browse/"
+                        hx-target="#file-browser-content"
+                        hx-trigger="change"
+                        hx-include="this"
+                        name="organization">
+                    <option value="">Choose organization...</option>
+                    {% for org in organizations %}
+                        <option value="{{ org.slug }}">
+                            {{ org.name }}{% if org.exists %} ✓{% endif %}
+                        </option>
+                    {% empty %}
+                        <option value="rsh">Robert Schumann Hochschule Düsseldorf</option>
+                        <option value="khm">Kunsthochschule für Medien Köln</option>
+                        <option value="fuk">Folkwang Universität der Künste</option>
+                        <option value="hmt">Hochschule für Musik und Tanz Köln</option>
+                        <option value="det">Hochschule für Musik Detmold</option>
+                    {% endfor %}
+                </select>
+                <div class="label">
+                    <span class="label-text-alt">✓ indicates bucket already exists</span>
+                </div>
+            </div>
+            
+            <!-- File Browser Content -->
+            <div id="file-browser-content">
+                <div class="alert alert-info">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>Select an organization to browse its files</span>
                 </div>
             </div>
         </div>
     </div>
+    
+
 </div>
 
-<!-- Modal -->
-<dialog id="fileModal" class="modal">
-    <div class="modal-box">
-        <form method="dialog">
-            <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
-        </form>
-        <!-- Modal Header -->
-        <h3 id="modalTitle" class="font-bold text-lg mb-4"></h3>
 
-        <!-- Modal Content -->
-        <div id="modalContent" class="overflow-auto">
-            <!-- Content will be injected here -->
-        </div>
-        
-        <div class="modal-action">
-            <form method="dialog">
-                <button class="btn">Close</button>
-            </form>
-        </div>
-    </div>
-    <form method="dialog" class="modal-backdrop">
-        <button>close</button>
-    </form>
-</dialog>
-
-<!-- Styles -->
-<style>
-    /* Content area with adaptive height */
-    #modalContent {
-        max-height: 70vh;
-    }
-
-    /* Folder structure styles */
-    .folder-tree {
-        list-style-type: none;
-        padding: 0;
-    }
-    
-    .folder-item {
-        margin-bottom: 0.5rem;
-    }
-    
-    .folder-contents {
-        transition: all 0.3s ease;
-        padding-left: 1rem;
-    }
-    
-    .folder-contents:not(.hidden) {
-        display: block !important;
-        opacity: 1;
-    }
-    
-    /* Colorized borders for folder nesting */
-    .folder-tree .folder-contents {
-        border-left: 2px solid hsl(var(--p) / 0.5);
-        padding-left: 1rem;
-    }
-</style>
-
-<script type="module">
-import { modalManager } from '/static/js/src/modal.js';
-import { handleFileViewRequest } from '/static/js/src/file-viewer/file-viewer-handler.js';
-import { toggleFolder, expandAllFolders } from '/static/js/src/folder-manager.js';
-
-// Make them available globally if needed
-window.modalManager = modalManager;
-window.handleFileViewRequest = handleFileViewRequest;
-window.toggleFolder = toggleFolder;
-window.expandAllFolders = expandAllFolders;
-
-// Add HTMX event handlers
-document.body.addEventListener('htmx:afterRequest', function (event) {
-    if (event.detail.elt.classList.contains('view-icon')) {
-        handleFileViewRequest(event);
-    }
-});
-
-// Log the folder structure on page load
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('Page loaded, folder structure:', {
-        ingest: document.querySelector('#ingest-structure'),
-        production: document.querySelector('#production-structure')
-    });
-    
-    // Initialize file counts
-    updateFileCounts();
-    
-    // Initialize theme from localStorage
-    const savedTheme = localStorage.getItem('theme') || 'light';
-    document.documentElement.setAttribute('data-theme', savedTheme);
-    
-    // Theme switching
-    document.querySelectorAll('.theme-item').forEach(button => {
-        button.addEventListener('click', function() {
-            const theme = this.getAttribute('data-theme');
-            document.documentElement.setAttribute('data-theme', theme);
-            localStorage.setItem('theme', theme);
-        });
-    });
-});
-
-// Update file counts
-function updateFileCounts() {
-    const ingestItems = document.querySelectorAll('#ingest-structure .file-item').length;
-    const productionItems = document.querySelectorAll('#production-structure .file-item').length;
-    
-    document.getElementById('ingest-count').textContent = ingestItems;
-    document.getElementById('production-count').textContent = productionItems;
-}
-
-// Tab switching
-window.switchTab = function(tabName) {
-    // Hide all containers
-    document.getElementById('ingest-container').classList.add('hidden');
-    document.getElementById('production-container').classList.add('hidden');
-    
-    // Deactivate all tabs
-    document.getElementById('tab-ingest').classList.remove('tab-active');
-    document.getElementById('tab-production').classList.remove('tab-active');
-    
-    // Show selected container and activate tab
-    document.getElementById(`${tabName}-container`).classList.remove('hidden');
-    document.getElementById(`tab-${tabName}`).classList.add('tab-active');
-}
-</script>
-
-<script>
-// Prevent default loading indicators
-document.body.addEventListener('htmx:beforeSend', function (event) {
-    event.detail.xhr.setRequestHeader('X-HTMX-Indicator', 'none');
-});
-
-// Add HTMX-specific event handler for message display
-document.body.addEventListener('htmx:afterOnLoad', function(evt) {
-    if (evt.detail && evt.detail.triggerSpec && evt.detail.triggerSpec.showMessage) {
-        const messageData = evt.detail.triggerSpec.showMessage;
-        const messageContainer = document.getElementById('message-container');
-        const messageContent = document.getElementById('message-content');
-        
-        // Set the message
-        messageContent.textContent = messageData.message;
-        
-        // Set the appropriate classes based on message level
-        messageContent.className = messageData.level === 'error' 
-            ? 'alert alert-error' 
-            : 'alert alert-success';
-        
-        // Show the message container
-        messageContainer.classList.remove('hidden');
-        
-        // Auto-hide the message after a delay
-        setTimeout(function() {
-            messageContainer.classList.add('hidden');
-        }, 5000);
-    }
-});
-
-// Add direct event handler for showing messages
-document.addEventListener('showMessage', function(event) {
-    if (event.detail) {
-        const messageContainer = document.getElementById('message-container');
-        const messageContent = document.getElementById('message-content');
-        
-        // Set the message
-        messageContent.textContent = event.detail.message;
-        
-        // Set the appropriate classes based on message level
-        messageContent.className = event.detail.level === 'error' 
-            ? 'alert alert-error' 
-            : 'alert alert-success';
-        
-        // Show the message container
-        messageContainer.classList.remove('hidden');
-        
-        // Auto-hide the message after a delay
-        setTimeout(function() {
-            messageContainer.classList.add('hidden');
-        }, 5000);
-    }
-});
-</script>
 
 {% endblock %}

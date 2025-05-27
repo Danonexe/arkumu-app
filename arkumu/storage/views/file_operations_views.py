@@ -13,6 +13,154 @@ logger = logging.getLogger(__name__)
 
 
 @login_required
+def organization_dashboard(request):
+    """
+    Display a dashboard of all organizations and their buckets.
+    """
+    try:
+        bucket_service = BucketService()
+        
+        # Get all organizations
+        organizations = bucket_service.get_organizations()
+        
+        # Prepare data for the template
+        org_data = []
+        for org_name in organizations:
+            bucket_name = bucket_service.get_organization_bucket(org_name)
+            
+            # Get root level items for this organization's bucket
+            try:
+                root_items = bucket_service.get_root_level_items(bucket_name)
+                file_count = sum(1 for item in root_items.get('children', []) 
+                                if item.get('type') == 'file')
+                folder_count = sum(1 for item in root_items.get('children', []) 
+                                  if item.get('type') == 'folder')
+            except Exception as e:
+                logger.error(f"Error getting root items for org {org_name}: {str(e)}")
+                root_items = {"children": []}
+                file_count = 0
+                folder_count = 0
+            
+            org_data.append({
+                "name": org_name,
+                "bucket": bucket_name,
+                "file_count": file_count,
+                "folder_count": folder_count
+            })
+        
+        return render(request, "dashboard/organization_dashboard.html", {
+            "organizations": org_data,
+            "total_orgs": len(org_data)
+        })
+        
+    except Exception as e:
+        error_message = f"Error loading organization dashboard: {str(e)}"
+        logger.exception(error_message)
+        messages.error(request, error_message)
+        return redirect("home")
+
+
+@login_required
+def organization_contents(request, organization=None):
+    """
+    Display the contents of an organization's bucket.
+    Returns partial template for HTMX requests.
+    """
+    try:
+        # Check if this is the browse URL (always get from query parameter)
+        is_browse_url = request.resolver_match.url_name == 'organization_contents_browse'
+        
+        if is_browse_url:
+            # For browse URL, always get organization from query parameter
+            organization = request.GET.get('organization') or request.POST.get('organization')
+        elif not organization:
+            # For regular URL, get from URL parameter or form parameter
+            organization = request.GET.get('organization') or request.POST.get('organization')
+        
+        if not organization:
+            if request.headers.get('HX-Request') == 'true':
+                return render(request, "dashboard/organization_files_empty.html")
+            return redirect("storage:organization_dashboard")
+        
+        bucket_service = BucketService()
+        
+        # Ensure the organization bucket exists first
+        bucket_result = bucket_service.ensure_organization_bucket_exists(organization)
+        if not bucket_result.get('success', False):
+            error_message = f"Failed to create/access bucket for {organization}: {bucket_result.get('error', 'Unknown error')}"
+            if request.headers.get('HX-Request') == 'true':
+                return render(request, "dashboard/organization_files_error.html", {
+                    "error": error_message,
+                    "organization": organization
+                })
+            messages.error(request, error_message)
+            return redirect("storage:organization_dashboard")
+        
+        # Get the bucket for this organization
+        bucket_name = bucket_service.get_organization_bucket(organization)
+        
+        # Get optional prefix from query params
+        prefix = request.GET.get('prefix', '')
+        
+        # Get contents of the bucket with the given prefix
+        contents = bucket_service.list_bucket_contents(bucket_name, prefix)
+        
+        # Check if HTMX request for partial content
+        is_htmx_request = request.headers.get('HX-Request') == 'true'
+        
+        # Debug logging
+        logger.info(f"Organization: {organization}")
+        logger.info(f"Is browse URL: {is_browse_url}")
+        
+        if is_htmx_request or is_browse_url:
+            # Return partial template for HTMX
+            logger.info("Returning partial template for HTMX or browse URL")
+            return render(request, "dashboard/organization_files_partial.html", {
+                "organization": organization,
+                "bucket_name": bucket_name,
+                "contents": contents,
+                "prefix": prefix
+            })
+        
+        # Prepare breadcrumbs for navigation
+        breadcrumbs = []
+        if prefix:
+            parts = prefix.strip('/').split('/')
+            current_path = ''
+            for i, part in enumerate(parts):
+                current_path += part + '/'
+                breadcrumbs.append({
+                    'name': part,
+                    'path': current_path,
+                    'is_last': i == len(parts) - 1
+                })
+        
+        return render(request, "dashboard/organization_contents.html", {
+            "organization": organization,
+            "bucket_name": bucket_name,
+            "contents": contents,
+            "prefix": prefix,
+            "breadcrumbs": breadcrumbs
+        })
+        
+    except Exception as e:
+        error_message = f"Error loading organization contents: {str(e)}"
+        logger.exception(error_message)
+        
+        # Check if HTMX request
+        is_htmx_request = request.headers.get('HX-Request') == 'true'
+        
+        if is_htmx_request:
+            return render(request, "dashboard/organization_files_error.html", {
+                "error": error_message,
+                "organization": organization
+            })
+        
+        messages.error(request, error_message)
+        return redirect("storage:organization_dashboard")
+
+
+@login_required
 def move_to_production(request, folder_path):
     """
     Move a folder from the ingest bucket to the production bucket.
@@ -159,6 +307,10 @@ def file_content(request, bucket_type, file_path):
         bucket = bucket_service.ingest_bucket
         if bucket_type == "production":
             bucket = bucket_service.production_bucket
+        elif bucket_type.startswith("org-"):
+            # Handle organization-specific buckets
+            org_name = bucket_type[4:]  # Remove 'org-' prefix
+            bucket = bucket_service.get_organization_bucket(org_name)
         
         # Get file content and metadata
         result = bucket_service.get_file_content(bucket, file_path)
@@ -196,7 +348,7 @@ def delete_object(request, bucket_type, object_type, object_path):
     If the object is a folder, all contents will also be deleted.
     
     Args:
-        bucket_type: "ingest" or "production"
+        bucket_type: "ingest", "production", or "org-{organization_name}"
         object_type: "file" or "folder"
         object_path: The path to the object within the bucket
     """
@@ -210,6 +362,10 @@ def delete_object(request, bucket_type, object_type, object_path):
         bucket_name = bucket_service.ingest_bucket
         if bucket_type == "production":
             bucket_name = bucket_service.production_bucket
+        elif bucket_type.startswith("org-"):
+            # Handle organization-specific buckets
+            org_name = bucket_type[4:]  # Remove 'org-' prefix
+            bucket_name = bucket_service.get_organization_bucket(org_name)
         
         # Delete the object based on its type
         if object_type == "folder":

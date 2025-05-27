@@ -3,12 +3,11 @@
 # This file is distributed under the same license as the PACKAGE package.
 # FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
 #
-#, fuzzy
 msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-01-31 13:56+0000\n"
+"POT-Creation-Date: 2025-05-27 09:47+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -18,54 +17,274 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
+#: arkumu/metadata/models/resource.py:7
+msgid "IRI Identified Resource"
+msgstr ""
+
+#: arkumu/metadata/models/resource.py:8
+msgid "Class"
+msgstr ""
+
+#: arkumu/metadata/models/resource.py:9
+msgid "Property"
+msgstr ""
+
+#: arkumu/metadata/models/resource.py:10
+msgid "Literal"
+msgstr ""
+
+#: arkumu/metadata/validators.py:16 arkumu/metadata/validators.py:246
+msgid "Entity must have a CIDOC-CRM class"
+msgstr ""
+
+#: arkumu/metadata/validators.py:24
+#, python-brace-format
+msgid "Invalid entity class: {entity_class}"
+msgstr ""
+
+#: arkumu/metadata/validators.py:37
+#, python-brace-format
+msgid "Invalid CIDOC class. Entity of type {entity_class.class_id} "
+msgstr ""
+
+#: arkumu/metadata/validators.py:63
+#, python-brace-format
+msgid "Invalid source class: {source_class}"
+msgstr ""
+
+#: arkumu/metadata/validators.py:71
+#, python-brace-format
+msgid "Invalid target class: {target_class}"
+msgstr ""
+
+#: arkumu/metadata/validators.py:83
+#, python-brace-format
+msgid "Invalid property domain. {property_def.property_id} requires "
+msgstr ""
+
+#: arkumu/metadata/validators.py:110
+msgid "Target class required for relationship property"
+msgstr ""
+
+#: arkumu/metadata/validators.py:121
+#, python-brace-format
+msgid "Invalid property range. {property_def.property_id} requires "
+msgstr ""
+
+#: arkumu/metadata/validators.py:141
+#, python-brace-format
+msgid "Property {property_def.property_id} can have at most one value"
+msgstr ""
+
+#: arkumu/metadata/validators.py:162
+#, python-brace-format
+msgid ""
+"Missing inverse relationship {property_def.inverse_property.property_id} "
+msgstr ""
+
+#: arkumu/metadata/validators.py:184
+#, python-brace-format
+msgid "Missing symmetric relationship for {property_def.property_id}"
+msgstr ""
+
+#: arkumu/metadata/validators.py:214 arkumu/metadata/validators.py:372
+msgid "Value must be a number"
+msgstr ""
+
+#: arkumu/metadata/validators.py:224 arkumu/metadata/validators.py:386
+msgid "Invalid date/time format"
+msgstr ""
+
+#: arkumu/metadata/validators.py:226
+msgid "Value must be a valid date/time in ISO format"
+msgstr ""
+
+#: arkumu/metadata/validators.py:230
+msgid "Spacetime primitive must be a valid GeoJSON object"
+msgstr ""
+
+#: arkumu/metadata/validators.py:255
+#, python-brace-format
+msgid "Invalid CIDOC-CRM class: {class_id}"
+msgstr ""
+
+#: arkumu/metadata/validators.py:269
+msgid "Relationship must have a CIDOC-CRM property"
+msgstr ""
+
+#: arkumu/metadata/validators.py:277
+#, python-brace-format
+msgid "Invalid CIDOC-CRM property: {property_id}"
+msgstr ""
+
+#: arkumu/metadata/validators.py:286
+#, python-brace-format
+msgid "Invalid CIDOC-CRM class: {source_class}"
+msgstr ""
+
+#: arkumu/metadata/validators.py:295
+#, python-brace-format
+msgid "Invalid CIDOC-CRM class: {target_class}"
+msgstr ""
+
+#: arkumu/metadata/validators.py:359
+msgid "Literal values must have a \"value\" field"
+msgstr ""
+
+#: arkumu/metadata/validators.py:377
+msgid "Date/time values must be strings in ISO format"
+msgstr ""
+
+#: arkumu/metadata/validators.py:391
+msgid "Spacetime/Geo data must be a valid GeoJSON object"
+msgstr ""
+
+#: arkumu/metadata/validators.py:395
+msgid "GeoJSON must have a \"type\" field"
+msgstr ""
+
+#: arkumu/templates/account/login.html:7
+#: arkumu/templates/account/login.html:14
+#: arkumu/templates/account/login.html:61
 #: arkumu/templates/allauth/layouts/entrance.html:8
-#: arkumu/templates/base.html:99
+#: arkumu/templates/base.html:57 arkumu/templates/base.html:138
+#: arkumu/templates/pages/home.html:40
 msgid "Sign In"
 msgstr ""
 
-#: arkumu/templates/base.html:84
-msgid "My Profile"
+#: arkumu/templates/account/login.html:20
+#: arkumu/templates/users/shibboleth_login.html:6
+#: arkumu/templates/users/shibboleth_login.html:13
+msgid "Institutional Login"
 msgstr ""
 
-#: arkumu/templates/base.html:88
-msgid "Sign Out"
+#: arkumu/templates/account/login.html:22
+msgid ""
+"If you are affiliated with a university, please use your institutional login "
+"credentials."
 msgstr ""
 
-#: arkumu/templates/base.html:94
+#: arkumu/templates/account/login.html:32
+msgid "Local Account Login"
+msgstr ""
+
+#: arkumu/templates/account/login.html:37
+msgid "Please sign in with one of your existing third party accounts:"
+msgstr ""
+
+#: arkumu/templates/account/login.html:43
+msgid "or"
+msgstr ""
+
+#: arkumu/templates/account/login.html:58
+msgid "Forgot Password?"
+msgstr ""
+
+#: arkumu/templates/account/login.html:68
+msgid "Don't have a local account?"
+msgstr ""
+
+#: arkumu/templates/account/login.html:70 arkumu/templates/base.html:55
 msgid "Sign Up"
 msgstr ""
 
-#: arkumu/templates/base.html:164
+#: arkumu/templates/base.html:51 arkumu/templates/base.html:71
+msgid "My Profile"
+msgstr ""
+
+#: arkumu/templates/base.html:52
+msgid "Sign Out"
+msgstr ""
+
+#: arkumu/templates/base.html:171 arkumu/templates/pages/home.html:10
 msgid "arkumu_title"
 msgstr "arkumu.nrw - Archives of Art and Music Universities"
 
-#: arkumu/templates/base.html:167
+#: arkumu/templates/base.html:174 arkumu/templates/pages/home.html:11
 msgid "arkumu_intro"
-msgstr "The art and music universities in North Rhine-Westphalia possess impressive collections of (retro-)digital artistic content. Beyond their cultural value, these are also significant as source data for advanced teaching and research. The goal of the arkumu.nrw project is the high-quality development, availability, and permanent archiving of these multimedia contents."
+msgstr ""
+"The art and music universities in North Rhine-Westphalia possess impressive "
+"collections of (retro-)digital artistic content. Beyond their cultural "
+"value, these are also significant as source data for advanced teaching and "
+"research. The goal of the arkumu.nrw project is the high-quality "
+"development, availability, and permanent archiving of these multimedia "
+"contents."
 
-#: arkumu/templates/base.html:169
+#: arkumu/templates/base.html:176 arkumu/templates/pages/home.html:47
 msgid "arkumu_core_tasks_heading"
 msgstr "Core tasks in the implementation include:"
 
-#: arkumu/templates/base.html:171
+#: arkumu/templates/base.html:178
 msgid "arkumu_task_1"
-msgstr "Transfer of data into the state's long-term availability storage structures"
+msgstr ""
+"Transfer of data into the state's long-term availability storage structures"
 
-#: arkumu/templates/base.html:172
+#: arkumu/templates/base.html:179
 msgid "arkumu_task_2"
-msgstr "Standardization of professional indexing and storage according to library, archival, technical, and media-aesthetic-artistic standards"
+msgstr ""
+"Standardization of professional indexing and storage according to library, "
+"archival, technical, and media-aesthetic-artistic standards"
 
-#: arkumu/templates/base.html:173
+#: arkumu/templates/base.html:180
 msgid "arkumu_task_3"
-msgstr "Creation of a user-friendly web interface for artistic, scientific, and public use"
+msgstr ""
+"Creation of a user-friendly web interface for artistic, scientific, and "
+"public use"
 
-#: arkumu/templates/base.html:174
+#: arkumu/templates/base.html:181
 msgid "arkumu_task_4"
-msgstr "Multimedia-experienceable documentation of the excellent level of culture and science in NRW"
+msgstr ""
+"Multimedia-experienceable documentation of the excellent level of culture "
+"and science in NRW"
 
-#: arkumu/templates/base.html:177
+#: arkumu/templates/base.html:184 arkumu/templates/pages/home.html:88
 msgid "arkumu_consortium"
-msgstr "arkumu.nrw is a consortium project of the Folkwang University of the Arts Essen, the Academy of Media Arts Cologne, the University of Music and Dance Cologne, and the Detmold University of Music, and the IT Center University of Cologne (ITCC), under the consortium leadership of the Robert Schumann University Düsseldorf, in cooperation with the North Rhine-Westphalian Library Service Centre. A future expansion of the consortium to include other interested universities or departments is explicitly desired."
+msgstr ""
+"arkumu.nrw is a consortium project of the Folkwang University of the Arts "
+"Essen, the Academy of Media Arts Cologne, the University of Music and Dance "
+"Cologne, and the Detmold University of Music, and the IT Center University "
+"of Cologne (ITCC), under the consortium leadership of the Robert Schumann "
+"University Düsseldorf, in cooperation with the North Rhine-Westphalian "
+"Library Service Centre. A future expansion of the consortium to include "
+"other interested universities or departments is explicitly desired."
+
+#: arkumu/templates/pages/home.html:52
+msgid "arkumu_task_1_title"
+msgstr "Organization Storage"
+
+#: arkumu/templates/pages/home.html:60
+msgid "arkumu_task_2_title"
+msgstr "Optimized Uploads"
+
+#: arkumu/templates/pages/home.html:68
+msgid "arkumu_task_3_title"
+msgstr "Metadata Management"
+
+#: arkumu/templates/pages/home.html:76
+msgid "arkumu_task_4_title"
+msgstr "Archive Management"
+
+#: arkumu/templates/pages/home.html:86
+msgid "arkumu_consortium_title"
+msgstr "About the Consortium"
+
+#: arkumu/templates/users/shibboleth_login.html:19
+msgid "Enter your institutional credentials to sign in."
+msgstr ""
+
+#: arkumu/templates/users/shibboleth_login.html:59
+msgid "Sign In with Institution"
+msgstr ""
+
+#: arkumu/templates/users/shibboleth_login.html:66
+msgid "This is a simulated institutional login page for development purposes."
+msgstr ""
+
+#: arkumu/templates/users/shibboleth_login.html:67
+msgid ""
+"In production, you would be redirected to your institution's actual login "
+"page."
+msgstr ""
 
 #: arkumu/users/admin.py:24
 msgid "Personal info"
@@ -87,7 +306,7 @@ msgstr ""
 msgid "This username has already been taken."
 msgstr ""
 
-#: arkumu/users/models.py:15
+#: arkumu/users/models.py:13
 msgid "Name of User"
 msgstr ""
 

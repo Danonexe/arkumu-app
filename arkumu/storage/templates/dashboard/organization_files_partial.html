@@ -1,0 +1,168 @@
+{% if not contents %}
+    <div class="alert alert-warning mb-4">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 15.5c-.77.833.192 2.5 1.732 2.5z" />
+        </svg>
+        <span>No files found in {{ organization|title }}</span>
+    </div>
+    <div class="flex gap-4">
+        <a href="{% url 'storage:streaming_upload_form' %}?organization={{ organization }}" class="btn btn-primary">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+            </svg>
+            Upload First Files
+        </a>
+    </div>
+{% else %}
+    <div class="flex justify-between items-center mb-4">
+        <h3 class="text-lg font-semibold">{{ organization|title }} Files</h3>
+        <div class="flex gap-2">
+            <a href="{% url 'storage:streaming_upload_form' %}?organization={{ organization }}" class="btn btn-sm btn-primary">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                </svg>
+                Upload
+            </a>
+            <a href="{% url 'storage:organization_contents' organization=organization %}" class="btn btn-sm btn-outline">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+                Full View
+            </a>
+        </div>
+    </div>
+    
+    <!-- Folder Tree Structure -->
+    <div class="organization-file-tree">
+        <ul class="folder-tree">
+            {% for item in contents %}
+                {% if item.type == 'folder' %}
+                    <li class="folder-item" data-folder-path="{{ item.path }}">
+                        <div class="flex items-center">
+                            <button class="folder-toggle mr-1 text-gray-600 focus:outline-none"
+                                    data-folder-path="{{ item.path }}"
+                                    data-folder-state="closed"
+                                    hx-get="{% url 'storage:organization_contents_browse' %}?organization={{ organization }}&prefix={{ item.path }}"
+                                    hx-target=".folder-contents[data-folder-path='{{ item.path }}'][data-organization='{{ organization }}']"
+                                    hx-swap="innerHTML"
+                                    hx-trigger="click"
+                                    hx-indicator=".loading-indicator[data-folder-path='{{ item.path }}']"
+                                    onclick="toggleFolderVisibility('{{ item.path }}', '{{ organization }}')">
+                                <svg class="w-4 h-4 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                </svg>
+                            </button>
+                            <span class="folder-name text-gray-800 font-medium">
+                                {{ item.name }}
+                            </span>
+                            
+                            <div class="ml-auto flex items-center space-x-2">
+                                <button class="refresh-icon text-green-500 hover:text-green-700" 
+                                        title="Refresh folder"
+                                        hx-get="{% url 'storage:organization_contents_browse' %}?organization={{ organization }}&prefix={{ item.path }}"
+                                        hx-target=".folder-contents[data-folder-path='{{ item.path }}'][data-organization='{{ organization }}']"
+                                        hx-swap="innerHTML"
+                                        hx-indicator=".loading-indicator[data-folder-path='{{ item.path }}']">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="folder-contents pl-6 mt-1 hidden" data-folder-path="{{ item.path }}" data-organization="{{ organization }}">
+                            <div class="loading-indicator htmx-indicator" data-folder-path="{{ item.path }}">
+                                <div class="flex items-center justify-center py-2">
+                                    <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </li>
+                {% elif item.type == 'file' %}
+                    <li class="file-item py-1">
+                        <div class="flex items-center">
+                            <span class="file-icon mr-1 text-gray-500">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                                </svg>
+                            </span>
+                            <span class="file-name text-gray-700">{{ item.name }}</span>
+                            
+                            {% if item.size %}
+                                <span class="ml-2 text-sm text-gray-500">({{ item.size|filesizeformat }})</span>
+                            {% endif %}
+                            
+                            <div class="ml-auto flex items-center space-x-2">
+                                <button class="view-icon text-blue-500 hover:text-blue-700" 
+                                        title="View File"
+                                        onclick="alert('File viewing not implemented yet')">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </li>
+                {% endif %}
+            {% endfor %}
+        </ul>
+    </div>
+{% endif %}
+
+<style>
+/* Folder structure styles */
+.folder-tree {
+    list-style-type: none;
+    padding: 0;
+}
+
+.folder-item {
+    margin-bottom: 0.5rem;
+}
+
+.folder-contents {
+    transition: all 0.3s ease;
+    padding-left: 1rem;
+}
+
+.folder-contents:not(.hidden) {
+    display: block !important;
+    opacity: 1;
+}
+
+/* Colorized borders for folder nesting */
+.folder-tree .folder-contents {
+    border-left: 2px solid hsl(var(--p) / 0.5);
+    padding-left: 1rem;
+}
+
+.folder-toggle svg {
+    transition: transform 0.2s ease;
+}
+
+.folder-toggle[data-folder-state="open"] svg {
+    transform: rotate(90deg);
+}
+</style>
+
+<script>
+function toggleFolderVisibility(folderPath, organization) {
+    const folderContents = document.querySelector(`.folder-contents[data-folder-path='${folderPath}'][data-organization='${organization}']`);
+    const toggleButton = document.querySelector(`.folder-toggle[data-folder-path='${folderPath}']`);
+    
+    if (folderContents && toggleButton) {
+        const isOpen = toggleButton.dataset.folderState === 'open';
+        
+        if (isOpen) {
+            // Close folder
+            folderContents.classList.add('hidden');
+            toggleButton.dataset.folderState = 'closed';
+        } else {
+            // Open folder
+            folderContents.classList.remove('hidden');
+            toggleButton.dataset.folderState = 'open';
+        }
+    }
+}
+</script> 

@@ -1,128 +1,56 @@
-{% extends "base2.html" %}
+{% extends "base.html" %}
+{% load i18n %}
 
-{% block title %}arkumu{% endblock title %}
+{% block title %}Arkumu - Archive der Kunst- und Musikhochschulen{% endblock %}
 
 {% block content %}
-<div class="w-full min-h-screen bg-arkumu-hell">
-  <!-- Header -->
-  <header class="w-full py-4 px-6">
-    <div class="container mx-auto flex items-center justify-between">
-      <!-- Left side: Logo placeholder -->
-      <div class="w-40">
-        <!-- Logo placeholder - ignore as requested -->
-      </div>
-      
-      <!-- Right side: Theme buttons and icons -->
-      <div class="flex items-center">
-        <!-- Theme buttons -->
-        <div class="theme-buttons">
-          {% include 'components/header/theme_buttons.html' %}
-        </div>
-        
-        <!-- Extra spacing between theme buttons and icons -->
-        <div class="w-10"></div>
-        
-        <!-- Search and Menu icons with labels -->
-        <div class="flex items-center space-x-6">
-          <div class="flex flex-col items-center">
-            {% include 'components/header/search_button.html' %}
-            <span class="text-xs mt-1 font-mono">Suche</span>
-          </div>
-          <div class="flex flex-col items-center">
-            {% include 'components/header/menu_button.html' %}
-            <span class="text-xs mt-1 font-mono">Menü</span>
-          </div>
-        </div>
-      </div>
+<div class="hero min-h-[50vh] bg-base-200">
+  <div class="hero-content text-center">
+    <div class="max-w-md">
+      <h1 class="text-5xl font-bold">{% translate "arkumu_title" %}</h1>
+      <p class="py-6">{% translate "arkumu_intro" %}</p>
     </div>
-  </header>
+  </div>
+</div>
 
-  <!-- Main Content -->
-  <main class="container mx-auto px-6 py-12">
-    <!-- Description Text -->
-    <div class="max-w-3xl mx-auto mb-16">
-      {% include 'components/text/arkumu_text.html' %}
-    </div>
-    
-    <!-- Search Bar -->
-    <div class="max-w-3xl mx-auto mb-16">
-      {% include 'components/inputs/navbar.html' with placeholder_text="Suchbegriff" %}
-    </div>
-    
-    <!-- Dotted Line with Text -->
-    <div class="max-w-5xl mx-auto mb-16">
-      {% include 'components/text/text_dotted_line.html' with text="Teilnehmende Hochschulen" %}
-      
-      <!-- Schools in two columns with proper spacing -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-y-2 gap-x-8 mt-4">
-        <!-- Left column -->
-        <div>
-          {% include 'components/labels/black_label.html' with label_text="Folkwang Universität der Künste" %}
-          <div class="mb-2"></div>
-          {% include 'components/labels/black_label.html' with label_text="Robert Schumann Hochschule Düsseldorf" %}
-          <div class="mb-2"></div>
-          {% include 'components/labels/black_label.html' with label_text="Kunsthochschule für Medien Köln" %}
-        </div>
-        
-        <!-- Right column -->
-        <div>
-          {% include 'components/labels/black_label.html' with label_text="Hochschule für Musik Detmold" %}
-          <div class="mb-2"></div>
-          {% include 'components/labels/black_label.html' with label_text="Universität zu Köln" %}
-          <div class="mb-2"></div>
-          {% include 'components/labels/black_label.html' with label_text="Hochschule für Musik und Tanz Köln" %}
-        </div>
+<div class="container mx-auto px-4 py-12">
+  <h2 class="text-3xl font-bold mb-6 text-center">{% translate "arkumu_core_tasks_heading" %}</h2>
+  
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+    <div class="card bg-base-100 shadow-xl">
+      <div class="card-body">
+        <h3 class="card-title">{% translate "arkumu_task_1_title" %}{% comment %}Organization Storage{% endcomment %}</h3>
+        <p>Manage organization-specific storage buckets for different institutions.</p>
       </div>
     </div>
     
-    <!-- Project Cards Grid - Directly in homepage -->
-    <div class="max-w-6xl mx-auto mt-12">
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        <!-- Card 1 -->
-        <div class="card-container">
-          {% include 'components/cards/card.html' with 
-            year="2024" 
-            institution="Folkwang Universität der Kunst" 
-            title="Handmade in Ethiopia" 
-            subtitle="Projekt" 
-            button_text="Projekt ansehen" 
-          %}
-        </div>
-        
-        <!-- Card 2 -->
-        <div class="card-container">
-          {% include 'components/cards/card.html' with 
-            year="2023" 
-            institution="Hochschule für Medien" 
-            title="Ein Herz aus Stahl und Plastik" 
-            subtitle="Projekt" 
-            button_text="Video, Spielfilm" 
-          %}
-        </div>
-        
-        <!-- Card 3 -->
-        <div class="card-container">
-          {% include 'components/cards/card.html' with 
-            year="2023" 
-            institution="Hochschule für Musik und Tanz Köln" 
-            title="Sonate für Klavier, op. 45" 
-            subtitle="Partitur" 
-            button_text="Instrumentalmusik" 
-          %}
-        </div>
-        
-        <!-- Card 4 -->
-        <div class="card-container">
-          {% include 'components/cards/card.html' with 
-            year="2022" 
-            institution="Hochschule für Musik und Tanz Köln" 
-            title="Die schöne Müllerin" 
-            subtitle="Projekt" 
-            button_text="Liederzyklus" 
-          %}
-        </div>
+    <div class="card bg-base-100 shadow-xl">
+      <div class="card-body">
+        <h3 class="card-title">{% translate "arkumu_task_2_title" %}{% comment %}Optimized Uploads{% endcomment %}</h3>
+        <p>Fast and reliable file uploads with folder structure preservation.</p>
       </div>
     </div>
-  </main>
+    
+    <div class="card bg-base-100 shadow-xl">
+      <div class="card-body">
+        <h3 class="card-title">{% translate "arkumu_task_3_title" %}{% comment %}Metadata Management{% endcomment %}</h3>
+        <p>Manage and organize file metadata for better discoverability.</p>
+      </div>
+    </div>
+    
+    <div class="card bg-base-100 shadow-xl">
+      <div class="card-body">
+        <h3 class="card-title">{% translate "arkumu_task_4_title" %}{% comment %}Archive Management{% endcomment %}</h3>
+        <p>Comprehensive tools for archivists to organize and maintain digital collections.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="bg-base-200 py-12">
+  <div class="container mx-auto px-4">
+    <h2 class="text-3xl font-bold mb-6 text-center">{% translate "arkumu_consortium_title" %}{% comment %}About the Consortium{% endcomment %}</h2>
+    <p class="text-center max-w-3xl mx-auto">{% translate "arkumu_consortium" %}</p>
+  </div>
 </div>
 {% endblock content %}

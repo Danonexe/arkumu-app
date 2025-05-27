@@ -38,12 +38,16 @@ class UploadService(BaseStorageService):
         Args:
             skip_bucket_check (bool): If True, skip bucket existence check
         """
-        # Skip initialization if already done
+        # Skip initialization if already done (proper singleton pattern)
         if hasattr(self, 'initialized'):
+            logger.info("Using cached UploadService instance")
             return
             
+        logger.info("Initializing UploadService for the first time...")
+        start_time = time.time()
         super().__init__(skip_bucket_check=skip_bucket_check)
-        logger.info("UploadService initialized for streaming uploads")
+        init_duration = time.time() - start_time
+        logger.info(f"UploadService initialized for streaming uploads in {init_duration:.2f} seconds")
         self.initialized = True
 
     def _generate_file_key(self, file_name: str, path_prefix: Optional[str] = None) -> str:
@@ -524,7 +528,8 @@ class UploadService(BaseStorageService):
 
     def upload_files_optimized(self, files: List[Dict[str, Any]], path_prefix: Optional[str] = None, 
                              max_workers: int = 10, multipart_threshold: int = 8 * 1024 * 1024,
-                             max_concurrency: int = 10, multipart_chunksize: int = 8 * 1024 * 1024) -> Dict[str, Any]:
+                             max_concurrency: int = 10, multipart_chunksize: int = 8 * 1024 * 1024,
+                             bucket_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Upload multiple files in parallel with optimized transfer configuration.
         
@@ -538,6 +543,7 @@ class UploadService(BaseStorageService):
             multipart_threshold: Size threshold for multipart uploads (default 8MB)
             max_concurrency: Maximum number of threads for concurrent part uploads
             multipart_chunksize: Size of each part for multipart uploads (default 8MB)
+            bucket_name: Target bucket name (defaults to ingest_bucket)
             
         Returns:
             Dictionary with batch upload results
@@ -547,7 +553,10 @@ class UploadService(BaseStorageService):
         start_time = time.time()
         total_size = 0
         
-        logger.info(f"Starting optimized batch upload of {len(files)} files with {max_workers} workers")
+        # Determine target bucket
+        target_bucket = bucket_name if bucket_name else self.ingest_bucket
+        
+        logger.info(f"Starting optimized batch upload of {len(files)} files with {max_workers} workers to bucket: {target_bucket}")
         
         # Configure optimized transfer settings
         config = TransferConfig(
@@ -584,7 +593,7 @@ class UploadService(BaseStorageService):
                 # Upload the file with optimized config
                 self.s3_client.upload_fileobj(
                     file_obj,
-                    self.ingest_bucket,
+                    target_bucket,
                     s3_key,
                     ExtraArgs=upload_args,
                     Config=config
@@ -592,7 +601,7 @@ class UploadService(BaseStorageService):
                 
                 # Get file info after upload
                 head_response = self.s3_client.head_object(
-                    Bucket=self.ingest_bucket,
+                    Bucket=target_bucket,
                     Key=s3_key
                 )
                 actual_file_size = head_response.get('ContentLength', 0)
@@ -601,7 +610,7 @@ class UploadService(BaseStorageService):
                     'success': True,
                     'file_name': file_name,
                     's3_key': s3_key,
-                    'bucket': self.ingest_bucket,
+                    'bucket': target_bucket,
                     'file_size': actual_file_size,
                     'file_size_formatted': self._format_size(actual_file_size),
                     'content_type': content_type
@@ -655,7 +664,8 @@ class UploadService(BaseStorageService):
                                  max_workers: int = 10,
                                  multipart_threshold: int = 8 * 1024 * 1024,
                                  max_concurrency: int = 10,
-                                 multipart_chunksize: int = 8 * 1024 * 1024) -> Dict[str, Any]:
+                                 multipart_chunksize: int = 8 * 1024 * 1024,
+                                 bucket_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Upload multiple Django UploadedFile objects to S3 using optimized parallel uploads.
         
@@ -666,6 +676,7 @@ class UploadService(BaseStorageService):
             multipart_threshold: Size threshold for multipart uploads (default 8MB)
             max_concurrency: Maximum number of threads for concurrent part uploads
             multipart_chunksize: Size of each part for multipart uploads (default 8MB)
+            bucket_name: Target bucket name (defaults to ingest_bucket)
             
         Returns:
             Dictionary with batch upload results
@@ -689,7 +700,8 @@ class UploadService(BaseStorageService):
             max_workers=max_workers,
             multipart_threshold=multipart_threshold,
             max_concurrency=max_concurrency,
-            multipart_chunksize=multipart_chunksize
+            multipart_chunksize=multipart_chunksize,
+            bucket_name=bucket_name
         )
 
     def initialize_multipart_upload(self, file_name: str, file_type: str, path_prefix: Optional[str] = None) -> Dict[str, Any]:

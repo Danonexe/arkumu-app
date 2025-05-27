@@ -10,8 +10,40 @@ from django.http import JsonResponse, HttpResponse
 from django.urls import reverse
 from django.views.decorators.csrf import csrf_exempt
 from django.core.files.uploadedfile import UploadedFile
+import time
 
 from arkumu.storage.services.upload_service import UploadService
+from arkumu.storage.services.bucket_service import BucketService
+
+# Cache services to avoid repeated initialization
+_upload_service = None
+_bucket_service = None
+
+def get_cached_upload_service():
+    """Get cached upload service to avoid repeated initialization."""
+    global _upload_service
+    if _upload_service is None:
+        logger.info("Initializing UploadService for the first time...")
+        start_time = time.time()
+        _upload_service = UploadService()
+        init_duration = time.time() - start_time
+        logger.info(f"UploadService initialized in {init_duration:.2f} seconds")
+    else:
+        logger.info("Using cached UploadService")
+    return _upload_service
+
+def get_cached_bucket_service():
+    """Get cached bucket service to avoid repeated initialization."""
+    global _bucket_service
+    if _bucket_service is None:
+        logger.info("Initializing BucketService for the first time...")
+        start_time = time.time()
+        _bucket_service = BucketService()
+        init_duration = time.time() - start_time
+        logger.info(f"BucketService initialized in {init_duration:.2f} seconds")
+    else:
+        logger.info("Using cached BucketService")
+    return _bucket_service
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +57,11 @@ def streaming_upload_form(request):
     POST: Process uploaded files
     """
     if request.method == 'GET':
-        return render(request, "upload/streaming_upload_form.html")
+        # Get optional organization parameter
+        organization = request.GET.get('organization', '')
+        return render(request, "upload/streaming_upload_form.html", {
+            "organization": organization
+        })
     
     # Handle POST request with file uploads
     logger.info(f"Processing streaming upload for user: {request.user.username}")
@@ -38,137 +74,138 @@ def streaming_upload_form(request):
             'error': 'Folder name is required'
         }, status=400)
     
+    # Get organization (if provided)
+    organization = request.POST.get('organization', '').strip()
+    
     # Get uploaded files
-    uploaded_files = request.FILES.getlist('files')
-    if not uploaded_files:
+    files = request.FILES.getlist('files')
+    if not files:
         return JsonResponse({
             'success': False,
             'error': 'No files were uploaded'
         }, status=400)
     
-    logger.info(f"Received {len(uploaded_files)} files for upload to folder: {folder_name}")
-    
     try:
-        # Initialize upload service
-        upload_service = UploadService()
+        # Get cached services to avoid repeated initialization
+        upload_service = get_cached_upload_service()
         
-        # Process each file to preserve folder structure
+        # Determine target bucket based on organization
+        target_bucket = upload_service.ingest_bucket
+        if organization:
+            # Get the cached bucket service to resolve organization bucket
+            bucket_service = get_cached_bucket_service()
+            # Just get the bucket name without expensive existence checks
+            target_bucket = bucket_service.get_organization_bucket(organization)
+            logger.info(f"Using organization bucket: {target_bucket}")
+        
+        # Record start time
+        start_time = time.time()
+        
+        # Process files with optimized method
         result = upload_service.upload_batch_django_files_optimized(
-            uploaded_files=uploaded_files,
+            uploaded_files=files,
             path_prefix=folder_name,
-            max_workers=min(20, len(uploaded_files)),  # Adjust workers based on file count
-            multipart_threshold=10 * 1024 * 1024,      # 10MB threshold
-            max_concurrency=10,                        # 10 threads per file for multipart
-            multipart_chunksize=8 * 1024 * 1024        # 8MB chunk size
+            bucket_name=target_bucket
         )
         
-        if result['success']:
-            logger.info(f"Successfully uploaded {result['total_uploaded']} files in {result['duration_seconds']:.2f} seconds, "
-                       f"total size: {result['total_size_formatted']}")
-            
-            # Return success response
-            return JsonResponse({
-                'success': True,
-                'message': f"Successfully uploaded {result['total_uploaded']} files",
-                'total_uploaded': result['total_uploaded'],
-                'total_size': result['total_size_formatted'],
-                'duration_seconds': result['duration_seconds'],
-                'results': result['results']
-            })
+        # Calculate duration
+        duration = time.time() - start_time
+        
+        # Add duration to result
+        result['duration'] = f"{duration:.2f}"
+        result['duration_seconds'] = duration
+        
+        # Log the result
+        if result.get('success', False):
+            logger.info(f"Successfully uploaded {len(files)} files to {folder_name} in {duration:.2f} seconds")
         else:
-            logger.error(f"Batch upload partially failed: {result['total_failed']} failures out of {len(uploaded_files)} files")
-            
-            # Return partial success response
-            return JsonResponse({
-                'success': False,
-                'error': f"Upload completed with {result['total_failed']} failures",
-                'total_uploaded': result['total_uploaded'],
-                'total_failed': result['total_failed'],
-                'duration_seconds': result['duration_seconds'],
-                'results': result['results'],
-                'failures': result['failures']
-            }, status=207)  # 207 Multi-Status
-            
+            logger.error(f"Failed to upload files: {result.get('error', 'Unknown error')}")
+        
+        return JsonResponse(result)
+    
     except Exception as e:
-        logger.exception(f"Error during streaming upload: {str(e)}")
+        logger.exception(f"Error in streaming upload: {str(e)}")
         return JsonResponse({
             'success': False,
-            'error': f"Upload failed: {str(e)}"
+            'error': str(e)
         }, status=500)
 
 
 @login_required
 @require_http_methods(["POST"])
-@csrf_exempt  # Allow CSRF exemption for API-style uploads
 def streaming_upload_api(request):
     """
-    API endpoint for streaming file uploads.
-    Accepts multipart/form-data with files and metadata.
+    API endpoint for streaming file uploads through Django to S3.
+    This is for programmatic use by other applications.
     """
-    logger.info(f"API streaming upload request from user: {request.user.username}")
-    
     try:
-        # Parse request data
-        folder_name = request.POST.get('folder_name', '').strip()
-        uploaded_files = request.FILES.getlist('files')
+        # Parse JSON data if Content-Type is application/json
+        if request.content_type == 'application/json':
+            data = json.loads(request.body)
+            folder_name = data.get('folder_name', '').strip()
+            organization = data.get('organization', '').strip()
+        else:
+            # Otherwise get from POST data
+            folder_name = request.POST.get('folder_name', '').strip()
+            organization = request.POST.get('organization', '').strip()
         
-        # Validate inputs
         if not folder_name:
             return JsonResponse({
                 'success': False,
                 'error': 'folder_name is required'
             }, status=400)
         
-        if not uploaded_files:
+        # Get uploaded files
+        files = request.FILES.getlist('files')
+        if not files:
             return JsonResponse({
                 'success': False,
-                'error': 'No files provided'
+                'error': 'No files were uploaded'
             }, status=400)
-        
-        logger.info(f"API upload: {len(uploaded_files)} files to folder '{folder_name}'")
         
         # Initialize upload service
         upload_service = UploadService()
         
-        # Upload files using optimized parallel streaming
+        # Determine target bucket based on organization
+        target_bucket = upload_service.ingest_bucket
+        if organization:
+            # Get the bucket service to resolve organization bucket
+            bucket_service = BucketService()
+            # Ensure the organization bucket exists
+            bucket_result = bucket_service.ensure_organization_bucket_exists(organization)
+            if not bucket_result.get('success', False):
+                return JsonResponse({
+                    'success': False,
+                    'error': f"Failed to create organization bucket: {bucket_result.get('error', 'Unknown error')}"
+                }, status=500)
+            target_bucket = bucket_service.get_organization_bucket(organization)
+            logger.info(f"Using organization bucket: {target_bucket}")
+        
+        # Record start time
+        start_time = time.time()
+        
+        # Process files with optimized method
         result = upload_service.upload_batch_django_files_optimized(
-            uploaded_files=uploaded_files,
+            uploaded_files=files,
             path_prefix=folder_name,
-            max_workers=min(20, len(uploaded_files)),  # Adjust workers based on file count
-            multipart_threshold=10 * 1024 * 1024,      # 10MB threshold
-            max_concurrency=10,                        # 10 threads per file for multipart
-            multipart_chunksize=8 * 1024 * 1024        # 8MB chunk size
+            bucket_name=target_bucket
         )
         
-        # Return structured response
-        response_data = {
-            'success': result['success'],
-            'total_uploaded': result['total_uploaded'],
-            'total_failed': result['total_failed'],
-            'total_size': result['total_size'],
-            'total_size_formatted': result['total_size_formatted'],
-            'duration_seconds': result['duration_seconds'],
-            'uploads': []
-        }
+        # Calculate duration
+        duration = time.time() - start_time
         
-        # Add successful uploads
-        for upload_result in result['results']:
-            response_data['uploads'].append({
-                'file_name': upload_result['file_name'],
-                's3_key': upload_result['s3_key'],
-                'file_size': upload_result['file_size'],
-                'file_size_formatted': upload_result['file_size_formatted'],
-                'content_type': upload_result['content_type'],
-                'upload_type': upload_result.get('upload_type', 'single')
-            })
+        # Add duration to result
+        result['duration'] = f"{duration:.2f}"
+        result['duration_seconds'] = duration
         
-        # Add failures if any
-        if result['failures']:
-            response_data['failures'] = result['failures']
+        # Log the result
+        if result.get('success', False):
+            logger.info(f"API: Successfully uploaded {len(files)} files to {folder_name} in {duration:.2f} seconds")
+        else:
+            logger.error(f"API: Failed to upload files: {result.get('error', 'Unknown error')}")
         
-        status_code = 200 if result['success'] else 207
-        return JsonResponse(response_data, status=status_code)
-        
+        return JsonResponse(result)
+    
     except Exception as e:
         logger.exception(f"Error in streaming upload API: {str(e)}")
         return JsonResponse({
@@ -268,23 +305,26 @@ def streaming_upload_single(request):
 @require_http_methods(["GET"])
 def file_info(request):
     """
-    Get information about an uploaded file.
+    Get information about a specific file in the bucket.
     """
-    s3_key = request.GET.get('s3_key')
-    if not s3_key:
-        return JsonResponse({
-            'success': False,
-            'error': 's3_key parameter is required'
-        }, status=400)
-    
     try:
+        s3_key = request.GET.get('s3_key', '').strip()
+        if not s3_key:
+            return JsonResponse({
+                'success': False,
+                'error': 's3_key parameter is required'
+            }, status=400)
+        
+        # Initialize upload service to get file info
         upload_service = UploadService()
+        
+        # Get file information
         result = upload_service.get_file_info(s3_key)
         
         return JsonResponse(result)
-        
+    
     except Exception as e:
-        logger.exception(f"Error getting file info for {s3_key}: {str(e)}")
+        logger.exception(f"Error getting file info: {str(e)}")
         return JsonResponse({
             'success': False,
             'error': str(e)
@@ -294,79 +334,18 @@ def file_info(request):
 def guess_content_type(filename: str) -> str:
     """
     Guess the content type based on file extension.
-    
-    Args:
-        filename: The filename to analyze
-        
-    Returns:
-        str: The guessed MIME type
     """
-    # Get file extension
-    ext = os.path.splitext(filename.lower())[1]
-    
-    # Common MIME types
-    mime_types = {
-        '.txt': 'text/plain',
-        '.pdf': 'application/pdf',
-        '.doc': 'application/msword',
-        '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        '.xls': 'application/vnd.ms-excel',
-        '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        '.ppt': 'application/vnd.ms-powerpoint',
-        '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-        '.jpg': 'image/jpeg',
-        '.jpeg': 'image/jpeg',
-        '.png': 'image/png',
-        '.gif': 'image/gif',
-        '.bmp': 'image/bmp',
-        '.svg': 'image/svg+xml',
-        '.mp4': 'video/mp4',
-        '.avi': 'video/x-msvideo',
-        '.mov': 'video/quicktime',
-        '.wmv': 'video/x-ms-wmv',
-        '.mp3': 'audio/mpeg',
-        '.wav': 'audio/wav',
-        '.zip': 'application/zip',
-        '.rar': 'application/x-rar-compressed',
-        '.7z': 'application/x-7z-compressed',
-        '.tar': 'application/x-tar',
-        '.gz': 'application/gzip',
-        '.json': 'application/json',
-        '.xml': 'application/xml',
-        '.csv': 'text/csv',
-        '.html': 'text/html',
-        '.css': 'text/css',
-        '.js': 'application/javascript',
-    }
-    
-    return mime_types.get(ext, 'application/octet-stream')
+    import mimetypes
+    content_type, _ = mimetypes.guess_type(filename)
+    return content_type or 'application/octet-stream'
 
 
 def format_file_size(size_bytes: int) -> str:
     """
-    Format a file size in bytes to a human-readable string.
-    
-    Args:
-        size_bytes: Size in bytes
-        
-    Returns:
-        str: Formatted size string
+    Format bytes to human-readable size.
     """
-    if size_bytes == 0:
-        return "0 B"
-    
-    # Define size units
-    units = ['B', 'KB', 'MB', 'GB', 'TB']
-    size = float(size_bytes)
-    unit_index = 0
-    
-    # Find the appropriate unit
-    while size >= 1024 and unit_index < len(units) - 1:
-        size /= 1024
-        unit_index += 1
-    
-    # Format with appropriate precision
-    if unit_index == 0:
-        return f"{int(size)} {units[unit_index]}"
-    else:
-        return f"{size:.2f} {units[unit_index]}" 
+    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+        if size_bytes < 1024.0:
+            return f"{size_bytes:.2f} {unit}"
+        size_bytes /= 1024.0
+    return f"{size_bytes:.2f} PB" 
