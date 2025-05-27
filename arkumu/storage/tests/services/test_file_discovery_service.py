@@ -3,7 +3,7 @@ import os
 from dotenv import load_dotenv
 from pathlib import Path
 
-from lacos.storage.services.file_discovery_service import FileDiscoveryService
+from arkumu.storage.services.file_discovery_service import FileDiscoveryService
 
 # Import constants from test_constants.py
 from .test_constants import TEST_BUCKET_NAME, TEST_INGEST_BUCKET, TEST_PRODUCTION_BUCKET

@@ -4,14 +4,14 @@ from datetime import date
 from unittest.mock import patch, MagicMock
 
 # Models needed for testing
-from lacos.blam.models.collection.collection_repository import Collection
-from lacos.blam.models.collection.collection_general_info import CollectionGeneralInfo, CollectionLocation
-from lacos.blam.models.collection.collection_administrative_info import CollectionAdministrativeInfo
-from lacos.blam.models.collection.collection_header import CollectionHeader
-from lacos.blam.models.collection.collection_publication_info import CollectionPublicationInfo
-from lacos.blam.models.bundle.bundle_repository import Bundle
-from lacos.blam.models.bundle.bundle_header import BundleHeader
-from lacos.blam.models.bundle.bundle_structural_info import (
+from arkumu.blam.models.collection.collection_repository import Collection
+from arkumu.blam.models.collection.collection_general_info import CollectionGeneralInfo, CollectionLocation
+from arkumu.blam.models.collection.collection_administrative_info import CollectionAdministrativeInfo
+from arkumu.blam.models.collection.collection_header import CollectionHeader
+from arkumu.blam.models.collection.collection_publication_info import CollectionPublicationInfo
+from arkumu.blam.models.bundle.bundle_repository import Bundle
+from arkumu.blam.models.bundle.bundle_header import BundleHeader
+from arkumu.blam.models.bundle.bundle_structural_info import (
     BundleStructuralInfo,
     BundleResources,
     MediaResource,

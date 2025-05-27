@@ -6,7 +6,7 @@ import tempfile
 import shutil
 from django.test import override_settings
 
-from lacos.storage.services.base_storage_service import BaseStorageService
+from arkumu.storage.services.base_storage_service import BaseStorageService
 
 # Import constants from test_constants using relative import
 from .test_constants import TEST_BUCKET_NAME, TEST_INGEST_BUCKET, TEST_PRODUCTION_BUCKET

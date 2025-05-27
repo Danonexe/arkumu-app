@@ -1,0 +1,325 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="hero">
+        <div class="hero-content text-center">
+            <h1 class="text-3xl font-bold text-gray-800">Streaming Upload to S3</h1>
+            <p class="text-gray-600 mt-2">Upload files directly through the server to S3</p>
+        </div>
+    </div>
+    
+    <div class="card bg-base-100 shadow-xl max-w-2xl mx-auto">
+        <div class="card-body">
+            <form id="streaming-upload-form" enctype="multipart/form-data">
+                {% csrf_token %}
+                
+                <div class="form-control w-full mb-6">
+                    <label class="label">
+                        <span class="label-text font-bold">Folder Name:</span>
+                    </label>
+                    <input type="text" id="folder-name" name="folder_name" 
+                           placeholder="Enter folder name (e.g., project-documents)" 
+                           class="input input-bordered w-full" required>
+                </div>
+                
+                <div class="form-control w-full mb-6">
+                    <label class="label">
+                        <span class="label-text font-bold">Select Files:</span>
+                    </label>
+                    <div id="file-upload-container" class="border-2 border-dashed border-base-300 rounded-lg p-6 text-center hover:border-primary transition-colors">
+                        <input type="file" id="file-input" name="files" multiple class="hidden">
+                        <div class="cursor-pointer" id="file-select-button">
+                            <svg class="mx-auto h-12 w-12 text-base-content/50" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                                <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" 
+                                      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                            </svg>
+                            <p class="mt-1 text-sm">
+                                <span class="text-primary hover:text-primary-focus">
+                                    Click to select files
+                                </span>
+                            </p>
+                            <p class="mt-1 text-xs text-base-content/70">
+                                Select multiple files to upload
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Selected files info -->
+                <div id="file-list" class="mt-4 max-h-60 overflow-y-auto hidden">
+                    <div class="alert">
+                        <div>
+                            <h3 class="font-medium">Selected Files:</h3>
+                            <div id="file-stats" class="mt-2 text-sm">
+                                <p id="file-count"></p>
+                                <p id="file-size"></p>
+                            </div>
+                            <div id="selected-files" class="mt-2 max-h-40 overflow-y-auto">
+                                <!-- File list will be populated here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Upload progress indicator -->
+                <div id="upload-progress" class="mb-6 hidden">
+                    <div class="flex items-center mb-2">
+                        <div class="w-full">
+                            <div class="flex justify-between mb-1">
+                                <span class="text-sm font-medium" id="progress-text">Preparing...</span>
+                                <span class="text-sm font-medium" id="progress-percentage">0%</span>
+                            </div>
+                            <progress class="progress progress-primary w-full" id="progress-bar" value="0" max="100"></progress>
+                        </div>
+                    </div>
+                    <p class="text-xs text-base-content/70 mt-1">
+                        Files are being uploaded directly through the server to S3. Please don't close this page.
+                    </p>
+                </div>
+                
+                <!-- Upload status area -->
+                <div id="upload-status" class="mb-6">
+                    <!-- This will be populated with status messages -->
+                </div>
+                
+                <div class="flex items-center justify-between">
+                    <a href="{% url 'storage:archivist_dashboard' %}" 
+                       class="btn btn-neutral">
+                        Cancel
+                    </a>
+                    <button id="upload-button" type="button" 
+                            class="btn btn-primary">
+                        Upload Files
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+// Helper function to format file size
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    
+    return parseFloat((bytes / Math.pow(1024, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+// Update progress bar and text
+function updateUploadProgress(message, percentage) {
+    const progressBar = document.getElementById('progress-bar');
+    const progressText = document.getElementById('progress-text');
+    const progressPercentage = document.getElementById('progress-percentage');
+    const progressContainer = document.getElementById('upload-progress');
+    
+    progressContainer.classList.remove('hidden');
+    progressBar.value = percentage;
+    progressText.textContent = message;
+    progressPercentage.textContent = `${Math.round(percentage)}%`;
+}
+
+// Update files info display
+function updateFilesInfo(fileCount, totalSize, files) {
+    document.getElementById('file-count').textContent = `Files: ${fileCount}`;
+    document.getElementById('file-size').textContent = `Total size: ${formatFileSize(totalSize)}`;
+    
+    // Show individual files
+    const filesList = document.getElementById('selected-files');
+    filesList.innerHTML = '';
+    
+    for (let i = 0; i < Math.min(files.length, 10); i++) {
+        const file = files[i];
+        const fileDiv = document.createElement('div');
+        fileDiv.className = 'text-xs p-1 border-b border-base-300';
+        fileDiv.textContent = `${file.name} (${formatFileSize(file.size)})`;
+        filesList.appendChild(fileDiv);
+    }
+    
+    if (files.length > 10) {
+        const moreDiv = document.createElement('div');
+        moreDiv.className = 'text-xs p-1 text-base-content/70 italic';
+        moreDiv.textContent = `... and ${files.length - 10} more files`;
+        filesList.appendChild(moreDiv);
+    }
+    
+    document.getElementById('file-list').classList.remove('hidden');
+}
+
+// Show success message
+function showSuccessMessage(message, details = null) {
+    const statusArea = document.getElementById('upload-status');
+    statusArea.innerHTML = `
+        <div class="alert alert-success">
+            <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            <div>
+                <h3 class="font-bold">Success!</h3>
+                <div class="text-xs">${message}</div>
+                ${details ? `<div class="text-xs mt-1 opacity-75">${details}</div>` : ''}
+            </div>
+        </div>
+    `;
+}
+
+// Show error message
+function showErrorMessage(message, details = null) {
+    const statusArea = document.getElementById('upload-status');
+    statusArea.innerHTML = `
+        <div class="alert alert-error">
+            <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            <div>
+                <h3 class="font-bold">Error!</h3>
+                <div class="text-xs">${message}</div>
+                ${details ? `<div class="text-xs mt-1 opacity-75">${details}</div>` : ''}
+            </div>
+        </div>
+    `;
+}
+
+// Add event listener for the file select button
+document.getElementById('file-select-button').addEventListener('click', function() {
+    document.getElementById('file-input').click();
+});
+
+// Handle file selection
+document.getElementById('file-input').addEventListener('change', function() {
+    const files = this.files;
+    if (files.length > 0) {
+        let totalSize = 0;
+        
+        // Calculate total size
+        for (let i = 0; i < files.length; i++) {
+            totalSize += files[i].size;
+        }
+        
+        // Update files info
+        updateFilesInfo(files.length, totalSize, Array.from(files));
+        
+        // Store files for upload
+        window.selectedFiles = Array.from(files);
+    }
+});
+
+// Add event listener for the upload button
+document.getElementById('upload-button').addEventListener('click', async function() {
+    const button = this;
+    const statusArea = document.getElementById('upload-status');
+    const folderName = document.getElementById('folder-name').value.trim();
+    
+    // Clear previous status
+    statusArea.innerHTML = '';
+    
+    // Validate inputs
+    if (!folderName) {
+        showErrorMessage('Please enter a folder name.');
+        return;
+    }
+    
+    if (!window.selectedFiles || window.selectedFiles.length === 0) {
+        showErrorMessage('Please select files to upload.');
+        return;
+    }
+    
+    try {
+        // Disable button and show progress
+        button.disabled = true;
+        button.innerHTML = '<span class="loading loading-spinner"></span> Uploading...';
+        updateUploadProgress('Preparing upload...', 0);
+        
+        // Create form data
+        const formData = new FormData();
+        formData.append('folder_name', folderName);
+        
+        // Add all files
+        for (let i = 0; i < window.selectedFiles.length; i++) {
+            formData.append('files', window.selectedFiles[i]);
+        }
+        
+        // Add CSRF token
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        formData.append('csrfmiddlewaretoken', csrfToken);
+        
+        updateUploadProgress('Uploading files to server...', 10);
+        
+        // Upload files
+        const response = await fetch(window.location.href, {
+            method: 'POST',
+            body: formData,
+            // Note: Don't set Content-Type header when using FormData, let the browser set it
+        });
+        
+        updateUploadProgress('Processing upload...', 90);
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            updateUploadProgress('Upload completed!', 100);
+            showSuccessMessage(
+                result.message || `Successfully uploaded ${result.total_uploaded} files`,
+                result.total_size ? `Total size: ${result.total_size}` : null
+            );
+            
+            // Reset form after successful upload
+            setTimeout(() => {
+                document.getElementById('streaming-upload-form').reset();
+                document.getElementById('file-list').classList.add('hidden');
+                document.getElementById('upload-progress').classList.add('hidden');
+                window.selectedFiles = null;
+            }, 3000);
+        } else {
+            updateUploadProgress('Upload failed', 0);
+            
+            let errorMessage = result.error || 'Upload failed';
+            let errorDetails = null;
+            
+            if (result.failures && result.failures.length > 0) {
+                errorDetails = `Failed files: ${result.failures.map(f => f.file_name).join(', ')}`;
+            }
+            
+            showErrorMessage(errorMessage, errorDetails);
+        }
+        
+    } catch (error) {
+        console.error('Upload error:', error);
+        updateUploadProgress('Upload failed', 0);
+        showErrorMessage('Upload failed: ' + error.message);
+    } finally {
+        // Re-enable button
+        button.disabled = false;
+        button.innerHTML = 'Upload Files';
+    }
+});
+
+// Allow drag and drop
+const fileUploadContainer = document.getElementById('file-upload-container');
+
+fileUploadContainer.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    this.classList.add('border-primary');
+});
+
+fileUploadContainer.addEventListener('dragleave', function(e) {
+    e.preventDefault();
+    this.classList.remove('border-primary');
+});
+
+fileUploadContainer.addEventListener('drop', function(e) {
+    e.preventDefault();
+    this.classList.remove('border-primary');
+    
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+        // Update the file input
+        document.getElementById('file-input').files = files;
+        
+        // Trigger the change event
+        const event = new Event('change', { bubbles: true });
+        document.getElementById('file-input').dispatchEvent(event);
+    }
+});
+</script>
+{% endblock %} 

@@ -1,6 +1,6 @@
 import pytest
 
-from lacos.storage.services.collection_service import CollectionService
+from arkumu.storage.services.collection_service import CollectionService
 
 # Import constants from test_constants.py
 from .test_constants import TEST_BUCKET_NAME, TEST_INGEST_BUCKET, TEST_PRODUCTION_BUCKET

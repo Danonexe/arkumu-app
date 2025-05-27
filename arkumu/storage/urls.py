@@ -1,7 +1,7 @@
 from django.urls import path
 
 from . import views
-from .views import direct_upload_views
+from .views import direct_upload_views, streaming_upload_views
 
 app_name = "storage"
 
@@ -12,6 +12,12 @@ urlpatterns = [
     path("upload/direct/", views.direct_upload, name="direct_upload"),
     path("upload/success/", views.upload_success, name="upload_success"),
     path('upload/complete/', views.upload_complete, name='upload_complete'),
+    
+    # New streaming upload endpoints
+    path("upload/streaming/", streaming_upload_views.streaming_upload_form, name="streaming_upload_form"),
+    path("upload/streaming/api/", streaming_upload_views.streaming_upload_api, name="streaming_upload_api"),
+    path("upload/streaming/single/", streaming_upload_views.streaming_upload_single, name="streaming_upload_single"),
+    path("file/info/", streaming_upload_views.file_info, name="file_info"),
     
     
     # Presigned URL API endpoints

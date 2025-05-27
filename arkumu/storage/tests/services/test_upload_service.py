@@ -10,7 +10,7 @@ from io import BytesIO
 from urllib.parse import urlparse
 
 
-from lacos.storage.services.upload_service import UploadService
+from arkumu.storage.services.upload_service import UploadService
 
 # Use a static bucket name for testing
 TEST_BUCKET_NAME = 'test-bucket'

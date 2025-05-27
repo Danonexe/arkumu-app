@@ -9,11 +9,11 @@ from moto import mock_aws
 from django.test import TestCase
 from django.conf import settings
 
-from lacos.storage.management.commands.standardize_ocfl_structure import (
+from arkumu.storage.management.commands.standardize_ocfl_structure import (
     is_collection, PathHandler, Command
 )
-from lacos.storage.services.ocfl_service import OCFLService
-from lacos.storage.services.bucket_service import BucketService
+from arkumu.storage.services.ocfl_service import OCFLService
+from arkumu.storage.services.bucket_service import BucketService
 
 # Use a static bucket name for testing
 TEST_BUCKET_NAME = 'test-bucket'

@@ -6,3 +6,4 @@ def daisy_test(request):
     """
     return render(request, 'metadata/daisy_test.html')
 
+

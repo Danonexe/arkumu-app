@@ -4,7 +4,7 @@ from moto import mock_aws
 
 from unittest.mock import patch, MagicMock
 
-from lacos.storage.services.bucket_service import BucketService
+from arkumu.storage.services.bucket_service import BucketService
 
 # Import constants from test_constants.py
 from .test_constants import TEST_BUCKET_NAME, TEST_INGEST_BUCKET, TEST_PRODUCTION_BUCKET
