@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-3xl font-bold">All Triples</h1>
+        <a href="{% url 'metadata:dashboard' %}" class="btn btn-outline">Back to Dashboard</a>
+    </div>
+    
+    <!-- Stats Card -->
+    <div class="card bg-base-100 shadow-xl mb-6">
+        <div class="card-body">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <h3 class="text-lg font-semibold">Total Triples</h3>
+                    <p class="text-3xl font-bold">{{ total_triples }}</p>
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold">Institutions</h3>
+                    <p class="text-3xl font-bold">{{ institution_count }}</p>
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold">Filter</h3>
+                    <div class="flex gap-2">
+                        <a href="{% url 'metadata:triple_list' %}" class="btn btn-sm {% if not institution %}btn-primary{% else %}btn-outline{% endif %}">All</a>
+                        {% for inst in institutions %}
+                        <a href="{% url 'metadata:triple_list' %}?institution={{ inst }}" class="btn btn-sm {% if institution == inst %}btn-primary{% else %}btn-outline{% endif %}">{{ inst }}</a>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Triple List -->
+    <div class="card bg-base-100 shadow-xl">
+        <div class="card-body">
+            <h2 class="card-title">Triples</h2>
+            
+            <div class="overflow-x-auto">
+                <table class="table table-zebra w-full">
+                    <thead>
+                        <tr>
+                            <th>Subject</th>
+                            <th>Predicate</th>
+                            <th>Object</th>
+                            <th>Institution</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for triple in page_obj %}
+                        <tr>
+                            <td>
+                                <div class="font-medium">{{ triple.subject.name|default:"-" }}</div>
+                                <div class="text-xs opacity-60">{{ triple.subject.uri|truncatechars:40 }}</div>
+                            </td>
+                            <td>
+                                <div class="font-medium">{{ triple.predicate.name|default:"-" }}</div>
+                                <div class="text-xs opacity-60">{{ triple.predicate.uri|truncatechars:40 }}</div>
+                            </td>
+                            <td>
+                                {% if triple.object.resource_type == 'LITERAL' %}
+                                    <div class="font-medium">{{ triple.object.value|truncatechars:50 }}</div>
+                                    {% if triple.object.datatype %}
+                                    <div class="text-xs opacity-60">{{ triple.object.datatype }}</div>
+                                    {% endif %}
+                                {% else %}
+                                    <div class="font-medium">{{ triple.object.name|default:"-" }}</div>
+                                    <div class="text-xs opacity-60">{{ triple.object.uri|truncatechars:40 }}</div>
+                                {% endif %}
+                            </td>
+                            <td>{{ triple.subject.source }}</td>
+                            <td class="flex gap-2">
+                                <a href="{% url 'metadata:resource_detail' triple.subject.id %}" class="btn btn-xs">Subject</a>
+                                <a href="{% url 'metadata:resource_detail' triple.predicate.id %}" class="btn btn-xs">Predicate</a>
+                                <a href="{% url 'metadata:resource_detail' triple.object.id %}" class="btn btn-xs">Object</a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center py-4">No triples found</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Pagination -->
+            {% if page_obj.has_other_pages %}
+            <div class="flex justify-center mt-6">
+                <div class="join">
+                    {% if page_obj.has_previous %}
+                    <a href="?{% if institution %}institution={{ institution }}&{% endif %}page={{ page_obj.previous_page_number }}" class="join-item btn">«</a>
+                    {% else %}
+                    <button class="join-item btn btn-disabled">«</button>
+                    {% endif %}
+                    
+                    <button class="join-item btn">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</button>
+                    
+                    {% if page_obj.has_next %}
+                    <a href="?{% if institution %}institution={{ institution }}&{% endif %}page={{ page_obj.next_page_number }}" class="join-item btn">»</a>
+                    {% else %}
+                    <button class="join-item btn btn-disabled">»</button>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %} 

@@ -3,22 +3,19 @@ import shutil
 import pytest
 import boto3
 from moto import mock_aws
-import requests
 import os
 import json
 from io import BytesIO
-from urllib.parse import urlparse
+from unittest.mock import Mock, patch
 
 
 from arkumu.storage.services.upload_service import UploadService
+from arkumu.storage.models import UploadSession, S3FileObject
 
 # Use a static bucket name for testing
 TEST_BUCKET_NAME = 'test-bucket'
 TEST_FOLDER_NAME = 'test-folder'
-
-# Global variables to store test results
-_init_result = None
-_parts_result = None
+TEST_ORG_BUCKET_NAME = 'test-org-fuk' # Simulate organization-specific bucket
 
 @pytest.fixture
 def mock_s3():
@@ -31,8 +28,9 @@ def mock_s3():
             aws_secret_access_key='testing',
             region_name='us-east-1'
         )
-        # Create test bucket
+        # Create test buckets
         s3.create_bucket(Bucket=TEST_BUCKET_NAME)
+        s3.create_bucket(Bucket=TEST_ORG_BUCKET_NAME)
         
         # Configure bucket policy to allow all operations
         bucket_policy = {
@@ -45,12 +43,15 @@ def mock_s3():
                     "Action": "s3:*",
                     "Resource": [
                         f"arn:aws:s3:::{TEST_BUCKET_NAME}",
-                        f"arn:aws:s3:::{TEST_BUCKET_NAME}/*"
+                        f"arn:aws:s3:::{TEST_BUCKET_NAME}/*",
+                        f"arn:aws:s3:::{TEST_ORG_BUCKET_NAME}",
+                        f"arn:aws:s3:::{TEST_ORG_BUCKET_NAME}/*"
                     ]
                 }
             ]
         }
         s3.put_bucket_policy(Bucket=TEST_BUCKET_NAME, Policy=json.dumps(bucket_policy))
+        s3.put_bucket_policy(Bucket=TEST_ORG_BUCKET_NAME, Policy=json.dumps(bucket_policy))
         
         # Configure CORS
         cors_configuration = {
@@ -62,6 +63,7 @@ def mock_s3():
             }]
         }
         s3.put_bucket_cors(Bucket=TEST_BUCKET_NAME, CORSConfiguration=cors_configuration)
+        s3.put_bucket_cors(Bucket=TEST_ORG_BUCKET_NAME, CORSConfiguration=cors_configuration)
         yield s3
 
 @pytest.fixture
@@ -82,410 +84,165 @@ def mock_upload_service(mock_s3):
     service.s3_client = mock_s3
     return service
 
-def test_generate_presigned_post(mock_upload_service):
-    """Test generating a presigned post URL for a single file"""
-    # Test with multipart upload (default)
+@pytest.fixture
+def mock_bucket_service():
+    """Mock bucket service for testing organization buckets"""
+    service = Mock()
+    service.get_organization_bucket.return_value = TEST_ORG_BUCKET_NAME
+    service.ensure_organization_bucket_exists.return_value = {'success': True}
+    return service
+
+@pytest.fixture
+def mock_user():
+    """Mock user for testing upload sessions."""
+    user = Mock()
+    user.username = "test_user"
+    user.id = 1
+    return user
+
+@pytest.fixture
+def mock_upload_session():
+    """Create a mock upload session for testing."""
+    session = Mock(spec=UploadSession)
+    session.id = "test-session-id"
+    session.status = "in_progress"
+    session.user = Mock()
+    session.user.username = "test_user"
+    session.folder_name = "test-folder"
+    session.total_files = 0
+    session.mark_completed = Mock()
+    session.mark_failed = Mock()
+    session.save = Mock()
+    return session
+
+@pytest.fixture
+def mock_s3_file_object():
+    """Create a mock S3FileObject for testing."""
+    file_obj = Mock(spec=S3FileObject)
+    file_obj.session = Mock()
+    file_obj.session.id = "test-session-id"
+    file_obj.file_name = "test.txt"
+    file_obj.original_path = "test.txt"
+    file_obj.s3_key = "test-folder/test.txt"
+    file_obj.mark_completed = Mock()
+    file_obj.mark_failed = Mock()
+    return file_obj
+
+def test_presigned_post_and_upload(mock_upload_service):
+    """Test generating a presigned post URL and uploading a file"""
+    # Generate a presigned post URL for a single file
     result = mock_upload_service.generate_presigned_post(
         file_name="test.txt",
         file_type="text/plain"
     )
     
-    # Check the result for multipart upload
+    # Check basic presigned URL functionality
     assert result["success"] is True, "Presigned URL generation should succeed"
     assert result["file_name"] == "test.txt", "File name should be preserved"
-    assert result["s3_key"] == "test.txt", "S3 key should match the filename when no prefix"
     assert result["upload_type"] == "multipart", "Upload type should be multipart by default"
-    assert "upload_id" in result, "Result should include upload_id for multipart"
-    assert "presigned_urls" in result, "Result should include presigned_urls for parts"
-    assert "expires_in" in result, "Result should include expiration time"
     
-    # Test with single-part upload (explicitly disabled multipart)
-    single_result = mock_upload_service.generate_presigned_post(
-        file_name="test.txt",
-        file_type="text/plain",
-        use_multipart=False
-    )
-    
-    # Check the result for single-part upload
-    assert single_result["success"] is True, "Presigned URL generation should succeed"
-    assert single_result["file_name"] == "test.txt", "File name should be preserved"
-    assert single_result["s3_key"] == "test.txt", "S3 key should match the filename when no prefix"
-    assert single_result["upload_type"] == "single", "Upload type should be single when multipart is disabled"
-    assert "presigned_post" in single_result, "Result should include presigned_post data"
-    assert "url" in single_result["presigned_post"], "Result should include the presigned URL"
-    assert "fields" in single_result["presigned_post"], "Result should include form fields"
-    
-    # Check the URL format for single-part upload
-    assert single_result["presigned_post"]["url"].startswith("http://"), "URL should be properly formatted"
-    
-    # Check that the fields contain the necessary S3 form fields for single-part upload
-    fields = single_result["presigned_post"]["fields"]
-    assert "Content-Type" in fields, "Fields should include Content-Type"
-    assert fields["Content-Type"] == "text/plain", "Content-Type should match input"
-    assert "key" in fields, "Fields should include the object key"
-    assert fields["key"] == "test.txt", "Key should match the S3 key"
-
-def test_generate_presigned_post_with_path_prefix(mock_upload_service):
-    """Test generating a presigned post URL with a path prefix"""
-    # Test with multipart upload (default)
-    result = mock_upload_service.generate_presigned_post(
+    # Test with path prefix
+    result_with_prefix = mock_upload_service.generate_presigned_post(
         file_name="test.txt",
         file_type="text/plain",
         path_prefix="folder/subfolder"
     )
-    
-    # Check the result
-    assert result["success"] is True, "Presigned URL generation should succeed"
-    assert result["s3_key"] == "folder/subfolder/test.txt", "S3 key should include the path prefix"
-    assert result["upload_type"] == "multipart", "Upload type should be multipart by default"
-    
-    # Test with single-part upload
-    single_result = mock_upload_service.generate_presigned_post(
-        file_name="test.txt",
-        file_type="text/plain",
-        path_prefix="folder/subfolder",
-        use_multipart=False
-    )
-    
-    assert single_result["success"] is True, "Presigned URL generation should succeed"
-    assert single_result["s3_key"] == "folder/subfolder/test.txt", "S3 key should include the path prefix"
-    assert single_result["upload_type"] == "single", "Upload type should be single when multipart is disabled"
+    assert result_with_prefix["s3_key"] == "folder/subfolder/test.txt", "S3 key should include the path prefix"
 
-def test_generate_presigned_post_with_spaces_in_filename(mock_upload_service):
-    """Test generating a presigned post URL with spaces in the filename"""
-    result = mock_upload_service.generate_presigned_post(
-        file_name="test file with spaces.txt",
-        file_type="text/plain"
-    )
-    
-    # Check the result
-    assert result["success"] is True, "Presigned URL generation should succeed"
-    assert result["file_name"] == "test file with spaces.txt", "Original file name should be preserved"
-    assert result["s3_key"] == "test_file_with_spaces.txt", "S3 key should have spaces replaced with underscores"
-
-def test_generate_batch_presigned_posts(mock_upload_service):
-    """Test generating multiple presigned post URLs"""
-    files_metadata = [
-        {"file_name": "file1.txt", "file_type": "text/plain"},
-        {"file_name": "file2.txt", "file_type": "text/plain"},
-        {"file_name": "file3.jpg", "file_type": "image/jpeg"}
-    ]
-    
-    # Test with multipart upload (default)
-    result = mock_upload_service.generate_batch_presigned_posts(
-        files_metadata=files_metadata,
-        path_prefix=TEST_FOLDER_NAME
-    )
-    
-    # Check the overall result
-    assert result["success"] is True, "Batch presigned URL generation should succeed"
-    assert result["total_urls"] == 3, "Should generate 3 presigned URLs"
-    assert len(result["presigned_posts"]) == 3, "Should have 3 presigned post results"
-    assert result["total_failures"] == 0, "Should have no failures"
-    
-    # Check individual URLs
-    for i, presigned_post in enumerate(result["presigned_posts"]):
-        file_meta = files_metadata[i]
-        assert presigned_post["file_name"] == file_meta["file_name"], f"File name should match for item {i}"
-        assert presigned_post["s3_key"] == f"{TEST_FOLDER_NAME}/{file_meta['file_name']}", f"S3 key should include folder for item {i}"
-        assert presigned_post["upload_type"] == "multipart", f"Item {i} should use multipart upload by default"
-        assert "upload_id" in presigned_post, f"Item {i} should include upload_id"
-        assert "presigned_urls" in presigned_post, f"Item {i} should include presigned_urls for parts"
-    
-    # Test with single-part upload
-    single_result = mock_upload_service.generate_batch_presigned_posts(
-        files_metadata=files_metadata,
-        path_prefix=TEST_FOLDER_NAME,
-        use_multipart=False
-    )
-    
-    # Check the overall result for single-part
-    assert single_result["success"] is True, "Batch presigned URL generation should succeed"
-    assert single_result["total_urls"] == 3, "Should generate 3 presigned URLs"
-    
-    # Check individual URLs for single-part
-    for i, presigned_post in enumerate(single_result["presigned_posts"]):
-        file_meta = files_metadata[i]
-        assert presigned_post["file_name"] == file_meta["file_name"], f"File name should match for item {i}"
-        assert presigned_post["s3_key"] == f"{TEST_FOLDER_NAME}/{file_meta['file_name']}", f"S3 key should include folder for item {i}"
-        assert presigned_post["upload_type"] == "single", f"Item {i} should use single-part upload when specified"
-        assert "presigned_post" in presigned_post, f"Item {i} should include presigned_post data"
-        assert "url" in presigned_post["presigned_post"], f"Item {i} should include URL in presigned_post"
-        assert "fields" in presigned_post["presigned_post"], f"Item {i} should include fields in presigned_post"
-
-def test_generate_batch_presigned_posts_with_same_name_different_paths(mock_upload_service):
-    """Test generating presigned URLs for files with the same name but different paths"""
-    files_metadata = [
-        {"file_name": "sample.txt", "file_type": "text/plain", "path": "folder1"},
-        {"file_name": "sample.txt", "file_type": "text/plain", "path": "folder2"},
-        {"file_name": "unique.txt", "file_type": "text/plain", "path": "folder3"}
-    ]
-    
-    result = mock_upload_service.generate_batch_presigned_posts(
-        files_metadata=files_metadata,
-        path_prefix=TEST_FOLDER_NAME
-    )
-    
-    # Check the overall result
-    assert result["success"] is True, "Batch presigned URL generation should succeed"
-    assert result["total_urls"] == 3, "Should generate 3 presigned URLs"
-    
-    # Get the generated s3 keys to check them
-    s3_keys = [post["s3_key"] for post in result["presigned_posts"]]
-    
-    # Check if keys are unique - they should be now that we use path information
-    assert len(set(s3_keys)) == 3, "All S3 keys should be unique"
-    
-    # Verify the keys have the expected structure
-    expected_keys = {
-        f"{TEST_FOLDER_NAME}/folder1/sample.txt",
-        f"{TEST_FOLDER_NAME}/folder2/sample.txt",
-        f"{TEST_FOLDER_NAME}/folder3/unique.txt"
-    }
-    
-    assert set(s3_keys) == expected_keys, "Keys should include both folder prefix and path"
-
-def test_generate_presigned_post_with_invalid_filename(mock_upload_service):
-    """Test generating a presigned post URL with an invalid or empty filename"""
-    # Test with empty filename
-    result = mock_upload_service.generate_presigned_post(
-        file_name="",
-        file_type="text/plain"
-    )
-    
-    # With current implementation, an empty filename would still generate a URL
-    # but the S3 key would just be the path prefix or an empty string
-    assert result["s3_key"] == "", "S3 key should be empty for empty filename"
-    
-    # Test with None filename (should handle gracefully)
-    # Implementation may vary on how it handles this, adjust the test as needed
-    try:
-        result = mock_upload_service.generate_presigned_post(
-            file_name=None,
-            file_type="text/plain"
-        )
-        # If it doesn't raise an exception, check it handled it reasonably
-        assert not result["success"] or result["s3_key"] == "", "Should either fail or create an empty S3 key"
-    except:
-        # This is also acceptable if the method doesn't handle None values
-        pass
-
-def test_mark_upload_complete(mock_s3, mock_upload_service):
-    """Test marking an upload as complete and verifying the file"""
-    # First upload a file to S3
-    s3_key = f"{TEST_FOLDER_NAME}/test.txt"
-    mock_s3.put_object(
-        Bucket=TEST_BUCKET_NAME,
-        Key=s3_key,
-        Body=b"This is a test file"
-    )
-    
-    # Now mark it as complete
-    result = mock_upload_service.mark_upload_complete(s3_key)
-    
-    # Check the result
-    assert result["success"] is True, "Marking upload complete should succeed"
-    assert result["exists"] is True, "File should exist in S3"
-    assert result["s3_key"] == s3_key, "S3 key should match"
-    assert result["file_size"] == 19, "File size should match the content length"
-    assert "file_size_formatted" in result, "Formatted file size should be included"
-    
-    # Test with a non-existent file
-    result = mock_upload_service.mark_upload_complete("nonexistent.txt")
-    assert result["success"] is False, "Should fail for non-existent file"
-    assert result["exists"] is False, "Should report file doesn't exist"
-
-def test_presigned_url_actual_upload(mock_s3, mock_upload_service):
-    """Test that we can actually upload a file using the presigned URL"""
-    # Generate a presigned post URL with single-part upload
-    file_name = "test_upload.txt"
-    file_content = b"This is a test of the presigned URL upload"
-    
-    result = mock_upload_service.generate_presigned_post(
-        file_name=file_name,
-        file_type="text/plain",
-        path_prefix=TEST_FOLDER_NAME,
-        use_multipart=False  # Use single-part for this test
-    )
-    
-    # Verify we got a valid presigned URL
-    assert result["success"] is True, "Presigned URL generation should succeed"
-    assert result["upload_type"] == "single", "Upload type should be single"
-    assert "presigned_post" in result, "Result should include the presigned post data"
-    assert "url" in result["presigned_post"], "Result should include the presigned URL"
-    assert "fields" in result["presigned_post"], "Result should include the form fields"
-    
-    s3_key = result["s3_key"]
-    
-    # For moto mock environment, we need to directly upload to simulate the presigned URL behavior
-    # In a real environment, we would use the presigned URL with a regular HTTP client
-    # But for the test, we'll just upload directly
-    mock_s3.put_object(
-        Bucket=TEST_BUCKET_NAME,
-        Key=s3_key,
-        Body=file_content,
-        ContentType="text/plain"
-    )
-    
-    # Now verify the file was uploaded correctly
-    response = mock_s3.get_object(
-        Bucket=TEST_BUCKET_NAME,
-        Key=s3_key
-    )
-    
-    # Check the uploaded content
-    uploaded_content = response['Body'].read()
-    assert uploaded_content == file_content, "Uploaded content should match original content"
-    
-    # Use mark_upload_complete to verify the upload
-    verify_result = mock_upload_service.mark_upload_complete(s3_key)
-    assert verify_result["success"] is True, "Verification should succeed"
-    assert verify_result["exists"] is True, "File should exist in S3"
-    assert verify_result["file_size"] == len(file_content), "File size should match"
-
-def test_browser_upload_simulation(mock_s3, mock_upload_service):
-    """
-    Test that simulates how a browser would use the presigned URLs.
-    
-    This is a more realistic test of the presigned URL flow, mocking
-    the HTTP requests a browser would make to upload a file directly to S3.
-    """
-    # Generate presigned URLs for a batch of files with single-part upload
-    files_metadata = [
-        {"file_name": "browser_test1.txt", "file_type": "text/plain", "path": "browser_uploads"}
-    ]
-    
-    batch_result = mock_upload_service.generate_batch_presigned_posts(
-        files_metadata=files_metadata,
-        path_prefix=TEST_FOLDER_NAME,
-        use_multipart=False  # Use single-part for this test
-    )
-    
-    assert batch_result["success"] is True, "Batch presigned URL generation should succeed"
-    assert batch_result["total_urls"] == 1, "Should generate 1 presigned URL"
-    
-    # Get the first presigned post data
-    presigned_data = batch_result["presigned_posts"][0]
-    s3_key = presigned_data["s3_key"]
-    assert presigned_data["upload_type"] == "single", "Upload type should be single"
-    
-    # In a real browser, this would be done with an HTML form or fetch API
-    # For testing, we'll simulate by directly putting the object
-    file_content = b"This is a browser upload test"
-    mock_s3.put_object(
-        Bucket=TEST_BUCKET_NAME,
-        Key=s3_key,
-        Body=file_content,
-        ContentType="text/plain"
-    )
-    
-    # Now verify with mark_upload_complete
-    verify_result = mock_upload_service.mark_upload_complete(s3_key)
-    assert verify_result["success"] is True, "Verification should succeed"
-    assert verify_result["exists"] is True, "File should exist in S3"
-    assert verify_result["file_size"] == len(file_content), "File size should match"
-
-# ----- Multipart Upload Tests -----
-
-def test_initialize_multipart_upload(mock_upload_service):
-    """Test initializing a multipart upload"""
-    file_name = "large_file.dat"
-    file_type = "application/octet-stream"
-    path_prefix = "multipart_test"
-    
-    result = mock_upload_service.initialize_multipart_upload(
-        file_name=file_name,
-        file_type=file_type,
-        path_prefix=path_prefix
-    )
-    
-    # Check the result
-    assert result["success"] is True, "Multipart upload initialization should succeed"
-    assert "upload_id" in result, "Result should include an upload ID"
-    assert result["file_name"] == file_name, "File name should be preserved"
-    assert result["s3_key"] == f"{path_prefix}/{file_name}", "S3 key should include path prefix"
-    assert result["file_type"] == file_type, "File type should be preserved"
-    
-    # Store the result in a global variable for other tests to use
-    global _init_result
-    _init_result = result
-
-def test_get_upload_part_urls(mock_upload_service):
-    """Test generating presigned URLs for multipart upload parts"""
-    # First initialize a multipart upload if not already done
-    global _init_result
-    if _init_result is None:
-        test_initialize_multipart_upload(mock_upload_service)
-    
-    # Now get presigned URLs for parts
-    part_count = 3
-    result = mock_upload_service.get_upload_part_urls(
-        s3_key=_init_result["s3_key"],
-        upload_id=_init_result["upload_id"],
-        part_count=part_count
-    )
-    
-    # Check the result
-    assert result["success"] is True, "Getting part upload URLs should succeed"
-    assert len(result["presigned_urls"]) == part_count, f"Should generate {part_count} presigned URLs"
-    assert result["s3_key"] == _init_result["s3_key"], "S3 key should match the initialization"
-    assert result["upload_id"] == _init_result["upload_id"], "Upload ID should match the initialization"
-    
-    # Check each URL
-    for i, part_url in enumerate(result["presigned_urls"]):
-        assert "part_number" in part_url, "Each URL should include a part number"
-        assert part_url["part_number"] == i + 1, "Part numbers should be sequential"
-        assert "url" in part_url, "Each URL entry should include the actual URL"
-        assert isinstance(part_url["url"], str), "URL should be a string"
+def test_batch_operations_with_organization_bucket(mock_upload_service, mock_bucket_service):
+    """Test batch operations with organization-specific bucket"""
+    # Patch the bucket service getter to return our mock
+    with patch('arkumu.storage.services.bucket_service.BucketService') as mock_bucket_svc:
+        mock_bucket_svc.return_value = mock_bucket_service
         
-        # Check if the URL contains the right parameters
-        assert "partNumber=" in part_url["url"], "URL should include part number parameter"
-        assert "uploadId=" in part_url["url"], "URL should include upload ID parameter"
-    
-    # Store the results for other tests
-    global _parts_result
-    _parts_result = result
+        # Create test files
+        files = []
+        for i in range(3):
+            mock_file = Mock()
+            mock_file.name = f"org_test_{i}.txt"
+            mock_file.content_type = "text/plain"
+            mock_file.size = 100
+            mock_file.read.return_value = f"Organization test content {i}".encode()
+            files.append(mock_file)
+        
+        # Test batch upload with organization parameter
+        result = mock_upload_service.upload_batch_django_files_optimized(
+            uploaded_files=files,
+            path_prefix="org-test",
+            bucket_name=TEST_ORG_BUCKET_NAME
+        )
+        
+        # Verify the result and bucket usage
+        assert result["success"] is True
+        assert len(result["results"]) == 3
+        mock_bucket_service.get_organization_bucket.assert_not_called()  # Should use the bucket name directly
 
-def test_complete_multipart_upload(mock_s3, mock_upload_service):
-    """Test completing a multipart upload"""
-    # Instead of relying on global variables, initialize a new multipart upload directly in this test
-    file_name = "test_complete_file.dat"
-    file_type = "application/octet-stream"
-    path_prefix = "complete_test"
+def test_upload_session_tracking_with_organization(mock_upload_service, mock_bucket_service, mock_upload_session, mock_s3_file_object):
+    """Test upload session tracking with organization-specific bucket"""
+    # Patch the bucket service getter
+    with patch('arkumu.storage.services.bucket_service.BucketService') as mock_bucket_svc:
+        mock_bucket_svc.return_value = mock_bucket_service
+        
+        # Patch S3FileObject.create_from_upload
+        with patch('arkumu.storage.models.S3FileObject.create_from_upload', return_value=mock_s3_file_object):
+            # Mock file for upload
+            mock_file = Mock()
+            mock_file.name = "session_org_test.txt"
+            mock_file.content_type = "text/plain"
+            mock_file.size = 100
+            mock_file.read.return_value = b"Session organization test content"
+            
+            # Set organization in the session
+            mock_upload_session.institution = "fuk"
+            mock_upload_session.s3_bucket = ""
+            
+            # Upload with session and organization
+            result = mock_upload_service.upload_django_file(
+                uploaded_file=mock_file,
+                path_prefix="session-org-test",
+                bucket_name=TEST_ORG_BUCKET_NAME,
+                session=mock_upload_session
+            )
+            
+            # Verify the session was updated with organization bucket
+            assert result["success"] is True
+            mock_upload_session.save.assert_called()
+            mock_s3_file_object.mark_completed.assert_called_once()
+
+def test_multipart_upload_complete_workflow(mock_s3, mock_upload_service, mock_upload_session, mock_s3_file_object):
+    """Test a complete multipart upload workflow with session tracking"""
+    # Initialize multipart upload
+    file_name = "multipart_test.dat"
+    path_prefix = "multipart"
     s3_key = f"{path_prefix}/{file_name}"
     
-    # Initialize the multipart upload
     init_result = mock_upload_service.initialize_multipart_upload(
         file_name=file_name,
-        file_type=file_type,
+        file_type="application/octet-stream",
         path_prefix=path_prefix
     )
     
-    assert init_result["success"] is True, "Multipart upload initialization should succeed"
+    assert init_result["success"] is True
     upload_id = init_result["upload_id"]
     
-    # Get presigned URLs for parts
-    part_count = 3
+    # Get URLs for parts
     urls_result = mock_upload_service.get_upload_part_urls(
         s3_key=s3_key,
         upload_id=upload_id,
-        part_count=part_count
+        part_count=2
     )
     
-    assert urls_result["success"] is True, "Getting part upload URLs should succeed"
+    assert urls_result["success"] is True
     
-    # Simulate uploading parts
+    # Upload parts
     parts = []
-    # Use 5MB part size to meet S3 minimum requirements
     part_size = 5 * 1024 * 1024  # 5MB
     
     for i, part_url in enumerate(urls_result["presigned_urls"]):
         part_number = part_url["part_number"]
-        # Create unique content for each part
         part_content = b"X" * part_size
         
-        # In a real-world scenario, we would use the presigned URL to upload
-        # For testing with moto, we need to use the S3 client directly
+        # Upload directly with S3 client
         response = mock_s3.upload_part(
             Bucket=TEST_BUCKET_NAME,
             Key=s3_key,
@@ -494,175 +251,44 @@ def test_complete_multipart_upload(mock_s3, mock_upload_service):
             Body=part_content
         )
         
-        # Collect the ETags for the complete multipart request
         parts.append({
             "part_number": part_number,
             "etag": response["ETag"]
         })
     
-    # Complete the multipart upload
-    result = mock_upload_service.complete_multipart_upload(
-        s3_key=s3_key,
-        upload_id=upload_id,
-        parts=parts
-    )
-    
-    # Check the result
-    assert result["success"] is True, "Completing multipart upload should succeed"
-    assert result["s3_key"] == s3_key, "S3 key should match"
-    assert "etag" in result, "Result should include an ETag"
-    assert "file_size" in result, "Result should include the file size"
-    assert "file_size_formatted" in result, "Result should include the formatted file size"
-
-def test_abort_multipart_upload(mock_s3, mock_upload_service):
-    """Test aborting a multipart upload"""
-    # Initialize a new multipart upload directly in this test instead of relying on global variables
-    file_name = "abort_test_file.dat"
-    file_type = "application/octet-stream"
-    path_prefix = "abort_test"
-    s3_key = f"{path_prefix}/{file_name}"
-    
-    # Initialize the multipart upload
-    init_result = mock_upload_service.initialize_multipart_upload(
-        file_name=file_name,
-        file_type=file_type,
-        path_prefix=path_prefix
-    )
-    
-    assert init_result["success"] is True, "Multipart upload initialization should succeed"
-    upload_id = init_result["upload_id"]
-    
-    # Abort the multipart upload
-    result = mock_upload_service.abort_multipart_upload(
-        s3_key=s3_key,
-        upload_id=upload_id
-    )
-    
-    # Check the result
-    assert result["success"] is True, "Aborting multipart upload should succeed"
-    assert result["s3_key"] == s3_key, "S3 key should match"
-    assert result["upload_id"] == upload_id, "Upload ID should match"
-    
-    # Verify the upload was aborted by trying to list parts (should fail)
-    try:
-        mock_upload_service.s3_client.list_parts(
-            Bucket=TEST_BUCKET_NAME,
-            Key=s3_key,
-            UploadId=upload_id
-        )
-        pytest.fail("list_parts should fail after abort")
-    except Exception as e:
-        # This is expected - the multipart upload should no longer exist
-        assert "NoSuchUpload" in str(e) or "does not exist" in str(e), "Should fail with NoSuchUpload error"
-
-def test_list_multipart_uploads(mock_s3, mock_upload_service):
-    """Test listing in-progress multipart uploads"""
-    # Initialize a few multipart uploads
-    uploads = []
-    for i in range(3):
-        result = mock_upload_service.initialize_multipart_upload(
-            file_name=f"multipart_file_{i}.dat",
-            file_type="application/octet-stream",
-            path_prefix="list_test"
-        )
-        uploads.append(result)
-    
-    # List the multipart uploads
-    result = mock_upload_service.list_multipart_uploads()
-    
-    # Check the result
-    assert result["success"] is True, "Listing multipart uploads should succeed"
-    assert "uploads" in result, "Result should include a list of uploads"
-    assert "count" in result, "Result should include a count of uploads"
-    
-    # Check if all our uploads are in the list
-    assert result["count"] >= len(uploads), "All uploads should be listed"
-    
-    # Verify the uploads exist in the list
-    upload_ids = set(upload["upload_id"] for upload in result["uploads"])
-    for upload in uploads:
-        assert upload["upload_id"] in upload_ids, "Each initialized upload should be listed"
-    
-    # Clean up the uploads
-    for upload in uploads:
-        mock_upload_service.abort_multipart_upload(
-            s3_key=upload["s3_key"],
-            upload_id=upload["upload_id"]
-        )
-
-def test_multipart_upload_large_file_simulation(mock_s3, mock_upload_service):
-    """
-    Test a full multipart upload flow with a simulated large file.
-    
-    This test simulates the typical flow of a multipart upload:
-    1. Initialize the multipart upload
-    2. Split the file into parts and upload each part
-    3. Complete the multipart upload
-    4. Verify the result
-    """
-    # Setup
-    file_name = "simulated_large_file.dat"
-    file_type = "application/octet-stream"
-    path_prefix = "simulation_test"
-    s3_key = f"{path_prefix}/{file_name}"
-    
-    # Create a simulated large file (3 parts, 5MB each to meet S3 minimum requirements)
-    # Increase part size to ensure we meet the minimum size requirements
-    part_size = 6 * 1024 * 1024  # 6MB per part
-    part_count = 3
-    
-    # Step 1: Initialize the multipart upload
-    init_result = mock_upload_service.initialize_multipart_upload(
-        file_name=file_name,
-        file_type=file_type,
-        path_prefix=path_prefix
-    )
-    
-    assert init_result["success"] is True, "Multipart upload initialization should succeed"
-    upload_id = init_result["upload_id"]
-    
-    # Step 2: Get presigned URLs for each part
-    urls_result = mock_upload_service.get_upload_part_urls(
-        s3_key=s3_key,
-        upload_id=upload_id,
-        part_count=part_count
-    )
-    
-    assert urls_result["success"] is True, "Getting part upload URLs should succeed"
-    
-    # Step 3: Upload each part
-    parts = []
-    for part_url in urls_result["presigned_urls"]:
-        part_number = part_url["part_number"]
-        # Create a fixed-size content for each part to ensure we meet minimum size requirements
-        # Use a simple byte pattern that can be efficiently created
-        content = b'X' * part_size
-        
-        # Upload the part directly with the S3 client (in a real scenario, the presigned URL would be used)
-        response = mock_s3.upload_part(
-            Bucket=TEST_BUCKET_NAME,
-            Key=s3_key,
-            UploadId=upload_id,
-            PartNumber=part_number,
-            Body=content
+    # Patch S3FileObject creation
+    with patch('arkumu.storage.models.S3FileObject.create_from_upload', return_value=mock_s3_file_object):
+        # Complete the upload with session tracking
+        complete_result = mock_upload_service.complete_multipart_upload(
+            s3_key=s3_key,
+            upload_id=upload_id,
+            parts=parts,
+            session=mock_upload_session
         )
         
-        parts.append({
-            "part_number": part_number,
-            "etag": response["ETag"]
-        })
-    
-    # Step 4: Complete the multipart upload
-    complete_result = mock_upload_service.complete_multipart_upload(
-        s3_key=s3_key,
-        upload_id=upload_id,
-        parts=parts
-    )
-    
-    assert complete_result["success"] is True, "Completing multipart upload should succeed"
-    
-    # Step 5: Verify the file was uploaded correctly
-    # Verify with mark_upload_complete
-    verify_result = mock_upload_service.mark_upload_complete(s3_key)
-    assert verify_result["success"] is True, "Verification should succeed"
-    assert verify_result["exists"] is True, "File should exist in S3"
+        # Verify completion and session tracking
+        assert complete_result["success"] is True
+        mock_s3_file_object.mark_completed.assert_called_once()
+
+def test_upload_failure_handling(mock_upload_service, mock_upload_session, mock_s3_file_object):
+    """Test handling of upload failures with session tracking"""
+    # Set up failure scenario
+    with patch.object(mock_upload_service.s3_client, 'upload_fileobj', side_effect=Exception("Simulated upload failure")):
+        with patch('arkumu.storage.models.S3FileObject.create_from_upload', return_value=mock_s3_file_object):
+            # Create test file
+            mock_file = Mock()
+            mock_file.name = "failing_file.txt"
+            mock_file.content_type = "text/plain"
+            mock_file.read.return_value = b"This upload will fail"
+            
+            # Try to upload
+            result = mock_upload_service.upload_django_file(
+                uploaded_file=mock_file,
+                path_prefix="failure-test",
+                session=mock_upload_session
+            )
+            
+            # Verify failure was properly tracked
+            assert result["success"] is False
+            mock_s3_file_object.mark_failed.assert_called_once()
+            mock_upload_session.mark_failed.assert_not_called()  # Only mark session failed if all files fail

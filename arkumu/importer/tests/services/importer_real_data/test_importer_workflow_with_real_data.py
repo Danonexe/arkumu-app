@@ -4,6 +4,7 @@ import logging
 import pytest
 
 from arkumu.importer.services.importer.import_workflow import ImportWorkflowService
+from arkumu.importer.services.importer.smart_bulk_updater import UpdateStrategy
 from arkumu.metadata.models.resource import Resource
 from arkumu.metadata.models.triples import Triple
 
@@ -120,9 +121,9 @@ def test_import_with_file_paths():
     initial_triple_count = Triple.objects.count()
     
     # Run the import
-    print(f"\nStarting import from {csv_dir} (all data imported as literals)")
+    print(f"\nStarting import from {csv_dir} (using SmartBulkUpdater)")
     print(f"Files base directory: {files_base_dir}")
-    print(f"Note: All data will be imported as literals without relationship resolution")
+    print(f"Note: All data will be imported with full triple creation using SmartBulkUpdater.")
     
     stats = ImportWorkflowService.import_csv_directory(
         directory_path=csv_dir,
@@ -133,7 +134,10 @@ def test_import_with_file_paths():
         relationship_config_path=relationship_config_path,
         file_columns=file_columns,
         files_base_directory=files_base_dir,
-        upload_service=upload_service
+        upload_service=upload_service,
+        use_smart_updater=True,
+        update_strategy=UpdateStrategy.SKIP_EXISTING,
+        link_row_cells=True
     )
     
     # Log the statistics
@@ -147,7 +151,7 @@ def test_import_with_file_paths():
     print(f"\nResource creation:")
     print(f"New resources created: {new_resources}")
     print(f"New triples created: {new_triples}")
-    print(f"All data imported as literals - relationships can be processed in post-processing")
+    print(f"Data imported with SmartBulkUpdater, including structural and linking triples.")
     
     # Check for file uploads
     print(f"\nFiles uploaded: {stats.get('files_uploaded', 0)}")
@@ -175,7 +179,7 @@ def test_import_with_file_paths():
     
     # Basic assertions
     assert new_resources > 0, "No resources were created"
-    assert new_triples > 0, "No triples were created"
+    assert new_triples > 0, "No triples were created. SmartBulkUpdater should create structural and linking triples."
     
     # If file columns were specified, check that files were uploaded
     if any(file_columns.values()):
@@ -278,8 +282,10 @@ def test_import_with_file_paths():
                     # Truncate long values for display
                     display_value = value[:50] + "..." if len(value) > 50 else value
                     print(f"  📋 {column_name}: {display_value}")
+                    assert value_triple.object.value is not None and value_triple.object.value != "", f"Cell {cell.uri} for column {column_name} should have a value."
                 else:
                     print(f"  ❌ {column_name}: <no value found>")
+                    assert value_triple is not None, f"No value triple found for cell {cell.uri} (column: {column_name}). SmartBulkUpdater should create these."
         else:
             print("❌ No row IDs found in dataset")
     else:
@@ -294,9 +300,9 @@ def test_import_with_file_paths():
         for res in dataset_related:
             print(f"  - {res.uri}")
     
-    print(f"\n✅ SUCCESS: Import completed with simplified approach!")
+    print(f"\n✅ SUCCESS: Import completed with SmartBulkUpdater!")
     print(f"📊 {new_resources} resources and {new_triples} triples created")
-    print(f"🔗 All data imported as literals - ready for post-processing relationship creation")
+    print(f"🔗 Data imported with SmartBulkUpdater, including structural, value, and linking triples.")
 
 
 

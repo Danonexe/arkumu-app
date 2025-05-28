@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-3xl font-bold">Triple Search</h1>
+        <a href="{% url 'metadata:dashboard' %}" class="btn btn-outline">Back to Dashboard</a>
+    </div>
+    
+    <!-- Search Form -->
+    <div class="card bg-base-100 shadow-xl mb-6">
+        <div class="card-body">
+            <h2 class="card-title">Search Triples</h2>
+            
+            <form id="search-form" class="grid grid-cols-1 md:grid-cols-3 gap-4" hx-get="{% url 'metadata:triple_search' %}" hx-target="#triple-results" hx-swap="innerHTML" hx-trigger="change, submit">
+                <div class="form-control">
+                    <label class="label">Subject</label>
+                    <div class="input-group">
+                        <input type="text" name="subject" value="{{ request.GET.subject }}" placeholder="Subject URI or name..." class="input input-bordered w-full" hx-trigger="keyup changed delay:500ms">
+                    </div>
+                </div>
+                
+                <div class="form-control">
+                    <label class="label">Predicate</label>
+                    <div class="input-group">
+                        <input type="text" name="predicate" value="{{ request.GET.predicate }}" placeholder="Predicate URI or name..." class="input input-bordered w-full" hx-trigger="keyup changed delay:500ms">
+                    </div>
+                </div>
+                
+                <div class="form-control">
+                    <label class="label">Object</label>
+                    <div class="input-group">
+                        <input type="text" name="object" value="{{ request.GET.object }}" placeholder="Object URI, name, or value..." class="input input-bordered w-full" hx-trigger="keyup changed delay:500ms">
+                    </div>
+                </div>
+                
+                <div class="form-control md:col-span-3">
+                    <label class="label">Institution</label>
+                    <select name="institution" class="select select-bordered">
+                        <option value="">All Institutions</option>
+                        {% for institution in institutions %}
+                        <option value="{{ institution }}" {% if request.GET.institution == institution %}selected{% endif %}>{{ institution }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="md:col-span-3 flex justify-end">
+                    <button type="submit" class="btn btn-primary">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                        Search
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Results -->
+    <div class="card bg-base-100 shadow-xl">
+        <div class="card-body">
+            <h2 class="card-title">Results</h2>
+            
+            <div id="triple-results">
+                {% if triples %}
+                <div class="overflow-x-auto">
+                    <table class="table table-zebra w-full">
+                        <thead>
+                            <tr>
+                                <th>Subject</th>
+                                <th>Predicate</th>
+                                <th>Object</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for triple in triples %}
+                            <tr>
+                                <td>
+                                    <div class="font-medium">{{ triple.subject.name|default:"-" }}</div>
+                                    <div class="text-xs opacity-60">{{ triple.subject.uri|truncatechars:40 }}</div>
+                                </td>
+                                <td>
+                                    <div class="font-medium">{{ triple.predicate.name|default:"-" }}</div>
+                                    <div class="text-xs opacity-60">{{ triple.predicate.uri|truncatechars:40 }}</div>
+                                </td>
+                                <td>
+                                    {% if triple.object.resource_type == 'LITERAL' %}
+                                        <div class="font-medium">{{ triple.object.value|truncatechars:50 }}</div>
+                                        {% if triple.object.datatype %}
+                                        <div class="text-xs opacity-60">{{ triple.object.datatype }}</div>
+                                        {% endif %}
+                                    {% else %}
+                                        <div class="font-medium">{{ triple.object.name|default:"-" }}</div>
+                                        <div class="text-xs opacity-60">{{ triple.object.uri|truncatechars:40 }}</div>
+                                    {% endif %}
+                                </td>
+                                <td class="flex gap-2">
+                                    <a href="{% url 'metadata:resource_detail' triple.subject.id %}" class="btn btn-xs">Subject</a>
+                                    <a href="{% url 'metadata:resource_detail' triple.predicate.id %}" class="btn btn-xs">Predicate</a>
+                                    <a href="{% url 'metadata:resource_detail' triple.object.id %}" class="btn btn-xs">Object</a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Pagination -->
+                {% if is_paginated %}
+                <div class="flex justify-center mt-6">
+                    <div class="join">
+                        {% if page_obj.has_previous %}
+                        <a href="?{{ request.GET.urlencode }}&page={{ page_obj.previous_page_number }}" class="join-item btn">«</a>
+                        {% else %}
+                        <button class="join-item btn btn-disabled">«</button>
+                        {% endif %}
+                        
+                        <button class="join-item btn">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</button>
+                        
+                        {% if page_obj.has_next %}
+                        <a href="?{{ request.GET.urlencode }}&page={{ page_obj.next_page_number }}" class="join-item btn">»</a>
+                        {% else %}
+                        <button class="join-item btn btn-disabled">»</button>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+                
+                {% else %}
+                <div class="text-center py-8">
+                    {% if request.GET %}
+                    <p>No triples match your search criteria.</p>
+                    {% else %}
+                    <p>Enter search criteria above to find triples.</p>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

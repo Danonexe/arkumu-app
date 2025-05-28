@@ -16,6 +16,7 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExampl
 
 from arkumu.importer.services.importer.import_workflow import ImportWorkflowService
 from arkumu.importer.services.file_upload.s3_upload_service import S3UploadService
+from arkumu.storage.models import UploadSession, S3FileObject
 from arkumu.rest.serializers import (
     DirectoryImportSerializer,
     ClearDatabaseSerializer
@@ -123,8 +124,17 @@ class ImportViewSet(viewsets.GenericViewSet):
         directory_path = validated_data.get('directory_path')
         zip_file = validated_data.get('zip_file')
         temp_dir = None
+        upload_session = None
             
         try:
+            # Get other parameters with defaults
+            institution = validated_data.get('institution', 'DEFAULT')
+            base_uri = validated_data.get('base_uri', 'http://arkumu.org/data')
+            delimiter = validated_data.get('delimiter', ';')
+            has_quoted_fields = validated_data.get('has_quoted_fields', False)
+            file_columns = validated_data.get('file_columns', {})
+            files_base_directory = validated_data.get('files_base_directory')
+            
             # Handle ZIP file upload if provided
             if zip_file and not directory_path:
                 temp_dir = tempfile.mkdtemp(prefix="arkumu_import_")
@@ -135,6 +145,7 @@ class ImportViewSet(viewsets.GenericViewSet):
                     zip_ref.extractall(temp_dir)
                 
                 directory_path = temp_dir
+                files_base_directory = files_base_directory or temp_dir
                 logger.info(f"Extracted ZIP file to {directory_path}")
             
             if not directory_path or not os.path.isdir(directory_path):
@@ -143,17 +154,17 @@ class ImportViewSet(viewsets.GenericViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Get other parameters with defaults
-            institution = validated_data.get('institution', 'DEFAULT')
-            base_uri = validated_data.get('base_uri', 'http://arkumu.org/data')
-            delimiter = validated_data.get('delimiter', ';')
-            has_quoted_fields = validated_data.get('has_quoted_fields', False)
-            file_columns = validated_data.get('file_columns', {})
-            files_base_directory = validated_data.get('files_base_directory', directory_path)
+            # Determine folder name for the upload session
+            if zip_file:
+                folder_name = getattr(zip_file, 'name', 'uploaded_zip_file')
+            else:
+                folder_name = os.path.basename(directory_path.rstrip('/'))
             
             # Initialize S3 upload service if S3 config is provided
             upload_service = None
             s3_config = validated_data.get('s3_config')
+            s3_bucket = None
+            s3_base_path = None
             
             if s3_config:
                 # Get S3 configuration with defaults
@@ -177,7 +188,27 @@ class ImportViewSet(viewsets.GenericViewSet):
                     bucket_name=bucket_name,
                     base_url=base_url
                 )
+                s3_bucket = bucket_name
+                s3_base_path = s3_config.get('base_path', 'imports/')
                 logger.info("Initialized S3 upload service")
+            
+            # Create upload session to track this import
+            import_type = 'zip_import' if zip_file else 'csv_import'
+            upload_session = UploadSession.create_from_import(
+                user=request.user,
+                folder_name=folder_name,
+                import_type=import_type,
+                institution=institution,
+                base_uri=base_uri,
+                s3_bucket=s3_bucket,
+                s3_base_path=s3_base_path
+            )
+            
+            logger.info(f"Created upload session {upload_session.id} for user {request.user.username}")
+            
+            # Set the files_base_directory default here after we have directory_path
+            if not files_base_directory:
+                files_base_directory = directory_path
             
             # Run the import
             try:
@@ -189,13 +220,23 @@ class ImportViewSet(viewsets.GenericViewSet):
                     has_quoted_fields=has_quoted_fields,
                     file_columns=file_columns,
                     files_base_directory=files_base_directory,
-                    upload_service=upload_service
+                    upload_service=upload_service,
+                    upload_session=upload_session  # Pass the session to track files
                 )
+                
+                # Mark session as completed with stats
+                upload_session.mark_completed(stats)
+                
+                # Add session info to response
+                stats['upload_session_id'] = str(upload_session.id)
+                stats['upload_session_status'] = upload_session.status
                 
                 return Response(stats, status=status.HTTP_200_OK)
                 
             except Exception as e:
                 logger.error(f"Error during CSV import: {str(e)}")
+                if upload_session:
+                    upload_session.mark_failed(str(e))
                 return Response(
                     {"error": f"Import failed: {str(e)}"}, 
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR

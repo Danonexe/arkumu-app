@@ -498,13 +498,6 @@ def ingest_file(request):
             # Clean up temp file
             os.unlink(temp_path)
             
-            # Return HTMX-friendly toast notification for success
-            if request.headers.get('HX-Request') == 'true':
-                return render(request, "partials/toast_notification.html", {
-                    "message": f"Successfully ingested {dataset_name} from {file_path}",
-                    "type": "success"
-                })
-            
             return JsonResponse({
                 'success': True,
                 'message': f'Successfully ingested {dataset_name} from {file_path}',
@@ -526,13 +519,6 @@ def ingest_file(request):
         # Check if it's a database integrity error from concurrent imports
         if 'ForeignKeyViolation' in str(e) or 'IntegrityError' in str(e):
             error_message = f'Database conflict while ingesting {file_path}. This may be due to concurrent imports of the same data. Please try again.'
-        
-        # Return HTMX-friendly toast notification for error
-        if request.headers.get('HX-Request') == 'true':
-            return render(request, "partials/toast_notification.html", {
-                "message": error_message,
-                "type": "error"
-            })
         
         return JsonResponse({
             'error': error_message,
@@ -592,21 +578,6 @@ def reset_database(request):
     except Exception as e:
         error_message = f'Failed to reset database: {str(e)}'
         logger.error(f"Database reset error: {e}", exc_info=True)
-        
-        # Return HTMX-friendly error response
-        if request.headers.get('HX-Request') == 'true':
-            error_html = f"""
-            <div class="alert alert-error">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                </svg>
-                <div>
-                    <h3 class="font-bold">Database Reset Failed!</h3>
-                    <div class="text-xs">{error_message}</div>
-                </div>
-            </div>
-            """
-            return HttpResponse(error_html, status=500)
         
         return JsonResponse({
             'error': error_message

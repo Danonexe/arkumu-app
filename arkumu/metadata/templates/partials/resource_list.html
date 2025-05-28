@@ -1,0 +1,69 @@
+<div class="overflow-x-auto">
+    <table class="table table-zebra w-full">
+        <thead>
+            <tr>
+                <th>Type</th>
+                <th>Name</th>
+                <th>URI/Value</th>
+                <th>Institution</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for resource in page_obj %}
+            <tr>
+                <td>
+                    <span class="badge {% if resource.resource_type == 'IRI' %}badge-primary{% elif resource.resource_type == 'LITERAL' %}badge-secondary{% elif resource.resource_type == 'CLASS' %}badge-accent{% else %}badge-neutral{% endif %}">
+                        {{ resource.get_resource_type_display }}
+                    </span>
+                </td>
+                <td>{{ resource.name|default:"-" }}</td>
+                <td>
+                    {% if resource.resource_type == 'LITERAL' %}
+                        <span class="text-sm">{{ resource.value|truncatechars:50 }}</span>
+                    {% else %}
+                        <span class="text-sm">{{ resource.uri|truncatechars:50 }}</span>
+                    {% endif %}
+                </td>
+                <td>{{ resource.source }}</td>
+                <td>
+                    <a href="{% url 'metadata:resource_detail' resource.id %}" class="btn btn-sm">
+                        View
+                    </a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="5" class="text-center py-4">No resources found matching your criteria</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Pagination -->
+<div class="flex justify-center my-4">
+    <div class="btn-group">
+        {% if page_obj.has_previous %}
+        <button class="btn btn-sm" 
+                hx-get="{% url 'metadata:resource_list' %}?page={{ page_obj.previous_page_number }}&type={{ request.GET.type }}&institution={{ request.GET.institution }}&q={{ request.GET.q }}"
+                hx-target="#resource-list">
+            «
+        </button>
+        {% else %}
+        <button class="btn btn-sm" disabled>«</button>
+        {% endif %}
+        
+        <button class="btn btn-sm">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</button>
+        
+        {% if page_obj.has_next %}
+        <button class="btn btn-sm"
+                hx-get="{% url 'metadata:resource_list' %}?page={{ page_obj.next_page_number }}&type={{ request.GET.type }}&institution={{ request.GET.institution }}&q={{ request.GET.q }}"
+                hx-target="#resource-list">
+            »
+        </button>
+        {% else %}
+        <button class="btn btn-sm" disabled>»</button>
+        {% endif %}
+    </div>
+</div>

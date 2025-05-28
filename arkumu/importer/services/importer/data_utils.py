@@ -1,12 +1,9 @@
 import logging
 from datetime import datetime
 import re
-from arkumu.importer.services.importer.uri_utils import XSD_BASE_URI # For infer_datatype
-import unicodedata
+from arkumu.importer.services.importer.uri_utils import XSD_BASE_URI, normalize_string_nfc # For infer_datatype
 from typing import Dict, List,  Any
-import os
 import csv
-import io
 
 # It's common to use the module's logger for utility functions
 # or allow a logger to be passed in if more specific context is needed from the caller.
@@ -262,25 +259,10 @@ def lookup_related_data(rule, source_value, related_sources_dict):
     logger.warning(f"Could not find value for '{source_value}' in related source")
     return None 
 
-def normalize_string_nfc(text: str) -> str:
-    """
-    Normalize a string to Unicode NFC (Normalization Form Canonical Composition).
-    
-    Args:
-        text: The string to normalize
-        
-    Returns:
-        The normalized string
-    """
-    if not isinstance(text, str):
-        return text
-        
-    return unicodedata.normalize('NFC', text)
-
 def normalize_dict_values_nfc(data: Dict[str, Any]) -> Dict[str, Any]:
     """
     Apply NFC normalization to all string values in a dictionary.
-    
+    Uses normalize_string_nfc imported from uri_utils.
     Args:
         data: Dictionary with potentially unnormalized string values
         
@@ -290,7 +272,7 @@ def normalize_dict_values_nfc(data: Dict[str, Any]) -> Dict[str, Any]:
     result = {}
     for k, v in data.items():
         if isinstance(v, str):
-            result[k] = normalize_string_nfc(v)
+            result[k] = normalize_string_nfc(v) # This will now use the imported version
         else:
             result[k] = v
     return result
@@ -298,9 +280,7 @@ def normalize_dict_values_nfc(data: Dict[str, Any]) -> Dict[str, Any]:
 def normalize_csv_data_nfc(data_list: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     Apply NFC normalization to all string values in a list of dictionaries.
-    
-    This is particularly useful for normalizing CSV data loaded as dictionaries.
-    
+    Uses normalize_dict_values_nfc which in turn uses the imported normalize_string_nfc.
     Args:
         data_list: List of dictionaries (e.g., from reading a CSV)
         
@@ -312,7 +292,7 @@ def normalize_csv_data_nfc(data_list: List[Dict[str, Any]]) -> List[Dict[str, An
 def read_csv_with_nfc(file_path: str, delimiter: str = ';', **csv_options) -> List[Dict[str, Any]]:
     """
     Read a CSV file and normalize all string values to NFC.
-    
+    Uses normalize_csv_data_nfc which relies on the imported normalize_string_nfc.
     Args:
         file_path: Path to the CSV file
         delimiter: Column delimiter (default is semicolon)

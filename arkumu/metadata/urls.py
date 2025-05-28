@@ -1,9 +1,15 @@
 from django.urls import path
-from . import views
+from arkumu.metadata.views import dashboard_views
 
 app_name = 'metadata'
 
 urlpatterns = [
-    # Add your metadata URLs here
-    path('daisy-test/', views.daisy_test, name='daisy_test'),
+    path('dashboard/', dashboard_views.metadata_dashboard, name='dashboard'),
+    path('resources/', dashboard_views.resource_list, name='resource_list'),
+    path('resources/<uuid:resource_id>/', dashboard_views.resource_detail, name='resource_detail'),
+    path('resources/<uuid:resource_id>/graph/', dashboard_views.resource_graph, name='resource_graph'),
+    path('triples/search/', dashboard_views.triple_search, name='triple_search'),
+    path('triples/', dashboard_views.triple_list, name='triple_list'),
+    path('graph/', dashboard_views.full_graph_view, name='full_graph_view'),
+    path('graph/data/', dashboard_views.graph_data_view, name='graph_data'),
 ]

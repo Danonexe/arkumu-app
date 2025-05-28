@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-3xl font-bold">Resource Details</h1>
+        <a href="{% url 'metadata:resource_list' %}" class="btn btn-outline">Back to Resources</a>
+    </div>
+    
+    <!-- Resource Details -->
+    <div class="card bg-base-100 shadow-xl mb-6">
+        <div class="card-body">
+            <div class="flex items-center justify-between">
+                <h2 class="card-title">
+                    <span class="badge badge-lg {% if resource.resource_type == 'IRI' %}badge-primary{% elif resource.resource_type == 'LITERAL' %}badge-secondary{% elif resource.resource_type == 'CLASS' %}badge-accent{% else %}badge-neutral{% endif %}">
+                        {{ resource.get_resource_type_display }}
+                    </span>
+                    {{ resource.name|default:"Unnamed Resource" }}
+                </h2>
+                <span class="text-sm">Institution: {{ resource.source }}</span>
+            </div>
+            
+            <div class="divider"></div>
+            
+            {% if resource.resource_type == 'LITERAL' %}
+            <div class="mb-4">
+                <h3 class="font-bold mb-1">Value:</h3>
+                <div class="bg-base-200 p-3 rounded">
+                    {{ resource.value }}
+                </div>
+                
+                {% if resource.datatype %}
+                <div class="mt-2 text-sm">
+                    <span class="font-semibold">Datatype:</span> {{ resource.datatype }}
+                </div>
+                {% endif %}
+                
+                {% if resource.language %}
+                <div class="mt-1 text-sm">
+                    <span class="font-semibold">Language:</span> {{ resource.language }}
+                </div>
+                {% endif %}
+            </div>
+            {% else %}
+            <div class="mb-4">
+                <h3 class="font-bold mb-1">URI:</h3>
+                <div class="bg-base-200 p-3 rounded break-all">
+                    <a href="{{ resource.uri }}" target="_blank" class="text-primary">{{ resource.uri }}</a>
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Placeholder status -->
+            {% if resource.is_placeholder %}
+            <div class="alert alert-warning mt-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                <span>This is a placeholder resource created during cross-referencing</span>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Triples as Subject -->
+    <div class="card bg-base-100 shadow-xl mb-6">
+        <div class="card-body">
+            <h2 class="card-title">Triples (as Subject)</h2>
+            
+            <div class="overflow-x-auto">
+                <table class="table table-zebra w-full">
+                    <thead>
+                        <tr>
+                            <th>Predicate</th>
+                            <th>Object</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for triple in subject_triples %}
+                        <tr>
+                            <td>
+                                <div class="font-medium">{{ triple.predicate.name|default:"-" }}</div>
+                                <div class="text-xs opacity-60">{{ triple.predicate.uri|truncatechars:40 }}</div>
+                            </td>
+                            <td>
+                                {% if triple.object.resource_type == 'LITERAL' %}
+                                    <div class="font-medium">{{ triple.object.value|truncatechars:50 }}</div>
+                                    {% if triple.object.datatype %}
+                                    <div class="text-xs opacity-60">{{ triple.object.datatype }}</div>
+                                    {% endif %}
+                                {% else %}
+                                    <div class="font-medium">{{ triple.object.name|default:"-" }}</div>
+                                    <div class="text-xs opacity-60">{{ triple.object.uri|truncatechars:40 }}</div>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{% url 'metadata:resource_detail' triple.object.id %}" class="btn btn-sm">View Object</a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="3" class="text-center py-4">No triples where this resource is the subject</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Triples as Object -->
+    <div class="card bg-base-100 shadow-xl mb-6">
+        <div class="card-body">
+            <h2 class="card-title">Triples (as Object)</h2>
+            
+            <div class="overflow-x-auto">
+                <table class="table table-zebra w-full">
+                    <thead>
+                        <tr>
+                            <th>Subject</th>
+                            <th>Predicate</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for triple in object_triples %}
+                        <tr>
+                            <td>
+                                <div class="font-medium">{{ triple.subject.name|default:"-" }}</div>
+                                <div class="text-xs opacity-60">{{ triple.subject.uri|truncatechars:40 }}</div>
+                            </td>
+                            <td>
+                                <div class="font-medium">{{ triple.predicate.name|default:"-" }}</div>
+                                <div class="text-xs opacity-60">{{ triple.predicate.uri|truncatechars:40 }}</div>
+                            </td>
+                            <td>
+                                <a href="{% url 'metadata:resource_detail' triple.subject.id %}" class="btn btn-sm">View Subject</a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="3" class="text-center py-4">No triples where this resource is the object</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Linked Files -->
+    {% if linked_files %}
+    <div class="card bg-base-100 shadow-xl">
+        <div class="card-body">
+            <h2 class="card-title">Linked Files</h2>
+            
+            <div class="overflow-x-auto">
+                <table class="table table-zebra w-full">
+                    <thead>
+                        <tr>
+                            <th>Filename</th>
+                            <th>Upload Date</th>
+                            <th>Size</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for file in linked_files %}
+                        <tr>
+                            <td>{{ file.file_name }}</td>
+                            <td>{{ file.created_at|date:"M d, Y" }}</td>
+                            <td>{{ file.file_size_bytes|filesizeformat }}</td>
+                            <td>
+                                <span class="badge {% if file.status == 'completed' %}badge-success{% elif file.status == 'failed' %}badge-error{% else %}badge-info{% endif %}">
+                                    {{ file.status }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if file.s3_url %}
+                                <a href="{{ file.s3_url }}" target="_blank" class="btn btn-sm">View File</a>
+                                {% else %}
+                                <span class="text-sm opacity-50">No URL available</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

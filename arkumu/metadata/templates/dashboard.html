@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <h1 class="text-3xl font-bold mb-6">Metadata Dashboard</h1>
+
+
+    <!-- Database Management -->
+    <div class="flex justify-between items-center mb-4">
+        <div>
+            <h3 class="text-lg font-semibold">Database Management</h3>
+            <p class="text-sm text-base-content/70">Reset all imported data (Resources and Triples)</p>
+        </div>
+        <button id="reset-db-btn" 
+                class="btn btn-error btn-sm"
+                hx-post="{% url 'storage:reset_database' %}"
+                hx-target="#reset-db-result"
+                hx-swap="innerHTML"
+                hx-indicator="#reset-db-spinner"
+                onclick="return confirm('Are you sure you want to delete ALL imported data? This cannot be undone!')">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            Reset Database
+            <span id="reset-db-spinner" class="loading loading-spinner loading-sm htmx-indicator"></span>
+        </button>
+    </div>
+    <div id="reset-db-result" class="mb-4"></div>
+
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-8">
+        <div class="card bg-base-100 shadow-xl">
+            <div class="card-body">
+                <h2 class="card-title">Resources</h2>
+                <p class="text-4xl font-bold">{{ stats.total_resources }}</p>
+                <div class="text-sm">
+                    <div>IRIs: {{ stats.iri_resources }}</div>
+                    <div>Literals: {{ stats.literal_resources }}</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card bg-base-100 shadow-xl">
+            <div class="card-body">
+                <h2 class="card-title">Triples</h2>
+                <p class="text-4xl font-bold">{{ stats.total_triples }}</p>
+            </div>
+        </div>
+        
+        <div class="card bg-base-100 shadow-xl">
+            <div class="card-body">
+                <h2 class="card-title">Classes</h2>
+                <p class="text-4xl font-bold">{{ stats.class_resources }}</p>
+            </div>
+        </div>
+        
+        <div class="card bg-base-100 shadow-xl">
+            <div class="card-body">
+                <h2 class="card-title">Properties</h2>
+                <p class="text-4xl font-bold">{{ stats.property_resources }}</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Recent Uploads -->
+        <div class="card bg-base-100 shadow-xl">
+            <div class="card-body">
+                <h2 class="card-title">Recent Uploads</h2>
+                
+                <div class="overflow-x-auto">
+                    <table class="table table-zebra w-full">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>User</th>
+                                <th>Files</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for upload in recent_uploads %}
+                            <tr>
+                                <td>{{ upload.created_at|date:"M d, Y" }}</td>
+                                <td>{{ upload.user.username }}</td>
+                                <td>{{ upload.total_files }}</td>
+                                <td>
+                                    <span class="badge {% if upload.status == 'completed' %}badge-success{% elif upload.status == 'failed' %}badge-error{% else %}badge-info{% endif %}">
+                                        {{ upload.status }}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center py-4">No uploads yet</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="card-actions justify-end mt-4">
+                    <a href="#" class="btn btn-primary btn-sm">View All</a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Institution Distribution -->
+        <div class="card bg-base-100 shadow-xl">
+            <div class="card-body">
+                <h2 class="card-title">Institution Distribution</h2>
+                
+                <div class="overflow-x-auto">
+                    <table class="table table-zebra w-full">
+                        <thead>
+                            <tr>
+                                <th>Institution</th>
+                                <th>Resources</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for institution in institutions %}
+                            <tr>
+                                <td>{{ institution.source }}</td>
+                                <td>{{ institution.count }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="2" class="text-center py-4">No data available</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Quick Links -->
+    <div class="mt-8 flex flex-wrap gap-4">
+        <a href="{% url 'metadata:resource_list' %}" class="btn btn-primary">Browse Resources</a>
+        <a href="{% url 'metadata:triple_search' %}" class="btn btn-secondary">Search Triples</a>
+        <a href="{% url 'metadata:triple_list' %}" class="btn btn-accent">View All Triples</a>
+        <a href="{% url 'metadata:full_graph_view' %}" class="btn btn-info">View Full Graph</a>
+    </div>
+</div>
+{% endblock %}

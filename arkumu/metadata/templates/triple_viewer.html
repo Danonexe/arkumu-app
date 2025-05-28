@@ -1,0 +1,430 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Triple Viewer{% endblock title %}
+
+{% block css %}
+{{ block.super }}
+<style>
+    /* Tree navigation styles */
+    .tree-container {
+        background: #f8f9fa;
+        border-right: 1px solid #e5e7eb;
+        overflow-y: auto;
+        max-height: 80vh;
+    }
+    
+    .tree-node {
+        padding: 8px 12px;
+        margin: 2px 0;
+        cursor: pointer;
+        border-radius: 4px;
+        transition: background-color 0.2s;
+    }
+    
+    .tree-node:hover {
+        background-color: #e5e7eb;
+    }
+    
+    .tree-node.active {
+        background-color: #3b82f6;
+        color: white;
+    }
+    
+    .tree-node.dataset {
+        font-weight: bold;
+        color: #1f2937;
+    }
+    
+    .tree-node.row {
+        margin-left: 20px;
+        color: #4b5563;
+        font-size: 0.9em;
+    }
+    
+    .tree-node.cell {
+        margin-left: 40px;
+        color: #6b7280;
+        font-size: 0.85em;
+    }
+    
+    .tree-toggle {
+        display: inline-block;
+        width: 16px;
+        text-align: center;
+        margin-right: 4px;
+        font-family: monospace;
+    }
+    
+    /* Graph styles */
+    .graph-container {
+        height: 80vh;
+    }
+    
+    .link {
+        stroke: #999;
+        stroke-opacity: 0.6;
+    }
+    
+    .node text {
+        pointer-events: none;
+        font: 10px sans-serif;
+    }
+    
+    .node circle {
+        stroke: #fff;
+        stroke-width: 1.5px;
+    }
+    
+    .detail-panel {
+        background: #f1f5f9;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 16px;
+    }
+    
+    /* HTMX loading styles */
+    .htmx-indicator {
+        display: none;
+    }
+    
+    .htmx-request .htmx-indicator {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .loading-spinner {
+        border: 2px solid #f3f4f6;
+        border-top: 2px solid #3b82f6;
+        border-radius: 50%;
+        width: 16px;
+        height: 16px;
+        animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+</style>
+{% endblock css %}
+
+{% block content %}
+<div class="container-fluid mx-auto p-4">
+    <h1 class="text-2xl font-bold mb-4 text-center">RDF Data Explorer</h1>
+    
+    <div class="grid grid-cols-12 gap-4">
+        <!-- Tree Navigation (left side) -->
+        <div class="col-span-4">
+            <div class="tree-container p-4 rounded-lg">
+                <h3 class="font-bold mb-3">Data Hierarchy</h3>
+                <div id="tree-view"></div>
+            </div>
+        </div>
+        
+        <!-- Graph Visualization (right side) -->
+        <div class="col-span-8">
+            <div class="detail-panel">
+                <h3 class="font-bold mb-2">Details</h3>
+                <div id="detail-info" class="text-sm text-gray-600">
+                    Select an item from the tree to view its relationships
+                    <div class="htmx-indicator ml-2">
+                        <div class="loading-spinner"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="graph-container bg-base-200 shadow-md rounded-lg p-4">
+                <div id="graph-content" class="w-full h-full flex items-center justify-center text-gray-500">
+                    Click on a dataset, row, or cell in the tree to view its graph visualization
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Data for the graph will be embedded here -->
+<script id="graph-data" type="application/json">
+    {{ graph_data_json|safe }}
+</script>
+{% endblock content %}
+
+{% block inline_javascript %}
+{{ block.super }}
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const graphDataElement = document.getElementById('graph-data');
+    if (!graphDataElement) {
+        console.error('Graph data element not found');
+        return;
+    }
+
+    let data;
+    try {
+        data = JSON.parse(graphDataElement.textContent);
+    } catch (e) {
+        console.error('Error parsing graph data:', e);
+        document.getElementById('detail-info').innerHTML = '<span class="text-red-500">Error loading data</span>';
+        return;
+    }
+
+    // Initialize the tree
+    initializeTreeView(data);
+    
+    function initializeTreeView(data) {
+        const treeView = document.getElementById('tree-view');
+        treeView.innerHTML = '';
+        
+        if (!data.tree_data) {
+            treeView.innerHTML = '<p class="text-gray-500">No tree data available</p>';
+            return;
+        }
+        
+        // Build tree structure
+        data.tree_data.forEach(dataset => {
+            const datasetNode = createTreeNode(dataset.name, 'dataset', dataset.id, dataset.count);
+            treeView.appendChild(datasetNode);
+            
+            if (dataset.rows) {
+                const rowContainer = document.createElement('div');
+                rowContainer.style.display = 'none';
+                rowContainer.className = 'row-container';
+                
+                dataset.rows.forEach(row => {
+                    const rowNode = createTreeNode(row.name, 'row', row.id, row.count, dataset.id);
+                    rowContainer.appendChild(rowNode);
+                    
+                    if (row.cells) {
+                        const cellContainer = document.createElement('div');
+                        cellContainer.style.display = 'none';
+                        cellContainer.className = 'cell-container';
+                        
+                        row.cells.forEach(cell => {
+                            const cellNode = createTreeNode(cell.name, 'cell', cell.id, null, dataset.id, row.id);
+                            cellContainer.appendChild(cellNode);
+                        });
+                        
+                        rowContainer.appendChild(cellContainer);
+                    }
+                });
+                
+                treeView.appendChild(rowContainer);
+            }
+        });
+    }
+    
+    function createTreeNode(name, type, id, count, datasetId, rowId) {
+        const node = document.createElement('div');
+        node.className = `tree-node ${type}`;
+        node.dataset.type = type;
+        node.dataset.id = id;
+        if (datasetId) node.dataset.datasetId = datasetId;
+        if (rowId) node.dataset.rowId = rowId;
+        
+        const toggle = document.createElement('span');
+        toggle.className = 'tree-toggle';
+        
+        const label = document.createElement('span');
+        label.textContent = count ? `${name} (${count})` : name;
+        
+        if (type === 'dataset' || type === 'row') {
+            toggle.textContent = '▶';
+            node.appendChild(toggle);
+        } else {
+            toggle.textContent = ' ';
+            node.appendChild(toggle);
+        }
+        
+        node.appendChild(label);
+        
+        // Add HTMX attributes for lazy loading
+        let hxGet = '';
+        let hxVals = '';
+        
+        if (type === 'dataset') {
+            hxGet = "{% url 'metadata:graph_data' %}";
+            hxVals = `{"level": "dataset", "dataset": "${id}"}`;
+        } else if (type === 'row') {
+            hxGet = "{% url 'metadata:graph_data' %}";
+            hxVals = `{"level": "row", "dataset": "${datasetId}", "row": "${id}"}`;
+        } else if (type === 'cell') {
+            hxGet = "{% url 'metadata:graph_data' %}";
+            hxVals = `{"level": "cell", "dataset": "${datasetId}", "row": "${rowId}", "cell": "${id}"}`;
+        }
+        
+        // Add HTMX attributes
+        node.setAttribute('hx-get', hxGet);
+        node.setAttribute('hx-vals', hxVals);
+        node.setAttribute('hx-target', '#graph-content');
+        node.setAttribute('hx-swap', 'innerHTML');
+        node.setAttribute('hx-indicator', '#detail-info .htmx-indicator');
+        
+        // Add click handler for tree expansion and selection
+        node.addEventListener('click', function(e) {
+            e.stopPropagation();
+            
+            // Toggle expansion for datasets and rows
+            if (type === 'dataset' || type === 'row') {
+                toggleNode(node, type);
+            }
+            
+            // Update selection
+            document.querySelectorAll('.tree-node').forEach(n => n.classList.remove('active'));
+            node.classList.add('active');
+            
+            // Update detail info immediately
+            updateDetailInfo(type, id, datasetId, rowId);
+        });
+        
+        return node;
+    }
+    
+    function toggleNode(node, type) {
+        const toggle = node.querySelector('.tree-toggle');
+        const container = node.nextElementSibling;
+        
+        if (container && container.className.includes('container')) {
+            if (container.style.display === 'none') {
+                container.style.display = 'block';
+                toggle.textContent = '▼';
+            } else {
+                container.style.display = 'none';
+                toggle.textContent = '▶';
+            }
+        }
+    }
+    
+    function updateDetailInfo(type, id, datasetId, rowId) {
+        const detailInfo = document.getElementById('detail-info');
+        
+        if (type === 'dataset') {
+            detailInfo.innerHTML = `<strong>Dataset:</strong> ${id}<br>Loading dataset overview... <div class="htmx-indicator ml-2"><div class="loading-spinner"></div></div>`;
+        } else if (type === 'row') {
+            detailInfo.innerHTML = `<strong>Row:</strong> ${id}<br><strong>Dataset:</strong> ${datasetId}<br>Loading row details... <div class="htmx-indicator ml-2"><div class="loading-spinner"></div></div>`;
+        } else if (type === 'cell') {
+            detailInfo.innerHTML = `<strong>Cell:</strong> ${id}<br><strong>Row:</strong> ${rowId}<br><strong>Dataset:</strong> ${datasetId}<br>Loading cell details... <div class="htmx-indicator ml-2"><div class="loading-spinner"></div></div>`;
+        }
+    }
+});
+
+// D3.js rendering function that will be called by HTMX responses
+function renderGraph(graphData) {
+    const container = document.getElementById('graph-content');
+    
+    // Clear previous content
+    container.innerHTML = '<svg id="triple-graph"></svg>';
+    
+    const svg = d3.select("#triple-graph");
+    const width = container.clientWidth - 32; // Account for padding
+    const height = container.clientHeight - 32;
+
+    svg.attr("viewBox", [-width / 2, -height / 2, width, height])
+       .attr("width", width)
+       .attr("height", height);
+    
+    if (!graphData.nodes || graphData.nodes.length === 0) {
+        svg.append("text")
+           .attr("text-anchor", "middle")
+           .attr("y", 0)
+           .attr("class", "text-gray-500")
+           .text("No data to display");
+        return;
+    }
+    
+    const simulation = d3.forceSimulation(graphData.nodes)
+        .force("link", d3.forceLink(graphData.links).id(d => d.id).distance(100))
+        .force("charge", d3.forceManyBody().strength(-300))
+        .force("center", d3.forceCenter())
+        .force("collision", d3.forceCollide().radius(20));
+
+    // Links
+    const link = svg.append("g")
+        .attr("class", "links")
+        .selectAll("line")
+        .data(graphData.links)
+        .join("line")
+        .attr("class", "link")
+        .attr("stroke-width", d => Math.sqrt(d.value || 1));
+
+    // Link labels
+    const linkLabel = svg.append("g")
+        .attr("class", "link-labels")
+        .selectAll("text")
+        .data(graphData.links)
+        .join("text")
+        .attr("class", "text-xs fill-current text-gray-600")
+        .text(d => d.label);
+
+    // Nodes
+    const node = svg.append("g")
+        .attr("class", "nodes")
+        .selectAll("g")
+        .data(graphData.nodes)
+        .join("g")
+        .attr("class", "node")
+        .call(drag(simulation));
+
+    node.append("circle")
+        .attr("r", d => {
+            const baseSize = { dataset: 15, row: 12, cell: 10, literal: 6 };
+            return baseSize[d.type] || 8;
+        })
+        .attr("fill", d => {
+            const colors = {
+                'dataset': '#2563eb',    // Blue
+                'row': '#059669',        // Green
+                'cell': '#dc2626',       // Red
+                'literal': '#7c3aed'     // Purple
+            };
+            return colors[d.type] || '#6b7280';
+        });
+
+    node.append("text")
+        .text(d => d.name)
+        .attr("x", 12)
+        .attr("y", 3)
+        .attr("class", "text-xs fill-current text-gray-800");
+
+    simulation.on("tick", () => {
+        link
+            .attr("x1", d => d.source.x)
+            .attr("y1", d => d.source.y)
+            .attr("x2", d => d.target.x)
+            .attr("y2", d => d.target.y);
+
+        linkLabel
+            .attr("x", d => (d.source.x + d.target.x) / 2)
+            .attr("y", d => (d.source.y + d.target.y) / 2);
+
+        node
+            .attr("transform", d => `translate(${d.x},${d.y})`);
+    });
+    
+    function drag(simulation) {
+        function dragstarted(event, d) {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+        }
+
+        function dragged(event, d) {
+            d.fx = event.x;
+            d.fy = event.y;
+        }
+
+        function dragended(event, d) {
+            if (!event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+        }
+
+        return d3.drag()
+            .on("start", dragstarted)
+            .on("drag", dragged)
+            .on("end", dragended);
+    }
+}
+</script>
+{% endblock inline_javascript %}

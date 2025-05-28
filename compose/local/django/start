@@ -6,4 +6,5 @@ set -o nounset
 
 
 python manage.py migrate
-exec python manage.py runserver_plus 0.0.0.0:8000
+# Use standard Django runserver for hot reloading
+exec uvicorn config.asgi:application --host 0.0.0.0 --reload --reload-include '*.html'

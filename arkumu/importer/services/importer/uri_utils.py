@@ -1,4 +1,5 @@
 import re
+import unicodedata
 
 # Base URIs
 RDF_BASE_URI = "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
@@ -8,6 +9,21 @@ XSD_BASE_URI = "http://www.w3.org/2001/XMLSchema#"
 OWL_BASE_URI = "http://www.w3.org/2002/07/owl#"
 DEFAULT_INSTITUTION_BASE_URI = "http://arkumu.nrw/data/" 
 
+def normalize_string_nfc(text: str) -> str:
+    """
+    Normalize a string to Unicode NFC (Normalization Form Canonical Composition).
+    
+    Args:
+        text: The string to normalize
+        
+    Returns:
+        The normalized string
+    """
+    if not isinstance(text, str):
+        return text
+        
+    return unicodedata.normalize('NFC', text)
+
 def slugify_uri_part(value_str):
     """
     Slugifies a string for use in URIs: lowercase, spaces and special chars replaced with hyphens, 
@@ -16,6 +32,8 @@ def slugify_uri_part(value_str):
     if not isinstance(value_str, str):
         value_str = str(value_str)
     
+    value_str = normalize_string_nfc(value_str)
+
     # Basic transliteration for common German umlauts / common characters
     replacements = {
         'ä': 'ae', 'ö': 'oe', 'ü': 'ue', 'Ä': 'Ae', 'Ö': 'Oe', 'Ü': 'Ue', 'ß': 'ss',
