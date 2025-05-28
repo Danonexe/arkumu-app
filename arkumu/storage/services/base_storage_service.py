@@ -1,577 +1,379 @@
 import logging
 import os
 from typing import Any, Dict
+import threading
 import boto3
 from botocore.exceptions import ClientError
+from botocore.config import Config
 from django.conf import settings
+import time # Keep time for potential delays if needed
 
 logger = logging.getLogger(__name__)
 
 class BaseStorageService:
     """
     Base service for interacting with S3/MinIO storage.
-    
-    This service handles both local development with MinIO and production with S3.
-    It automatically detects the environment and configures the client accordingly.
+    This service is a singleton and handles the core S3 client setup,
+    initialization of ingest/production buckets, and CORS configuration once.
+    Other services should obtain this singleton instance to access the S3 client and config.
     """
-    
-    # Class-level flag to track if buckets have been checked
-    _buckets_checked = False
     _instance = None
-    
+    _lock = threading.Lock()  # Lock for thread-safe singleton creation and initialization
+    _global_buckets_checked = False # Moved here, will be set in __init__
+
     def __new__(cls, *args, **kwargs):
-        if cls._instance is None:
-            cls._instance = super(BaseStorageService, cls).__new__(cls)
+        # This __new__ makes BaseStorageService a singleton.
+        # It ensures only one instance of BaseStorageService itself is ever created.
+        if not cls._instance: # Check first without lock for performance
+            with cls._lock:
+                if not cls._instance: # Double-check lock
+                    logger.info("-----> BaseStorageService.__new__: Creating new (and only) instance of BaseStorageService.")
+                    cls._instance = super().__new__(cls)
+                    # __init__ will be called automatically by Python after __new__ returns this instance.
+                    # We will put an initialization guard in __init__.
+                else:
+                    logger.info("-----> BaseStorageService.__new__: Instance already existed (another thread created it).")
+        else:
+            logger.info("-----> BaseStorageService.__new__: Instance already existed.")
         return cls._instance
-    
-    def __init__(self, skip_bucket_check=False):
-        """
-        Initialize the BaseStorageService with S3 client.
+
+    def __init__(self):
+        # This __init__ should only perform its expensive setup once.
+        # The __new__ method ensures only one instance, but __init__ is called
+        # every time BaseStorageService() is invoked if the instance already exists.
         
-        Args:
-            skip_bucket_check (bool): If True, skip bucket existence check (for child services)
-        """
-        # Skip initialization if already done
-        if hasattr(self, 'initialized'):
+        # Check if our one-time initialization has already run for this instance.
+        # Use an instance attribute for the flag.
+        if hasattr(self, '_base_initialized_flag') and self._base_initialized_flag:
+            logger.info("===> BaseStorageService.__init__: Already fully initialized. Skipping one-time setup.")
             return
             
-        logger.info("Initializing BaseStorageService...")
+        logger.info("===> BaseStorageService.__init__: Starting ONE-TIME actual S3 setup.")
         
-        # Initialize settings
+        # Class-level flag for ensuring buckets are checked only once across all calls to this specific init method.
+        # This is somewhat redundant if __init__ itself only runs its core logic once due to _base_initialized_flag,
+        # but kept for clarity on the original intent.
+        # Consider if BaseStorageService._buckets_checked (class attr) is still needed or if an instance attr is better.
+        # For now, let's stick to the logic of ensuring buckets only once globally for the process.
+        if not hasattr(BaseStorageService, '_global_buckets_checked') :
+            BaseStorageService._global_buckets_checked = False
+
         self.is_minio = self._is_minio_environment()
         self.endpoint_url = self._get_endpoint_url()
         self.access_key = self._get_access_key()
         self.secret_key = self._get_secret_key()
         self.region = self._get_region()
-        
-        # Determine if we're running inside a container
-        # This helps us decide how to handle URLs for browser access
         self.in_container = self._is_running_in_container()
-        
-        # Initialize both buckets
         self.ingest_bucket = self._get_ingest_bucket_name()
         self.production_bucket = self._get_production_bucket_name()
         
-        # Create S3 client
-        logger.info(f"Creating S3 client with endpoint URL: {self.endpoint_url}")
-        self.s3_client = self._create_s3_client()
+        logger.info(f"===> BaseStorageService: Attempting to create S3 client. Endpoint: {self.endpoint_url}, Region: {self.region}")
+        # _create_s3_client will set self.s3_client and potentially self.presigned_client
+        self._create_s3_client() 
+        logger.info("===> BaseStorageService: S3 client(s) created.")
         
-        logger.info(f"BaseStorageService initialized with {'MinIO' if self.is_minio else 'S3'}")
-        logger.info(f"Using endpoint: {self.endpoint_url or 'default S3 endpoint'}")
-        logger.info(f"Using region: {self.region}")
-        logger.info(f"Using ingest bucket: {self.ingest_bucket}")
-        logger.info(f"Using production bucket: {self.production_bucket}")
+        logger.info(f"BaseStorageService core configured with {'MinIO' if self.is_minio else 'S3'}. Ingest: {self.ingest_bucket}, Prod: {self.production_bucket}")
         
-        # Only check buckets if not skipped and not already checked
-        if not skip_bucket_check and not self._buckets_checked:
-            logger.info("Ensuring buckets exist...")
-            ingest_bucket_exists = self.ensure_bucket_exists(self.ingest_bucket)
-            production_bucket_exists = self.ensure_bucket_exists(self.production_bucket)
-            
-            # Set the class-level flag
-            self._buckets_checked = True
-            
-            # Ensure CORS is configured for the ingest bucket (needed for direct uploads)
-            if ingest_bucket_exists:
-                logger.info("Ensuring CORS is configured for ingest bucket...")
-                cors_result = self.ensure_cors_enabled(self.ingest_bucket)
-                if cors_result["success"]:
-                    if cors_result.get("updated", False):
-                        logger.info("✅ CORS configuration for ingest bucket has been updated")
-                    else:
-                        logger.info("✅ CORS configuration for ingest bucket is already correct")
+        # Ensure essential buckets (ingest, production) exist. This should run only once.
+        # The skip_bucket_check parameter is removed from __init__ as this init runs its core only once.
+        with BaseStorageService._lock: # Use the same lock to protect _global_buckets_checked
+            if not BaseStorageService._global_buckets_checked:
+                logger.info("===> BaseStorageService: Ensuring system buckets exist (GLOBAL first time check)...")
+                
+                logger.info(f"===> BaseStorageService: Checking ingest bucket: {self.ingest_bucket}")
+                ingest_bucket_exists = self.ensure_bucket_exists(self.ingest_bucket)
+                logger.info(f"===> BaseStorageService: Ingest bucket '{self.ingest_bucket}' exists result: {ingest_bucket_exists}")
+                
+                logger.info(f"===> BaseStorageService: Checking production bucket: {self.production_bucket}")
+                production_bucket_exists = self.ensure_bucket_exists(self.production_bucket)
+                logger.info(f"===> BaseStorageService: Production bucket '{self.production_bucket}' exists result: {production_bucket_exists}")
+                
+                BaseStorageService._global_buckets_checked = True
+                logger.info("===> BaseStorageService: System buckets GLOBAL check complete. _global_buckets_checked set to True.")
+                
+                if ingest_bucket_exists:
+                    logger.info(f"===> BaseStorageService: Ensuring CORS for ingest bucket: {self.ingest_bucket}")
+                    cors_result = self.ensure_cors_enabled(self.ingest_bucket)
+                    logger.info(f"===> BaseStorageService: CORS configuration for '{self.ingest_bucket}' result: {cors_result.get('success')}")
                 else:
-                    logger.warning(f"⚠️ Failed to configure CORS for ingest bucket: {cors_result.get('error', 'Unknown error')}")
+                    logger.warning(f"===> BaseStorageService: Skipping CORS for ingest bucket '{self.ingest_bucket}' as it does not exist or failed to be ensured.")
+            else:
+                logger.info("===> BaseStorageService: System buckets GLOBAL check already performed.")
         
-        # Mark as initialized
-        self.initialized = True
+        self._base_initialized_flag = True # Mark this specific instance as having completed its one-time setup.
+        logger.info("===> BaseStorageService.__init__: ONE-TIME actual S3 setup COMPLETED.")
     
-    def set_client_and_buckets(self, service):
-        """
-        Ensure a child service uses the same S3 client and bucket names.
-        
-        Args:
-            service: The child service to update
-        """
-        if hasattr(service, 's3_client'):
-            service.s3_client = self.s3_client
-            
-        if hasattr(service, 'ingest_bucket'):
-            service.ingest_bucket = self.ingest_bucket
-            
-        if hasattr(service, 'production_bucket'):
-            service.production_bucket = self.production_bucket
-            
-        return service
-    
-    def _is_minio_environment(self) -> bool:
-        """Determine if we're using MinIO based on settings or environment."""
-        # First check for explicit setting
-        use_minio = getattr(settings, 'USE_MINIO', None)
-        if use_minio is not None:
-            return use_minio
-        
-        # Then check for environment variable
-        use_minio_env = os.environ.get('USE_MINIO', '').lower()
-        if use_minio_env in ('true', 'yes', '1'):
-            return True
-        elif use_minio_env in ('false', 'no', '0'):
-            return False
-        
-        # Finally, check if we're in a development environment
-        return getattr(settings, 'DEBUG', False)
-    
-    def _get_endpoint_url(self) -> str:
-        """Get the endpoint URL for S3/MinIO."""
-        # First check for explicit setting
-        endpoint_url = getattr(settings, 'AWS_S3_ENDPOINT_URL', None)
-        if endpoint_url:
-            return endpoint_url
-        
-        # Then check for environment variable
-        endpoint_url_env = os.environ.get('AWS_S3_ENDPOINT_URL', '')
-        if endpoint_url_env:
-            return endpoint_url_env
-        
-        # Default MinIO endpoint if we're using MinIO
-        if self._is_minio_environment():
-            return 'http://minio:9000'
-        
-        # For production S3, return None to use the default AWS endpoint
-        return None
-    
-    def _get_access_key(self) -> str:
-        """Get the access key for S3/MinIO."""
-        # First check for explicit setting
-        access_key = getattr(settings, 'AWS_ACCESS_KEY_ID', None)
-        if access_key:
-            return access_key
-        
-        # Then check for environment variable
-        access_key_env = os.environ.get('AWS_ACCESS_KEY_ID', '')
-        if access_key_env:
-            return access_key_env
-        
-        # Default MinIO access key if we're using MinIO
-        if self._is_minio_environment():
-            return 'minioadmin'
-        
-        # For production, we should have a setting or environment variable
-        logger.warning("No AWS_ACCESS_KEY_ID found in settings or environment")
-        return ''
-    
-    def _get_secret_key(self) -> str:
-        """Get the secret key for S3/MinIO."""
-        # First check for explicit setting
-        secret_key = getattr(settings, 'AWS_SECRET_ACCESS_KEY', None)
-        if secret_key:
-            return secret_key
-        
-        # Then check for environment variable
-        secret_key_env = os.environ.get('AWS_SECRET_ACCESS_KEY', '')
-        if secret_key_env:
-            return secret_key_env
-        
-        # Default MinIO secret key if we're using MinIO
-        if self._is_minio_environment():
-            return 'minioadmin'
-        
-        # For production, we should have a setting or environment variable
-        logger.warning("No AWS_SECRET_ACCESS_KEY found in settings or environment")
-        return ''
-    
-    def _get_region(self) -> str:
-        """Get the region for S3."""
-        # First check for explicit setting
-        region = getattr(settings, 'AWS_S3_REGION_NAME', None)
-        if region:
-            return region
-        
-        # Then check for environment variable
-        region_env = os.environ.get('AWS_S3_REGION_NAME', '')
-        if region_env:
-            return region_env
-        
-        # Default region
-        return 'us-east-1'
-    
-    def _get_ingest_bucket_name(self) -> str:
-        """Get the ingest bucket name for S3/MinIO."""
-        # First check for explicit setting
-        bucket_name = getattr(settings, 'AWS_INGEST_BUCKET_NAME', None)
-        if bucket_name:
-            return bucket_name
-        
-        # Then check for environment variable
-        bucket_name_env = os.environ.get('AWS_INGEST_BUCKET_NAME', '')
-        if bucket_name_env:
-            return bucket_name_env
-        
-        # Fall back to the storage bucket name if ingest-specific not defined
-        storage_bucket = getattr(settings, 'AWS_STORAGE_BUCKET_NAME', None)
-        if storage_bucket:
-            return storage_bucket
-            
-        storage_bucket_env = os.environ.get('AWS_STORAGE_BUCKET_NAME', '')
-        if storage_bucket_env:
-            return storage_bucket_env
-        
-        # Default bucket name
-        if self._is_minio_environment():
-            return 'lacos-ingest'
-        
-        # For production, we should have a setting or environment variable
-        logger.warning("No AWS_INGEST_BUCKET_NAME found in settings or environment")
-        return 'lacos-ingest'
-    
-    def _get_production_bucket_name(self) -> str:
-        """Get the production bucket name for S3/MinIO."""
-        # First check for explicit setting
-        bucket_name = getattr(settings, 'AWS_PRODUCTION_BUCKET_NAME', None)
-        if bucket_name:
-            return bucket_name
-        
-        # Then check for environment variable
-        bucket_name_env = os.environ.get('AWS_PRODUCTION_BUCKET_NAME', '')
-        if bucket_name_env:
-            return bucket_name_env
-        
-        # Default bucket name
-        if self._is_minio_environment():
-            return 'lacos-production'
-        
-        # For production, we should have a setting or environment variable
-        logger.warning("No AWS_PRODUCTION_BUCKET_NAME found in settings or environment")
-        return 'lacos-production'
-    
+    # Methods like _is_minio_environment, _get_endpoint_url, _create_s3_client, 
+    # ensure_bucket_exists, ensure_cors_enabled etc. remain largely the same, 
+    # but _create_s3_client should assign to self.s3_client and self.presigned_client directly.
+
     def _create_s3_client(self):
         """
         Create an S3 client configured for the current environment.
-        
-        Returns:
-            boto3.client: Configured S3 client
+        Assigns to self.s3_client and self.presigned_client.
         """
-        # Basic client configuration
+        optimized_config = Config(
+            retries={'max_attempts': 2, 'mode': 'standard'},
+            connect_timeout=5,
+            read_timeout=10,
+            max_pool_connections=10
+        )
+        
         client_kwargs = {
             'service_name': 's3',
             'aws_access_key_id': self.access_key,
             'aws_secret_access_key': self.secret_key,
+            'config': optimized_config,
         }
         
-        # Add region if specified
         if self.region:
             client_kwargs['region_name'] = self.region
         
-        # Add endpoint URL for MinIO or custom S3 endpoints
         if self.endpoint_url:
-            # For server-side operations, use the original endpoint URL
-            server_endpoint = self.endpoint_url
-            client_kwargs['endpoint_url'] = server_endpoint
-            
-            # For MinIO in local development, we need special handling for presigned URLs
+            client_kwargs['endpoint_url'] = self.endpoint_url
             if self.is_minio:
-                # Create a config that tells boto3 to use path-style addressing
-                # This is required for MinIO
-                client_kwargs['config'] = boto3.session.Config(
+                minio_specific_config_for_main_client = Config(
                     signature_version='s3v4',
-                    s3={'addressing_style': 'path'}
+                    s3={'addressing_style': 'path'},
+                    retries={'max_attempts': 2, 'mode': 'standard'},
+                    connect_timeout=5,
+                    read_timeout=10,
+                    max_pool_connections=10
                 )
+                client_kwargs['config'] = minio_specific_config_for_main_client
                 
-                # For presigned URLs that will be used by the browser,
-                # we need to use a browser-accessible URL
                 browser_endpoint = os.environ.get('AWS_S3_BROWSER_ENDPOINT_URL', None)
-                
                 if browser_endpoint:
-                    logger.info(f"Using browser endpoint URL from environment: {browser_endpoint}")
+                    logger.info(f"Using browser endpoint URL for presigned client from environment: {browser_endpoint}")
                 elif 'minio:9000' in self.endpoint_url:
-                    # Default fallback for local development
                     browser_endpoint = self.endpoint_url.replace('minio:9000', 'localhost:9000')
-                    logger.info(f"MinIO detected at {self.endpoint_url}, will use {browser_endpoint} for presigned URLs")
+                    logger.info(f"MinIO detected at {self.endpoint_url}, presigned client will use {browser_endpoint}")
                 else:
-                    # If no specific browser endpoint is provided, use the same as server
                     browser_endpoint = self.endpoint_url
-                    logger.info(f"Using server endpoint for presigned URLs: {browser_endpoint}")
+                    logger.info(f"Using server endpoint for presigned client: {browser_endpoint}")
                 
-                # Create a separate client for generating presigned URLs
                 self.presigned_client = boto3.client(
                     's3',
                     aws_access_key_id=self.access_key,
                     aws_secret_access_key=self.secret_key,
                     region_name=self.region if self.region else None,
                     endpoint_url=browser_endpoint,
-                    config=boto3.session.Config(
+                    config=Config(
                         signature_version='s3v4',
-                        s3={'addressing_style': 'path'}
+                        s3={'addressing_style': 'path'},
+                        retries={'max_attempts': 2, 'mode': 'standard'},
+                        connect_timeout=5,
+                        read_timeout=10,
+                        max_pool_connections=10
                     )
                 )
-                logger.info(f"Created separate client for presigned URLs with endpoint: {browser_endpoint}")
-        
-        # Create and return the client
-        return boto3.client(**client_kwargs)
-    
-    def _format_size(self, size_bytes: int) -> str:
-        """Format bytes to human-readable size"""
-        for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
-            if size_bytes < 1024.0:
-                return f"{size_bytes:.2f} {unit}"
-            size_bytes /= 1024.0
-        return f"{size_bytes:.2f} PB"
+                logger.info(f"Created separate presigned client with endpoint: {browser_endpoint}")
+            else: # Not MinIO but has endpoint_url (e.g. other S3 compatible)
+                 # Ensure presigned_client exists, can be same as s3_client if no special browser URL needed
+                if not hasattr(self, 'presigned_client'):
+                    self.presigned_client = boto3.client(**client_kwargs)
+                    logger.info("Created presigned client (same as main client for non-MinIO custom endpoint).")
 
-    def ensure_bucket_exists(self, bucket_name: str) -> bool:
-        """
-        Ensure that the specified bucket exists, creating it if necessary.
-        
-        Args:
-            bucket_name (str): The name of the bucket to check/create.
-            
-        Returns:
-            bool: True if the bucket exists or was created successfully, False otherwise.
-        """
-        logger.info(f"Checking if bucket '{bucket_name}' exists...")
-        try:
-            # Check if bucket exists
-            self.s3_client.head_bucket(Bucket=bucket_name)
-            logger.info(f"✅ Bucket '{bucket_name}' already exists")
-            return True
-        except ClientError as e:
-            error_code = e.response.get('Error', {}).get('Code', 'Unknown')
-            error_message = e.response.get('Error', {}).get('Message', str(e))
-            logger.info(f"Bucket check result: {error_code} - {error_message}")
-            
-            # If bucket doesn't exist, create it
-            if error_code == '404' or error_code == 'NoSuchBucket':
-                try:
-                    logger.info(f"🔄 Creating bucket '{bucket_name}' in region '{self.region}'...")
-                    if self.region == 'us-east-1':
-                        # Special case for us-east-1
-                        logger.info(f"Using special case for us-east-1 region (no LocationConstraint)")
-                        self.s3_client.create_bucket(Bucket=bucket_name)
-                    else:
-                        logger.info(f"Using LocationConstraint={self.region}")
-                        self.s3_client.create_bucket(
-                            Bucket=bucket_name,
-                            CreateBucketConfiguration={'LocationConstraint': self.region}
-                        )
-                    logger.info(f"✅ Bucket '{bucket_name}' created successfully")
-                    return True
-                except Exception as create_error:
-                    logger.error(f"❌ Error creating bucket '{bucket_name}': {str(create_error)}")
-                    # Log more details about the error
-                    if hasattr(create_error, 'response'):
-                        error_details = create_error.response.get('Error', {})
-                        logger.error(f"Error details: Code={error_details.get('Code')}, Message={error_details.get('Message')}")
-                    return False
-            else:
-                logger.error(f"❌ Error checking bucket '{bucket_name}': {error_code} - {error_message}")
-                return False
-    
-    def get_file_content(self, bucket_name: str, file_path: str) -> Dict[str, Any]:
-        """
-        Get the content of a file from the specified bucket.
-        
-        Args:
-            bucket_name (str): The name of the bucket containing the file
-            file_path (str): The path to the file in the bucket
-            
-        Returns:
-            Dict[str, Any]: A dictionary containing the file content and metadata
-        """
-        try:
-            response = self.s3_client.get_object(
-                Bucket=bucket_name, Key=file_path
-            )
-            
-            # Get the file content
-            content = response["Body"].read()
-            
-            # Get the file metadata
-            metadata = {
-                "content_type": response.get("ContentType", "application/octet-stream"),
-                "content_length": response.get("ContentLength", 0),
-                "last_modified": response.get("LastModified", None),
-            }
-            
-            return {
-                "content": content,
-                "metadata": metadata,
-                "bucket_type": "ingest" if bucket_name == self.ingest_bucket else "production",
-                "path": file_path,
-            }
-        except ClientError as e:
-            logger.error(f"Error getting file content for {file_path}: {str(e)}")
-            return {"error": str(e)}
-            
-    def delete_object(self, bucket_name: str, object_path: str, is_directory: bool = False) -> Dict[str, Any]:
-        """
-        Delete an object or directory from the specified bucket.
-        
-        Args:
-            bucket_name (str): The name of the bucket containing the object
-            object_path (str): The path to the object in the bucket
-            is_directory (bool, optional): Whether the object is a directory. Defaults to False.
-            
-        Returns:
-            Dict[str, Any]: A dictionary containing the result of the operation
-        """
-        try:
-            if is_directory:
-                # For directories, we need to delete all objects with the given prefix
-                paginator = self.s3_client.get_paginator("list_objects_v2")
-                
-                objects_to_delete = []
-                for page in paginator.paginate(Bucket=bucket_name, Prefix=object_path):
-                    for obj in page.get("Contents", []):
-                        objects_to_delete.append({"Key": obj["Key"]})
-                
-                if objects_to_delete:
-                    # Some S3-compatible services (like MinIO) require Content-MD5 for DeleteObjects
-                    # We'll delete each object individually to avoid this issue
-                    logger.info(f"Deleting {len(objects_to_delete)} objects from {bucket_name}/{object_path}")
-                    deleted_count = 0
-                    for obj in objects_to_delete:
-                        try:
-                            self.s3_client.delete_object(Bucket=bucket_name, Key=obj["Key"])
-                            deleted_count += 1
-                        except Exception as obj_error:
-                            logger.error(f"Error deleting object {obj['Key']}: {str(obj_error)}")
-                    
-                    return {
-                        "success": deleted_count > 0,
-                        "message": f"Successfully deleted directory {object_path} with {deleted_count} objects",
-                        "deleted_objects": deleted_count
-                    }
-                else:
-                    return {
-                        "success": True,
-                        "message": f"Directory {object_path} was empty, nothing to delete",
-                        "deleted_objects": 0
-                    }
-            else:
-                # For single objects, just delete the object
-                self.s3_client.delete_object(Bucket=bucket_name, Key=object_path)
-                
-                return {
-                    "success": True,
-                    "message": f"Successfully deleted object {object_path}",
-                    "deleted_objects": 1
-                }
-        except ClientError as e:
-            logger.error(f"Error deleting {object_path}: {str(e)}")
-            return {"success": False, "error": str(e)}
-    
-    def ensure_cors_enabled(self, bucket_name: str = None) -> Dict[str, Any]:
-        """
-        Ensure CORS is properly configured for the specified bucket.
-        
-        This is required for browser-based uploads to work properly.
-        
-        Args:
-            bucket_name (str, optional): Name of the bucket to configure. 
-                                         Defaults to ingest bucket.
-        
-        Returns:
-            Dict[str, Any]: Result of the operation
-        """
-        if bucket_name is None:
-            bucket_name = self.ingest_bucket
-        
-        logger.info(f"Checking CORS configuration for bucket: {bucket_name}")
-        
-        try:
-            # Define the required CORS rule - using the exact minimal configuration provided
-            required_rule = {
-                'AllowedHeaders': ['*'],
-                'AllowedMethods': ['POST'],
-                'AllowedOrigins': ['*'],
-                'ExposeHeaders': []
-            }
-            
-            # Check if CORS is already configured
-            try:
-                cors_config = self.s3_client.get_bucket_cors(Bucket=bucket_name)
-                current_rules = cors_config.get('CORSRules', [])
-                logger.info(f"Found existing CORS configuration with {len(current_rules)} rules")
-                
-                # Check if our required rule already exists
-                rule_exists = False
-                for rule in current_rules:
-                    # Check if all required keys are in the existing rule
-                    if (set(rule.get('AllowedHeaders', [])) >= set(required_rule['AllowedHeaders']) and
-                        set(rule.get('AllowedMethods', [])) >= set(required_rule['AllowedMethods']) and
-                        set(rule.get('AllowedOrigins', [])) >= set(required_rule['AllowedOrigins'])):
-                        rule_exists = True
-                        logger.info("✅ Required CORS rule already exists")
-                        break
-                
-                # If the rule doesn't exist, add it
-                if not rule_exists:
-                    logger.info("🔄 Required CORS rule not found, updating configuration...")
-                    
-                    # Use existing rules if any, otherwise create a new configuration
-                    new_rules = current_rules.copy() if current_rules else []
-                    new_rules.append(required_rule)
-                    
-                    # Apply the updated CORS configuration
-                    self.s3_client.put_bucket_cors(
-                        Bucket=bucket_name,
-                        CORSConfiguration={'CORSRules': new_rules}
-                    )
-                    logger.info("✅ CORS configuration updated successfully")
-                    return {"success": True, "message": "CORS configuration updated", "updated": True}
-                
-                return {"success": True, "message": "CORS already properly configured", "updated": False}
-                
-            except ClientError as e:
-                error_code = e.response.get('Error', {}).get('Code', 'Unknown')
-                error_message = e.response.get('Error', {}).get('Message', str(e))
-                
-                # If no CORS configuration exists, create one
-                if error_code == 'NoSuchCORSConfiguration':
-                    logger.info("No existing CORS configuration found, creating new configuration...")
-                    
-                    # Create a new CORS configuration with our required rule
-                    self.s3_client.put_bucket_cors(
-                        Bucket=bucket_name,
-                        CORSConfiguration={'CORSRules': [required_rule]}
-                    )
-                    logger.info("✅ CORS configuration created successfully")
-                    return {"success": True, "message": "CORS configuration created", "updated": True}
-                else:
-                    # Some other error occurred
-                    logger.error(f"❌ Error getting CORS configuration: {error_code} - {error_message}")
-                    return {"success": False, "error": f"{error_code}: {error_message}"}
-        
-        except Exception as e:
-            logger.error(f"❌ Error ensuring CORS configuration: {str(e)}")
-            
-            # For MinIO, CORS might not be fully supported, but uploads might still work
-            if self.is_minio:
-                logger.warning("⚠️ CORS configuration failed, but this is expected with some MinIO versions")
-                logger.warning("⚠️ Browser uploads may still work despite this error")
-                return {"success": True, "message": "CORS configuration skipped for MinIO", "updated": False}
-            
-            return {"success": False, "error": str(e)}
+        self.s3_client = boto3.client(**client_kwargs)
+        # If not using a specific endpoint_url (i.e., targeting AWS S3 directly) 
+        # and presigned_client wasn't created, make it the same as s3_client.
+        if not self.endpoint_url and not hasattr(self, 'presigned_client'):
+            logger.info("Using main S3 client for presigned URLs (AWS S3 default endpoint).")
+            self.presigned_client = self.s3_client
+        elif self.endpoint_url and not self.is_minio and not hasattr(self, 'presigned_client'):
+             # Fallback for non-MinIO with endpoint_url if presigned_client still not set
+            self.presigned_client = self.s3_client 
+            logger.info("Fallback: presigned client set to main client for custom S3 endpoint.")
+
+    # ... other helper methods (_is_minio_environment, _get_access_key, etc.) ...
+    # ... ensure_bucket_exists, ensure_cors_enabled, delete_object etc. ...
+    # The set_client_and_buckets method is no longer needed as sub-services will get the BaseStorageService instance.
+
+# Make sure all previous helper methods from BaseStorageService are still here and are instance methods.
+# The following is a placeholder for brevity - ensure all methods from the previous version of
+# BaseStorageService (like _get_ingest_bucket_name, _format_size, get_file_content, etc.) are present.
+
+    def _is_minio_environment(self) -> bool:
+        use_minio = getattr(settings, 'USE_MINIO', None)
+        if use_minio is not None: return use_minio
+        use_minio_env = os.environ.get('USE_MINIO', '').lower()
+        if use_minio_env in ('true', 'yes', '1'): return True
+        if use_minio_env in ('false', 'no', '0'): return False
+        return getattr(settings, 'DEBUG', False)
+
+    def _get_endpoint_url(self) -> str:
+        endpoint_url = getattr(settings, 'AWS_S3_ENDPOINT_URL', None)
+        if endpoint_url: return endpoint_url
+        endpoint_url_env = os.environ.get('AWS_S3_ENDPOINT_URL', '')
+        if endpoint_url_env: return endpoint_url_env
+        if self._is_minio_environment(): return 'http://minio:9000'
+        return None
+
+    def _get_access_key(self) -> str:
+        access_key = getattr(settings, 'AWS_ACCESS_KEY_ID', None)
+        if access_key: return access_key
+        access_key_env = os.environ.get('AWS_ACCESS_KEY_ID', '')
+        if access_key_env: return access_key_env
+        if self._is_minio_environment(): return 'minioadmin'
+        logger.warning("No AWS_ACCESS_KEY_ID found")
+        return ''
+
+    def _get_secret_key(self) -> str:
+        secret_key = getattr(settings, 'AWS_SECRET_ACCESS_KEY', None)
+        if secret_key: return secret_key
+        secret_key_env = os.environ.get('AWS_SECRET_ACCESS_KEY', '')
+        if secret_key_env: return secret_key_env
+        if self._is_minio_environment(): return 'minioadmin'
+        logger.warning("No AWS_SECRET_ACCESS_KEY found")
+        return ''
+
+    def _get_region(self) -> str:
+        region = getattr(settings, 'AWS_S3_REGION_NAME', None)
+        if region: return region
+        region_env = os.environ.get('AWS_S3_REGION_NAME', '')
+        if region_env: return region_env
+        return 'us-east-1'
+
+    def _get_ingest_bucket_name(self) -> str:
+        bucket_name = getattr(settings, 'AWS_INGEST_BUCKET_NAME', None)
+        if bucket_name: return bucket_name
+        bucket_name_env = os.environ.get('AWS_INGEST_BUCKET_NAME', '')
+        if bucket_name_env: return bucket_name_env
+        storage_bucket = getattr(settings, 'AWS_STORAGE_BUCKET_NAME', None)
+        if storage_bucket: return storage_bucket
+        storage_bucket_env = os.environ.get('AWS_STORAGE_BUCKET_NAME', '')
+        if storage_bucket_env: return storage_bucket_env
+        if self._is_minio_environment(): return 'arkumu-ingest'
+        logger.warning("No AWS_INGEST_BUCKET_NAME found")
+        return 'arkumu-ingest' # Default
+
+    def _get_production_bucket_name(self) -> str:
+        bucket_name = getattr(settings, 'AWS_PRODUCTION_BUCKET_NAME', None)
+        if bucket_name: return bucket_name
+        bucket_name_env = os.environ.get('AWS_PRODUCTION_BUCKET_NAME', '')
+        if bucket_name_env: return bucket_name_env
+        if self._is_minio_environment(): return 'arkumu-production'
+        logger.warning("No AWS_PRODUCTION_BUCKET_NAME found")
+        return 'arkumu-production' # Default
 
     def _is_running_in_container(self):
-        """
-        Determine if we're running inside a Docker container.
-        
-        Returns:
-            bool: True if running in a container, False otherwise
-        """
-        # Check for the RUNNING_IN_CONTAINER environment variable
-        if os.environ.get('RUNNING_IN_CONTAINER'):
-            return True
-        
-        # Check for .dockerenv file
-        if os.path.exists('/.dockerenv'):
-            return True
-        
-        # Check cgroup
+        if os.environ.get('RUNNING_IN_CONTAINER'): return True
+        if os.path.exists('/.dockerenv'): return True
         try:
             with open('/proc/1/cgroup', 'r') as f:
                 return 'docker' in f.read() or 'kubepods' in f.read()
-        except:
-            pass
-        
-        return False 
+        except: pass
+        return False
+
+    def ensure_bucket_exists(self, bucket_name: str) -> bool:
+        logger.info(f"Checking if bucket '{bucket_name}' exists (within ensure_bucket_exists)...")
+        try:
+            self.s3_client.head_bucket(Bucket=bucket_name)
+            logger.info(f"✅ Bucket '{bucket_name}' already exists (from head_bucket)")
+            return True
+        except ClientError as e:
+            error_code = e.response.get('Error', {}).get('Code', 'Unknown')
+            logger.info(f"Bucket '{bucket_name}' head_bucket result: {error_code}")
+            if error_code == '404' or error_code == 'NoSuchBucket':
+                try:
+                    logger.info(f"🔄 Creating bucket '{bucket_name}' in region '{self.region if self.region else 'default'}'...")
+                    create_kwargs = {'Bucket': bucket_name}
+                    if self.region and self.region != 'us-east-1':
+                        create_kwargs['CreateBucketConfiguration'] = {'LocationConstraint': self.region}
+                    elif not self.region and not self.is_minio:
+                         pass 
+                    self.s3_client.create_bucket(**create_kwargs)
+                    logger.info(f"✅ Bucket '{bucket_name}' created successfully.")
+                    time.sleep(0.5) 
+                    return True
+                except Exception as create_error:
+                    logger.error(f"❌ Error creating bucket '{bucket_name}': {str(create_error)}")
+                    if hasattr(create_error, 'response'): 
+                        logger.error(f"Error details: {create_error.response.get('Error', {})}")
+                    return False
+            else:
+                logger.error(f"❌ Error checking bucket '{bucket_name}' (non-404): {e.response.get('Error', {})}")
+                return False
+
+    def ensure_cors_enabled(self, bucket_name: str = None) -> Dict[str, Any]:
+        if bucket_name is None: bucket_name = self.ingest_bucket
+        if self.is_minio:
+            logger.info("⚠️ CORS: Skipping for MinIO.")
+            return {"success": True, "message": "CORS skipped for MinIO", "updated": False}
+        logger.info(f"CORS: Checking for bucket: {bucket_name}")
+        required_rule = {
+            'AllowedHeaders': ['*'], 'AllowedMethods': ['POST'],
+            'AllowedOrigins': ['*'], 'ExposeHeaders': []
+        }
+        try:
+            cors_config = self.s3_client.get_bucket_cors(Bucket=bucket_name)
+            current_rules = cors_config.get('CORSRules', [])
+            logger.info(f"CORS: Found {len(current_rules)} existing rules.")
+            rule_exists = any(
+                set(r.get('AllowedHeaders', [])) >= set(required_rule['AllowedHeaders']) and
+                set(r.get('AllowedMethods', [])) >= set(required_rule['AllowedMethods']) and
+                set(r.get('AllowedOrigins', [])) >= set(required_rule['AllowedOrigins'])
+                for r in current_rules
+            )
+            if not rule_exists:
+                logger.info("CORS: Required rule not found, updating...")
+                new_rules = current_rules + [required_rule]
+                self.s3_client.put_bucket_cors(Bucket=bucket_name, CORSConfiguration={'CORSRules': new_rules})
+                logger.info("CORS: Configuration updated.")
+                return {"success": True, "message": "CORS updated", "updated": True}
+            logger.info("CORS: Already configured.")
+            return {"success": True, "message": "CORS already configured", "updated": False}
+        except ClientError as e:
+            if e.response.get('Error', {}).get('Code') == 'NoSuchCORSConfiguration':
+                logger.info("CORS: No existing config, creating new...")
+                self.s3_client.put_bucket_cors(Bucket=bucket_name, CORSConfiguration={'CORSRules': [required_rule]})
+                logger.info("CORS: Configuration created.")
+                return {"success": True, "message": "CORS created", "updated": True}
+            logger.error(f"CORS: Error getting/setting config: {e.response.get('Error', {})}")
+            return {"success": False, "error": str(e.response.get('Error', {}))}
+        except Exception as e:
+            logger.error(f"CORS: Unexpected error: {str(e)}")
+            return {"success": False, "error": str(e)}
+
+    def get_file_content(self, bucket_name: str, file_path: str) -> Dict[str, Any]:
+        try:
+            response = self.s3_client.get_object(Bucket=bucket_name, Key=file_path)
+            return {
+                "content": response["Body"].read(),
+                "metadata": {
+                    "content_type": response.get("ContentType", "application/octet-stream"),
+                    "content_length": response.get("ContentLength", 0),
+                    "last_modified": response.get("LastModified", None),
+                },
+                "success": True
+            }
+        except ClientError as e:
+            logger.error(f"Error getting file content for {file_path} in {bucket_name}: {e.response.get('Error', {})}")
+            return {"success": False, "error": str(e.response.get('Error', {}))}
+
+    def delete_object(self, bucket_name: str, object_path: str, is_directory: bool = False) -> Dict[str, Any]:
+        try:
+            if is_directory:
+                paginator = self.s3_client.get_paginator("list_objects_v2")
+                objects_to_delete = [{"Key": obj["Key"]} for page in paginator.paginate(Bucket=bucket_name, Prefix=object_path) for obj in page.get("Contents", [])]
+                if objects_to_delete:
+                    deleted_count = 0
+                    for obj_key in objects_to_delete:
+                        self.s3_client.delete_object(Bucket=bucket_name, Key=obj_key["Key"])
+                        deleted_count +=1
+                    logger.info(f"Deleted {deleted_count} objects from directory {object_path} in {bucket_name}")
+                    return {"success": True, "deleted_count": deleted_count}
+                return {"success": True, "deleted_count": 0, "message": "Directory empty."}
+            else:
+                self.s3_client.delete_object(Bucket=bucket_name, Key=object_path)
+                logger.info(f"Deleted object {object_path} from {bucket_name}")
+                return {"success": True, "deleted_count": 1}
+        except ClientError as e:
+            logger.error(f"Error deleting {object_path} from {bucket_name}: {e.response.get('Error', {})}")
+            return {"success": False, "error": str(e.response.get('Error', {}))}
+
+    def _format_size(self, size_bytes: int) -> str:
+        for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+            if size_bytes < 1024.0: return f"{size_bytes:.2f} {unit}"
+            size_bytes /= 1024.0
+        return f"{size_bytes:.2f} PB" 

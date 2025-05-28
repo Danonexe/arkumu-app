@@ -21,39 +21,60 @@ def organization_dashboard(request):
     Display a dashboard of all organizations and their buckets.
     """
     try:
+        # Single bucket service instance - this is now optimized with singleton pattern
         bucket_service = BucketService()
         
-        # Get all organizations
-        organizations = bucket_service.get_organizations()
+        # Get available organizations (includes both existing and predefined)
+        available_organizations = bucket_service.get_available_organizations()
+        
+        # Check if user wants detailed file counts (optional for performance)
+        include_counts = request.GET.get('include_counts', 'false').lower() == 'true'
         
         # Prepare data for the template
         org_data = []
-        for org_name in organizations:
-            bucket_name = bucket_service.get_organization_bucket(org_name)
+        for org_info in available_organizations:
+            org_name = org_info.get('slug')
+            org_display_name = org_info.get('name', org_name)
+            org_description = org_info.get('description', '')
+            exists = org_info.get('exists', False)
             
-            # Get root level items for this organization's bucket
-            try:
-                root_items = bucket_service.get_root_level_items(bucket_name)
-                file_count = sum(1 for item in root_items.get('children', []) 
-                                if item.get('type') == 'file')
-                folder_count = sum(1 for item in root_items.get('children', []) 
-                                  if item.get('type') == 'folder')
-            except Exception as e:
-                logger.error(f"Error getting root items for org {org_name}: {str(e)}")
-                root_items = {"children": []}
-                file_count = 0
-                folder_count = 0
+            org_entry = {
+                "slug": org_name,
+                "name": org_display_name,
+                "description": org_description,
+                "exists": exists,
+                "bucket": bucket_service.get_organization_bucket(org_name) if exists else None,
+                "file_count": 0,
+                "folder_count": 0,
+                "status": "active" if exists else "available"
+            }
             
-            org_data.append({
-                "name": org_name,
-                "bucket": bucket_name,
-                "file_count": file_count,
-                "folder_count": folder_count
-            })
+            # Only get file counts if requested and bucket exists (for performance)
+            if include_counts and exists:
+                try:
+                    bucket_name = bucket_service.get_organization_bucket(org_name)
+                    root_items = bucket_service.get_root_level_items(bucket_name)
+                    org_entry["file_count"] = sum(1 for item in root_items.get('children', []) 
+                                                  if item.get('type') == 'file')
+                    org_entry["folder_count"] = sum(1 for item in root_items.get('children', []) 
+                                                    if item.get('type') == 'folder')
+                except Exception as e:
+                    logger.warning(f"Error getting counts for org {org_name}: {str(e)}")
+                    # Continue without counts instead of failing
+                    org_entry["file_count"] = 0
+                    org_entry["folder_count"] = 0
+            
+            org_data.append(org_entry)
+        
+        # Sort organizations: existing ones first, then by name
+        org_data.sort(key=lambda x: (not x["exists"], x["name"]))
         
         return render(request, "dashboard/organization_dashboard.html", {
             "organizations": org_data,
-            "total_orgs": len(org_data)
+            "total_orgs": len(org_data),
+            "include_counts": include_counts,
+            "existing_orgs": len([org for org in org_data if org["exists"]]),
+            "available_orgs": len([org for org in org_data if not org["exists"]])
         })
         
     except Exception as e:
@@ -457,7 +478,7 @@ def ingest_file(request):
         
         # Validate organization against predefined organizations
         bucket_service = BucketService()
-        valid_orgs = [org['slug'] for org in bucket_service.PREDEFINED_ORGANIZATIONS]
+        valid_orgs = [org['slug'] for org in bucket_service.get_predefined_organizations_data()]
         if organization_slug not in valid_orgs:
             return JsonResponse({'error': f'Invalid organization: {organization_slug}'}, status=400)
         
@@ -474,7 +495,7 @@ def ingest_file(request):
             
         try:
             # Download from S3 using bucket service
-            bucket_service.s3_client.download_file(bucket_name, file_path, temp_path)
+            bucket_service.base_s3_service.s3_client.download_file(bucket_name, file_path, temp_path)
             
             # Extract dataset name from file path
             dataset_name = os.path.splitext(os.path.basename(file_path))[0]
@@ -498,9 +519,18 @@ def ingest_file(request):
             # Clean up temp file
             os.unlink(temp_path)
             
+            success_message = f'Successfully ingested {dataset_name} from {file_path}'
+            
+            # Return appropriate response based on request type
+            if request.headers.get('HX-Request') == 'true':
+                return render(request, "partials/toast_notification.html", {
+                    "message": success_message,
+                    "type": "success"
+                })
+            
             return JsonResponse({
                 'success': True,
-                'message': f'Successfully ingested {dataset_name} from {file_path}',
+                'message': success_message,
                 'file_path': file_path,
                 'dataset_name': dataset_name,
                 'stats': result
@@ -519,6 +549,13 @@ def ingest_file(request):
         # Check if it's a database integrity error from concurrent imports
         if 'ForeignKeyViolation' in str(e) or 'IntegrityError' in str(e):
             error_message = f'Database conflict while ingesting {file_path}. This may be due to concurrent imports of the same data. Please try again.'
+        
+        # Return appropriate response based on request type
+        if request.headers.get('HX-Request') == 'true':
+            return render(request, "partials/toast_notification.html", {
+                "message": error_message,
+                "type": "error"
+            })
         
         return JsonResponse({
             'error': error_message,

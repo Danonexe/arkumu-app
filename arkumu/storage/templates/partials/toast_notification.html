@@ -3,8 +3,8 @@ Toast notification partial template for HTMX responses
 Usage: Include this template with message and type variables
 {% endcomment %}
 
-<div class="toast toast-top toast-end" hx-swap-oob="afterbegin:#toast-container">
-    <div class="alert {% if type == 'error' %}alert-error{% elif type == 'warning' %}alert-warning{% elif type == 'success' %}alert-success{% else %}alert-info{% endif %} shadow-lg">
+<div class="toast toast-top toast-center z-50" hx-swap-oob="afterbegin:#toast-container" id="toast-{{ message|slugify }}-{{ type }}">
+    <div class="alert {% if type == 'error' %}alert-error{% elif type == 'warning' %}alert-warning{% elif type == 'success' %}alert-success{% else %}alert-info{% endif %} shadow-xl min-w-96 max-w-lg">
         <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
             {% if type == 'error' %}
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -16,19 +16,45 @@ Usage: Include this template with message and type variables
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             {% endif %}
         </svg>
-        <span>{{ message }}</span>
-        <button class="btn btn-sm btn-circle btn-ghost" onclick="this.parentElement.parentElement.remove()">✕</button>
+        <div class="flex-1">
+            <div class="font-bold">
+                {% if type == 'success' %}✅ Success!
+                {% elif type == 'error' %}❌ Error!
+                {% elif type == 'warning' %}⚠️ Warning!
+                {% else %}ℹ️ Info
+                {% endif %}
+            </div>
+            <div class="text-sm">{{ message }}</div>
+        </div>
+        <button class="btn btn-sm btn-circle btn-ghost ml-2" onclick="dismissToast(this)">✕</button>
     </div>
 </div>
 
 <script>
-    // Auto-dismiss toast after 5 seconds
-    setTimeout(function() {
-        const toasts = document.querySelectorAll('#toast-container .toast');
-        toasts.forEach(function(toast) {
-            if (toast.parentElement) {
-                toast.parentElement.remove();
-            }
-        });
-    }, 5000);
+function dismissToast(button) {
+    const toast = button.closest('.toast');
+    if (toast) {
+        toast.style.transition = 'all 0.3s ease-out';
+        toast.style.transform = 'translateY(-20px)';
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
+    }
+}
+
+// Auto-dismiss after 5 seconds
+(function() {
+    const toast = document.querySelector('#toast-{{ message|slugify }}-{{ type }}');
+    if (toast) {
+        setTimeout(() => {
+            toast.style.transition = 'all 0.3s ease-out';
+            toast.style.transform = 'translateY(-20px)';
+            toast.style.opacity = '0';
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.remove();
+                }
+            }, 300);
+        }, 5000);
+    }
+})();
 </script> 

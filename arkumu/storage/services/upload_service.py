@@ -15,40 +15,25 @@ from .base_storage_service import BaseStorageService
 
 logger = logging.getLogger(__name__)
 
-class UploadService(BaseStorageService):
+class UploadService:
     """
     Service for handling file uploads to S3/MinIO buckets via streaming.
     
     This service focuses on streaming file uploads directly from Django to S3,
     avoiding the need for presigned URLs which may not be supported by all S3-compatible
     services. Files are streamed chunk by chunk to avoid memory issues.
+    
+    This service is NOT a singleton. It uses BaseStorageService for S3 client operations.
     """
     
-    _instance = None
-    
-    def __new__(cls, *args, **kwargs):
-        if cls._instance is None:
-            cls._instance = super(UploadService, cls).__new__(cls)
-        return cls._instance
-    
-    def __init__(self, skip_bucket_check=False):
+    def __init__(self):
         """
-        Initialize the UploadService with base storage configuration.
-        
-        Args:
-            skip_bucket_check (bool): If True, skip bucket existence check
+        Initialize the UploadService with reference to BaseStorageService.
         """
-        # Skip initialization if already done (proper singleton pattern)
-        if hasattr(self, 'initialized'):
-            logger.info("Using cached UploadService instance")
-            return
-            
-        logger.info("Initializing UploadService for the first time...")
-        start_time = time.time()
-        super().__init__(skip_bucket_check=skip_bucket_check)
-        init_duration = time.time() - start_time
-        logger.info(f"UploadService initialized for streaming uploads in {init_duration:.2f} seconds")
-        self.initialized = True
+        logger.info("Initializing UploadService...")
+        # Get the singleton instance of BaseStorageService for S3 operations
+        self.base_s3_service = BaseStorageService()
+        logger.info(f"UploadService initialized using BaseStorageService with endpoint: {self.base_s3_service.endpoint_url}")
 
     def _generate_file_key(self, file_name: str, path_prefix: Optional[str] = None) -> str:
         """
@@ -108,32 +93,32 @@ class UploadService(BaseStorageService):
                 'ContentType': content_type,
             }
             
-            # Upload the file
-            self.s3_client.upload_fileobj(
+            # Upload the file using BaseStorageService's S3 client
+            self.base_s3_service.s3_client.upload_fileobj(
                 file_obj,
-                self.ingest_bucket,
+                self.base_s3_service.ingest_bucket,
                 s3_key,
                 ExtraArgs=upload_args
             )
             
             # Verify upload and get file info
             try:
-                head_response = self.s3_client.head_object(
-                    Bucket=self.ingest_bucket,
+                head_response = self.base_s3_service.s3_client.head_object(
+                    Bucket=self.base_s3_service.ingest_bucket,
                     Key=s3_key
                 )
                 actual_file_size = head_response.get('ContentLength', 0)
                 last_modified = head_response.get('LastModified', None)
                 
-                logger.info(f"Successfully uploaded {file_name} ({self._format_size(actual_file_size)})")
+                logger.info(f"Successfully uploaded {file_name} ({self.base_s3_service._format_size(actual_file_size)})")
                 
                 return {
                     'success': True,
                     'file_name': file_name,
                     's3_key': s3_key,
-                    'bucket': self.ingest_bucket,
+                    'bucket': self.base_s3_service.ingest_bucket,
                     'file_size': actual_file_size,
-                    'file_size_formatted': self._format_size(actual_file_size),
+                    'file_size_formatted': self.base_s3_service._format_size(actual_file_size),
                     'content_type': content_type,
                     'last_modified': last_modified.isoformat() if last_modified else None,
                 }
@@ -143,7 +128,7 @@ class UploadService(BaseStorageService):
                     'success': True,
                     'file_name': file_name,
                     's3_key': s3_key,
-                    'bucket': self.ingest_bucket,
+                    'bucket': self.base_s3_service.ingest_bucket,
                     'content_type': content_type,
                     'verification_warning': str(verify_error)
                 }
@@ -184,8 +169,8 @@ class UploadService(BaseStorageService):
                 file_obj = BytesIO(file_obj)
             
             # Initialize multipart upload
-            create_response = self.s3_client.create_multipart_upload(
-                Bucket=self.ingest_bucket,
+            create_response = self.base_s3_service.s3_client.create_multipart_upload(
+                Bucket=self.base_s3_service.ingest_bucket,
                 Key=s3_key,
                 ContentType=content_type
             )
@@ -208,11 +193,11 @@ class UploadService(BaseStorageService):
                     chunk_size_actual = len(chunk)
                     total_size += chunk_size_actual
                     
-                    logger.debug(f"Uploading part {part_number} ({self._format_size(chunk_size_actual)})")
+                    logger.debug(f"Uploading part {part_number} ({self.base_s3_service._format_size(chunk_size_actual)})")
                     
                     # Upload part
-                    part_response = self.s3_client.upload_part(
-                        Bucket=self.ingest_bucket,
+                    part_response = self.base_s3_service.s3_client.upload_part(
+                        Bucket=self.base_s3_service.ingest_bucket,
                         Key=s3_key,
                         PartNumber=part_number,
                         UploadId=upload_id,
@@ -228,19 +213,19 @@ class UploadService(BaseStorageService):
                     part_number += 1
                 
                 # Complete multipart upload
-                complete_response = self.s3_client.complete_multipart_upload(
-                    Bucket=self.ingest_bucket,
+                complete_response = self.base_s3_service.s3_client.complete_multipart_upload(
+                    Bucket=self.base_s3_service.ingest_bucket,
                     Key=s3_key,
                     UploadId=upload_id,
                     MultipartUpload={'Parts': parts}
                 )
                 
-                logger.info(f"Multipart upload completed for {file_name} ({self._format_size(total_size)}, {len(parts)} parts)")
+                logger.info(f"Multipart upload completed for {file_name} ({self.base_s3_service._format_size(total_size)}, {len(parts)} parts)")
                 
                 # Verify upload
                 try:
-                    head_response = self.s3_client.head_object(
-                        Bucket=self.ingest_bucket,
+                    head_response = self.base_s3_service.s3_client.head_object(
+                        Bucket=self.base_s3_service.ingest_bucket,
                         Key=s3_key
                     )
                     actual_file_size = head_response.get('ContentLength', 0)
@@ -250,43 +235,42 @@ class UploadService(BaseStorageService):
                         'success': True,
                         'file_name': file_name,
                         's3_key': s3_key,
-                        'bucket': self.ingest_bucket,
+                        'bucket': self.base_s3_service.ingest_bucket,
                         'file_size': actual_file_size,
-                        'file_size_formatted': self._format_size(actual_file_size),
+                        'file_size_formatted': self.base_s3_service._format_size(actual_file_size),
                         'content_type': content_type,
-                        'upload_type': 'multipart',
-                        'parts_count': len(parts),
-                        'etag': complete_response.get('ETag', '').strip('"'),
                         'last_modified': last_modified.isoformat() if last_modified else None,
+                        'part_count': len(parts)
                     }
                 except Exception as verify_error:
-                    logger.warning(f"Multipart upload succeeded but verification failed for {s3_key}: {verify_error}")
+                    logger.warning(f"Upload succeeded but verification failed for {s3_key}: {verify_error}")
                     return {
                         'success': True,
                         'file_name': file_name,
                         's3_key': s3_key,
-                        'bucket': self.ingest_bucket,
+                        'bucket': self.base_s3_service.ingest_bucket,
+                        'file_size_approximation': total_size,
+                        'file_size_formatted': self.base_s3_service._format_size(total_size),
                         'content_type': content_type,
-                        'upload_type': 'multipart',
-                        'parts_count': len(parts),
-                        'etag': complete_response.get('ETag', '').strip('"'),
+                        'part_count': len(parts),
                         'verification_warning': str(verify_error)
                     }
                     
-            except Exception as upload_error:
-                # Abort multipart upload on error
-                logger.error(f"Error during multipart upload, aborting: {upload_error}")
+            except Exception as part_error:
+                logger.error(f"Error during multipart upload for {file_name}: {str(part_error)}")
+                
+                # Abort the multipart upload to clean up
                 try:
-                    self.s3_client.abort_multipart_upload(
-                        Bucket=self.ingest_bucket,
+                    self.base_s3_service.s3_client.abort_multipart_upload(
+                        Bucket=self.base_s3_service.ingest_bucket,
                         Key=s3_key,
                         UploadId=upload_id
                     )
-                    logger.info(f"Multipart upload {upload_id} aborted")
+                    logger.info(f"Aborted multipart upload for {file_name} with ID {upload_id}")
                 except Exception as abort_error:
-                    logger.error(f"Failed to abort multipart upload {upload_id}: {abort_error}")
+                    logger.error(f"Error aborting multipart upload: {str(abort_error)}")
                 
-                raise upload_error
+                raise part_error
                 
         except Exception as e:
             logger.error(f"Error in multipart upload for {file_name}: {str(e)}")
@@ -300,363 +284,327 @@ class UploadService(BaseStorageService):
                           use_multipart: bool = True, 
                           multipart_threshold: int = 10 * 1024 * 1024) -> Dict[str, Any]:
         """
-        Upload a Django UploadedFile object to S3.
+        Upload a Django uploaded file to S3.
         
         Args:
             uploaded_file: Django UploadedFile object
             path_prefix: Optional prefix for the S3 key
             use_multipart: Whether to use multipart upload for large files
-            multipart_threshold: File size threshold for multipart upload (default 10MB)
+            multipart_threshold: Size threshold for multipart upload
             
         Returns:
             Dictionary with upload result
         """
-        try:
-            file_name = uploaded_file.name
-            content_type = getattr(uploaded_file, 'content_type', 'application/octet-stream')
-            file_size = getattr(uploaded_file, 'size', None)
-            
-            logger.info(f"Uploading Django file {file_name} (size: {self._format_size(file_size) if file_size else 'unknown'})")
-            
-            # Decide whether to use multipart upload
-            if use_multipart and file_size and file_size > multipart_threshold:
-                logger.info(f"Using multipart upload for large file {file_name}")
-                return self.upload_multipart_stream(
-                    uploaded_file,
-                    file_name,
-                    content_type,
-                    path_prefix
-                )
-            else:
-                logger.info(f"Using single-part upload for file {file_name}")
-                return self.upload_file_stream(
-                    uploaded_file,
-                    file_name,
-                    content_type,
-                    path_prefix,
-                    file_size
-                )
-                
-        except Exception as e:
-            logger.error(f"Error uploading Django file {uploaded_file.name}: {str(e)}")
-            return {
-                'success': False,
-                'error': str(e),
-                'file_name': getattr(uploaded_file, 'name', 'unknown')
-            }
+        # Get file details
+        file_name = os.path.basename(uploaded_file.name)
+        file_size = uploaded_file.size
+        content_type = uploaded_file.content_type or 'application/octet-stream'
+        
+        logger.info(f"Uploading Django file: {file_name}, size: {self.base_s3_service._format_size(file_size)}, type: {content_type}")
+        
+        # Choose upload method based on file size
+        if use_multipart and file_size > multipart_threshold:
+            logger.info(f"Using multipart upload for {file_name} ({self.base_s3_service._format_size(file_size)} > {self.base_s3_service._format_size(multipart_threshold)})")
+            return self.upload_multipart_stream(
+                file_obj=uploaded_file,
+                file_name=file_name,
+                content_type=content_type,
+                path_prefix=path_prefix
+            )
+        else:
+            logger.info(f"Using single-part upload for {file_name} ({self.base_s3_service._format_size(file_size)})")
+            return self.upload_file_stream(
+                file_obj=uploaded_file,
+                file_name=file_name,
+                content_type=content_type,
+                path_prefix=path_prefix,
+                file_size=file_size
+            )
 
     def upload_batch_django_files(self, uploaded_files: List, 
                                  path_prefix: Optional[str] = None,
                                  use_multipart: bool = True,
                                  multipart_threshold: int = 10 * 1024 * 1024) -> Dict[str, Any]:
         """
-        Upload multiple Django UploadedFile objects to S3.
+        Upload multiple Django uploaded files to S3.
         
         Args:
             uploaded_files: List of Django UploadedFile objects
-            path_prefix: Optional prefix for all S3 keys
+            path_prefix: Optional prefix for the S3 key
             use_multipart: Whether to use multipart upload for large files
-            multipart_threshold: File size threshold for multipart upload
+            multipart_threshold: Size threshold for multipart upload
             
         Returns:
-            Dictionary with batch upload results
+            Dictionary with upload results
         """
         results = []
-        failures = []
+        success_count = 0
+        error_count = 0
         total_size = 0
         
         logger.info(f"Starting batch upload of {len(uploaded_files)} files")
         
         for uploaded_file in uploaded_files:
-            try:
-                result = self.upload_django_file(
-                    uploaded_file,
-                    path_prefix,
-                    use_multipart,
-                    multipart_threshold
-                )
-                
-                if result['success']:
-                    results.append(result)
-                    file_size = result.get('file_size', 0)
-                    total_size += file_size
-                    logger.info(f"Successfully uploaded {result['file_name']}")
-                else:
-                    failures.append({
-                        'file_name': result.get('file_name', 'unknown'),
-                        'error': result.get('error', 'Unknown error')
-                    })
-                    logger.error(f"Failed to upload {result.get('file_name')}: {result.get('error')}")
-                    
-            except Exception as e:
-                file_name = getattr(uploaded_file, 'name', 'unknown')
-                logger.error(f"Exception during upload of {file_name}: {str(e)}")
-                failures.append({
-                    'file_name': file_name,
-                    'error': str(e)
-                })
+            result = self.upload_django_file(
+                uploaded_file=uploaded_file,
+                path_prefix=path_prefix,
+                use_multipart=use_multipart,
+                multipart_threshold=multipart_threshold
+            )
+            
+            results.append(result)
+            
+            if result.get('success', False):
+                success_count += 1
+                total_size += result.get('file_size', 0)
+            else:
+                error_count += 1
         
-        success_count = len(results)
-        failure_count = len(failures)
-        
-        logger.info(f"Batch upload completed: {success_count} succeeded, {failure_count} failed, total size: {self._format_size(total_size)}")
+        logger.info(f"Batch upload complete: {success_count} successful, {error_count} failed, total size: {self.base_s3_service._format_size(total_size)}")
         
         return {
-            'success': failure_count == 0,
-            'results': results,
-            'failures': failures,
-            'total_uploaded': success_count,
-            'total_failed': failure_count,
+            'success': error_count == 0,
+            'total_files': len(uploaded_files),
+            'success_count': success_count,
+            'error_count': error_count,
             'total_size': total_size,
-            'total_size_formatted': self._format_size(total_size)
+            'total_size_formatted': self.base_s3_service._format_size(total_size),
+            'results': results
         }
 
     def get_file_info(self, s3_key: str) -> Dict[str, Any]:
         """
-        Get information about an uploaded file in S3.
+        Get information about a file in S3.
         
         Args:
-            s3_key (str): The S3 key for the file
+            s3_key: The S3 key of the file
             
         Returns:
-            Dict[str, Any]: Dictionary containing file information or error information
+            Dictionary with file information
         """
         try:
-            # Check if the file exists in S3
-            response = self.s3_client.head_object(
-                Bucket=self.ingest_bucket,
+            # Get file metadata
+            head_response = self.base_s3_service.s3_client.head_object(
+                Bucket=self.base_s3_service.ingest_bucket,
                 Key=s3_key
             )
             
-            file_size = response.get('ContentLength', 0)
-            content_type = response.get('ContentType', 'application/octet-stream')
-            last_modified = response.get('LastModified', None)
-            etag = response.get('ETag', '').strip('"')
+            # Extract file details
+            file_size = head_response.get('ContentLength', 0)
+            last_modified = head_response.get('LastModified', None)
+            content_type = head_response.get('ContentType', 'application/octet-stream')
+            metadata = head_response.get('Metadata', {})
+            
+            logger.info(f"Retrieved file info for {s3_key}: {self.base_s3_service._format_size(file_size)}, {content_type}")
             
             return {
                 'success': True,
                 's3_key': s3_key,
-                'exists': True,
+                'file_name': os.path.basename(s3_key),
+                'bucket': self.base_s3_service.ingest_bucket,
                 'file_size': file_size,
-                'file_size_formatted': self._format_size(file_size),
+                'file_size_formatted': self.base_s3_service._format_size(file_size),
                 'content_type': content_type,
                 'last_modified': last_modified.isoformat() if last_modified else None,
-                'etag': etag
+                'metadata': metadata
             }
-            
         except ClientError as e:
-            if e.response['Error']['Code'] == '404':
+            error_code = e.response.get('Error', {}).get('Code', '')
+            if error_code == 'NoSuchKey':
+                logger.warning(f"File not found: {s3_key}")
                 return {
-                    'success': True,
-                    's3_key': s3_key,
-                    'exists': False
+                    'success': False,
+                    'error': 'File not found',
+                    's3_key': s3_key
                 }
             else:
                 logger.error(f"Error getting file info for {s3_key}: {str(e)}")
                 return {
                     'success': False,
                     'error': str(e),
-                    's3_key': s3_key,
-                    'exists': False
+                    's3_key': s3_key
                 }
         except Exception as e:
-            logger.error(f"Error getting file info for {s3_key}: {str(e)}")
+            logger.error(f"Unexpected error getting file info for {s3_key}: {str(e)}")
             return {
                 'success': False,
                 'error': str(e),
-                's3_key': s3_key,
-                'exists': False
+                's3_key': s3_key
             }
-
-    def _format_size(self, size_bytes: int) -> str:
-        """
-        Format a size in bytes to a human-readable format.
-        
-        Args:
-            size_bytes (int): Size in bytes
-            
-        Returns:
-            str: Formatted size string
-        """
-        # Define size units
-        units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
-        size = float(size_bytes)
-        unit_index = 0
-        
-        # Find the appropriate unit
-        while size >= 1024 and unit_index < len(units) - 1:
-            size /= 1024
-            unit_index += 1
-        
-        # Format with proper precision
-        if unit_index == 0:
-            return f"{int(size)} {units[unit_index]}"
-        else:
-            return f"{size:.2f} {units[unit_index]}"
-
-    # Legacy methods for backward compatibility (these will now redirect to streaming)
-    def generate_presigned_post(self, file_name: str, file_type: str, path_prefix: Optional[str] = None, 
-                             expiration: int = 3600, use_multipart: bool = True, part_count: int = 10) -> Dict[str, Any]:
-        """
-        Legacy method - presigned URLs are no longer supported.
-        This method returns an error indicating that streaming upload should be used instead.
-        """
-        logger.warning(f"Presigned URL requested for {file_name}, but presigned URLs are disabled. Use streaming upload instead.")
-        return {
-            'success': False,
-            'error': 'Presigned URLs are not supported. Please use the streaming upload endpoint instead.',
-            'file_name': file_name,
-            'alternative': 'Use upload_django_file() or upload_file_stream() methods'
-        }
-
-    def generate_batch_presigned_posts(self, files_metadata: List[Dict[str, str]], 
-                                    path_prefix: Optional[str] = None,
-                                    expiration: int = 3600,
-                                    use_multipart: bool = True,
-                                    part_count: int = 10) -> Dict[str, Any]:
-        """
-        Legacy method - presigned URLs are no longer supported.
-        This method returns an error indicating that streaming upload should be used instead.
-        """
-        logger.warning(f"Batch presigned URLs requested for {len(files_metadata)} files, but presigned URLs are disabled.")
-        return {
-            'success': False,
-            'error': 'Presigned URLs are not supported. Please use the streaming upload endpoint instead.',
-            'total_files': len(files_metadata),
-            'alternative': 'Use upload_batch_django_files() method'
-        }
 
     def upload_files_optimized(self, files: List[Dict[str, Any]], path_prefix: Optional[str] = None, 
                              max_workers: int = 10, multipart_threshold: int = 8 * 1024 * 1024,
                              max_concurrency: int = 10, multipart_chunksize: int = 8 * 1024 * 1024,
                              bucket_name: Optional[str] = None) -> Dict[str, Any]:
         """
-        Upload multiple files in parallel with optimized transfer configuration.
+        Upload multiple files using optimized threading and boto3 config.
         
         Args:
-            files: List of dictionaries containing file information with keys:
-                  - file_obj: File-like object or bytes
-                  - file_name: Name of the file
-                  - content_type: MIME type (optional, defaults to application/octet-stream)
-            path_prefix: Optional prefix for all S3 keys
-            max_workers: Maximum number of worker processes for parallel uploads
-            multipart_threshold: Size threshold for multipart uploads (default 8MB)
-            max_concurrency: Maximum number of threads for concurrent part uploads
-            multipart_chunksize: Size of each part for multipart uploads (default 8MB)
-            bucket_name: Target bucket name (defaults to ingest_bucket)
+            files: List of dictionaries with file information (must include 'file_path' and 'file_name')
+            path_prefix: Optional prefix for the S3 key
+            max_workers: Maximum number of worker threads
+            multipart_threshold: Size threshold for multipart upload
+            max_concurrency: Maximum number of concurrent threads for a single multipart upload
+            multipart_chunksize: Size of each part in a multipart upload
+            bucket_name: Override the default ingest bucket
             
         Returns:
-            Dictionary with batch upload results
+            Dictionary with upload results
         """
-        results = []
-        failures = []
-        start_time = time.time()
-        total_size = 0
+        logger.info(f"Starting optimized upload of {len(files)} files with max_workers={max_workers}")
         
-        # Determine target bucket
-        target_bucket = bucket_name if bucket_name else self.ingest_bucket
+        if not files:
+            return {
+                'success': True,
+                'message': 'No files to upload',
+                'total_files': 0,
+                'success_count': 0,
+                'error_count': 0,
+                'total_size': 0,
+                'total_size_formatted': '0 B',
+                'results': []
+            }
         
-        logger.info(f"Starting optimized batch upload of {len(files)} files with {max_workers} workers to bucket: {target_bucket}")
+        # Use ingest bucket by default
+        if not bucket_name:
+            bucket_name = self.base_s3_service.ingest_bucket
         
-        # Configure optimized transfer settings
-        config = TransferConfig(
+        # Configure transfer settings
+        transfer_config = TransferConfig(
             multipart_threshold=multipart_threshold,
             max_concurrency=max_concurrency,
             multipart_chunksize=multipart_chunksize,
             use_threads=True
         )
         
-        # Function to upload a single file with the optimized config
+        # Define function for uploading a single file
         def upload_single_file(file_info):
+            file_path = file_info.get('file_path')
+            file_name = file_info.get('file_name') or os.path.basename(file_path)
+            content_type = file_info.get('content_type') or 'application/octet-stream'
+            file_folder = file_info.get('folder')
+            
+            # Determine final path prefix
+            final_path_prefix = path_prefix
+            if file_folder:
+                if final_path_prefix:
+                    final_path_prefix = f"{final_path_prefix}/{file_folder}"
+                else:
+                    final_path_prefix = file_folder
+            
+            # Generate S3 key
+            s3_key = self._generate_file_key(file_name, final_path_prefix)
+            
+            logger.debug(f"Uploading file {file_name} to {s3_key}")
+            
             try:
-                file_obj = file_info.get('file_obj')
-                file_name = file_info.get('file_name')
-                content_type = file_info.get('content_type', 'application/octet-stream')
-                file_size = file_info.get('file_size')
-                
-                # Generate S3 key
-                s3_key = self._generate_file_key(file_name, path_prefix)
-                
-                logger.debug(f"Uploading file {file_name} to {s3_key}")
-                
-                # Handle bytes input
-                if isinstance(file_obj, bytes):
-                    file_obj = BytesIO(file_obj)
-                    if file_size is None:
-                        file_size = len(file_obj.getvalue())
+                # Get file size
+                file_size = os.path.getsize(file_path)
                 
                 # Prepare upload arguments
                 upload_args = {
-                    'ContentType': content_type,
+                    'ContentType': content_type
                 }
                 
-                # Upload the file with optimized config
-                self.s3_client.upload_fileobj(
-                    file_obj,
-                    target_bucket,
+                # Add metadata if provided
+                metadata = file_info.get('metadata')
+                if metadata:
+                    upload_args['Metadata'] = metadata
+                
+                # Add tags if provided
+                tags = file_info.get('tags')
+                if tags:
+                    tag_string = '&'.join([f"{k}={v}" for k, v in tags.items()])
+                    upload_args['Tagging'] = tag_string
+                
+                # Track start time for performance analysis
+                start_time = time.time()
+                
+                # Upload the file using optimized settings
+                self.base_s3_service.s3_client.upload_file(
+                    file_path,
+                    bucket_name,
                     s3_key,
                     ExtraArgs=upload_args,
-                    Config=config
+                    Config=transfer_config
                 )
                 
-                # Get file info after upload
-                head_response = self.s3_client.head_object(
-                    Bucket=target_bucket,
-                    Key=s3_key
-                )
-                actual_file_size = head_response.get('ContentLength', 0)
+                # Calculate upload speed
+                end_time = time.time()
+                duration = end_time - start_time
+                upload_speed = file_size / duration if duration > 0 else 0
+                upload_speed_formatted = f"{self.base_s3_service._format_size(upload_speed)}/s"
                 
-                result = {
+                logger.info(f"Successfully uploaded {file_name} ({self.base_s3_service._format_size(file_size)}) in {duration:.2f}s ({upload_speed_formatted})")
+                
+                return {
                     'success': True,
                     'file_name': file_name,
                     's3_key': s3_key,
-                    'bucket': target_bucket,
-                    'file_size': actual_file_size,
-                    'file_size_formatted': self._format_size(actual_file_size),
-                    'content_type': content_type
+                    'bucket': bucket_name,
+                    'file_size': file_size,
+                    'file_size_formatted': self.base_s3_service._format_size(file_size),
+                    'content_type': content_type,
+                    'duration': duration,
+                    'upload_speed': upload_speed,
+                    'upload_speed_formatted': upload_speed_formatted
                 }
-                
-                logger.debug(f"Successfully uploaded {file_name} ({self._format_size(actual_file_size)})")
-                return result, None
-                
             except Exception as e:
-                logger.error(f"Error uploading file {file_info.get('file_name', 'unknown')}: {str(e)}")
-                error = {
+                logger.error(f"Error uploading file {file_name}: {str(e)}")
+                return {
                     'success': False,
-                    'file_name': file_info.get('file_name', 'unknown'),
-                    'error': str(e)
+                    'error': str(e),
+                    'file_name': file_name,
+                    's3_key': s3_key,
+                    'bucket': bucket_name
                 }
-                return None, error
         
-        # Use ProcessPoolExecutor for parallel uploads
+        # Use ThreadPoolExecutor for parallel uploads
+        results = []
+        success_count = 0
+        error_count = 0
+        total_size = 0
+        
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit all uploads
             future_to_file = {executor.submit(upload_single_file, file_info): file_info for file_info in files}
             
+            # Process results as they complete
             for future in concurrent.futures.as_completed(future_to_file):
-                result, error = future.result()
-                if result:
+                file_info = future_to_file[future]
+                try:
+                    result = future.result()
                     results.append(result)
-                    total_size += result.get('file_size', 0)
-                if error:
-                    failures.append(error)
+                    
+                    if result.get('success', False):
+                        success_count += 1
+                        total_size += result.get('file_size', 0)
+                    else:
+                        error_count += 1
+                        
+                    # Log progress periodically
+                    if (success_count + error_count) % 10 == 0 or (success_count + error_count) == len(files):
+                        logger.info(f"Progress: {success_count + error_count}/{len(files)} files processed, {success_count} successful, {error_count} failed")
+                        
+                except Exception as e:
+                    logger.error(f"Exception processing result for {file_info.get('file_name')}: {str(e)}")
+                    results.append({
+                        'success': False,
+                        'error': str(e),
+                        'file_name': file_info.get('file_name') or file_info.get('file_path', 'unknown')
+                    })
+                    error_count += 1
         
-        end_time = time.time()
-        duration = end_time - start_time
-        success_count = len(results)
-        failure_count = len(failures)
-        
-        logger.info(f"Optimized batch upload completed in {duration:.2f} seconds: {success_count} succeeded, "
-                   f"{failure_count} failed, total size: {self._format_size(total_size)}")
+        logger.info(f"Optimized batch upload complete: {success_count}/{len(files)} successful, {error_count} failed, total size: {self.base_s3_service._format_size(total_size)}")
         
         return {
-            'success': failure_count == 0,
-            'results': results,
-            'failures': failures,
-            'total_uploaded': success_count,
-            'total_failed': failure_count,
+            'success': error_count == 0,
+            'total_files': len(files),
+            'success_count': success_count,
+            'error_count': error_count,
             'total_size': total_size,
-            'total_size_formatted': self._format_size(total_size),
-            'duration_seconds': duration
+            'total_size_formatted': self.base_s3_service._format_size(total_size),
+            'results': results
         }
 
     def upload_batch_django_files_optimized(self, uploaded_files: List, 
@@ -667,103 +615,67 @@ class UploadService(BaseStorageService):
                                  multipart_chunksize: int = 8 * 1024 * 1024,
                                  bucket_name: Optional[str] = None) -> Dict[str, Any]:
         """
-        Upload multiple Django UploadedFile objects to S3 using optimized parallel uploads.
+        Upload multiple Django uploaded files to S3 using an optimized approach.
+        
+        This method saves each Django file to a temporary file and then uses
+        upload_files_optimized for better performance with large batches.
         
         Args:
             uploaded_files: List of Django UploadedFile objects
-            path_prefix: Optional prefix for all S3 keys
-            max_workers: Maximum number of worker processes for parallel uploads
-            multipart_threshold: Size threshold for multipart uploads (default 8MB)
-            max_concurrency: Maximum number of threads for concurrent part uploads
-            multipart_chunksize: Size of each part for multipart uploads (default 8MB)
-            bucket_name: Target bucket name (defaults to ingest_bucket)
+            path_prefix: Optional prefix for the S3 key
+            max_workers: Maximum number of worker threads
+            multipart_threshold: Size threshold for multipart upload
+            max_concurrency: Maximum number of concurrent threads for a single multipart upload
+            multipart_chunksize: Size of each part in a multipart upload
+            bucket_name: Override the default ingest bucket
             
         Returns:
-            Dictionary with batch upload results
+            Dictionary with upload results
         """
-        logger.info(f"Starting optimized batch upload of {len(uploaded_files)} Django files with {max_workers} workers")
+        import tempfile
+        import os
         
-        # Convert Django files to the format needed by upload_files_optimized
+        logger.info(f"Starting optimized batch upload of {len(uploaded_files)} Django files")
+        
+        # Convert Django files to file paths
+        temp_files = []
         files_to_upload = []
-        for uploaded_file in uploaded_files:
-            files_to_upload.append({
-                'file_obj': uploaded_file,
-                'file_name': uploaded_file.name,
-                'content_type': getattr(uploaded_file, 'content_type', 'application/octet-stream'),
-                'file_size': getattr(uploaded_file, 'size', None)
-            })
         
-        # Use the optimized upload method
-        return self.upload_files_optimized(
-            files=files_to_upload,
-            path_prefix=path_prefix,
-            max_workers=max_workers,
-            multipart_threshold=multipart_threshold,
-            max_concurrency=max_concurrency,
-            multipart_chunksize=multipart_chunksize,
-            bucket_name=bucket_name
-        )
-
-    def initialize_multipart_upload(self, file_name: str, file_type: str, path_prefix: Optional[str] = None) -> Dict[str, Any]:
-        """
-        Legacy method - multipart uploads are now handled through streaming.
-        This method returns an error indicating that streaming upload should be used instead.
-        """
-        logger.warning(f"Legacy multipart upload initialization requested for {file_name}, but this method is deprecated.")
-        return {
-            'success': False,
-            'error': 'Direct multipart uploads are no longer supported. Please use the streaming upload endpoint instead.',
-            'file_name': file_name,
-            'alternative': 'Use upload_django_file() or upload_file_stream() methods with the optimized parameters'
-        }
-        
-    def get_upload_part_urls(self, s3_key: str, upload_id: str, part_count: int, expiration: int = 3600) -> Dict[str, Any]:
-        """
-        Legacy method - multipart uploads are now handled through streaming.
-        This method returns an error indicating that streaming upload should be used instead.
-        """
-        logger.warning(f"Legacy part upload URLs requested for {s3_key}, but this method is deprecated.")
-        return {
-            'success': False,
-            'error': 'Direct multipart uploads are no longer supported. Please use the streaming upload endpoint instead.',
-            's3_key': s3_key,
-            'alternative': 'Use upload_django_file() or upload_file_stream() methods with the optimized parameters'
-        }
-        
-    def complete_multipart_upload(self, s3_key: str, upload_id: str, parts: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """
-        Legacy method - multipart uploads are now handled through streaming.
-        This method returns an error indicating that streaming upload should be used instead.
-        """
-        logger.warning(f"Legacy multipart upload completion requested for {s3_key}, but this method is deprecated.")
-        return {
-            'success': False,
-            'error': 'Direct multipart uploads are no longer supported. Please use the streaming upload endpoint instead.',
-            's3_key': s3_key,
-            'alternative': 'Use upload_django_file() or upload_file_stream() methods with the optimized parameters'
-        }
-        
-    def abort_multipart_upload(self, s3_key: str, upload_id: str) -> Dict[str, Any]:
-        """
-        Legacy method - multipart uploads are now handled through streaming.
-        This method returns a success response since there's nothing to abort.
-        """
-        logger.warning(f"Legacy multipart upload abort requested for {s3_key}, but this method is deprecated.")
-        return {
-            'success': True,
-            'message': 'No action needed as direct multipart uploads are no longer supported.',
-            's3_key': s3_key
-        }
-        
-    def list_multipart_uploads(self) -> Dict[str, Any]:
-        """
-        Legacy method - multipart uploads are now handled through streaming.
-        This method returns an empty list since there are no legacy multipart uploads.
-        """
-        logger.warning("Legacy multipart uploads listing requested, but this method is deprecated.")
-        return {
-            'success': True,
-            'uploads': [],
-            'count': 0,
-            'message': 'Direct multipart uploads are no longer supported.'
-        } 
+        try:
+            for uploaded_file in uploaded_files:
+                # Create a temporary file
+                temp_file = tempfile.NamedTemporaryFile(delete=False)
+                temp_files.append(temp_file.name)
+                
+                # Write Django file content to the temporary file
+                for chunk in uploaded_file.chunks():
+                    temp_file.write(chunk)
+                temp_file.close()
+                
+                # Add file info to the upload list
+                files_to_upload.append({
+                    'file_path': temp_file.name,
+                    'file_name': os.path.basename(uploaded_file.name),
+                    'content_type': uploaded_file.content_type or 'application/octet-stream'
+                })
+            
+            # Use the optimized upload method
+            result = self.upload_files_optimized(
+                files=files_to_upload,
+                path_prefix=path_prefix,
+                max_workers=max_workers,
+                multipart_threshold=multipart_threshold,
+                max_concurrency=max_concurrency,
+                multipart_chunksize=multipart_chunksize,
+                bucket_name=bucket_name
+            )
+            
+            return result
+            
+        finally:
+            # Clean up temporary files
+            for temp_file in temp_files:
+                try:
+                    os.unlink(temp_file)
+                except Exception as e:
+                    logger.warning(f"Error cleaning up temporary file {temp_file}: {str(e)}") 

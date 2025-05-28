@@ -21,59 +21,62 @@ def archivist_dashboard(request):
     """
     Dashboard for archivists to manage organization buckets.
     """
+    logger.info(f"Archivist dashboard view called. Request method: {request.method}, User: {request.user}")
     try:
+        logger.info("Attempting to initialize BucketService...")
         bucket_service = BucketService()
+        logger.info("BucketService initialized.")
         
-        # Get available organizations (existing and predefined)
+        logger.info("Attempting to get available organizations...")
         organizations = bucket_service.get_available_organizations()
+        logger.info(f"Got {len(organizations)} available organizations.")
         
-        # Get organization count and file statistics
         organization_count = len([org for org in organizations if org.get('exists', False)])
-        total_files = 0
-        storage_used = "0 MB"  # TODO: Calculate actual storage usage
         
-        # Try to get file counts from existing organization buckets
-        for org in organizations:
-            if org.get('exists', False):
-                try:
-                    bucket_name = bucket_service.get_organization_bucket(org['slug'])
-                    root_items = bucket_service.get_root_level_items(bucket_name)
-                    org_files = sum(1 for item in root_items.get('children', []) if item.get('type') == 'file')
-                    total_files += org_files
-                except Exception as e:
-                    logger.warning(f"Error counting files for organization {org['slug']}: {str(e)}")
+        total_files_display = "N/A"
+        storage_used_display = "N/A"
         
-        # Get organization structure if a specific org is requested
         organization_structure = None
-        selected_org = request.GET.get('org')
-        if selected_org:
+        selected_org_slug = request.GET.get('org')
+        selected_org_data = None
+
+        if selected_org_slug:
+            logger.info(f"Selected organization slug: {selected_org_slug}")
             try:
-                # Ensure the organization bucket exists
-                result = bucket_service.ensure_organization_bucket_exists(selected_org)
-                if result['success']:
-                    bucket_name = result['bucket_name']
+                selected_org_data = next((org for org in organizations if org.get('slug') == selected_org_slug), None)
+
+                if selected_org_data and selected_org_data.get('exists'):
+                    logger.info(f"Fetching structure for existing org: {selected_org_slug}")
+                    bucket_name = bucket_service.get_organization_bucket(selected_org_slug)
                     organization_structure = bucket_service.get_root_level_items(bucket_name)
+                    logger.info(f"Structure fetched for {selected_org_slug}")
+                elif selected_org_data:
+                    logger.info(f"Organization {selected_org_slug} is predefined but its bucket does not exist yet.")
                 else:
-                    logger.error(f"Failed to ensure bucket for org {selected_org}: {result.get('error')}")
+                    logger.warning(f"Requested organization '{selected_org_slug}' not found in available organizations.")
+
             except Exception as e:
-                logger.error(f"Error loading organization structure for {selected_org}: {str(e)}")
+                logger.error(f"Error loading organization structure for {selected_org_slug}: {str(e)}")
         
+        logger.info("Preparing to render archivist_dashboard.html")
         return render(request, "dashboard/archivist_dashboard.html", {
             "organizations": organizations,
             "organization_count": organization_count,
-            "total_files": total_files,
-            "storage_used": storage_used,
+            "total_files_display": total_files_display,
+            "storage_used_display": storage_used_display,
             "organization_structure": organization_structure,
-            "selected_org": selected_org
+            "selected_org_data": selected_org_data, 
+            "selected_org_slug": selected_org_slug
         })
     except Exception as e:
-        logger.exception(f"Error loading archivist dashboard: {str(e)}")
+        logger.exception(f"Outer exception in archivist_dashboard: {str(e)}")
         return render(request, "dashboard/archivist_dashboard.html", {
-            "error": str(e),
+            "error": f"An error occurred while loading the dashboard: {str(e)}",
             "organizations": [],
             "organization_count": 0,
-            "total_files": 0,
-            "storage_used": "0 MB"
+            "total_files_display": "Error",
+            "storage_used_display": "Error",
+            "selected_org_slug": request.GET.get('org') 
         })
 
 @login_required

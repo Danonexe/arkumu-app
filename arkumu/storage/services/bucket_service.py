@@ -1,6 +1,7 @@
 import logging
 import os
 import time
+import threading
 from typing import Any, Dict, List
 import tempfile
 from pathlib import Path
@@ -18,951 +19,307 @@ from arkumu.metadata.models.triples import Triple
 
 logger = logging.getLogger(__name__)
 
+# List of predefined organizations (can be moved to settings if dynamic)
+PREDEFINED_ORGANIZATIONS = [
+    "rsh",
+    "khm", 
+    "fuk",
+    "hmt",
+    "det",
+]
 
-class BucketService(BaseStorageService):
+class BucketService:
     """
-    Primary service for interacting with S3/MinIO buckets in Arkumu.
-    
-    This service provides a simplified approach for organization-based file organization
-    and basic metadata management. Each organization can have its own bucket.
+    Service for managing organization-specific S3 buckets.
+    This service is NOT a singleton. It uses the BaseStorageService singleton for S3 interactions.
     """
+    # Remove _instance and _lock, as this is no longer a singleton
+    # _instance = None
+    # _lock = threading.Lock() # Temporarily commented out lock as part of deadlock diagnosis
     
-    _instance = None
-    
-    # Define predefined organizations in a single place
-    PREDEFINED_ORGANIZATIONS = [
-        {
-            "slug": "rsh",
-            "name": "Robert Schumann Hochschule Düsseldorf",
-            "description": "Robert Schumann Hochschule Düsseldorf"
-        },
-        {
-            "slug": "khm",
-            "name": "Kunsthochschule für Medien Köln",
-            "description": "Academy of Media Arts Cologne"
-        },
-        {
-            "slug": "fuk",
-            "name": "Folkwang Universität der Künste", 
-            "description": "Folkwang University of the Arts"
-        },
-        {
-            "slug": "hmt",
-            "name": "Hochschule für Musik und Tanz Köln",
-            "description": "Cologne University of Music and Dance"
-        },
-        {
-            "slug": "det", 
-            "name": "Hochschule für Musik Detmold",
-            "description": "Detmold University of Music"
+    # No __new__ method needed anymore
+
+    def __init__(self):
+        logger.info("-----> BucketService.__init__ ENTERED")
+        # Get the singleton instance of BaseStorageService
+        self.base_s3_service = BaseStorageService()
+        
+        # No longer call super().__init__ as BaseStorageService manages its own initialization.
+        # The S3 client and essential bucket info (ingest/production) are available via self.base_s3_service.
+        
+        # If BucketService needs its own specific initialization that runs only once,
+        # an instance flag like self._initialized could be used here.
+        # For now, assume most of its state comes from BaseStorageService or is per-method.
+
+        # Initialize UploadService here if it's a direct dependency, passing the base_s3_service instance
+        # or letting UploadService get it itself. For now, let's assume UploadService gets it.
+        # self.upload_service = UploadService() # Example if needed
+        
+        # Removed the old complex initialization logic that duplicated BaseStorageService concerns.
+        logger.info("-----> BucketService.__init__ COMPLETED. Using BaseStorageService for S3 operations.")
+
+    def _get_organization_bucket_name(self, organization_id: str) -> str:
+        return organization_id
+
+    def get_organization_bucket(self, organization_id: str) -> str:
+        """Public method to get organization bucket name."""
+        return self._get_organization_bucket_name(organization_id)
+
+    def get_predefined_organizations(self) -> List[str]:
+        """Get the list of predefined organization IDs."""
+        return PREDEFINED_ORGANIZATIONS.copy()
+
+    def get_predefined_organizations_data(self) -> List[Dict[str, str]]:
+        """Get predefined organizations with additional data like names."""
+        org_names = {
+            "rsh": "Robert Schumann Hochschule Düsseldorf",
+            "khm": "Kunsthochschule für Medien Köln",
+            "fuk": "Folkwang Universität der Künste",
+            "hmt": "Hochschule für Musik und Tanz Köln",
+            "det": "Hochschule für Musik Detmold",
         }
-    ]
-    
-    def __new__(cls, *args, **kwargs):
-        if cls._instance is None:
-            cls._instance = super(BucketService, cls).__new__(cls)
-        return cls._instance
-    
-    def __init__(self, skip_bucket_check=False):
-        """
-        Initialize the BucketService with all required sub-services.
         
-        Args:
-            skip_bucket_check (bool): If True, skip bucket existence check
-        """
-        # Skip initialization if already done (proper singleton pattern)
-        if hasattr(self, 'initialized'):
-            logger.info("Using cached BucketService instance")
-            return
-            
-        logger.info("Initializing BucketService for the first time...")
-        start_time = time.time()
-        super().__init__(skip_bucket_check=skip_bucket_check)
-        
-        # Initialize the upload service with skip_bucket_check=True
-        self.upload_service = UploadService(skip_bucket_check=True)
-        
-        # Configure child services with consistent settings
-        self.set_client_and_buckets(self.upload_service)
-        
-        # Store organization buckets mapping
-        self.org_buckets = {}
-        
-        init_duration = time.time() - start_time
-        logger.info(f"BucketService initialized in {init_duration:.2f} seconds")
-        self.initialized = True
-    
-    def get_organizations(self) -> List[str]:
-        """
-        Get a list of all organizations with buckets.
-        
-        Returns:
-            List[str]: A list of organization names
-        """
-        try:
-            # List all buckets
-            response = self.s3_client.list_buckets()
-            
-            organizations = []
-            
-            # Process buckets
-            for bucket in response.get('Buckets', []):
-                bucket_name = bucket.get('Name', '')
-                # Skip system buckets
-                if bucket_name in [self.ingest_bucket, self.production_bucket]:
-                    continue
-                # Add organization name (bucket name)
-                organizations.append(bucket_name)
-            
-            return organizations
-        except Exception as e:
-            logger.error(f"Error getting organizations: {str(e)}")
-            return []
-    
-    def get_organization_bucket(self, organization: str) -> str:
-        """
-        Get the bucket name for an organization.
-        
-        Args:
-            organization (str): The organization name
-            
-        Returns:
-            str: The bucket name for the organization
-        """
-        # Check if we have a cached bucket name
-        if organization in self.org_buckets:
-            return self.org_buckets[organization]
-        
-        # For now, the organization name is the bucket name
-        # In the future, this could be a mapping from organization to bucket
-        bucket_name = organization
-        
-        # Cache the bucket name
-        self.org_buckets[organization] = bucket_name
-        
-        return bucket_name
-
-    def ensure_organization_bucket_exists(self, organization: str) -> Dict[str, Any]:
-        """
-        Ensure that an organization's bucket exists, creating it if necessary.
-        
-        Args:
-            organization (str): The organization name
-            
-        Returns:
-            Dict[str, Any]: Result of the operation
-        """
-        try:
-            bucket_name = self.get_organization_bucket(organization)
-            
-            # Check if bucket already exists
-            bucket_exists = self.ensure_bucket_exists(bucket_name)
-            
-            if bucket_exists:
-                logger.info(f"Organization bucket '{bucket_name}' for '{organization}' is ready")
-                return {
-                    "success": True,
-                    "bucket_name": bucket_name,
-                    "organization": organization,
-                    "created": False,
-                    "message": f"Organization bucket '{bucket_name}' is ready"
-                }
-            else:
-                logger.error(f"Failed to ensure organization bucket '{bucket_name}' exists")
-                return {
-                    "success": False,
-                    "error": f"Failed to create organization bucket '{bucket_name}'"
-                }
-                
-        except Exception as e:
-            logger.error(f"Error ensuring organization bucket for '{organization}': {str(e)}")
-            return {
-                "success": False,
-                "error": str(e)
+        return [
+            {
+                "id": org_id,
+                "slug": org_id,  # For backwards compatibility
+                "name": org_names.get(org_id, f"Organization {org_id.capitalize()}")
             }
+            for org_id in PREDEFINED_ORGANIZATIONS
+        ]
 
-    def get_available_organizations(self) -> List[Dict[str, Any]]:
+    def ensure_organization_bucket_exists(self, organization_id: str, check_only: bool = False) -> Dict[str, Any]:
         """
-        Get a list of available organizations with their bucket information.
-        This includes both existing buckets and predefined organizations.
+        Ensures an organization-specific bucket exists. 
+        Now uses BaseStorageService's ensure_bucket_exists for creation if not check_only.
+        If check_only is True, it only checks existence using head_bucket and does not create.
+        """
+        bucket_name = self._get_organization_bucket_name(organization_id)
+        logger.info(f"Ensuring organization bucket: {bucket_name}, check_only={check_only}")
         
-        Returns:
-            List[Dict[str, Any]]: List of organizations with metadata
-        """
         try:
-            # Get existing organization buckets
-            existing_orgs = self.get_organizations()
-            
-            # Combine existing and predefined organizations
-            organizations = []
-            processed_slugs = set()
-            
-            # Add existing organizations first
-            for org_slug in existing_orgs:
-                # Check if this existing org matches a predefined org
-                predefined_org = next((org for org in self.PREDEFINED_ORGANIZATIONS if org["slug"] == org_slug), None)
+            self.base_s3_service.s3_client.head_bucket(Bucket=bucket_name)
+            logger.info(f"✅ Organization bucket '{bucket_name}' already exists.")
+            return {"success": True, "bucket_name": bucket_name, "status": "exists"}
+        except ClientError as e:
+            error_code = e.response.get('Error', {}).get('Code', 'Unknown')
+            if error_code == '404' or error_code == 'NoSuchBucket':
+                logger.info(f"Organization bucket '{bucket_name}' does not exist.")
+                if check_only:
+                    return {"success": False, "bucket_name": bucket_name, "status": "does_not_exist", "error": "Bucket not found and check_only is True"}
                 
-                if predefined_org:
-                    # Use predefined org info
-                    organizations.append({
-                        "slug": predefined_org["slug"],
-                        "name": predefined_org["name"],
-                        "description": predefined_org["description"],
-                        "exists": True
-                    })
+                # Attempt to create using BaseStorageService's method
+                logger.info(f"Attempting to create organization bucket '{bucket_name}' via BaseStorageService.")
+                if self.base_s3_service.ensure_bucket_exists(bucket_name):
+                    logger.info(f"✅ Organization bucket '{bucket_name}' created successfully.")
+                    return {"success": True, "bucket_name": bucket_name, "status": "created"}
                 else:
-                    # Use generated info for unknown orgs
-                    organizations.append({
-                        "slug": org_slug,
-                        "name": org_slug.replace("-", " ").replace("_", " ").title(),
-                        "description": f"Organization bucket: {org_slug}",
-                        "exists": True
-                    })
-                processed_slugs.add(org_slug)
+                    logger.error(f"❌ Failed to create organization bucket '{bucket_name}' via BaseStorageService.")
+                    return {"success": False, "bucket_name": bucket_name, "status": "creation_failed", "error": "Failed to create bucket"}
+            else:
+                logger.error(f"❌ Error checking organization bucket '{bucket_name}': {e.response.get('Error', {})}")
+                return {"success": False, "bucket_name": bucket_name, "status": "error", "error": str(e.response.get('Error', {}))}
+
+    def get_available_organizations(self, include_counts: bool = False) -> List[Dict[str, Any]]:
+        """
+        List available organizations by checking their predefined buckets.
+        Uses the check_only=True variant of ensure_organization_bucket_exists.
+        Optionally includes item counts (can be slow).
+        """
+        logger.info(f"Getting available organizations. Include counts: {include_counts}")
+        
+        # Map organization IDs to proper names
+        org_names = {
+            "rsh": "Robert Schumann Hochschule Düsseldorf",
+            "khm": "Kunsthochschule für Medien Köln",
+            "fuk": "Folkwang Universität der Künste",
+            "hmt": "Hochschule für Musik und Tanz Köln",
+            "det": "Hochschule für Musik Detmold",
+        }
+        
+        organizations_data = []
+        for org_id in PREDEFINED_ORGANIZATIONS:
+            bucket_name = self._get_organization_bucket_name(org_id)
+            org_info = {
+                "id": org_id,
+                "bucket_name": bucket_name,
+                "status": "unknown",
+                "name": org_names.get(org_id, f"Organization {org_id.capitalize()}"),
+                "file_count": 0, # Initialize counts
+                "folder_count": 0,
+                "total_size_formatted": "0 B"
+            }
             
-            # Add predefined organizations that don't already exist
-            for predefined in self.PREDEFINED_ORGANIZATIONS:
-                if predefined["slug"] not in processed_slugs:
-                    # Create a copy and add the exists flag
-                    org_copy = predefined.copy()
-                    org_copy["exists"] = False
-                    organizations.append(org_copy)
-                    processed_slugs.add(predefined["slug"])
+            # Use check_only=True to only verify existence without attempting creation here.
+            # Creation should be an explicit admin action or handled elsewhere if needed.
+            check_result = self.ensure_organization_bucket_exists(org_id, check_only=True)
             
-            return organizations
+            if check_result["success"] or check_result.get("status") == "exists": # Bucket exists
+                org_info["status"] = "active"
+                if include_counts:
+                    logger.info(f"Fetching counts for organization '{org_id}' bucket '{bucket_name}'...")
+                    items_data = self.get_root_level_items(org_id, bucket_name)
+                    org_info.update(items_data) # file_count, folder_count, total_size_formatted
+            elif check_result.get("status") == "does_not_exist":
+                org_info["status"] = "inactive_bucket_not_found"
+            else: # error or creation_failed (though creation isn't attempted with check_only=True)
+                org_info["status"] = "error_checking_bucket"
+                org_info["error_details"] = check_result.get("error", "Unknown error")
+
+            organizations_data.append(org_info)
+        
+        logger.info(f"Found {len(organizations_data)} organizations data.")
+        return organizations_data
+
+    def get_root_level_items(self, organization_id: str, bucket_name: str = None) -> Dict[str, Any]:
+        """
+        Get root level items (files and folders) for an organization's bucket.
+        Uses BaseStorageService.s3_client for listing objects.
+        """
+        if not bucket_name:
+            bucket_name = self._get_organization_bucket_name(organization_id)
+        
+        logger.info(f"Fetching root level items for bucket: {bucket_name}")
+        root_items = {"files": [], "folders": [], "file_count": 0, "folder_count": 0, "total_size": 0}
+        
+        try:
+            paginator = self.base_s3_service.s3_client.get_paginator('list_objects_v2')
+            for page in paginator.paginate(Bucket=bucket_name, Delimiter='/'):
+                # Add folders (CommonPrefixes)
+                for prefix in page.get('CommonPrefixes', []):
+                    folder_name = prefix.get('Prefix')
+                    root_items["folders"].append({"name": folder_name, "path": folder_name})
+                    root_items["folder_count"] += 1
+                
+                # Add files (Contents)
+                for obj in page.get('Contents', []):
+                    if not obj['Key'].endswith('/'): # Ensure it's not a folder object
+                        file_size = obj.get('Size', 0)
+                        root_items["files"].append({
+                            "name": os.path.basename(obj['Key']),
+                            "path": obj['Key'],
+                            "size": file_size,
+                            "size_formatted": self.base_s3_service._format_size(file_size),
+                            "last_modified": obj.get('LastModified')
+                        })
+                        root_items["file_count"] += 1
+                        root_items["total_size"] += file_size
             
-        except Exception as e:
-            logger.error(f"Error getting available organizations: {str(e)}")
-            # Return predefined organizations as fallback
-            fallback_orgs = []
-            for predefined in self.PREDEFINED_ORGANIZATIONS:
-                org_copy = predefined.copy()
-                org_copy["exists"] = False
-                fallback_orgs.append(org_copy)
-            return fallback_orgs
+            root_items["total_size_formatted"] = self.base_s3_service._format_size(root_items["total_size"])
+            logger.info(f"Found {root_items['file_count']} files and {root_items['folder_count']} folders in {bucket_name}.")
+
+        except ClientError as e:
+            logger.error(f"Error listing root items for bucket {bucket_name}: {e.response.get('Error', {})}")
+            # Return empty/zeroed data but log the error
+            root_items["error"] = str(e.response.get('Error', {}))
+        
+        return root_items
     
+    # Add other BucketService specific methods here, using self.base_s3_service for S3 ops.
+    # For example, methods to manage files within an organization's bucket, etc.
+
+    def delete_organization_bucket_and_contents(self, organization_id: str) -> Dict[str, Any]:
+        """Deletes all objects within an organization's bucket and then the bucket itself."""
+        bucket_name = self._get_organization_bucket_name(organization_id)
+        logger.info(f"Attempting to delete all contents and bucket for organization: {organization_id}, bucket: {bucket_name}")
+
+        # First, delete all objects in the bucket using BaseStorageService
+        # The delete_object method in BaseStorageService can handle directory deletion.
+        # We list all objects and delete them. A more robust way would be to use list_objects_v2 and DeleteObjects.
+        # For simplicity, let's assume BaseStorageService might need a more direct "empty_bucket" or we iterate here.
+        
+        # Iteratively delete objects (safer for services without direct batch delete)
+        try:
+            logger.info(f"Listing all objects in bucket {bucket_name} for deletion...")
+            paginator = self.base_s3_service.s3_client.get_paginator('list_objects_v2')
+            objects_to_delete = []
+            for page in paginator.paginate(Bucket=bucket_name):
+                if 'Contents' in page:
+                    for obj in page['Contents']:
+                        objects_to_delete.append({'Key': obj['Key']})
+            
+            if objects_to_delete:
+                logger.info(f"Found {len(objects_to_delete)} objects to delete from {bucket_name}.")
+                # S3 DeleteObjects can handle up to 1000 keys at a time
+                for i in range(0, len(objects_to_delete), 1000):
+                    chunk = objects_to_delete[i:i + 1000]
+                    delete_payload = {'Objects': chunk}
+                    response = self.base_s3_service.s3_client.delete_objects(
+                        Bucket=bucket_name,
+                        Delete=delete_payload
+                    )
+                    deleted_count = len(response.get('Deleted', []))
+                    logger.info(f"Batch delete: {deleted_count} objects deleted from {bucket_name}.")
+                    errors = response.get('Errors', [])
+                    if errors:
+                        logger.error(f"Errors during batch delete from {bucket_name}: {errors}")
+                        return {"success": False, "error": f"Errors deleting objects: {errors}"}
+            else:
+                logger.info(f"Bucket {bucket_name} is already empty.")
+
+            # After emptying, delete the bucket itself
+            logger.info(f"Attempting to delete bucket: {bucket_name}")
+            self.base_s3_service.s3_client.delete_bucket(Bucket=bucket_name)
+            logger.info(f"✅ Successfully deleted bucket {bucket_name}.")
+            return {"success": True, "message": f"Bucket {bucket_name} and all its contents deleted."}
+
+        except ClientError as e:
+            logger.error(f"Error during deletion of bucket {bucket_name} or its contents: {e.response.get('Error', {})}")
+            return {"success": False, "error": str(e.response.get('Error', {}))}
+        except Exception as e:
+            logger.error(f"Unexpected error during deletion of bucket {bucket_name}: {str(e)}")
+            return {"success": False, "error": str(e)}
+
     def list_bucket_contents(self, bucket_name: str, prefix: str = "") -> List[Dict[str, Any]]:
         """
-        List contents of a bucket with the given prefix.
-        
-        Args:
-            bucket_name (str): The bucket name
-            prefix (str): The prefix to list
-            
-        Returns:
-            List[Dict[str, Any]]: List of objects in the bucket
+        List contents of a bucket with optional prefix.
+        Returns a list of file/folder items compatible with the views.
         """
-        try:
-            # Ensure prefix ends with slash if not empty
-            if prefix and not prefix.endswith('/'):
-                prefix = prefix + '/'
-            
-            # List objects with the prefix
-            response = self.s3_client.list_objects_v2(
-                Bucket=bucket_name,
-                Prefix=prefix,
-                Delimiter='/'
-            )
-            
-            results = []
-            
-            # Process CommonPrefixes (folders)
-            for prefix_obj in response.get('CommonPrefixes', []):
-                folder_path = prefix_obj.get('Prefix', '')
-                folder_name = folder_path.rstrip('/').split('/')[-1]
-                
-                results.append({
-                    "type": "folder",
-                    "name": folder_name,
-                    "path": folder_path,
-                    "is_dir": True
-                })
-            
-            # Process Contents (files)
-            for content in response.get('Contents', []):
-                file_path = content.get('Key', '')
-                
-                # Skip if this is just the directory marker
-                if file_path == prefix:
-                    continue
-                    
-                file_name = file_path.split('/')[-1]
-                file_size = content.get('Size', 0)
-                last_modified = content.get('LastModified', '')
-                
-                results.append({
-                    "type": "file",
-                    "name": file_name,
-                    "path": file_path,
-                    "size": file_size,
-                    "last_modified": last_modified,
-                    "is_dir": False
-                })
-            
-            return results
-        except Exception as e:
-            logger.error(f"Error listing bucket contents for '{bucket_name}' with prefix '{prefix}': {str(e)}")
-            return []
-    
-    def direct_move_to_production(self, folder_path: str) -> Dict[str, Any]:
-        """
-        Move a folder from the ingest bucket to the production bucket.
-        
-        Args:
-            folder_path (str): The path in the ingest bucket to move
-            
-        Returns:
-            Dict[str, Any]: Result of the operation
-        """
-        logger.info(f"Starting direct move to production for {folder_path}")
+        logger.info(f"Listing contents for bucket: {bucket_name}, prefix: {prefix}")
         
         try:
-            # Verify ingest and production buckets are different
-            if self.ingest_bucket == self.production_bucket:
-                error_message = "Error: Ingest and production buckets must be different"
-                logger.error(error_message)
-                return {
-                    "success": False,
-                    "error": error_message
-                }
+            contents = []
+            paginator = self.base_s3_service.s3_client.get_paginator('list_objects_v2')
             
-            # Ensure folder_path ends with a slash for proper prefix matching
-            if not folder_path.endswith('/'):
-                folder_path = folder_path + '/'
-                logger.info(f"Added trailing slash for proper prefix matching: {folder_path}")
-            
-            # List all objects in the source
-            paginator = self.s3_client.get_paginator("list_objects_v2")
-            copied_files = 0
-            
-            for page in paginator.paginate(Bucket=self.ingest_bucket, Prefix=folder_path):
-                for obj in page.get("Contents", []):
-                    source_key = obj["Key"]
-                    
-                    # Skip if this is just the folder marker object
-                    if source_key == folder_path:
-                        logger.info(f"Skipping folder marker object: {source_key}")
-                        continue
-                    
-                    # Create destination key, preserving the folder structure
-                    dest_key = source_key
-                    
-                    # Copy the object to the production bucket
-                    self.s3_client.copy_object(
-                        CopySource={"Bucket": self.ingest_bucket, "Key": source_key},
-                        Bucket=self.production_bucket,
-                        Key=dest_key
-                    )
-                    
-                    copied_files += 1
-                    
-                    if copied_files % 10 == 0:
-                        logger.info(f"Copied {copied_files} files so far...")
-            
-            # Add an empty directory marker if no files were found
-            if copied_files == 0:
-                logger.warning(f"No files found to copy, creating an empty directory marker: {folder_path}")
-                self.s3_client.put_object(
-                    Bucket=self.production_bucket,
-                    Key=folder_path,
-                    Body=''
-                )
-                copied_files = 1
-            
-            if copied_files > 0:
-                logger.info(f"Successfully copied {copied_files} files to production bucket")
-                return {
-                    "success": True,
-                    "message": f"Successfully moved {folder_path} to production bucket ({copied_files} files copied)"
-                }
-            else:
-                # This should never happen now due to the empty directory marker
-                logger.warning(f"No files found to copy at {folder_path}")
-                return {
-                    "success": False,
-                    "error": f"No files found to copy at {folder_path}"
-                }
-                
-        except Exception as e:
-            logger.error(f"Error in direct_move_to_production: {str(e)}")
-            return {
-                "success": False,
-                "error": str(e)
-            }
-    
-    def get_institutions(self) -> List[str]:
-        """
-        Get a list of all institution folders in the production bucket.
-        
-        Returns:
-            List[str]: A list of institution names
-        """
-        try:
-            # List all objects with delimiter to identify top-level prefixes
-            response = self.s3_client.list_objects_v2(
-                Bucket=self.production_bucket,
-                Delimiter='/'
-            )
-            
-            institutions = []
-            
-            # Process CommonPrefixes (folders)
-            for prefix in response.get('CommonPrefixes', []):
-                # Extract institution name by removing the trailing slash
-                institution_name = prefix.get('Prefix', '').rstrip('/')
-                if institution_name:
-                    institutions.append(institution_name)
-            
-            return institutions
-        except Exception as e:
-            logger.error(f"Error getting institutions: {str(e)}")
-            return []
-    
-    def list_institution_contents(self, institution: str, prefix: str = "") -> List[Dict[str, Any]]:
-        """
-        List contents within an institution folder.
-        
-        Args:
-            institution (str): The institution name
-            prefix (str): Additional path prefix within the institution
-            
-        Returns:
-            List[Dict[str, Any]]: List of files and folders
-        """
-        try:
-            # Ensure institution path ends with slash
-            institution_path = f"{institution}/"
-            
-            # Combine with additional prefix if provided
+            # Set up pagination parameters
+            paginate_kwargs = {'Bucket': bucket_name, 'Delimiter': '/'}
             if prefix:
-                # Remove leading slash if present
-                clean_prefix = prefix.lstrip('/')
-                full_prefix = f"{institution_path}{clean_prefix}"
-                
-                # Ensure full prefix ends with slash
-                if not full_prefix.endswith('/'):
-                    full_prefix += '/'
-            else:
-                full_prefix = institution_path
+                paginate_kwargs['Prefix'] = prefix
             
-            logger.info(f"Listing contents for institution '{institution}' with prefix '{full_prefix}'")
-            
-            # List objects with the full prefix
-            response = self.s3_client.list_objects_v2(
-                Bucket=self.production_bucket,
-                Prefix=full_prefix,
-                Delimiter='/'
-            )
-            
-            results = []
-            
-            # Process CommonPrefixes (folders)
-            for prefix_obj in response.get('CommonPrefixes', []):
-                folder_path = prefix_obj.get('Prefix', '')
-                folder_name = folder_path.rstrip('/').split('/')[-1]
-                
-                results.append({
-                    "type": "folder",
-                    "name": folder_name,
-                    "path": folder_path,
-                })
-            
-            # Process Contents (files)
-            for content in response.get('Contents', []):
-                file_path = content.get('Key', '')
-                
-                # Skip if this is just the directory marker
-                if file_path == full_prefix:
-                    continue
-                    
-                file_name = file_path.split('/')[-1]
-                file_size = content.get('Size', 0)
-                last_modified = content.get('LastModified', '')
-                
-                results.append({
-                    "type": "file",
-                    "name": file_name,
-                    "path": file_path,
-                    "size": file_size,
-                    "last_modified": last_modified,
-                })
-            
-            return results
-        except Exception as e:
-            logger.error(f"Error listing institution contents: {str(e)}")
-            return []
-    
-    def create_institution(self, institution_name: str) -> Dict[str, Any]:
-        """
-        Create a new institution folder in the production bucket.
-        
-        Args:
-            institution_name (str): The name of the institution to create
-            
-        Returns:
-            Dict[str, Any]: Result of the operation
-        """
-        try:
-            # Sanitize institution name (remove spaces, special chars, etc.)
-            clean_name = institution_name.strip().replace(' ', '_')
-            
-            # Ensure the institution name is valid
-            if not clean_name:
-                return {
-                    "success": False,
-                    "error": "Institution name cannot be empty"
-                }
-            
-            # Check if institution already exists
-            existing_institutions = self.get_institutions()
-            if clean_name in existing_institutions:
-                return {
-                    "success": False,
-                    "error": f"Institution '{clean_name}' already exists"
-                }
-            
-            # Create an empty directory marker for the institution
-            institution_path = f"{clean_name}/"
-            self.s3_client.put_object(
-                Bucket=self.production_bucket,
-                Key=institution_path,
-                Body=''
-            )
-            
-            logger.info(f"Created institution folder: {institution_path}")
-            
-            return {
-                "success": True,
-                "message": f"Institution '{clean_name}' created successfully",
-                "institution_name": clean_name,
-                "path": institution_path
-            }
-        except Exception as e:
-            logger.error(f"Error creating institution: {str(e)}")
-            return {
-                "success": False,
-                "error": str(e)
-            }
-    
-    def get_root_level_items(self, bucket_name: str) -> Dict[str, Any]:
-        """
-        Get only the root level items (files and folders) from a bucket.
-        This is optimized for the initial dashboard load.
-        
-        Args:
-            bucket_name (str): The name of the bucket to list
-            
-        Returns:
-            Dict[str, Any]: Dictionary containing root level items
-        """
-        try:
-            # List objects with delimiter to get root-level items
-            response = self.s3_client.list_objects_v2(
-                Bucket=bucket_name,
-                Delimiter='/'
-            )
-            
-            children = []
-            
-            # Process CommonPrefixes (folders)
-            for prefix in response.get('CommonPrefixes', []):
-                folder_path = prefix.get('Prefix', '')
-                folder_name = folder_path.rstrip('/').split('/')[-1]
-                
-                children.append({
-                    "type": "folder",
-                    "name": folder_name,
-                    "path": folder_path,
-                })
-            
-            # Process Contents (files)
-            for content in response.get('Contents', []):
-                file_path = content.get('Key', '')
-                
-                # Skip folder markers
-                if file_path.endswith('/'):
-                    continue
-                    
-                # Only include root-level files (no slashes in path)
-                if '/' not in file_path:
-                    file_name = file_path
-                    file_size = content.get('Size', 0)
-                    last_modified = content.get('LastModified', '')
-                    
-                    children.append({
-                        "type": "file",
-                        "name": file_name,
-                        "path": file_path,
-                        "size": file_size,
-                        "last_modified": last_modified,
+            for page in paginator.paginate(**paginate_kwargs):
+                # Add folders (CommonPrefixes)
+                for prefix_obj in page.get('CommonPrefixes', []):
+                    folder_path = prefix_obj.get('Prefix', '')
+                    folder_name = folder_path.rstrip('/').split('/')[-1]
+                    contents.append({
+                        "name": folder_name,
+                        "path": folder_path,
+                        "is_dir": True,
+                        "type": "folder"
                     })
-            
-            return {
-                "type": "folder",
-                "name": bucket_name,
-                "path": "",
-                "children": children
-            }
-        except Exception as e:
-            logger.error(f"Error getting root level items for bucket '{bucket_name}': {str(e)}")
-            return {"type": "folder", "name": bucket_name, "path": "", "children": []}
-    
-    def get_folder_contents(self, bucket_name: str, folder_path: str) -> List[Dict[str, Any]]:
-        """
-        Get the contents of a specific folder.
-        This is used for lazy loading folder contents.
-        
-        Args:
-            bucket_name (str): The name of the bucket
-            folder_path (str): The path to the folder
-            
-        Returns:
-            List[Dict[str, Any]]: List of items in the folder
-        """
-        try:
-            # Ensure folder_path ends with a slash
-            if folder_path and not folder_path.endswith('/'):
-                folder_path = folder_path + '/'
-            
-            # List objects with the folder prefix
-            response = self.s3_client.list_objects_v2(
-                Bucket=bucket_name,
-                Prefix=folder_path,
-                Delimiter='/'
-            )
-            
-            results = []
-            
-            # Process CommonPrefixes (folders)
-            for prefix_obj in response.get('CommonPrefixes', []):
-                sub_folder_path = prefix_obj.get('Prefix', '')
-                folder_name = sub_folder_path.rstrip('/').split('/')[-1]
                 
-                results.append({
-                    "type": "folder",
-                    "name": folder_name,
-                    "path": sub_folder_path,
-                })
+                # Add files (Contents)
+                for obj in page.get('Contents', []):
+                    if not obj['Key'].endswith('/'):  # Ensure it's not a folder object
+                        file_name = obj['Key'].split('/')[-1]
+                        file_size = obj.get('Size', 0)
+                        contents.append({
+                            "name": file_name,
+                            "path": obj['Key'],
+                            "is_dir": False,
+                            "type": "file",
+                            "size": file_size,
+                            "size_formatted": self.base_s3_service._format_size(file_size),
+                            "last_modified": obj.get('LastModified')
+                        })
             
-            # Process Contents (files)
-            for content in response.get('Contents', []):
-                file_path = content.get('Key', '')
-                
-                # Skip if this is just the directory marker
-                if file_path == folder_path:
-                    continue
-                    
-                file_name = file_path.split('/')[-1]
-                file_size = content.get('Size', 0)
-                last_modified = content.get('LastModified', '')
-                
-                results.append({
-                    "type": "file",
-                    "name": file_name,
-                    "path": file_path,
-                    "size": file_size,
-                    "last_modified": last_modified,
-                })
+            logger.info(f"Found {len(contents)} items in bucket {bucket_name} with prefix '{prefix}'")
+            return contents
             
-            return results
-        except Exception as e:
-            logger.error(f"Error getting folder contents for '{folder_path}' in bucket '{bucket_name}': {str(e)}")
+        except ClientError as e:
+            logger.error(f"Error listing bucket contents for {bucket_name}: {e.response.get('Error', {})}")
             return []
-    
-    def move_to_production(self, institution: str, source_prefix: str) -> Dict[str, Any]:
-        """
-        Move a folder from the ingest bucket to the production bucket.
-        
-        Args:
-            institution (str): The institution name to place files under
-            source_prefix (str): The path in the ingest bucket to move
-            
-        Returns:
-            Dict[str, Any]: Result of the operation
-        """
-        logger.info(f"Starting move to production for {source_prefix} under institution {institution}")
-        
-        try:
-            # Verify ingest and production buckets are different
-            if self.ingest_bucket == self.production_bucket:
-                error_message = "Error: Ingest and production buckets must be different"
-                logger.error(error_message)
-                return {
-                    "success": False,
-                    "error": error_message
-                }
-            
-            # Ensure source_prefix ends with a slash for proper prefix matching
-            if not source_prefix.endswith('/'):
-                source_prefix = source_prefix + '/'
-                logger.info(f"Added trailing slash for proper prefix matching: {source_prefix}")
-            
-            # Create destination prefix with institution
-            dest_prefix = f"{institution}/{source_prefix}"
-            
-            # List all objects in the source
-            paginator = self.s3_client.get_paginator("list_objects_v2")
-            copied_files = 0
-            
-            for page in paginator.paginate(Bucket=self.ingest_bucket, Prefix=source_prefix):
-                for obj in page.get("Contents", []):
-                    source_key = obj["Key"]
-                    
-                    # Skip if this is just the folder marker object
-                    if source_key == source_prefix:
-                        logger.info(f"Skipping folder marker object: {source_key}")
-                        continue
-                    
-                    # Create destination key, preserving the subfolder structure
-                    # but placing it under the institution folder
-                    relative_path = source_key[len(source_prefix):]
-                    dest_key = f"{institution}/{relative_path}"
-                    
-                    # Copy the object to the production bucket
-                    self.s3_client.copy_object(
-                        CopySource={"Bucket": self.ingest_bucket, "Key": source_key},
-                        Bucket=self.production_bucket,
-                        Key=dest_key
-                    )
-                    
-                    copied_files += 1
-                    
-                    if copied_files % 10 == 0:
-                        logger.info(f"Copied {copied_files} files so far...")
-            
-            # Add an empty directory marker if no files were found
-            if copied_files == 0:
-                logger.warning(f"No files found to copy, creating an empty directory marker: {dest_prefix}")
-                self.s3_client.put_object(
-                    Bucket=self.production_bucket,
-                    Key=dest_prefix,
-                    Body=''
-                )
-                copied_files = 1
-            
-            if copied_files > 0:
-                logger.info(f"Successfully copied {copied_files} files to {dest_prefix}")
-                return {
-                    "success": True,
-                    "message": f"Successfully moved {source_prefix} to {institution} in production bucket ({copied_files} files copied)"
-                }
-            else:
-                # This should never happen now due to the empty directory marker
-                logger.warning(f"No files found to copy at {source_prefix}")
-                return {
-                    "success": False,
-                    "error": f"No files found to copy at {source_prefix}"
-                }
-                
         except Exception as e:
-            logger.error(f"Error in move_to_production: {str(e)}")
-            return {
-                "success": False,
-                "error": str(e)
-            }
-    
-    def _format_size(self, size_bytes: int) -> str:
-        """Format bytes to human-readable size"""
-        for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
-            if size_bytes < 1024.0:
-                return f"{size_bytes:.2f} {unit}"
-            size_bytes /= 1024.0
-        return f"{size_bytes:.2f} PB"
-
-    def delete_folder(self, bucket_name, folder_path):
-        """
-        Delete a folder and all its contents from the specified bucket.
-        
-        Args:
-            bucket_name: The name of the bucket
-            folder_path: Path to the folder to delete
-        
-        Returns:
-            dict: Result of the operation with success flag and error message if applicable
-        """
-        return self.delete_object(bucket_name, folder_path, is_directory=True)
-        
-    def delete_file(self, bucket_name, file_path):
-        """
-        Delete a single file from the specified bucket.
-        
-        Args:
-            bucket_name: The name of the bucket
-            file_path: Path to the file to delete
-        
-        Returns:
-            dict: Result of the operation with success flag and error message if applicable
-        """
-        return self.delete_object(bucket_name, file_path, is_directory=False)
-        
-    def update_file_metadata(self, institution: str, file_path: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Update or create metadata for a file.
-        
-        Args:
-            institution (str): The institution name
-            file_path (str): Path to the file
-            metadata (Dict[str, Any]): Metadata to associate with the file
-            
-        Returns:
-            Dict[str, Any]: Result of the operation
-        """
-        try:
-            # Get or create a resource for the file
-            full_path = f"{institution}/{file_path}"
-            
-            # Create a file resource URI using the full path
-            file_uri = f"file://{full_path}"
-            
-            # Get or create the file resource
-            file_resource, created = Resource.objects.get_or_create(
-                uri=file_uri,
-                defaults={
-                    'resource_type': 'IRI',
-                    'name': file_path.split('/')[-1],
-                    'source': institution
-                }
-            )
-            
-            # Process metadata and create triples
-            triples_created = 0
-            for key, value in metadata.items():
-                # Get or create predicate resource
-                predicate, _ = Resource.objects.get_or_create(
-                    uri=f"property:{key}",
-                    defaults={
-                        'resource_type': 'PROPERTY',
-                        'name': key,
-                        'source': 'system'
-                    }
-                )
-                
-                # Create object resource based on value type
-                if isinstance(value, dict) and 'uri' in value:
-                    # Handle IRI values
-                    object_resource, _ = Resource.objects.get_or_create(
-                        uri=value['uri'],
-                        defaults={
-                            'resource_type': 'IRI',
-                            'name': value.get('name', ''),
-                            'source': value.get('source', 'external')
-                        }
-                    )
-                else:
-                    # Handle literal values
-                    object_resource, _ = Resource.objects.get_or_create(
-                        value=str(value),
-                        resource_type='LITERAL',
-                        name=key,
-                        source=institution,
-                        defaults={
-                            'datatype': metadata.get('datatype', None),
-                            'language': metadata.get('language', None)
-                        }
-                    )
-                
-                # Create the triple
-                triple, created = Triple.objects.get_or_create(
-                    subject=file_resource,
-                    predicate=predicate,
-                    object=object_resource
-                )
-                
-                if created:
-                    triples_created += 1
-            
-            return {
-                "success": True,
-                "file_resource_id": str(file_resource.id),
-                "triples_created": triples_created,
-                "message": f"Metadata updated for {full_path}"
-            }
-            
-        except Exception as e:
-            logger.error(f"Error updating file metadata: {str(e)}")
-            return {
-                "success": False,
-                "error": str(e)
-            }
-    
-    def get_file_metadata(self, institution: str, file_path: str) -> Dict[str, Any]:
-        """
-        Get metadata for a file.
-        
-        Args:
-            institution (str): The institution name
-            file_path (str): Path to the file
-            
-        Returns:
-            Dict[str, Any]: File metadata
-        """
-        try:
-            # Create the file URI
-            full_path = f"{institution}/{file_path}"
-            file_uri = f"file://{full_path}"
-            
-            # Try to find the file resource
-            try:
-                file_resource = Resource.objects.get(uri=file_uri)
-            except Resource.DoesNotExist:
-                return {
-                    "success": False,
-                    "error": f"No metadata found for {full_path}"
-                }
-            
-            # Get all triples where this resource is the subject
-            triples = Triple.objects.filter(subject=file_resource)
-            
-            metadata = {
-                "id": str(file_resource.id),
-                "uri": file_resource.uri,
-                "name": file_resource.name,
-                "source": file_resource.source,
-                "properties": {}
-            }
-            
-            # Process triples into a metadata dictionary
-            for triple in triples:
-                predicate_name = triple.predicate.name
-                
-                # Handle different object types
-                if triple.object.resource_type == 'LITERAL':
-                    # For literals, just use the value
-                    value = triple.object.value
-                    
-                    # Add datatype or language if present
-                    if triple.object.datatype:
-                        # Store complex structure for typed literals
-                        metadata["properties"][predicate_name] = {
-                            "value": value,
-                            "datatype": triple.object.datatype
-                        }
-                    elif triple.object.language:
-                        # Store complex structure for language tagged literals
-                        metadata["properties"][predicate_name] = {
-                            "value": value,
-                            "language": triple.object.language
-                        }
-                    else:
-                        # Store simple value for plain literals
-                        metadata["properties"][predicate_name] = value
-                else:
-                    # For IRIs, include the URI and other relevant info
-                    metadata["properties"][predicate_name] = {
-                        "uri": triple.object.uri,
-                        "name": triple.object.name,
-                        "type": triple.object.resource_type
-                    }
-            
-            return {
-                "success": True,
-                "metadata": metadata
-            }
-            
-        except Exception as e:
-            logger.error(f"Error getting file metadata: {str(e)}")
-            return {
-                "success": False,
-                "error": str(e)
-            }
+            logger.error(f"Unexpected error listing bucket contents for {bucket_name}: {str(e)}")
+            return []
 

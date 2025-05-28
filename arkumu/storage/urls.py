@@ -12,10 +12,10 @@ urlpatterns = [
     # Upload endpoints
     path("upload/", views.upload_form, name="upload_form"),
     path("upload/process/", views.process_upload, name="process_upload"),
-    path('mark-uploads-complete/', views.mark_uploads_complete, name='mark_uploads_complete'),
+    # path('mark-uploads-complete/', views.mark_uploads_complete, name='mark_uploads_complete'), # Removed - incorrect view name
     path("upload/direct/", views.direct_upload, name="direct_upload"),
     path("upload/success/", views.upload_success, name="upload_success"),
-    path('upload/complete/', views.upload_complete, name='upload_complete'),
+    path('upload/complete/', direct_upload_views.upload_complete, name='upload_complete'),
     
     # New streaming upload endpoints
     path("upload/streaming/", streaming_upload_views.streaming_upload_form, name="streaming_upload_form"),
@@ -35,16 +35,14 @@ urlpatterns = [
     # Database reset endpoint
     path("reset-database/", file_operations_views.reset_database, name="reset_database"),
     
-    # Presigned URL API endpoints
-    path("presigned-urls/", views.get_presigned_urls, name="get_presigned_urls"),
-    path("verify-uploads/", views.mark_uploads_complete, name="mark_uploads_complete"),
-    
-    # Multipart upload API endpoints
-    path("multipart/initialize/", views.initialize_multipart_upload, name="initialize_multipart_upload"),
-    path("multipart/get-part-urls/", views.get_part_upload_urls, name="get_part_upload_urls"),
-    path("multipart/complete/", views.complete_multipart_upload, name="complete_multipart_upload"),
-    path("multipart/abort/", views.abort_multipart_upload, name="abort_multipart_upload"),
-    path("multipart/list/", views.list_multipart_uploads, name="list_multipart_uploads"),
+    # Remove presigned URL and multipart upload API endpoints since they're no longer used
+    # path("presigned-urls/", views.get_presigned_urls, name="get_presigned_urls"),
+    # path("verify-uploads/", views.mark_uploads_complete, name="mark_uploads_complete"),
+    # path("multipart/initialize/", views.initialize_multipart_upload, name="initialize_multipart_upload"),
+    # path("multipart/get-part-urls/", views.get_part_upload_urls, name="get_part_upload_urls"),
+    # path("multipart/complete/", views.complete_multipart_upload, name="complete_multipart_upload"),
+    # path("multipart/abort/", views.abort_multipart_upload, name="abort_multipart_upload"),
+    # path("multipart/list/", views.list_multipart_uploads, name="list_multipart_uploads"),
     
     # Archivist dashboard
     path("dashboard/", dashboard_views.archivist_dashboard, name="archivist_dashboard"),

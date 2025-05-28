@@ -12,16 +12,27 @@
     </div>
     
     <!-- Back to main dashboard -->
-    <div class="mb-6">
+    <div class="mb-6 flex justify-between items-center">
         <a href="{% url 'storage:archivist_dashboard' %}" class="btn btn-ghost">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
             Back to Dashboard
         </a>
+        
+        <!-- File count toggle -->
+        <div class="form-control">
+            <label class="label cursor-pointer">
+                <span class="label-text mr-2">Show file counts</span>
+                <input type="checkbox" 
+                       class="toggle toggle-primary" 
+                       {% if include_counts %}checked{% endif %}
+                       onchange="toggleFileCounts(this.checked)">
+            </label>
+        </div>
     </div>
     
-    <!-- Stats card -->
+    <!-- Stats cards -->
     <div class="stats shadow w-full mb-8">
         <div class="stat">
             <div class="stat-figure text-primary">
@@ -29,9 +40,31 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                 </svg>
             </div>
+            <div class="stat-title">Total Organizations</div>
+            <div class="stat-value text-primary">{{ total_orgs|default:0 }}</div>
+            <div class="stat-desc">Available for use</div>
+        </div>
+        
+        <div class="stat">
+            <div class="stat-figure text-success">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            </div>
+            <div class="stat-title">Active Organizations</div>
+            <div class="stat-value text-success">{{ existing_orgs|default:0 }}</div>
+            <div class="stat-desc">With existing buckets</div>
+        </div>
+        
+        <div class="stat">
+            <div class="stat-figure text-info">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+            </div>
             <div class="stat-title">Available Organizations</div>
-            <div class="stat-value text-primary">{{ organizations|length|default:0 }}</div>
-            <div class="stat-desc">Ready for use</div>
+            <div class="stat-value text-info">{{ available_orgs|default:0 }}</div>
+            <div class="stat-desc">Ready to activate</div>
         </div>
     </div>
     
@@ -54,7 +87,11 @@
                 <div class="text-sm space-y-1 mb-4">
                     <p><strong>Slug:</strong> {{ org.slug }}</p>
                     {% if org.exists %}
-                        <p><strong>Status:</strong> Bucket exists</p>
+                        <p><strong>Bucket:</strong> {{ org.bucket }}</p>
+                        {% if include_counts %}
+                            <p><strong>Files:</strong> {{ org.file_count }}</p>
+                            <p><strong>Folders:</strong> {{ org.folder_count }}</p>
+                        {% endif %}
                     {% else %}
                         <p><strong>Status:</strong> Will be created on first access</p>
                     {% endif %}
@@ -93,4 +130,17 @@
         {% endfor %}
     </div>
 </div>
+
+<script>
+function toggleFileCounts(enabled) {
+    const currentUrl = new URL(window.location);
+    if (enabled) {
+        currentUrl.searchParams.set('include_counts', 'true');
+    } else {
+        currentUrl.searchParams.delete('include_counts');
+    }
+    window.location.href = currentUrl.toString();
+}
+</script>
+
 {% endblock %} 

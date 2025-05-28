@@ -147,8 +147,8 @@
                             name="organization">
                         <option value="">Choose organization...</option>
                         {% for org in organizations %}
-                            <option value="{{ org.slug }}">
-                                {{ org.name }}{% if org.exists %} ✓{% endif %}
+                            <option value="{{ org.id }}">
+                                {{ org.name }}{% if org.status == 'active' %} ✓{% endif %}
                             </option>
                         {% empty %}
                             <option value="rsh">Robert Schumann Hochschule Düsseldorf</option>

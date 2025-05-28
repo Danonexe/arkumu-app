@@ -46,7 +46,6 @@
           <li><a href="{% url 'home' %}" class="{% if request.path == '/' %}active{% endif %}">Home</a></li>
           <li><a href="{% url 'about' %}" class="{% if request.path == '/about/' %}active{% endif %}">About</a></li>
           {% if request.user.is_authenticated %}
-            <li><a href="{% url 'storage:organization_dashboard' %}">Organizations</a></li>
             <li><a href="{% url 'storage:archivist_dashboard' %}">Archivist Dashboard</a></li>
             <li><a href="{% url 'metadata:metadata_dashboard' %}">Metadata Dashboard</a></li>
             <li><a href="{% url 'users:detail' request.user.username %}">{% translate "My Profile" %}</a></li>
@@ -67,7 +66,6 @@
         <li><a href="{% url 'home' %}" class="{% if request.path == '/' %}active{% endif %}">Home</a></li>
         <li><a href="{% url 'about' %}" class="{% if request.path == '/about/' %}active{% endif %}">About</a></li>
         {% if request.user.is_authenticated %}
-          <li><a href="{% url 'storage:organization_dashboard' %}">Organizations</a></li>
           <li><a href="{% url 'storage:archivist_dashboard' %}">Archivist Dashboard</a></li>
           <li><a href="{% url 'metadata:metadata_dashboard' %}">Metadata Dashboard</a></li>
           <li><a href="{% url 'users:detail' request.user.username %}">{% translate "My Profile" %}</a></li>
