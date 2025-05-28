@@ -1,0 +1,311 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-3xl font-bold">Bulk Triple Editor</h1>
+        <a href="{% url 'metadata:metadata_dashboard' %}" class="btn btn-ghost">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            Back to Dashboard
+        </a>
+    </div>
+
+    <!-- Query Section -->
+    <div class="card bg-base-100 shadow-xl mb-6">
+        <div class="card-body">
+            <h2 class="card-title">Query Existing Relationships</h2>
+            <p class="text-sm text-base-content/70 mb-4">
+                Search for existing resources and relationships to understand the data model before creating new triples.
+            </p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Subject (contains)</span>
+                    </label>
+                    <input type="text" id="query-subject" placeholder="e.g., Person, dataset" class="input input-bordered" />
+                </div>
+                
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Predicate (contains)</span>
+                    </label>
+                    <input type="text" id="query-predicate" placeholder="e.g., hasPart, P14_carried_out_by" class="input input-bordered" />
+                </div>
+                
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Object (contains)</span>
+                    </label>
+                    <input type="text" id="query-object" placeholder="e.g., Actor, E21_Person" class="input input-bordered" />
+                </div>
+            </div>
+            
+            <div class="flex gap-2">
+                <button class="btn btn-primary" 
+                        hx-get="{% url 'metadata:query_relationships' %}"
+                        hx-include="#query-subject, #query-predicate, #query-object"
+                        hx-target="#query-results"
+                        hx-indicator="#query-spinner">
+                    <span id="query-spinner" class="loading loading-spinner loading-sm htmx-indicator"></span>
+                    Query Relationships
+                </button>
+                <button class="btn btn-secondary" onclick="clearQuery()">Clear</button>
+            </div>
+            
+            <div id="query-results" class="mt-4"></div>
+        </div>
+    </div>
+
+    <!-- Bulk Creation Section -->
+    <div class="card bg-base-100 shadow-xl">
+        <div class="card-body">
+            <h2 class="card-title">Create Multiple Triples</h2>
+            <p class="text-sm text-base-content/70 mb-4">
+                Create multiple triples at once. Use either existing resource URIs or create new resources with values.
+            </p>
+
+            <!-- Data Model Selection -->
+            <div class="form-control mb-4">
+                <label class="label">
+                    <span class="label-text">Data Model</span>
+                </label>
+                <select id="data-model" class="select select-bordered" onchange="updatePredicateOptions()">
+                    <option value="custom">Custom/Ad-hoc</option>
+                    <option value="cidoc">CIDOC-CRM</option>
+                    <option value="dublin-core">Dublin Core</option>
+                    <option value="rdf">RDF/RDFS</option>
+                </select>
+            </div>
+
+            <!-- Common Predicates based on model -->
+            <div id="predicate-suggestions" class="mb-4">
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Common Predicates</span>
+                    </label>
+                    <div id="predicate-buttons" class="flex flex-wrap gap-2">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Triple Entry Form -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Subject</span>
+                    </label>
+                    <div class="join">
+                        <select id="subject-type" class="select select-bordered join-item">
+                            <option value="uri">Existing URI</option>
+                            <option value="new">New Resource</option>
+                        </select>
+                        <input type="text" id="subject-input" placeholder="URI or name" class="input input-bordered join-item flex-1" />
+                    </div>
+                    <div class="label">
+                        <span class="label-text-alt" id="subject-help">Enter full URI or search term</span>
+                    </div>
+                </div>
+                
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Predicate</span>
+                    </label>
+                    <div class="join">
+                        <select id="predicate-type" class="select select-bordered join-item">
+                            <option value="uri">URI</option>
+                            <option value="new">New Property</option>
+                        </select>
+                        <input type="text" id="predicate-input" placeholder="Predicate URI or name" class="input input-bordered join-item flex-1" />
+                    </div>
+                </div>
+                
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Object</span>
+                    </label>
+                    <div class="join">
+                        <select id="object-type" class="select select-bordered join-item">
+                            <option value="uri">Existing URI</option>
+                            <option value="literal">Literal Value</option>
+                            <option value="new">New Resource</option>
+                        </select>
+                        <input type="text" id="object-input" placeholder="URI, value, or name" class="input input-bordered join-item flex-1" />
+                    </div>
+                </div>
+            </div>
+
+            <!-- Batch Input Area -->
+            <div class="form-control mb-4">
+                <label class="label">
+                    <span class="label-text">Batch Triple Creation</span>
+                    <span class="label-text-alt">One triple per line: subject|predicate|object</span>
+                </label>
+                <textarea id="batch-triples" class="textarea textarea-bordered h-32" 
+                          placeholder="Example:
+http://example.org/person1|http://purl.org/dc/terms/name|John Doe
+http://example.org/person1|http://www.cidoc-crm.org/cidoc-crm/P14_carried_out_by|http://example.org/activity1
+new:Person2|dc:name|Jane Smith
+new:Activity1|cidoc:P14_carried_out_by|new:Person3"></textarea>
+            </div>
+
+            <!-- Institution and Source -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Institution/Source</span>
+                    </label>
+                    <input type="text" id="institution" value="{{ request.user.username }}" class="input input-bordered" />
+                </div>
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Base URI</span>
+                    </label>
+                    <input type="text" id="base-uri" value="http://arkumu.org/data" class="input input-bordered" />
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="flex gap-2">
+                <button class="btn btn-success" onclick="addTripleFromForm()">Add Triple</button>
+                <button class="btn btn-primary" 
+                        hx-post="{% url 'metadata:create_bulk_triples' %}"
+                        hx-include="#batch-triples, #institution, #base-uri"
+                        hx-target="#creation-results"
+                        hx-indicator="#create-spinner">
+                    <span id="create-spinner" class="loading loading-spinner loading-sm htmx-indicator"></span>
+                    Create All Triples
+                </button>
+                <button class="btn btn-warning" onclick="validateTriples()">Validate</button>
+                <button class="btn btn-ghost" onclick="clearTriples()">Clear All</button>
+            </div>
+
+            <!-- Results -->
+            <div id="creation-results" class="mt-4"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Predicate suggestions for different data models
+const predicateOptions = {
+    'cidoc': [
+        'P14_carried_out_by', 'P11_had_participant', 'P2_has_type', 'P1_is_identified_by',
+        'P4_has_time-span', 'P7_took_place_at', 'P16_used_specific_object', 'P17_was_motivated_by',
+        'P108_has_produced', 'P140_assigned_attribute_to', 'P141_assigned', 'P177_assigned_property_of_type'
+    ],
+    'dublin-core': [
+        'dc:title', 'dc:creator', 'dc:subject', 'dc:description', 'dc:publisher', 'dc:contributor',
+        'dc:date', 'dc:type', 'dc:format', 'dc:identifier', 'dc:source', 'dc:language', 'dc:relation',
+        'dc:coverage', 'dc:rights', 'dcterms:hasPart', 'dcterms:isPartOf', 'dcterms:relation'
+    ],
+    'rdf': [
+        'rdf:type', 'rdfs:label', 'rdfs:comment', 'rdfs:seeAlso', 'rdfs:subClassOf', 'rdfs:subPropertyOf',
+        'rdf:value', 'rdfs:domain', 'rdfs:range'
+    ],
+    'custom': [
+        'hasPart', 'isPartOf', 'relatedTo', 'contains', 'belongsTo', 'hasValue', 'name', 'description'
+    ]
+};
+
+function updatePredicateOptions() {
+    const model = document.getElementById('data-model').value;
+    const buttonsContainer = document.getElementById('predicate-buttons');
+    buttonsContainer.innerHTML = '';
+    
+    predicateOptions[model].forEach(predicate => {
+        const button = document.createElement('button');
+        button.className = 'btn btn-sm btn-outline';
+        button.textContent = predicate;
+        button.onclick = () => {
+            document.getElementById('predicate-input').value = predicate;
+        };
+        buttonsContainer.appendChild(button);
+    });
+}
+
+function addTripleFromForm() {
+    const subject = document.getElementById('subject-input').value.trim();
+    const predicate = document.getElementById('predicate-input').value.trim();
+    const object = document.getElementById('object-input').value.trim();
+    
+    if (!subject || !predicate || !object) {
+        alert('Please fill in all fields');
+        return;
+    }
+    
+    const subjectType = document.getElementById('subject-type').value;
+    const predicateType = document.getElementById('predicate-type').value;
+    const objectType = document.getElementById('object-type').value;
+    
+    // Format based on type
+    const formattedSubject = subjectType === 'new' ? `new:${subject}` : subject;
+    const formattedPredicate = predicateType === 'new' ? `new:${predicate}` : predicate;
+    const formattedObject = objectType === 'new' ? `new:${object}` : object;
+    
+    const triple = `${formattedSubject}|${formattedPredicate}|${formattedObject}`;
+    
+    const textarea = document.getElementById('batch-triples');
+    if (textarea.value) {
+        textarea.value += '\n' + triple;
+    } else {
+        textarea.value = triple;
+    }
+    
+    // Clear form
+    document.getElementById('subject-input').value = '';
+    document.getElementById('predicate-input').value = '';
+    document.getElementById('object-input').value = '';
+}
+
+function clearQuery() {
+    document.getElementById('query-subject').value = '';
+    document.getElementById('query-predicate').value = '';
+    document.getElementById('query-object').value = '';
+    document.getElementById('query-results').innerHTML = '';
+}
+
+function clearTriples() {
+    document.getElementById('batch-triples').value = '';
+    document.getElementById('creation-results').innerHTML = '';
+}
+
+function validateTriples() {
+    const triples = document.getElementById('batch-triples').value.trim();
+    if (!triples) {
+        alert('No triples to validate');
+        return;
+    }
+    
+    const lines = triples.split('\n');
+    const errors = [];
+    
+    lines.forEach((line, index) => {
+        const parts = line.trim().split('|');
+        if (parts.length !== 3) {
+            errors.push(`Line ${index + 1}: Expected 3 parts (subject|predicate|object), got ${parts.length}`);
+        } else {
+            parts.forEach((part, partIndex) => {
+                if (!part.trim()) {
+                    const partNames = ['subject', 'predicate', 'object'];
+                    errors.push(`Line ${index + 1}: Empty ${partNames[partIndex]}`);
+                }
+            });
+        }
+    });
+    
+    if (errors.length > 0) {
+        alert('Validation errors:\n' + errors.join('\n'));
+    } else {
+        alert(`Validation successful! ${lines.length} triples ready for creation.`);
+    }
+}
+
+// Initialize predicate options on page load
+updatePredicateOptions();
+</script>
+{% endblock %} 

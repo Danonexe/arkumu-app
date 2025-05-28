@@ -1,0 +1,142 @@
+{% if triples %}
+<div class="bg-base-200 p-4 rounded-lg">
+    <div class="flex justify-between items-center mb-4">
+        <h3 class="text-lg font-semibold">Query Results ({{ triples|length }} found)</h3>
+        <div class="badge badge-info">{{ total_count }} total matches</div>
+    </div>
+    
+    <div class="overflow-x-auto">
+        <table class="table table-zebra w-full">
+            <thead>
+                <tr>
+                    <th>Subject</th>
+                    <th>Predicate</th>
+                    <th>Object</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for triple in triples %}
+                <tr class="hover">
+                    <td>
+                        <div class="tooltip" data-tip="{{ triple.subject.uri }}">
+                            <div class="font-medium">{{ triple.subject.name|default:"Unnamed" }}</div>
+                            <div class="text-xs text-base-content/70">
+                                {{ triple.subject.resource_type }}
+                                {% if triple.subject.value %}
+                                    | "{{ triple.subject.value|truncatechars:30 }}"
+                                {% endif %}
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="tooltip" data-tip="{{ triple.predicate.uri }}">
+                            <span class="badge badge-primary">{{ triple.predicate.name|default:triple.predicate.uri|truncatechars:20 }}</span>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="tooltip" data-tip="{{ triple.object.uri|default:'Literal value' }}">
+                            <div class="font-medium">{{ triple.object.name|default:"Unnamed" }}</div>
+                            <div class="text-xs text-base-content/70">
+                                {{ triple.object.resource_type }}
+                                {% if triple.object.value %}
+                                    | "{{ triple.object.value|truncatechars:30 }}"
+                                {% endif %}
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="flex gap-1">
+                            <button class="btn btn-xs btn-ghost" 
+                                    onclick="copyToClipboard('{{ triple.subject.uri }}')">
+                                Copy S
+                            </button>
+                            <button class="btn btn-xs btn-ghost" 
+                                    onclick="copyToClipboard('{{ triple.predicate.uri }}')">
+                                Copy P
+                            </button>
+                            <button class="btn btn-xs btn-ghost" 
+                                    onclick="copyToClipboard('{{ triple.object.uri|default:triple.object.value }}')">
+                                Copy O
+                            </button>
+                            <button class="btn btn-xs btn-outline btn-success" 
+                                    onclick="useAsTemplate('{{ triple.subject.uri }}', '{{ triple.predicate.uri }}', '{{ triple.object.uri|default:triple.object.value }}')">
+                                Use
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    
+    <!-- Pagination if needed -->
+    {% if page_obj.has_other_pages %}
+    <div class="flex justify-center mt-4">
+        <div class="join">
+            {% if page_obj.has_previous %}
+                <button class="join-item btn btn-sm" 
+                        hx-get="{% url 'metadata:query_relationships' %}?page={{ page_obj.previous_page_number }}"
+                        hx-include="#query-subject, #query-predicate, #query-object"
+                        hx-target="#query-results">
+                    Previous
+                </button>
+            {% endif %}
+            
+            <span class="join-item btn btn-sm btn-active">
+                Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+            </span>
+            
+            {% if page_obj.has_next %}
+                <button class="join-item btn btn-sm"
+                        hx-get="{% url 'metadata:query_relationships' %}?page={{ page_obj.next_page_number }}"
+                        hx-include="#query-subject, #query-predicate, #query-object"
+                        hx-target="#query-results">
+                    Next
+                </button>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(() => {
+        // Show a temporary success message
+        const toast = document.createElement('div');
+        toast.className = 'toast toast-top toast-end';
+        toast.innerHTML = '<div class="alert alert-success"><span>Copied to clipboard!</span></div>';
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 2000);
+    });
+}
+
+function useAsTemplate(subject, predicate, object) {
+    // Fill the triple form with this data as a template
+    document.getElementById('subject-input').value = subject;
+    document.getElementById('predicate-input').value = predicate;
+    document.getElementById('object-input').value = object;
+    
+    // Scroll to the form
+    document.querySelector('#batch-triples').scrollIntoView({ behavior: 'smooth' });
+}
+</script>
+
+{% elif query_performed %}
+<div class="alert alert-info">
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+    </svg>
+    <span>No relationships found matching your query. Try different search terms.</span>
+</div>
+
+{% else %}
+<div class="text-center text-base-content/50 py-8">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto mb-4 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+    </svg>
+    <p>Enter search terms above to query existing relationships</p>
+</div>
+{% endif %} 

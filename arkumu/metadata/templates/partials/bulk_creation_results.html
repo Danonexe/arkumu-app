@@ -1,0 +1,97 @@
+{% if success %}
+<div class="alert alert-success">
+    <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+    <div>
+        <h3 class="font-bold">Bulk Creation Successful!</h3>
+        <div class="text-sm">
+            <div class="stats stats-horizontal bg-transparent">
+                <div class="stat p-2">
+                    <div class="stat-title text-xs">Resources Created</div>
+                    <div class="stat-value text-lg">{{ created_resources }}</div>
+                </div>
+                <div class="stat p-2">
+                    <div class="stat-title text-xs">Triples Created</div>
+                    <div class="stat-value text-lg">{{ created_triples }}</div>
+                </div>
+                {% if skipped_triples > 0 %}
+                <div class="stat p-2">
+                    <div class="stat-title text-xs">Triples Skipped</div>
+                    <div class="stat-value text-lg">{{ skipped_triples }}</div>
+                    <div class="stat-desc text-xs">Already existed</div>
+                </div>
+                {% endif %}
+                <div class="stat p-2">
+                    <div class="stat-title text-xs">Total Processed</div>
+                    <div class="stat-value text-lg">{{ total_lines }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if processing_errors %}
+<div class="alert alert-warning mt-4">
+    <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
+    </svg>
+    <div>
+        <h3 class="font-bold">Some Errors Occurred</h3>
+        <div class="text-sm">
+            <p class="mb-2">{{ processing_errors|length }} line(s) had processing errors:</p>
+            <ul class="list-disc list-inside max-h-32 overflow-y-auto">
+                {% for error in processing_errors %}
+                <li class="text-xs">{{ error }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% elif errors %}
+<div class="alert alert-error">
+    <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+    <div>
+        <h3 class="font-bold">Validation Errors Found</h3>
+        <div class="text-sm">
+            <p class="mb-2">{{ errors|length }} error(s) in {{ total_lines }} line(s):</p>
+            <ul class="list-disc list-inside max-h-32 overflow-y-auto">
+                {% for error in errors %}
+                <li class="text-xs">{{ error }}</li>
+                {% endfor %}
+            </ul>
+            <p class="mt-2">Please fix these errors and try again.</p>
+        </div>
+    </div>
+</div>
+
+{% elif error %}
+<div class="alert alert-error">
+    <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+    <div>
+        <h3 class="font-bold">Error</h3>
+        <div class="text-sm">{{ error }}</div>
+    </div>
+</div>
+
+{% endif %}
+
+{% if success and created_triples > 0 %}
+<div class="mt-4 flex gap-2">
+    <a href="{% url 'metadata:triple_search' %}" class="btn btn-sm btn-outline">
+        View in Triple Search
+    </a>
+    <a href="{% url 'metadata:metadata_dashboard' %}" class="btn btn-sm btn-outline">
+        Back to Dashboard
+    </a>
+    <button class="btn btn-sm btn-ghost" onclick="document.getElementById('batch-triples').value = ''; this.parentElement.parentElement.innerHTML = '';">
+        Clear Results
+    </button>
+</div>
+{% endif %} 
