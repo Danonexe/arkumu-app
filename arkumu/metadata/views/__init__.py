@@ -16,6 +16,9 @@ from .graph_views import full_graph_view, graph_data_view
 # Bulk editor views
 from .bulk_editor_views import bulk_triple_editor, query_relationships, create_bulk_triples
 
+# Map resources to S3 views
+from .map_resources_to_s3_views import MapResourcesToS3View
+
 __all__ = [
     # Dashboard
     'metadata_dashboard',
@@ -37,4 +40,7 @@ __all__ = [
     'bulk_triple_editor', 
     'query_relationships', 
     'create_bulk_triples',
+
+    # Map resources to S3
+    'MapResourcesToS3View',
 ] 

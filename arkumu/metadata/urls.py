@@ -26,4 +26,7 @@ urlpatterns = [
     path('bulk-editor/', bulk_editor_views.bulk_triple_editor, name='bulk_triple_editor'),
     path('bulk-editor/query/', bulk_editor_views.query_relationships, name='query_relationships'),
     path('bulk-editor/create/', bulk_editor_views.create_bulk_triples, name='create_bulk_triples'),
+
+    # Map S3 Files to Resources (New Path)
+    path('map-s3-to-resources/', resource_views.MapS3ToResourcesView.as_view(), name='map_s3_to_resources'),
 ]

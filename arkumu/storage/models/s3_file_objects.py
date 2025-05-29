@@ -2,11 +2,12 @@ from django.db import models
 import uuid
 from django.utils import timezone
 from .upload_sessions import UploadSession
+from arkumu.metadata.models.resource import Resource
 
 class S3FileObject(models.Model):
     """Represents a file in S3"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    session = models.ForeignKey(UploadSession, related_name='files', on_delete=models.CASCADE)
+    session = models.ForeignKey(UploadSession, related_name='files', on_delete=models.CASCADE, null=True, blank=True)
     file_name = models.CharField(max_length=255)
     original_path = models.CharField(max_length=1024, blank=True)
     s3_key = models.CharField(max_length=1024)
@@ -33,17 +34,24 @@ class S3FileObject(models.Model):
     source_csv_file = models.CharField(max_length=512, blank=True, help_text="Name of the CSV file this file was referenced from")
     source_row_number = models.IntegerField(null=True, blank=True, help_text="Row number in the CSV where this file was referenced")
     source_column_name = models.CharField(max_length=255, blank=True, help_text="Column name in the CSV that contained this file reference")
-    related_resource_uri = models.CharField(max_length=512, blank=True, help_text="URI of the metadata resource this file is associated with")
+    related_resource = models.ForeignKey(
+        Resource,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        help_text="Direct link to the metadata resource this file is associated with"
+    )
     s3_url = models.URLField(max_length=1024, blank=True, help_text="Full S3 URL to access this file")
 
     class Meta:
         verbose_name = "S3 File Object"
         verbose_name_plural = "S3 File Objects"
         indexes = [
-            models.Index(fields=['session', 'status']),
+            models.Index(fields=['session']),
+            models.Index(fields=['status']),
             models.Index(fields=['s3_key']),
             models.Index(fields=['source_csv_file', 'source_row_number']),
-            models.Index(fields=['related_resource_uri']),
+            models.Index(fields=['related_resource']),
         ]
 
     def __str__(self):
@@ -74,8 +82,10 @@ class S3FileObject(models.Model):
     def create_from_upload(cls, session, file_name, original_path, s3_key, 
                           file_size=0, content_type='', source_csv_file='',
                           source_row_number=None, source_column_name='', 
-                          related_resource_uri=''):
+                          related_resource=None):
         """Create an S3FileObject from an upload operation"""
+        if session is None:
+            raise ValueError("A session must be provided when creating S3FileObject via create_from_upload.")
         return cls.objects.create(
             session=session,
             file_name=file_name,
@@ -86,6 +96,6 @@ class S3FileObject(models.Model):
             source_csv_file=source_csv_file,
             source_row_number=source_row_number,
             source_column_name=source_column_name,
-            related_resource_uri=related_resource_uri,
+            related_resource=related_resource,
             status='uploading'
         ) 
