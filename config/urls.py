@@ -10,6 +10,9 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, Spec
 from rest_framework.authtoken.views import obtain_auth_token
 from django.conf.urls.i18n import i18n_patterns
 
+# Import staticfiles_urlpatterns
+from django.contrib.staticfiles.urls import staticfiles_urlpatterns
+
 urlpatterns = [
     path("", TemplateView.as_view(template_name="pages/home.html"), name="home"),
     path("design/", TemplateView.as_view(template_name="pages/prueba.html"), name="design"),
@@ -27,6 +30,7 @@ urlpatterns = [
     # Your stuff: custom urls includes go here
     path('metadata/', include('arkumu.metadata.urls', namespace='metadata')),
     path('storage/', include('arkumu.storage.urls', namespace='storage')),
+    path('importer/', include('arkumu.importer.urls', namespace='importer')),
     # Media files
     *static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT),    
     # i18n
@@ -65,6 +69,13 @@ if settings.DEBUG:
         ),
         path("500/", default_views.server_error),
     ]
+
+    # Add static files serving for development
+    urlpatterns += staticfiles_urlpatterns()
+    
+    # Optionally, if you also serve from STATIC_ROOT in debug (less common for dev)
+    # urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+
     if "debug_toolbar" in settings.INSTALLED_APPS:
         pass
 #        import debug_toolbar

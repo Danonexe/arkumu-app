@@ -43,6 +43,24 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/dev/ref/settings/#locale-paths
 LOCALE_PATHS = [str(BASE_DIR / "locale")]
 
+# CACHES
+# ------------------------------------------------------------------------------
+# https://docs.djangoproject.com/en/dev/topics/cache/
+# https://github.com/jazzband/django-redis
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        # Ensure this matches your Redis service name and port in Docker Compose
+        "LOCATION": env("REDIS_URL", default="redis://redis:6379/1"), # Using DB 1 for cache, Huey might use DB 0
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            # Mimicing memcache behavior.
+            # http://niwinz.github.io/django-redis/latest/#_memcached_exceptions_behavior
+            "IGNORE_EXCEPTIONS": True, 
+        },
+    }
+}
+
 # DATABASES
 # ------------------------------------------------------------------------------
 # https://docs.djangoproject.com/en/dev/ref/settings/#databases
@@ -84,6 +102,7 @@ THIRD_PARTY_APPS = [
     "corsheaders",
     "drf_spectacular",
     "modeltranslation",
+    "huey.contrib.djhuey",
 ]
 
 LOCAL_APPS = [
@@ -317,3 +336,29 @@ SPECTACULAR_SETTINGS = {
 }
 # Your stuff...
 # ------------------------------------------------------------------------------
+
+# Huey (Task Queue) Configuration
+# ------------------------------------------------------------------------------
+HUEY = {
+    'huey_class': 'huey.RedisHuey',
+    'name': 'arkumu',
+    'results': True,
+    'store_none': False,
+    'immediate': DEBUG,  # If DEBUG=True, run synchronously
+    'utc': True,
+    'blocking': True,
+    'connection': {
+        'url': REDIS_URL,
+    },
+    'consumer': {
+        'workers': 2,
+        'worker_type': 'thread',
+        'initial_delay': 0.1,  # Smallest polling interval
+        'backoff': 1.15,  # Exponential backoff rate
+        'max_delay': 10.0,  # Max polling interval
+        'scheduler_interval': 1,  # Check schedule every second
+        'periodic': True,  # Enable crontab feature
+        'check_worker_health': True,  # Enable worker health checks
+        'health_check_interval': 1,  # Check worker health every second
+    },
+}

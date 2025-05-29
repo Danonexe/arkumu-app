@@ -95,15 +95,16 @@ def streaming_upload_form(request):
     try:
         # Get cached services to avoid repeated initialization
         upload_service = get_cached_upload_service()
+        bucket_service = get_cached_bucket_service()
         
         # Determine target bucket based on organization
-        target_bucket = upload_service.ingest_bucket
         if organization:
-            # Get the cached bucket service to resolve organization bucket
-            bucket_service = get_cached_bucket_service()
-            # Just get the bucket name without expensive existence checks
             target_bucket = bucket_service.get_organization_bucket(organization)
-            logger.info(f"Using organization bucket: {target_bucket}")
+            logger.info(f"Using organization bucket: {target_bucket} for organization: {organization}")
+        else:
+            # Default to the main ingest bucket if no organization is specified
+            target_bucket = bucket_service.base_s3_service.ingest_bucket
+            logger.info(f"No organization specified, using default ingest bucket: {target_bucket}")
         
         # Update session with bucket info
         upload_session.s3_bucket = target_bucket

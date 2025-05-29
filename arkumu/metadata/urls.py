@@ -6,6 +6,8 @@ app_name = 'metadata'
 urlpatterns = [
     # Dashboard
     path('dashboard/', dashboard_views.metadata_dashboard, name='metadata_dashboard'),
+    path('dashboard/all-uploads/', dashboard_views.all_upload_sessions, name='all_upload_sessions'),
+    path('dashboard/all-ingests/', dashboard_views.all_ingest_sessions, name='all_ingest_sessions'),
     
     # Resources
     path('resources/', resource_views.resource_list, name='resource_list'),

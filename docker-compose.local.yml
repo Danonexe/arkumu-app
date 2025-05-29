@@ -79,6 +79,40 @@ services:
     networks:
       - arkumu_network
 
+
+  redis:
+    image: "redis:latest"
+    container_name: arkumu_redis
+    restart: unless-stopped
+    volumes:
+      - arkumu_local_redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - arkumu_network
+    command: redis-server --appendonly yes
+
+
+  huey:
+      build:
+        context: .
+        dockerfile: ./compose/local/django/Dockerfile
+      image: lacos_local_huey
+      container_name: arkumu_local_huey
+      depends_on:
+        - django
+        - redis
+      volumes:
+        - .:/app:z
+      env_file:
+        - ./.envs/.local/.django
+        - ./.envs/.local/.postgres
+      command: /bin/sh -c "python manage.py run_huey"
+      networks:
+        - arkumu_network
+
+
+
   node:
     image: node:latest
     container_name: arkumu_node_tailwind
@@ -92,15 +126,3 @@ services:
     tty: true
     networks:
       - arkumu_network
-
-  redis:
-    image: "redis:latest"
-    container_name: arkumu_redis
-    restart: unless-stopped
-    volumes:
-      - arkumu_local_redis_data:/data
-    ports:
-      - "6379:6379"
-    networks:
-      - arkumu_network
-    command: redis-server --appendonly yes

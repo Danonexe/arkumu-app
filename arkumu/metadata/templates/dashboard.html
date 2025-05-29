@@ -14,7 +14,7 @@
         </div>
         <button id="reset-db-btn" 
                 class="btn btn-error btn-sm"
-                hx-post="{% url 'storage:reset_database' %}"
+                hx-post="{% url 'importer:reset_database' %}"
                 hx-target="#reset-db-result"
                 hx-swap="innerHTML"
                 hx-indicator="#reset-db-spinner"
@@ -29,7 +29,7 @@
     <div id="reset-db-result" class="mb-4"></div>
 
     <!-- Stats Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-8">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
         <div class="card bg-base-100 shadow-xl">
             <div class="card-body">
                 <h2 class="card-title">Resources</h2>
@@ -59,6 +59,32 @@
             <div class="card-body">
                 <h2 class="card-title">Properties</h2>
                 <p class="text-4xl font-bold">{{ stats.property_resources }}</p>
+            </div>
+        </div>
+        
+        <div class="card bg-base-100 shadow-xl">
+            <div class="card-body">
+                <h2 class="card-title">Ingests</h2>
+                <p class="text-4xl font-bold">{{ stats.ingests }}</p>
+            </div>
+        </div>
+        
+        <div class="card bg-base-100 shadow-xl">
+            <div class="card-body">
+                <h2 class="card-title text-sm">Top Institutions</h2>
+                <div class="space-y-1">
+                    {% for institution in institutions|slice:":4" %}
+                    <div class="flex justify-between text-xs">
+                        <span class="truncate w-20">{{ institution.source|truncatechars:15 }}</span>
+                        <span class="font-semibold">{{ institution.count }}</span>
+                    </div>
+                    {% empty %}
+                    <div class="text-xs text-base-content/70">No data</div>
+                    {% endfor %}
+                </div>
+                {% if institutions|length > 4 %}
+                <div class="text-xs text-base-content/50 mt-2">+{{ institutions|length|add:"-4" }} more</div>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -101,37 +127,49 @@
                 </div>
                 
                 <div class="card-actions justify-end mt-4">
-                    <a href="#" class="btn btn-primary btn-sm">View All</a>
+                    <a href="{% url 'metadata:all_upload_sessions' %}" class="btn btn-primary btn-sm">View All</a>
                 </div>
             </div>
         </div>
         
-        <!-- Institution Distribution -->
+        <!-- Recent Ingests -->
         <div class="card bg-base-100 shadow-xl">
             <div class="card-body">
-                <h2 class="card-title">Institution Distribution</h2>
+                <h2 class="card-title">Recent Ingests</h2>
                 
                 <div class="overflow-x-auto">
                     <table class="table table-zebra w-full">
                         <thead>
                             <tr>
-                                <th>Institution</th>
-                                <th>Resources</th>
+                                <th>Date</th>
+                                <th>Dataset</th>
+                                <th>Organization</th>
+                                <th>Status</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {% for institution in institutions %}
+                            {% for ingest in recent_ingests %}
                             <tr>
-                                <td>{{ institution.source }}</td>
-                                <td>{{ institution.count }}</td>
+                                <td>{{ ingest.created_at|date:"M d, Y" }}</td>
+                                <td>{{ ingest.dataset_name|truncatechars:15 }}</td>
+                                <td>{{ ingest.organization|truncatechars:15 }}</td>
+                                <td>
+                                    <span class="badge {% if ingest.status == 'completed' %}badge-success{% elif ingest.status == 'failed' %}badge-error{% else %}badge-info{% endif %}">
+                                        {{ ingest.status }}
+                                    </span>
+                                </td>
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="2" class="text-center py-4">No data available</td>
+                                <td colspan="4" class="text-center py-4">No ingests yet</td>
                             </tr>
                             {% endfor %}
                         </tbody>
                     </table>
+                </div>
+                
+                <div class="card-actions justify-end mt-4">
+                    <a href="{% url 'metadata:all_ingest_sessions' %}" class="btn btn-primary btn-sm">View All</a>
                 </div>
             </div>
         </div>

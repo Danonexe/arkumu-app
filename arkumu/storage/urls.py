@@ -29,12 +29,6 @@ urlpatterns = [
     path("organizations/browse/", file_operations_views.organization_contents, name="organization_contents_browse"),
     path("organizations/<str:organization>/", file_operations_views.organization_contents, name="organization_contents"),
     
-    # CSV ingest endpoint
-    path("ingest-file/", file_operations_views.ingest_file, name="ingest_file"),
-    
-    # Database reset endpoint
-    path("reset-database/", file_operations_views.reset_database, name="reset_database"),
-    
     # Remove presigned URL and multipart upload API endpoints since they're no longer used
     # path("presigned-urls/", views.get_presigned_urls, name="get_presigned_urls"),
     # path("verify-uploads/", views.mark_uploads_complete, name="mark_uploads_complete"),
@@ -49,9 +43,8 @@ urlpatterns = [
     path("dashboard/folder-contents/<str:bucket_type>/<path:folder_path>/", views.load_folder_contents, name="load_folder_contents"),
     
     # File operations
-    path("move-to-production/<path:folder_path>/", views.move_to_production, name="move_to_production"),
-    path("file-content/<str:bucket_type>/<path:file_path>/", views.file_content, name="file_content"),
-    path("delete/<str:bucket_type>/<str:object_type>/<path:object_path>/", views.delete_object, name="delete_object"),
+    path("file-content/<str:bucket_type>/<path:file_path>/", file_operations_views.file_content, name="file_content"),
+    path("delete/<str:bucket_type>/<str:object_type>/<path:object_path>/", file_operations_views.delete_object, name="delete_object"),
     path("debug/presigned-url/", direct_upload_views.debug_presigned_url, name="debug_presigned_url"),
     path("upload/debug-error/", direct_upload_views.debug_upload_error, name="debug_upload_error"),
 
