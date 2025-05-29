@@ -137,6 +137,10 @@ class MapS3ToResourcesView(LoginRequiredMixin, View):
     success_url = reverse_lazy('metadata:map_s3_to_resources')
 
     def get(self, request, *args, **kwargs):
+        # Retrieve bucket_name and prefix from query parameters to repopulate form if needed (e.g., after POST redirect)
+        bucket_name = request.GET.get('bucket_name', '')
+        prefix = request.GET.get('prefix', '')
+
         unmapped_files_qs = S3FileObject.objects.filter(related_resource__isnull=True).order_by('-created_at')
         
         paginator = Paginator(unmapped_files_qs, 25)
@@ -146,28 +150,60 @@ class MapS3ToResourcesView(LoginRequiredMixin, View):
         context = {
             'page_obj': page_obj,
             'total_unmapped_count': unmapped_files_qs.count(),
+            'form_data': {'bucket_name': bucket_name, 'prefix': prefix} # Pass form data back
         }
         return render(request, self.template_name, context)
 
     def post(self, request, *args, **kwargs):
-        service = FileResourceMatcherService(logger=messages.debug)
+        bucket_name = request.POST.get('bucket_name')
+        prefix = request.POST.get('prefix', "").strip() # Default to empty string and strip whitespace
+
+        if not bucket_name:
+            messages.error(request, "S3 Bucket Name is required.")
+            return redirect(self.success_url) # Or render the form with an error
+
+        service = FileResourceMatcherService(logger=messages.debug) # Pass messages.debug for detailed logging in template
         
+        # Stage 1: Discover and Sync S3 Files
         try:
-            processed_count, linked_count, ambiguous_count, error_count = service.match_and_link_by_filename_to_resource_value()
-            
-            messages.success(request, 
-                             f"File to Resource mapping process completed. "
-                             f"Processed: {processed_count}, Linked: {linked_count}, "
-                             f"Ambiguous Matches (not linked): {ambiguous_count}, Errors: {error_count}."
-                            )
-            if error_count > 0:
-                messages.warning(request, f"There were {error_count} errors during the process. Check server logs or debug messages for details.")
-            if ambiguous_count > 0:
-                messages.info(request, f"{ambiguous_count} files had ambiguous matches and were not linked. Consider refining Resource values or filenames.")
-            if linked_count == 0 and processed_count > 0 and ambiguous_count == 0 and error_count == 0:
-                 messages.info(request, "No new files were linked. All unmapped files either had no match or were already processed.")
+            messages.info(request, f"Starting S3 discovery and sync for bucket: <b>{bucket_name}</b>, prefix: <b>'{prefix if prefix else "(root)"}'</b>...", extra_tags='safe')
+            synced_count, created_count, skipped_s3_count, error_s3_create_count = service.discover_and_sync_s3_files(bucket_name, prefix)
+            messages.success(
+                request, 
+                f"S3 discovery and sync complete for <b>{bucket_name}</b>. "
+                f"DB records in sync/already existed: {synced_count}, New S3FileObjects created: {created_count}, "
+                f"Skipped S3 items (folders/invalid): {skipped_s3_count}, Errors during S3FileObject creation: {error_s3_create_count}.",
+                extra_tags='safe'
+            )
+            if error_s3_create_count > 0:
+                messages.warning(request, f"There were {error_s3_create_count} errors creating S3FileObject records. Check debug messages or server logs.")
 
         except Exception as e:
-            messages.error(request, f"A critical error occurred during the mapping service execution: {e}")
+            messages.error(request, f"A critical error occurred during S3 discovery/sync: {e}")
+            # Redirect with form data to allow user to see their input
+            return redirect(f"{self.success_url}?bucket_name={bucket_name}&prefix={prefix}")
+
+        # Stage 2: Match and Link Files to Resources
+        try:
+            messages.info(request, "Starting process to link S3FileObjects to Resources...", extra_tags='safe')
+            processed_match_count, linked_count, ambiguous_match_count, error_match_count = service.match_and_link_by_filename_to_resource_value()
+            
+            messages.success(
+                request, 
+                f"File to Resource linking process completed. "
+                f"S3FileObjects processed for linking: {processed_match_count}, Newly linked: {linked_count}, "
+                f"Ambiguous matches (not linked): {ambiguous_match_count}, Errors during linking: {error_match_count}.",
+                extra_tags='safe'
+            )
+            if error_match_count > 0:
+                messages.warning(request, f"There were {error_match_count} errors during the linking process. Check debug messages or server logs.")
+            if ambiguous_match_count > 0:
+                messages.info(request, f"{ambiguous_match_count} files had ambiguous matches and were not linked. Consider refining Resource values or filenames for these.")
+            if linked_count == 0 and processed_match_count > 0 and ambiguous_match_count == 0 and error_match_count == 0:
+                 messages.info(request, "No new files were linked in this run. All unmapped files considered either had no match or were previously processed.")
+
+        except Exception as e:
+            messages.error(request, f"A critical error occurred during the linking service execution: {e}")
         
-        return redirect(self.success_url) 
+        # Redirect with form data to allow user to see their input and updated unmapped list
+        return redirect(f"{self.success_url}?bucket_name={bucket_name}&prefix={prefix}") 
