@@ -1,5 +1,5 @@
 from django.shortcuts import render, get_object_or_404
-from django.http import JsonResponse, HttpResponse
+from django.http import JsonResponse, HttpResponse, HttpResponseRedirect
 from django.views import View
 from django.views.decorators.http import require_http_methods
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -8,11 +8,16 @@ from django.db.models import Q, Count, Case, When, BooleanField
 from django.utils.decorators import method_decorator
 from django.core.paginator import Paginator
 from django.template.loader import render_to_string
+from django.urls import reverse
 import json
+import logging
 
 from arkumu.storage.models import S3FileObject, UploadSession
 from arkumu.metadata.models import Resource
-from arkumu.metadata.services.map_resources_to_files import FileResourceMatcherService
+from arkumu.metadata.services.mapping.map_resources_to_files import FileResourceMatcherService
+from arkumu.storage.services.bucket_service import BucketService
+
+logger = logging.getLogger(__name__)
 
 
 class DataDiscoveryView(LoginRequiredMixin, View):
@@ -20,46 +25,141 @@ class DataDiscoveryView(LoginRequiredMixin, View):
     template_name = 'data_discovery.html'
 
     def get(self, request, *args, **kwargs):
-        # Filter for files in "data" folders only (not metadata folders)
-        s3_files = S3FileObject.objects.filter(
-            s3_key__contains='/data/'
-        ).select_related('related_resource', 'session', 'session__user').annotate(
+        # Get filters from request
+        organization = request.GET.get('org_filter', '') or request.GET.get('org', '')
+        status_filter = request.GET.get('status_filter', '')
+        bucket_filter = request.GET.get('bucket_filter', '')
+        
+        logger.info(f"DataDiscoveryView filters: org='{organization}', status='{status_filter}', bucket='{bucket_filter}'")
+        
+        # Start with all S3 files, then filter by organization if specified
+        s3_files = S3FileObject.objects.all().select_related(
+            'related_resource', 'session', 'session__user'
+        ).annotate(
             is_linked=Case(
                 When(related_resource__isnull=False, then=True),
                 default=False,
                 output_field=BooleanField()
             )
-        ).order_by('s3_key')
+        )
+        
+        logger.info(f"Initial S3 files count: {s3_files.count()}")
+        
+        # Log sample S3 keys to understand the bucket structure
+        if s3_files.count() > 0:
+            sample_all_keys = list(S3FileObject.objects.all().values_list('s3_key', flat=True)[:20])
+            logger.info(f"Sample S3 keys from database (first 20): {sample_all_keys}")
+            
+            # Show unique bucket prefixes
+            all_keys = S3FileObject.objects.all().values_list('s3_key', flat=True)
+            unique_prefixes = set()
+            for key in all_keys:
+                if '/' in key:
+                    prefix = key.split('/')[0]
+                    unique_prefixes.add(prefix)
+                else:
+                    unique_prefixes.add(key)
+            logger.info(f"Unique bucket prefixes found: {sorted(list(unique_prefixes))}")
+        
+        # Filter by organization bucket if specified
+        if organization:
+            s3_files = s3_files.filter(session__s3_bucket=organization)
+            logger.info(f"After organization filter '{organization}': {s3_files.count()} files")
+        
+        # Filter by specific bucket if specified (at database level)
+        if bucket_filter:
+            s3_files = s3_files.filter(session__s3_bucket=bucket_filter)
+            logger.info(f"After bucket filter '{bucket_filter}': {s3_files.count()} files")
+        
+        # Filter by link status if specified
+        if status_filter == 'linked':
+            s3_files = s3_files.filter(related_resource__isnull=False)
+            logger.info(f"After status filter 'linked': {s3_files.count()} files")
+        elif status_filter == 'unlinked':
+            s3_files = s3_files.filter(related_resource__isnull=True)
+            logger.info(f"After status filter 'unlinked': {s3_files.count()} files")
+        
+        s3_files = s3_files.order_by('s3_key')
 
-        # Group files by bucket (extract bucket from s3_key)
+        # Log some sample s3_keys to see the data
+        sample_keys = list(s3_files.values_list('s3_key', flat=True)[:5])
+        logger.info(f"Sample S3 keys: {sample_keys}")
+
+        # Add pagination
+        page_number = request.GET.get('page', 1)
+        paginator = Paginator(s3_files, 50)  # Show 50 files per page
+        page_obj = paginator.get_page(page_number)
+
+        logger.info(f"Pagination: page {page_number}, total pages: {paginator.num_pages}, current page items: {len(page_obj)}")
+
+        # Group paginated files by bucket (get bucket from session)
         files_by_bucket = {}
-        for file in s3_files:
-            # Extract bucket name from s3_key (assuming format: bucket/path/to/file)
-            bucket_name = file.s3_key.split('/')[0] if '/' in file.s3_key else 'unknown'
+        buckets = set()
+        
+        for file in page_obj:
+            # Get bucket name from session
+            bucket_name = file.session.s3_bucket if file.session and file.session.s3_bucket else 'unknown'
+            
+            buckets.add(bucket_name)
+            
             if bucket_name not in files_by_bucket:
                 files_by_bucket[bucket_name] = []
             files_by_bucket[bucket_name].append(file)
 
-        # Get statistics
+        logger.info(f"Files grouped by bucket: {[(k, len(v)) for k, v in files_by_bucket.items()]}")
+
+        # Get available organizations and all possible buckets from BucketService
+        bucket_service = BucketService()
+        available_organizations = bucket_service.get_predefined_organizations()
+        
+        # Get all unique buckets from all S3 files (not just current page) for the dropdown
+        all_buckets = set()
+        all_files_for_buckets = S3FileObject.objects.all()
+        if organization:
+            all_files_for_buckets = all_files_for_buckets.filter(session__s3_bucket=organization)
+        
+        logger.info(f"Getting all buckets from {all_files_for_buckets.count()} files for dropdown")
+        
+        # Get unique bucket names from sessions
+        bucket_names = all_files_for_buckets.values_list('session__s3_bucket', flat=True).distinct()
+        for bucket_name in bucket_names:
+            if bucket_name:  # Skip empty bucket names
+                all_buckets.add(bucket_name)
+
+        logger.info(f"All available buckets: {sorted(list(all_buckets))}")
+
+        # Get statistics for all files (not just current page)
         total_files = s3_files.count()
         linked_files = s3_files.filter(related_resource__isnull=False).count()
         unlinked_files = total_files - linked_files
 
+        logger.info(f"Statistics: total={total_files}, linked={linked_files}, unlinked={unlinked_files}")
+
         context = {
             'files_by_bucket': files_by_bucket,
+            'buckets': sorted(list(all_buckets)),  # All possible buckets for dropdown
+            'available_organizations': available_organizations,
+            'selected_organization': organization,
+            'selected_status': status_filter,
+            'selected_bucket': bucket_filter,
+            'page_obj': page_obj,
             'total_files': total_files,
             'linked_files': linked_files,
             'unlinked_files': unlinked_files,
             'link_percentage': round((linked_files / total_files * 100) if total_files > 0 else 0, 1)
         }
 
+        # Return just the files container for HTMX requests
+        if request.headers.get('HX-Request'):
+            return render(request, 'partials/files_container.html', context)
+        
         return render(request, self.template_name, context)
 
 
 @login_required
 @require_http_methods(["GET"])
-def search_resources_api(request):
-    """API endpoint to search for resources that could be linked to files."""
+def search_resources(request):
+    """Search for resources that could be linked to files."""
     query = request.GET.get('q', '').strip()
     
     if not query or len(query) < 2:
@@ -81,8 +181,8 @@ def search_resources_api(request):
 
 @login_required
 @require_http_methods(["POST"])
-def link_file_to_resource_api(request):
-    """API endpoint to link a single file to a resource."""
+def link_file_to_resource(request):
+    """Link a single file to a resource."""
     try:
         # Handle both JSON and form data
         if request.content_type == 'application/json':
@@ -94,10 +194,12 @@ def link_file_to_resource_api(request):
         resource_id = data.get('resource_id')
 
         if not file_id or not resource_id:
-            return render(request, 'partials/toast.html', {
-                'message': 'Missing file or resource information',
-                'type': 'error'
-            })
+            if request.headers.get('HX-Request'):
+                return render(request, 'partials/toast.html', {
+                    'message': 'Missing file or resource information',
+                    'type': 'error'
+                })
+            return HttpResponse("Missing file or resource information", status=400)
 
         # Get the objects
         s3_file = get_object_or_404(S3FileObject, id=file_id)
@@ -107,29 +209,37 @@ def link_file_to_resource_api(request):
         s3_file.related_resource = resource
         s3_file.save()
 
-        # Return updated files list
-        return _get_files_list_response(request)
+        # Return updated files list for HTMX or redirect for regular requests
+        if request.headers.get('HX-Request'):
+            return _get_files_list_response(request)
+        else:
+            return render(request, 'data_discovery.html', {'message': 'File linked successfully'})
 
     except Exception as e:
-        return render(request, 'partials/toast.html', {
-            'message': f'Error linking file: {str(e)}',
-            'type': 'error'
-        })
+        if request.headers.get('HX-Request'):
+            return render(request, 'partials/toast.html', {
+                'message': f'Error linking file: {str(e)}',
+                'type': 'error'
+            })
+        return HttpResponse(f"Error linking file: {str(e)}", status=500)
 
 
 @login_required
 @require_http_methods(["POST"])
-def batch_link_files_api(request):
-    """API endpoint to batch link multiple files using the automated service."""
+def batch_link_files(request):
+    """Batch link multiple files using the automated service."""
     try:
         # Get selected file IDs from form data
         file_ids = request.POST.getlist('selected_files')
 
         if not file_ids:
-            return render(request, 'partials/toast.html', {
-                'message': 'No files selected',
-                'type': 'warning'
-            })
+            message = 'No files selected'
+            if request.headers.get('HX-Request'):
+                return render(request, 'partials/toast.html', {
+                    'message': message,
+                    'type': 'warning'
+                })
+            return HttpResponse(message, status=400)
 
         # Get the queryset of selected files
         selected_files = S3FileObject.objects.filter(id__in=file_ids)
@@ -138,26 +248,37 @@ def batch_link_files_api(request):
         service = FileResourceMatcherService()
         processed, linked, ambiguous, errors = service.match_and_link_by_filename_to_resource_value(selected_files)
 
-        # Return success toast and updated files list
-        response = HttpResponse()
-        response['HX-Refresh'] = 'true'  # Tell HTMX to refresh the page
+        message = f'Batch processing complete. Processed: {processed}, Linked: {linked}, Ambiguous: {ambiguous}, Errors: {errors}'
         
-        return render(request, 'partials/toast.html', {
-            'message': f'Batch processing complete. Processed: {processed}, Linked: {linked}, Ambiguous: {ambiguous}, Errors: {errors}',
-            'type': 'success' if errors == 0 else 'warning'
-        })
+        if request.headers.get('HX-Request'):
+            # Return success toast and trigger page refresh
+            response = HttpResponse()
+            response['HX-Refresh'] = 'true'  # Tell HTMX to refresh the page
+            
+            return render(request, 'partials/toast.html', {
+                'message': message,
+                'type': 'success' if errors == 0 else 'warning'
+            })
+        else:
+            # For regular requests, redirect back to data discovery
+            from django.contrib import messages
+            messages.success(request, message)
+            return HttpResponseRedirect(reverse('metadata:data_discovery'))
 
     except Exception as e:
-        return render(request, 'partials/toast.html', {
-            'message': f'Batch linking failed: {str(e)}',
-            'type': 'error'
-        })
+        error_msg = f'Batch linking failed: {str(e)}'
+        if request.headers.get('HX-Request'):
+            return render(request, 'partials/toast.html', {
+                'message': error_msg,
+                'type': 'error'
+            })
+        return HttpResponse(error_msg, status=500)
 
 
 @login_required
 @require_http_methods(["POST"])  
-def unlink_file_api(request):
-    """API endpoint to unlink a file from its resource."""
+def unlink_file(request):
+    """Unlink a file from its resource."""
     try:
         # Handle both JSON and form data
         if request.content_type == 'application/json':
@@ -168,10 +289,13 @@ def unlink_file_api(request):
         file_id = data.get('file_id')
 
         if not file_id:
-            return render(request, 'partials/toast.html', {
-                'message': 'Missing file information',
-                'type': 'error'
-            })
+            message = 'Missing file information'
+            if request.headers.get('HX-Request'):
+                return render(request, 'partials/toast.html', {
+                    'message': message,
+                    'type': 'error'
+                })
+            return HttpResponse(message, status=400)
 
         s3_file = get_object_or_404(S3FileObject, id=file_id)
         
@@ -182,56 +306,78 @@ def unlink_file_api(request):
         s3_file.related_resource = None
         s3_file.save()
 
-        # Return updated files list
-        return _get_files_list_response(request)
+        # Return updated files list for HTMX or redirect for regular requests
+        if request.headers.get('HX-Request'):
+            return _get_files_list_response(request)
+        else:
+            from django.contrib import messages
+            messages.success(request, f'File unlinked from {old_resource}' if old_resource else 'File unlinked')
+            return HttpResponseRedirect(reverse('metadata:data_discovery'))
 
     except Exception as e:
-        return render(request, 'partials/toast.html', {
-            'message': f'Error unlinking file: {str(e)}',
-            'type': 'error'
-        })
+        error_msg = f'Error unlinking file: {str(e)}'
+        if request.headers.get('HX-Request'):
+            return render(request, 'partials/toast.html', {
+                'message': error_msg,
+                'type': 'error'
+            })
+        return HttpResponse(error_msg, status=500)
 
 
 @login_required
 @require_http_methods(["POST"])
-def auto_link_all_api(request):
-    """API endpoint to automatically link all unlinked files."""
+def auto_link_all(request):
+    """Automatically link all unlinked files."""
     try:
-        # Get all unlinked files in data folders
+        # Get all unlinked files
         unlinked_files = S3FileObject.objects.filter(
-            s3_key__contains='/data/',
             related_resource__isnull=True
         )
         
         if not unlinked_files.exists():
-            return render(request, 'partials/toast.html', {
-                'message': 'No unlinked files found',
-                'type': 'info'
-            })
+            message = 'No unlinked files found'
+            if request.headers.get('HX-Request'):
+                return render(request, 'partials/toast.html', {
+                    'message': message,
+                    'type': 'info'
+                })
+            from django.contrib import messages
+            messages.info(request, message)
+            return HttpResponseRedirect(reverse('metadata:data_discovery'))
         
         # Use the matching service for batch processing
         service = FileResourceMatcherService()
         processed, linked, ambiguous, errors = service.match_and_link_by_filename_to_resource_value(unlinked_files)
 
-        # Return success response and refresh page
-        response = HttpResponse()
-        response['HX-Refresh'] = 'true'  # Tell HTMX to refresh the page
+        message = f'Auto-linking complete. Processed: {processed}, Linked: {linked}, Ambiguous: {ambiguous}, Errors: {errors}'
         
-        return render(request, 'partials/toast.html', {
-            'message': f'Auto-linking complete. Processed: {processed}, Linked: {linked}, Ambiguous: {ambiguous}, Errors: {errors}',
-            'type': 'success' if errors == 0 else 'warning'
-        })
+        if request.headers.get('HX-Request'):
+            # Return success response and refresh page
+            response = HttpResponse()
+            response['HX-Refresh'] = 'true'  # Tell HTMX to refresh the page
+            
+            return render(request, 'partials/toast.html', {
+                'message': message,
+                'type': 'success' if errors == 0 else 'warning'
+            })
+        else:
+            from django.contrib import messages
+            messages.success(request, message)
+            return HttpResponseRedirect(reverse('metadata:data_discovery'))
 
     except Exception as e:
-        return render(request, 'partials/toast.html', {
-            'message': f'Auto-linking failed: {str(e)}',
-            'type': 'error'
-        })
+        error_msg = f'Auto-linking failed: {str(e)}'
+        if request.headers.get('HX-Request'):
+            return render(request, 'partials/toast.html', {
+                'message': error_msg,
+                'type': 'error'
+            })
+        return HttpResponse(error_msg, status=500)
 
 
 def _get_files_list_response(request):
     """Helper function to get updated files list HTML."""
-    # Re-fetch files data
+    # Re-fetch files data using same filter as main view
     s3_files = S3FileObject.objects.filter(
         s3_key__contains='/data/'
     ).select_related('related_resource', 'session', 'session__user').annotate(
@@ -246,6 +392,7 @@ def _get_files_list_response(request):
     files_by_bucket = {}
     for file in s3_files:
         bucket_name = file.s3_key.split('/')[0] if '/' in file.s3_key else 'unknown'
+        
         if bucket_name not in files_by_bucket:
             files_by_bucket[bucket_name] = []
         files_by_bucket[bucket_name].append(file)

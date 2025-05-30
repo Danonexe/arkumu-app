@@ -60,6 +60,13 @@
                             value="{{ link_percentage|default:0 }}" max="100"></progress>
                 </div>
             </div>
+            {% if page_obj.has_other_pages %}
+            <div class="stat place-items-center">
+                <div class="stat-title">Current Page</div>
+                <div class="stat-value text-neutral">{{ page_obj.number }}</div>
+                <div class="stat-desc">of {{ page_obj.paginator.num_pages }} pages</div>
+            </div>
+            {% endif %}
         </div>
     </div>
 
@@ -78,18 +85,45 @@
                             S3 Files by Bucket
                         </h2>
                         
-                        <!-- Simple Filter Controls -->
+                        <!-- Filter Controls -->
                         <div class="join">
-                            <select name="status_filter" class="select select-sm select-bordered join-item">
-                                <option value="">All Status</option>
-                                <option value="linked">Linked Only</option>
-                                <option value="unlinked">Unlinked Only</option>
+                            <select name="org_filter" 
+                                    class="select select-sm select-bordered join-item"
+                                    hx-get="{% url 'metadata:data_discovery' %}"
+                                    hx-target="#files-container"
+                                    hx-swap="innerHTML"
+                                    hx-include="[name='status_filter'], [name='bucket_filter']"
+                                    hx-trigger="change">
+                                <option value="">All Organizations</option>
+                                {% for org in available_organizations %}
+                                    <option value="{{ org }}" {% if org == selected_organization %}selected{% endif %}>
+                                        {{ org|upper }}
+                                    </option>
+                                {% endfor %}
                             </select>
                             
-                            <select name="bucket_filter" class="select select-sm select-bordered join-item">
+                            <select name="status_filter" 
+                                    class="select select-sm select-bordered join-item"
+                                    hx-get="{% url 'metadata:data_discovery' %}"
+                                    hx-target="#files-container"
+                                    hx-swap="innerHTML"
+                                    hx-include="[name='org_filter'], [name='bucket_filter']"
+                                    hx-trigger="change">
+                                <option value="">All Status</option>
+                                <option value="linked" {% if selected_status == 'linked' %}selected{% endif %}>Linked Only</option>
+                                <option value="unlinked" {% if selected_status == 'unlinked' %}selected{% endif %}>Unlinked Only</option>
+                            </select>
+                            
+                            <select name="bucket_filter" 
+                                    class="select select-sm select-bordered join-item"
+                                    hx-get="{% url 'metadata:data_discovery' %}"
+                                    hx-target="#files-container"
+                                    hx-swap="innerHTML"
+                                    hx-include="[name='org_filter'], [name='status_filter']"
+                                    hx-trigger="change">
                                 <option value="">All Buckets</option>
                                 {% for bucket in buckets %}
-                                    <option value="{{ bucket }}">{{ bucket }}</option>
+                                    <option value="{{ bucket }}" {% if bucket == selected_bucket %}selected{% endif %}>{{ bucket }}</option>
                                 {% endfor %}
                             </select>
                         </div>
@@ -102,7 +136,7 @@
                         </button>
                         
                         <button class="btn btn-sm btn-primary"
-                                hx-post="{% url 'metadata:batch_link_api' %}"
+                                hx-post="{% url 'metadata:batch_link_files' %}"
                                 hx-include="[name='selected_files']:checked"
                                 hx-confirm="Link selected files using automatic matching?"
                                 hx-target="#toast-container"
@@ -117,7 +151,64 @@
                 
                 <!-- File List Container -->
                 <div class="card-body p-0" id="files-container">
+                    <!-- Pagination - Top -->
+                    {% if page_obj.has_other_pages %}
+                    <div class="px-6 py-4 border-b border-base-300">
+                        <div class="flex justify-between items-center">
+                            <div class="text-sm text-base-content/70">
+                                Showing {{ page_obj.start_index }}-{{ page_obj.end_index }} of {{ page_obj.paginator.count }} files
+                            </div>
+                            <div class="join">
+                                {% if page_obj.has_previous %}
+                                    <a href="?page=1{% if selected_organization %}&org={{ selected_organization }}{% endif %}" class="join-item btn btn-sm">«</a>
+                                    <a href="?page={{ page_obj.previous_page_number }}{% if selected_organization %}&org={{ selected_organization }}{% endif %}" class="join-item btn btn-sm">‹</a>
+                                {% else %}
+                                    <button class="join-item btn btn-sm btn-disabled">«</button>
+                                    <button class="join-item btn btn-sm btn-disabled">‹</button>
+                                {% endif %}
+                                
+                                <button class="join-item btn btn-sm btn-active">Page {{ page_obj.number }}</button>
+                                
+                                {% if page_obj.has_next %}
+                                    <a href="?page={{ page_obj.next_page_number }}{% if selected_organization %}&org={{ selected_organization }}{% endif %}" class="join-item btn btn-sm">›</a>
+                                    <a href="?page={{ page_obj.paginator.num_pages }}{% if selected_organization %}&org={{ selected_organization }}{% endif %}" class="join-item btn btn-sm">»</a>
+                                {% else %}
+                                    <button class="join-item btn btn-sm btn-disabled">›</button>
+                                    <button class="join-item btn btn-sm btn-disabled">»</button>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
                     {% include 'partials/files_list.html' %}
+                    
+                    <!-- Pagination - Bottom -->
+                    {% if page_obj.has_other_pages %}
+                    <div class="px-6 py-4 border-t border-base-300">
+                        <div class="flex justify-center">
+                            <div class="join">
+                                {% if page_obj.has_previous %}
+                                    <a href="?page=1{% if selected_organization %}&org={{ selected_organization }}{% endif %}" class="join-item btn btn-sm">« First</a>
+                                    <a href="?page={{ page_obj.previous_page_number }}{% if selected_organization %}&org={{ selected_organization }}{% endif %}" class="join-item btn btn-sm">‹ Previous</a>
+                                {% endif %}
+                                
+                                {% for num in page_obj.paginator.page_range %}
+                                    {% if page_obj.number == num %}
+                                        <button class="join-item btn btn-sm btn-active">{{ num }}</button>
+                                    {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                                        <a href="?page={{ num }}{% if selected_organization %}&org={{ selected_organization }}{% endif %}" class="join-item btn btn-sm">{{ num }}</a>
+                                    {% endif %}
+                                {% endfor %}
+                                
+                                {% if page_obj.has_next %}
+                                    <a href="?page={{ page_obj.next_page_number }}{% if selected_organization %}&org={{ selected_organization }}{% endif %}" class="join-item btn btn-sm">Next ›</a>
+                                    <a href="?page={{ page_obj.paginator.num_pages }}{% if selected_organization %}&org={{ selected_organization }}{% endif %}" class="join-item btn btn-sm">Last »</a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -145,7 +236,7 @@
                         <div class="divider">Bulk Operations</div>
                         
                         <button class="btn btn-info w-full"
-                                hx-post="{% url 'metadata:auto_link_all_api' %}"
+                                hx-post="{% url 'metadata:auto_link_all' %}"
                                 hx-confirm="Run automatic linking for all unlinked files? This may take a while."
                                 hx-target="#toast-container"
                                 hx-swap="beforeend">
@@ -214,7 +305,7 @@
                        placeholder="Type to search resources..." 
                        class="input input-bordered w-full"
                        autocomplete="off"
-                       hx-get="{% url 'metadata:search_resources_api' %}"
+                       hx-get="{% url 'metadata:search_resources' %}"
                        hx-target="#search-results"
                        hx-trigger="input changed delay:300ms, focus"
                        hx-include="#current-file-id">
@@ -300,5 +391,17 @@ document.addEventListener('change', function(e) {
         console.log('Filter changed:', e.target.name, e.target.value);
     }
 });
+
+function filterByOrganization(orgValue) {
+    const url = new URL(window.location);
+    if (orgValue) {
+        url.searchParams.set('org', orgValue);
+    } else {
+        url.searchParams.delete('org');
+    }
+    // Reset to page 1 when changing organization
+    url.searchParams.delete('page');
+    window.location.href = url.toString();
+}
 </script>
 {% endblock %} 

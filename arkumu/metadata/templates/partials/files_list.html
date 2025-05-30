@@ -57,7 +57,7 @@
                             <!-- Unlink Button -->
                             <button 
                                 class="btn btn-sm btn-ghost text-error"
-                                hx-post="{% url 'metadata:unlink_file_api' %}"
+                                hx-post="{% url 'metadata:unlink_file' %}"
                                 hx-vals='{"file_id": "{{ file.id }}"}'
                                 hx-confirm="Are you sure you want to unlink this file?"
                                 hx-target="#files-container"

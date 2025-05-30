@@ -11,7 +11,7 @@ import json
 from arkumu.metadata.models.resource import Resource, ResourceType
 from arkumu.metadata.models.triples import Triple
 from arkumu.storage.models import S3FileObject
-from arkumu.metadata.services.map_resources_to_files import FileResourceMatcherService
+from arkumu.metadata.services.mapping.map_resources_to_files import FileResourceMatcherService
 
 @login_required
 def resource_list(request):

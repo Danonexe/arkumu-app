@@ -18,7 +18,7 @@ from .bulk_editor_views import bulk_triple_editor, query_relationships, create_b
 
 
 # Data discovery views
-from .data_discovery_views import DataDiscoveryView, search_resources_api, link_file_to_resource_api, batch_link_files_api, unlink_file_api, auto_link_all_api
+from .data_discovery_views import DataDiscoveryView, search_resources, link_file_to_resource, batch_link_files, unlink_file, auto_link_all
 
 __all__ = [
     # Dashboard
@@ -44,9 +44,9 @@ __all__ = [
 
     # Data discovery
     'DataDiscoveryView',
-    'search_resources_api',
-    'link_file_to_resource_api',
-    'batch_link_files_api',
-    'unlink_file_api',
-    'auto_link_all_api',
+    'search_resources',
+    'link_file_to_resource',
+    'batch_link_files',
+    'unlink_file',
+    'auto_link_all',
 ] 

@@ -30,9 +30,9 @@ urlpatterns = [
     
     # Data Discovery
     path('data-discovery/', data_discovery_views.DataDiscoveryView.as_view(), name='data_discovery'),
-    path('data-discovery/search-resources/', data_discovery_views.search_resources_api, name='search_resources_api'),
-    path('data-discovery/link-file/', data_discovery_views.link_file_to_resource_api, name='link_file_api'),
-    path('data-discovery/batch-link/', data_discovery_views.batch_link_files_api, name='batch_link_api'),
-    path('data-discovery/unlink-file/', data_discovery_views.unlink_file_api, name='unlink_file_api'),
-    path('data-discovery/auto-link-all/', data_discovery_views.auto_link_all_api, name='auto_link_all_api'),
+    path('data-discovery/search-resources/', data_discovery_views.search_resources, name='search_resources'),
+    path('data-discovery/link-file/', data_discovery_views.link_file_to_resource, name='link_file_to_resource'),
+    path('data-discovery/batch-link/', data_discovery_views.batch_link_files, name='batch_link_files'),
+    path('data-discovery/unlink-file/', data_discovery_views.unlink_file, name='unlink_file'),
+    path('data-discovery/auto-link-all/', data_discovery_views.auto_link_all, name='auto_link_all'),
     ]
