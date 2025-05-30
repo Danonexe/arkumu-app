@@ -1,5 +1,5 @@
 from django.urls import path
-from arkumu.metadata.views import dashboard_views, resource_views, triple_views, graph_views, bulk_editor_views
+from arkumu.metadata.views import dashboard_views, resource_views, triple_views, graph_views, bulk_editor_views, map_resources_to_s3_views
 
 app_name = 'metadata'
 
@@ -27,6 +27,6 @@ urlpatterns = [
     path('bulk-editor/query/', bulk_editor_views.query_relationships, name='query_relationships'),
     path('bulk-editor/create/', bulk_editor_views.create_bulk_triples, name='create_bulk_triples'),
 
-    # Map S3 Files to Resources (New Path)
-    path('map-s3-to-resources/', resource_views.MapS3ToResourcesView.as_view(), name='map_s3_to_resources'),
-]
+    # Map resources to S3
+    path('map-resources-to-s3/', map_resources_to_s3_views.MapResourcesToS3View.as_view(), name='map_resources_to_s3'),
+    ]
