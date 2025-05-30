@@ -1,0 +1,23 @@
+{% if resources %}
+    {% for resource in resources %}
+    <div 
+        class="border border-base-300 rounded-lg p-3 mb-2 hover:bg-base-50 cursor-pointer"
+        hx-post="{% url 'metadata:link_file_api' %}"
+        hx-vals='{"resource_id": "{{ resource.id }}"}'
+        hx-include="#current-file-id"
+        hx-target="#files-container"
+        hx-swap="innerHTML"
+        onclick="document.getElementById('resource-search-modal').close()"
+    >
+        <div class="font-medium">{{ resource.value }}</div>
+        <div class="text-sm text-base-content/60">{{ resource.resource_type }}</div>
+        {% if resource.uri %}
+            <div class="text-xs text-base-content/50">{{ resource.uri }}</div>
+        {% endif %}
+    </div>
+    {% endfor %}
+{% elif query %}
+    <p class="text-base-content/60 text-center py-4">No resources found for "{{ query }}"</p>
+{% else %}
+    <p class="text-base-content/60 text-center py-4">Type at least 2 characters to search</p>
+{% endif %} 

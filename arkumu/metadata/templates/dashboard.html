@@ -176,13 +176,35 @@
     </div>
     
     <!-- Quick Links -->
-    <div class="mt-8 flex flex-wrap gap-4">
-        <a href="{% url 'metadata:resource_list' %}" class="btn btn-primary">Browse Resources</a>
-        <a href="{% url 'metadata:triple_search' %}" class="btn btn-secondary">Search Triples</a>
-        <a href="{% url 'metadata:triple_list' %}" class="btn btn-accent">View All Triples</a>
-        <a href="{% url 'metadata:full_graph_view' %}" class="btn btn-info">View Full Graph</a>
-        <a href="{% url 'metadata:bulk_triple_editor' %}" class="btn btn-warning">Bulk Triple Editor</a>
-        <a href="{% url 'storage:map_s3_to_resources' %}" class="btn btn-neutral">Map S3 to Resources</a>
+    <div class="mt-8">
+        <h3 class="text-lg font-semibold mb-4">Quick Actions</h3>
+        
+        <!-- Browsing & Discovery -->
+        <div class="mb-4">
+            <h4 class="text-sm font-medium text-base-content/70 mb-2">Browse & Discover</h4>
+            <div class="flex flex-wrap gap-2">
+                <a href="{% url 'metadata:resource_list' %}" class="btn btn-primary">Browse Resources</a>
+                <a href="{% url 'metadata:data_discovery' %}" class="btn btn-outline btn-primary">Data Discovery</a>
+            </div>
+        </div>
+        
+        <!-- Search & Query -->
+        <div class="mb-4">
+            <h4 class="text-sm font-medium text-base-content/70 mb-2">Search & Query</h4>
+            <div class="flex flex-wrap gap-2">
+                <a href="{% url 'metadata:triple_search' %}" class="btn btn-accent">Search Triples</a>
+                <a href="{% url 'metadata:triple_list' %}" class="btn btn-outline btn-accent">View All Triples</a>
+            </div>
+        </div>
+        
+        <!-- Visualization & Editing -->
+        <div class="mb-4">
+            <h4 class="text-sm font-medium text-base-content/70 mb-2">Visualization & Editing</h4>
+            <div class="flex flex-wrap gap-2">
+                <a href="{% url 'metadata:full_graph_view' %}" class="btn btn-info">View Full Graph</a>
+                <a href="{% url 'metadata:bulk_triple_editor' %}" class="btn btn-error">Bulk Triple Editor</a>
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %}

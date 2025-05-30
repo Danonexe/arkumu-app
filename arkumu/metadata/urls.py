@@ -1,5 +1,5 @@
 from django.urls import path
-from arkumu.metadata.views import dashboard_views, resource_views, triple_views, graph_views, bulk_editor_views, map_resources_to_s3_views
+from arkumu.metadata.views import dashboard_views, resource_views, triple_views, graph_views, bulk_editor_views, data_discovery_views
 
 app_name = 'metadata'
 
@@ -27,6 +27,12 @@ urlpatterns = [
     path('bulk-editor/query/', bulk_editor_views.query_relationships, name='query_relationships'),
     path('bulk-editor/create/', bulk_editor_views.create_bulk_triples, name='create_bulk_triples'),
 
-    # Map resources to S3
-    path('map-resources-to-s3/', map_resources_to_s3_views.MapResourcesToS3View.as_view(), name='map_resources_to_s3'),
+    
+    # Data Discovery
+    path('data-discovery/', data_discovery_views.DataDiscoveryView.as_view(), name='data_discovery'),
+    path('data-discovery/search-resources/', data_discovery_views.search_resources_api, name='search_resources_api'),
+    path('data-discovery/link-file/', data_discovery_views.link_file_to_resource_api, name='link_file_api'),
+    path('data-discovery/batch-link/', data_discovery_views.batch_link_files_api, name='batch_link_api'),
+    path('data-discovery/unlink-file/', data_discovery_views.unlink_file_api, name='unlink_file_api'),
+    path('data-discovery/auto-link-all/', data_discovery_views.auto_link_all_api, name='auto_link_all_api'),
     ]

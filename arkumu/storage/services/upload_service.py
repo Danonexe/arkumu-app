@@ -59,6 +59,76 @@ class UploadService:
         # Just return the clean file name if no prefix
         return clean_file_name
 
+    def _upload_file_to_custom_key(self, file_obj, s3_key, bucket_name, content_type='application/octet-stream'):
+        """
+        Upload a file directly to a specific S3 key without path generation.
+        
+        Args:
+            file_obj: File-like object (Django UploadedFile, etc.)
+            s3_key: Complete S3 key (path) for the file
+            bucket_name: Target S3 bucket
+            content_type: MIME type of the file
+            
+        Returns:
+            Dictionary with upload result
+        """
+        try:
+            logger.debug(f"Uploading to custom key: {s3_key}")
+            
+            # Prepare upload arguments
+            upload_args = {
+                'ContentType': content_type,
+            }
+            
+            # Upload the file using BaseStorageService's S3 client
+            self.base_s3_service.s3_client.upload_fileobj(
+                file_obj,
+                bucket_name,
+                s3_key,
+                ExtraArgs=upload_args
+            )
+            
+            # Verify upload and get file info
+            try:
+                head_response = self.base_s3_service.s3_client.head_object(
+                    Bucket=bucket_name,
+                    Key=s3_key
+                )
+                actual_file_size = head_response.get('ContentLength', 0)
+                last_modified = head_response.get('LastModified', None)
+                
+                s3_url = f"s3://{bucket_name}/{s3_key}"
+                
+                logger.debug(f"✅ Successfully uploaded to {s3_key} ({self.base_s3_service._format_size(actual_file_size)})")
+                
+                return {
+                    'success': True,
+                    's3_key': s3_key,
+                    's3_url': s3_url,
+                    'bucket': bucket_name,
+                    'file_size': actual_file_size,
+                    'content_type': content_type,
+                    'last_modified': last_modified.isoformat() if last_modified else None,
+                }
+            except Exception as verify_error:
+                logger.warning(f"Upload succeeded but verification failed for {s3_key}: {verify_error}")
+                return {
+                    'success': True,
+                    's3_key': s3_key,
+                    's3_url': f"s3://{bucket_name}/{s3_key}",
+                    'bucket': bucket_name,
+                    'content_type': content_type,
+                    'verification_warning': str(verify_error)
+                }
+                
+        except Exception as e:
+            logger.error(f"Error uploading to {s3_key}: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e),
+                's3_key': s3_key
+            }
+
     def upload_file_stream(self, file_obj: Union[IO, bytes], file_name: str, 
                           content_type: str = 'application/octet-stream',
                           path_prefix: Optional[str] = None, 
@@ -678,4 +748,141 @@ class UploadService:
                 try:
                     os.unlink(temp_file)
                 except Exception as e:
-                    logger.warning(f"Error cleaning up temporary file {temp_file}: {str(e)}") 
+                    logger.warning(f"Error cleaning up temporary file {temp_file}: {str(e)}")
+
+    def upload_batch_django_files_with_structure(self, uploaded_files, base_path='', bucket_name=None, file_paths=None):
+        """
+        Upload Django files while preserving their folder structure.
+        Uses provided file paths to maintain directory hierarchy.
+        
+        Args:
+            uploaded_files: List of Django UploadedFile objects
+            base_path: Base path to prepend to all files (e.g., 'data' or 'metadata')
+            bucket_name: Target S3 bucket (optional, uses default if None)
+            file_paths: List of relative paths for each file (optional)
+            
+        Returns:
+            Dict with success status, results, and summary
+        """
+        if not uploaded_files:
+            return {
+                'success': False,
+                'error': 'No files provided',
+                'results': [],
+                'failures': []
+            }
+        
+        bucket_name = bucket_name or self.base_s3_service.ingest_bucket
+        logger.info(f"Starting structured batch upload: {len(uploaded_files)} files to {bucket_name}")
+        
+        start_time = time.time()
+        results = []
+        failures = []
+        
+        try:
+            for i, uploaded_file in enumerate(uploaded_files):
+                try:
+                    # Get the file's relative path for folder structure
+                    if file_paths and i < len(file_paths):
+                        # Use provided path from JavaScript (webkitRelativePath)
+                        relative_path = file_paths[i]
+                    else:
+                        # Fallback to file name
+                        relative_path = uploaded_file.name
+                    
+                    # If we have a base_path, prepend it
+                    if base_path:
+                        s3_key = f"{base_path.rstrip('/')}/{relative_path}"
+                    else:
+                        s3_key = relative_path
+                    
+                    # Clean up the S3 key (remove double slashes, etc.)
+                    s3_key = '/'.join(filter(None, s3_key.split('/')))
+                    
+                    logger.debug(f"Uploading {uploaded_file.name} -> {s3_key}")
+                    
+                    # Upload the file directly using the existing upload methods
+                    # Reset file position to beginning
+                    if hasattr(uploaded_file, 'seek'):
+                        uploaded_file.seek(0)
+                    
+                    # Use upload_file_stream method - we need to set the key manually
+                    # Since upload_file_stream uses _generate_file_key, we need a custom approach
+                    result = self._upload_file_to_custom_key(
+                        file_obj=uploaded_file,
+                        s3_key=s3_key,
+                        bucket_name=bucket_name,
+                        content_type=uploaded_file.content_type or 'application/octet-stream'
+                    )
+                    
+                    if result.get('success', False):
+                        results.append({
+                            'file_name': uploaded_file.name,
+                            'original_path': relative_path,
+                            's3_key': s3_key,
+                            's3_url': result.get('s3_url', ''),
+                            'file_size': uploaded_file.size,
+                            'content_type': uploaded_file.content_type or 'application/octet-stream'
+                        })
+                        logger.debug(f"✅ Successfully uploaded: {uploaded_file.name}")
+                    else:
+                        error_msg = result.get('error', 'Upload failed')
+                        failures.append({
+                            'file_name': uploaded_file.name,
+                            'original_path': relative_path,
+                            's3_key': s3_key,
+                            'error': error_msg,
+                            'file_size': uploaded_file.size,
+                            'content_type': uploaded_file.content_type or 'application/octet-stream'
+                        })
+                        logger.error(f"❌ Failed to upload {uploaded_file.name}: {error_msg}")
+                
+                except Exception as e:
+                    error_msg = f"Error processing file {uploaded_file.name}: {str(e)}"
+                    logger.exception(error_msg)
+                    failures.append({
+                        'file_name': uploaded_file.name,
+                        'original_path': file_paths[i] if file_paths and i < len(file_paths) else uploaded_file.name,
+                        's3_key': '',
+                        'error': error_msg,
+                        'file_size': getattr(uploaded_file, 'size', 0),
+                        'content_type': getattr(uploaded_file, 'content_type', 'application/octet-stream') or 'application/octet-stream'
+                    })
+        
+        except Exception as e:
+            logger.exception(f"Critical error in batch upload: {str(e)}")
+            return {
+                'success': False,
+                'error': f"Batch upload failed: {str(e)}",
+                'results': results,
+                'failures': failures
+            }
+        
+        # Calculate summary
+        duration = time.time() - start_time
+        total_files = len(uploaded_files)
+        success_count = len(results)
+        failure_count = len(failures)
+        
+        total_size = sum(f.get('file_size', 0) for f in results)
+        
+        logger.info(f"Structured batch upload completed: {success_count}/{total_files} files successful in {duration:.2f}s")
+        
+        return {
+            'success': failure_count == 0,
+            'results': results,
+            'failures': failures,
+            'summary': {
+                'total_files': total_files,
+                'successful_files': success_count,
+                'failed_files': failure_count,
+                'total_size': total_size,
+                'duration_seconds': duration,
+                'bucket': bucket_name,
+                'base_path': base_path
+            },
+            'success_count': success_count,
+            'error_count': failure_count,
+            'total_size': total_size,
+            'duration': f"{duration:.2f}s"
+        } 

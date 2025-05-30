@@ -64,3 +64,9 @@ INSTALLED_APPS += ["django_extensions"]
 
 # Your stuff...
 # ------------------------------------------------------------------------------
+
+# Temporary fix for large batch uploads during development
+# TODO: Implement proper chunked upload solution
+DATA_UPLOAD_MAX_NUMBER_FILES = 1000  # Increase from default 100
+FILE_UPLOAD_MAX_MEMORY_SIZE = 25 * 1024 * 1024  # 25MB per file
+DATA_UPLOAD_MAX_MEMORY_SIZE = 500 * 1024 * 1024  # 500MB total

@@ -28,15 +28,7 @@ urlpatterns = [
     # Handle organization selection via parameter (for HTMX) - MUST come before the generic pattern
     path("organizations/browse/", file_operations_views.organization_contents, name="organization_contents_browse"),
     path("organizations/<str:organization>/", file_operations_views.organization_contents, name="organization_contents"),
-    
-    # Remove presigned URL and multipart upload API endpoints since they're no longer used
-    # path("presigned-urls/", views.get_presigned_urls, name="get_presigned_urls"),
-    # path("verify-uploads/", views.mark_uploads_complete, name="mark_uploads_complete"),
-    # path("multipart/initialize/", views.initialize_multipart_upload, name="initialize_multipart_upload"),
-    # path("multipart/get-part-urls/", views.get_part_upload_urls, name="get_part_upload_urls"),
-    # path("multipart/complete/", views.complete_multipart_upload, name="complete_multipart_upload"),
-    # path("multipart/abort/", views.abort_multipart_upload, name="abort_multipart_upload"),
-    # path("multipart/list/", views.list_multipart_uploads, name="list_multipart_uploads"),
+
     
     # Archivist dashboard
     path("dashboard/", dashboard_views.archivist_dashboard, name="archivist_dashboard"),

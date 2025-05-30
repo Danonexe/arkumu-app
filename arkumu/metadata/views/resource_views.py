@@ -47,7 +47,7 @@ def resource_list(request):
             'page_obj': page_obj,
         })
     
-    return render(request, 'metadata/resource_list.html', {
+    return render(request, 'resource_list.html', {
         'page_obj': page_obj,
         'resource_types': ResourceType.choices,
         'institutions': Resource.objects.values_list('source', flat=True).distinct().order_by('source'),
@@ -68,7 +68,7 @@ def resource_detail(request, resource_id):
     # Find linked files using the ForeignKey
     linked_files = S3FileObject.objects.filter(related_resource=resource)
     
-    return render(request, 'metadata/resource_detail.html', {
+    return render(request, 'resource_detail.html', {
         'resource': resource,
         'subject_triples': subject_triples,
         'object_triples': object_triples,
@@ -127,13 +127,13 @@ def resource_graph(request, resource_id):
         'links': links
     }
     
-    return render(request, 'metadata/resource_graph.html', {
+    return render(request, 'resource_graph.html', {
         'resource': resource,
         'graph_data': json.dumps(graph_data)
     })
 
 class MapS3ToResourcesView(LoginRequiredMixin, View):
-    template_name = 'metadata/map_s3_to_resources.html'
+    template_name = 'map_s3_to_resources.html'
     success_url = reverse_lazy('metadata:map_s3_to_resources')
 
     def get(self, request, *args, **kwargs):

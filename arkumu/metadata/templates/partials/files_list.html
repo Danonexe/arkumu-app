@@ -1,0 +1,103 @@
+{% if files_by_bucket %}
+    {% for bucket_name, files in files_by_bucket.items %}
+    <div class="collapse collapse-arrow border-b border-base-300">
+        <input type="checkbox" class="peer" checked>
+        <div class="collapse-title bg-base-50 font-medium flex items-center justify-between">
+            <span>📦 {{ bucket_name }}</span>
+            <div class="badge badge-outline">{{ files|length }} files</div>
+        </div>
+        <div class="collapse-content">
+            <div class="p-4 space-y-2">
+                {% for file in files %}
+                <div class="file-item flex items-center justify-between p-3 bg-base-50 rounded-lg hover:bg-base-100 border" data-file-id="{{ file.id }}">
+                    <div class="flex items-center gap-3">
+                        <!-- Selection Checkbox -->
+                        <input 
+                            type="checkbox" 
+                            class="file-checkbox checkbox checkbox-sm"
+                            name="selected_files"
+                            value="{{ file.id }}"
+                        >
+                        
+                        <!-- File Info -->
+                        <div class="flex flex-col">
+                            <div class="flex items-center gap-2">
+                                <span class="font-medium">{{ file.file_name }}</span>
+                                
+                                <!-- Link Status Indicator -->
+                                {% if file.related_resource %}
+                                    <div class="badge badge-success gap-1 linked-indicator">
+                                        <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                                        </svg>
+                                        Linked
+                                    </div>
+                                {% else %}
+                                    <div class="badge badge-warning gap-1">
+                                        <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                                        </svg>
+                                        Unlinked
+                                    </div>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="text-sm text-base-content/60">
+                                {{ file.s3_key }}
+                                {% if file.related_resource %}
+                                    → <span class="text-success">{{ file.related_resource.value }}</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Action Buttons -->
+                    <div class="flex items-center gap-2">
+                        {% if file.related_resource %}
+                            <!-- Unlink Button -->
+                            <button 
+                                class="btn btn-sm btn-ghost text-error"
+                                hx-post="{% url 'metadata:unlink_file_api' %}"
+                                hx-vals='{"file_id": "{{ file.id }}"}'
+                                hx-confirm="Are you sure you want to unlink this file?"
+                                hx-target="#files-container"
+                                hx-swap="innerHTML"
+                                title="Unlink from resource"
+                            >
+                                <span class="loading loading-spinner loading-xs htmx-indicator"></span>
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+                                </svg>
+                            </button>
+                        {% else %}
+                            <!-- Search & Link Button -->
+                            <button 
+                                class="btn btn-sm btn-primary"
+                                onclick="openResourceSearch('{{ file.id }}', '{{ file.file_name }}')"
+                                title="Search and link to resource"
+                            >
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                                </svg>
+                            </button>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="p-8 text-center">
+        <div class="text-base-content/60 mb-4">
+            <svg class="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 009.586 13H7"/>
+            </svg>
+        </div>
+        <h3 class="text-lg font-medium mb-2">No Data Files Found</h3>
+        <p class="text-base-content/60">
+            No S3 files were found in data folders. Files should be uploaded to buckets with "/data/" in their path.
+        </p>
+    </div>
+{% endif %} 

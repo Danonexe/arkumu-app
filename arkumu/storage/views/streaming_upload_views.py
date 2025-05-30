@@ -71,6 +71,9 @@ def streaming_upload_form(request):
             'error': 'Folder name is required'
         }, status=400)
     
+    # Check if we should preserve folder structure
+    preserve_folder_structure = request.POST.get('preserve_folder_structure', '').lower() == 'true'
+    
     # Get organization (if provided)
     organization = request.POST.get('organization', '').strip()
     
@@ -115,11 +118,31 @@ def streaming_upload_form(request):
         start_time = time.time()
         
         # Process files with optimized method
-        result = upload_service.upload_batch_django_files_optimized(
-            uploaded_files=files,
-            path_prefix=folder_name,
-            bucket_name=target_bucket
-        )
+        if preserve_folder_structure:
+            # Parse individual file paths if provided
+            file_paths = None
+            file_paths_json = request.POST.get('file_paths', '')
+            if file_paths_json:
+                try:
+                    file_paths = json.loads(file_paths_json)
+                    logger.debug(f"Parsed {len(file_paths)} file paths for structured upload")
+                except json.JSONDecodeError as e:
+                    logger.warning(f"Failed to parse file_paths JSON: {e}")
+            
+            # Use custom upload method that preserves folder structure
+            result = upload_service.upload_batch_django_files_with_structure(
+                uploaded_files=files,
+                base_path=folder_name,
+                bucket_name=target_bucket,
+                file_paths=file_paths
+            )
+        else:
+            # Use existing method for simple uploads
+            result = upload_service.upload_batch_django_files_optimized(
+                uploaded_files=files,
+                path_prefix=folder_name,
+                bucket_name=target_bucket
+            )
         
         # Calculate duration
         duration = time.time() - start_time

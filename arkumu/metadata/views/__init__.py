@@ -2,7 +2,7 @@
 # This package contains all view modules for the metadata application
 
 # Dashboard views
-from .dashboard_views import metadata_dashboard
+from .dashboard_views import metadata_dashboard, all_upload_sessions, all_ingest_sessions
 
 # Resource views  
 from .resource_views import resource_list, resource_detail, resource_graph
@@ -16,8 +16,9 @@ from .graph_views import full_graph_view, graph_data_view
 # Bulk editor views
 from .bulk_editor_views import bulk_triple_editor, query_relationships, create_bulk_triples
 
-# Map resources to S3 views
-from .map_resources_to_s3_views import MapResourcesToS3View
+
+# Data discovery views
+from .data_discovery_views import DataDiscoveryView, search_resources_api, link_file_to_resource_api, batch_link_files_api, unlink_file_api, auto_link_all_api
 
 __all__ = [
     # Dashboard
@@ -41,6 +42,11 @@ __all__ = [
     'query_relationships', 
     'create_bulk_triples',
 
-    # Map resources to S3
-    'MapResourcesToS3View',
+    # Data discovery
+    'DataDiscoveryView',
+    'search_resources_api',
+    'link_file_to_resource_api',
+    'batch_link_files_api',
+    'unlink_file_api',
+    'auto_link_all_api',
 ] 

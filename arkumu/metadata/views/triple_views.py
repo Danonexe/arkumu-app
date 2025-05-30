@@ -22,6 +22,21 @@ def triple_search(request):
     logger.info(f"Triple search request: subject='{subject}', predicate='{predicate}', object='{object_value}', institution='{institution}'")
     logger.info(f"Headers: HX-Request: {request.headers.get('HX-Request')}, HX-Trigger: {request.headers.get('HX-Trigger')}")
     
+    # Don't load any triples if no search criteria provided
+    if not any([subject, predicate, object_value, institution]):
+        if request.headers.get('HX-Request'):
+            return render(request, 'partials/triple_results.html', {
+                'page_obj': None,
+                'is_paginated': False,
+                'triples': [],
+            })
+        return render(request, 'triple_search.html', {
+            'page_obj': None,
+            'is_paginated': False,
+            'triples': [],
+            'institutions': Resource.objects.values_list('source', flat=True).distinct(),
+        })
+    
     triples = Triple.objects.all().select_related('subject', 'predicate', 'object')
     
     if subject:
@@ -45,17 +60,18 @@ def triple_search(request):
     # Check if HTMX request
     if request.headers.get('HX-Request'):
         logger.info(f"Rendering partial template for HTMX request (page {page})")
-        return render(request, 'partials/triple_list.html', {
+        return render(request, 'partials/triple_results.html', {
             'page_obj': page_obj,
             'is_paginated': paginator.num_pages > 1,
-            'triples': triples,
+            'triples': page_obj.object_list,
+            'institutions': Resource.objects.values_list('source', flat=True).distinct(),
         })
     
     logger.info("Rendering full triple search template")
     return render(request, 'triple_search.html', {
         'page_obj': page_obj,
         'is_paginated': paginator.num_pages > 1,
-        'triples': triples,
+        'triples': page_obj.object_list,
         'institutions': Resource.objects.values_list('source', flat=True).distinct(),
     })
 

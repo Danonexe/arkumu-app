@@ -30,6 +30,13 @@
 <!-- HTMX -->
 <script defer src="{% static 'js/htmx.min.js' %}"></script>
 
+<!-- S3 Upload Components -->
+<script defer src="{% static 'js/src/s3/s3-client.js' %}"></script>
+<script defer src="{% static 'js/src/s3/multipart-upload.js' %}"></script>
+<script defer src="{% static 'js/src/s3/streaming-upload.js' %}"></script>
+<script defer src="{% static 'js/src/s3/chunked-upload.js' %}"></script>
+<script defer src="{% static 'js/src/s3/upload-form-handler.js' %}"></script>
+
 {% endblock javascript %}
 </head>
 <body class="min-h-screen bg-base-100" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
@@ -48,6 +55,7 @@
           {% if request.user.is_authenticated %}
             <li><a href="{% url 'storage:archivist_dashboard' %}">Archivist Dashboard</a></li>
             <li><a href="{% url 'metadata:metadata_dashboard' %}">Metadata Dashboard</a></li>
+            <li><a href="{% url 'metadata:data_discovery' %}">Data Discovery</a></li>
             <li><a href="{% url 'users:detail' request.user.username %}">{% translate "My Profile" %}</a></li>
             <li><a href="{% url 'account_logout' %}">{% translate "Sign Out" %}</a></li>
           {% else %}
@@ -68,6 +76,7 @@
         {% if request.user.is_authenticated %}
           <li><a href="{% url 'storage:archivist_dashboard' %}">Archivist Dashboard</a></li>
           <li><a href="{% url 'metadata:metadata_dashboard' %}">Metadata Dashboard</a></li>
+          <li><a href="{% url 'metadata:data_discovery' %}">Data Discovery</a></li>
           <li><a href="{% url 'users:detail' request.user.username %}">{% translate "My Profile" %}</a></li>
         {% endif %}
       </ul>

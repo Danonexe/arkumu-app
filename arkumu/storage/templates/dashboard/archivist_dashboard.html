@@ -34,7 +34,7 @@
                         <label class="label">
                             <span class="label-text">Organization</span> 
                         </label>
-                        <select id="organization-upload" name="organization" class="select select-bordered w-full select-sm">
+                        <select id="organization" name="organization" class="select select-bordered w-full select-sm">
                             <option value="rsh">Robert Schumann Hochschule Düsseldorf</option>
                             <option value="khm">Kunsthochschule für Medien Köln</option>
                             <option value="fuk">Folkwang Universität der Künste</option>
@@ -58,42 +58,25 @@
                         </div>
                     </div>
                     
-                    <!-- Upload type selection -->
+                    <!-- Folder mode toggle -->
                     <div class="form-control mb-4">
-                        <label class="label">
-                            <span class="label-text">Upload Type</span>
+                        <label class="label cursor-pointer">
+                            <span class="label-text">Preserve folder structure</span>
+                            <input type="checkbox" id="folder-mode" class="checkbox checkbox-primary checkbox-sm" />
                         </label>
-                        <div class="flex gap-2">
-                            <label class="flex-1">
-                                <input type="radio" name="upload-type" value="files" class="radio radio-sm radio-primary" checked />
-                                <span class="ml-2">Files</span>
-                            </label>
-                            <label class="flex-1">
-                                <input type="radio" name="upload-type" value="folder" class="radio radio-sm radio-primary" />
-                                <span class="ml-2">Folder</span>
-                            </label>
+                        <div class="text-xs text-gray-500 mt-1">
+                            Enable to upload folders and preserve their structure
                         </div>
                     </div>
                     
-                    <!-- Upload Files section -->
-                    <div id="files-upload-section" class="form-control mb-4">
+                    <!-- File input -->
+                    <div class="form-control mb-4">
                         <label class="label">
                             <span class="label-text">Select Files</span>
                         </label>
                         <input type="file" id="file-input" name="files" multiple class="file-input file-input-bordered file-input-sm w-full" />
                         <div class="text-xs text-gray-500 mt-1">
-                            Select multiple files at once
-                        </div>
-                    </div>
-                    
-                    <!-- Upload Folder section (initially hidden) -->
-                    <div id="folder-upload-section" class="form-control mb-4 hidden">
-                        <label class="label">
-                            <span class="label-text">Select Folder</span>
-                        </label>
-                        <input type="file" id="folder-input" webkitdirectory directory multiple class="file-input file-input-bordered file-input-sm w-full" />
-                        <div class="text-xs text-gray-500 mt-1">
-                            Upload an entire folder with its structure
+                            You can select multiple files at once
                         </div>
                     </div>
                     
@@ -109,6 +92,7 @@
                     </div>
                 </form>
                 
+                <!-- Progress section -->
                 <div id="upload-progress" class="mt-4 hidden">
                     <div class="flex justify-between mb-1 text-sm">
                         <span id="progress-text">Uploading...</span>
@@ -117,7 +101,22 @@
                     <progress class="progress progress-primary w-full" id="progress-bar" value="0" max="100"></progress>
                 </div>
                 
+                <!-- Status section -->
                 <div id="upload-status" class="mt-4"></div>
+                
+                <!-- Results section -->
+                <div id="upload-results" class="mt-4 hidden">
+                    <div class="alert alert-success">
+                        <div>
+                            <h3 class="font-bold">Upload Complete!</h3>
+                            <div class="text-sm">
+                                <span id="result-files-count">0</span> files uploaded
+                                (<span id="result-total-size">0 B</span>)
+                                in <span id="result-duration">0s</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -177,247 +176,72 @@
     </div>
 </div>
 
-<!-- Include the S3 client and multipart upload handler scripts -->
-<script src="{% static 'js/src/s3/s3-client.js' %}"></script>
-<script src="{% static 'js/src/s3/multipart-upload.js' %}"></script>
-
 <script>
-    console.log('JavaScript is loading...');
+// Utility functions needed by the upload handlers
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+function formatDuration(seconds) {
+    if (seconds < 60) return seconds.toFixed(1) + 's';
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return minutes + 'm ' + remainingSeconds.toFixed(1) + 's';
+}
+
+// Initialize when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 Initializing dashboard upload system...');
     
-    // Global variables - make sure selectedFiles is properly accessible
-    window.selectedFiles = [];
+    // Initialize the upload form handler
+    const uploadHandler = new UploadFormHandler();
+    console.log('✅ UploadFormHandler initialized');
     
-    // Handle upload type toggle
-    const fileUploadSection = document.getElementById('files-upload-section');
-    const folderUploadSection = document.getElementById('folder-upload-section');
-    const uploadTypeRadios = document.querySelectorAll('input[name="upload-type"]');
+    // Sync organization selections between upload form and browser
+    const uploadOrgSelect = document.getElementById('organization');
+    const browserOrgSelect = document.getElementById('organization-select');
     
-    // Add event listeners to radio buttons
-    uploadTypeRadios.forEach(radio => {
-        radio.addEventListener('change', function() {
-            if (this.value === 'files') {
-                fileUploadSection.classList.remove('hidden');
-                folderUploadSection.classList.add('hidden');
-                // Clear selection
-                document.getElementById('folder-input').value = '';
-            } else if (this.value === 'folder') {
-                fileUploadSection.classList.add('hidden');
-                folderUploadSection.classList.remove('hidden');
-                // Clear selection
-                document.getElementById('file-input').value = '';
+    if (uploadOrgSelect && browserOrgSelect) {
+        // When upload org changes, update browser org and refresh file list
+        uploadOrgSelect.addEventListener('change', function() {
+            if (this.value) {
+                console.log('📋 Syncing organization selection:', this.value);
+                browserOrgSelect.value = this.value;
+                htmx.trigger(browserOrgSelect, 'change');
             }
-            // Reset info
-            window.selectedFiles = [];
-            document.getElementById('selected-files-info').classList.add('hidden');
         });
-    });
-    
-    // Handle file selection
-    function handleFileSelection(fileInput) {
-        console.log('File input changed!');
-        const files = fileInput.files;
-        console.log('Files selected:', files.length);
         
-        if (files.length > 0) {
-            let totalSize = 0;
-            
-            // Calculate total size
-            for (let i = 0; i < files.length; i++) {
-                totalSize += files[i].size;
+        // When browser org changes, update upload org
+        browserOrgSelect.addEventListener('change', function() {
+            if (this.value) {
+                uploadOrgSelect.value = this.value;
             }
-            
-            // Store selected files in window scope
-            window.selectedFiles = Array.from(files);
-            
-            // Update UI
-            document.getElementById('selected-files-info').classList.remove('hidden');
-            document.getElementById('file-count').textContent = `${files.length} files selected`;
-            document.getElementById('total-size').textContent = formatBytes(totalSize);
-        }
+        });
     }
     
-    // Add event listeners to file inputs
-    document.getElementById('file-input').addEventListener('change', function() {
-        handleFileSelection(this);
-    });
-    
-    document.getElementById('folder-input').addEventListener('change', function() {
-        handleFileSelection(this);
-    });
-    
-    // Format bytes to human-readable size
-    function formatBytes(bytes, decimals = 2) {
-        if (bytes === 0) return '0 Bytes';
+    // Override the upload completion handler to refresh file browser
+    const originalHandleUploadComplete = uploadHandler.handleUploadComplete;
+    uploadHandler.handleUploadComplete = function(summary) {
+        // Call original handler first
+        originalHandleUploadComplete.call(this, summary);
         
-        const k = 1024;
-        const dm = decimals < 0 ? 0 : decimals;
-        const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
-        
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
-    }
-    
-    // Show error message
-    function showErrorMessage(message) {
-        const statusArea = document.getElementById('upload-status');
-        statusArea.innerHTML = `<div class="alert alert-error">${message}</div>`;
-    }
-    
-    // Update upload progress
-    function updateUploadProgress(message, percentage) {
-        document.getElementById('upload-progress').classList.remove('hidden');
-        document.getElementById('progress-text').textContent = message;
-        document.getElementById('progress-percentage').textContent = `${Math.round(percentage)}%`;
-        document.getElementById('progress-bar').value = percentage;
-    }
-    
-    // Add event listener for the upload button
-    document.getElementById('upload-button').addEventListener('click', async function() {
-        console.log('Upload button clicked!');
-        const button = this;
-        const statusArea = document.getElementById('upload-status');
-        
-        console.log('Selected files:', window.selectedFiles);
-        
-        if (!window.selectedFiles || window.selectedFiles.length === 0) {
-            console.log('No files selected, showing error');
-            showErrorMessage('Please select files or a folder to upload.');
-            return;
-        }
-        
-        // Check if base folder is selected
-        const baseFolder = document.getElementById('base-folder').value;
-        if (!baseFolder) {
-            showErrorMessage('Please select a base folder (data or metadata).');
-            return;
-        }
-        
-        try {
-            // Disable button and show progress
-            button.disabled = true;
-            button.innerHTML = '<span class="loading loading-spinner"></span> Uploading...';
-            updateUploadProgress('Preparing upload...', 0);
-            
-            // Create form data
-            const formData = new FormData();
-            
-            // Set the base folder as the folder_name
-            formData.append('folder_name', baseFolder);
-            
-            // Add organization if present
-            const organizationInput = document.getElementById('organization-upload');
-            if (organizationInput && organizationInput.value) {
-                console.log('Organization:', organizationInput.value);
-                formData.append('organization', organizationInput.value);
-            }
-            
-            // Check CSRF token
-            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-            console.log('CSRF token found:', !!csrfToken);
-            
-            // Determine if we're in folder mode
-            const isFolderMode = document.querySelector('input[name="upload-type"]:checked').value === 'folder';
-            
-            // Add all files to form data
-            for (let i = 0; i < window.selectedFiles.length; i++) {
-                const file = window.selectedFiles[i];
-                formData.append('files', file);
-                
-                // Update progress periodically
-                if (i % 10 === 0 || i === window.selectedFiles.length - 1) {
-                    const percentage = (i / window.selectedFiles.length) * 30; // Use first 30% for preparation
-                    updateUploadProgress(`Preparing files (${i+1}/${window.selectedFiles.length})...`, percentage);
-                    // Allow UI to update
-                    await new Promise(resolve => setTimeout(resolve, 0));
-                }
-            }
-            
-            // Send the upload request
-            updateUploadProgress('Uploading files to server...', 30);
-            console.log('Sending POST request to:', '{% url "storage:streaming_upload_form" %}');
-            
-            const response = await fetch('{% url "storage:streaming_upload_form" %}', {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'X-CSRFToken': csrfToken
-                }
-            });
-            
-            console.log('Response status:', response.status);
-            console.log('Response ok:', response.ok);
-            
-            updateUploadProgress('Processing response...', 95);
-            
-            // Handle response
-            let result;
-            try {
-                const responseText = await response.text();
-                console.log('Response text:', responseText);
-                result = JSON.parse(responseText);
-                console.log('Parsed result:', result);
-            } catch (parseError) {
-                console.error('Error parsing JSON:', parseError);
-                throw new Error('Invalid response from server');
-            }
-            
-            if (result.success) {
-                // Show success message
-                statusArea.innerHTML = `<div class="alert alert-success">Upload completed successfully!</div>`;
-                
-                // Complete progress
-                updateUploadProgress('Upload complete!', 100);
-                
-                // Refresh the file browser if an organization was selected
-                const selectedOrg = organizationInput?.value;
-                if (selectedOrg) {
-                    // Set the browser organization selector to match the upload org
-                    const browserOrgSelect = document.getElementById('organization-select');
-                    if (browserOrgSelect) {
-                        browserOrgSelect.value = selectedOrg;
-                        // Trigger the HTMX request to refresh the file list
+        // Then refresh file browser if upload was successful
+        if (summary.success && uploadOrgSelect && browserOrgSelect) {
+            const selectedOrg = uploadOrgSelect.value;
+            if (selectedOrg && browserOrgSelect.value === selectedOrg) {
+                console.log('🔄 Refreshing file browser after successful upload');
+                setTimeout(() => {
                         htmx.trigger(browserOrgSelect, 'change');
-                    }
-                }
-            } else {
-                // Show error message
-                statusArea.innerHTML = `<div class="alert alert-error">
-                    <p>Upload failed: ${result.error || 'Unknown error'}</p>
-                    ${result.failures ? `<p class="mt-2">Failed files: ${result.failures.length}</p>` : ''}
-                </div>`;
-                
-                // Update progress
-                updateUploadProgress('Upload failed', 100);
+                }, 1500); // Delay to ensure upload is fully complete
             }
-        } catch (error) {
-            console.error('Upload error:', error);
-            statusArea.innerHTML = `<div class="alert alert-error">Upload failed: ${error.message}</div>`;
-            updateUploadProgress('Upload failed', 100);
-        } finally {
-            // Re-enable button
-            button.disabled = false;
-            button.textContent = 'Upload';
         }
-    });
+    };
     
-    // Sync organization selections
-    document.getElementById('organization-select').addEventListener('change', function() {
-        const uploadOrgSelect = document.getElementById('organization-upload');
-        if (uploadOrgSelect && this.value) {
-            uploadOrgSelect.value = this.value;
-        }
-    });
-    
-    document.getElementById('organization-upload').addEventListener('change', function() {
-        const browserOrgSelect = document.getElementById('organization-select');
-        if (browserOrgSelect && this.value) {
-            browserOrgSelect.value = this.value;
-            // Trigger HTMX to refresh the file browser
-            htmx.trigger(browserOrgSelect, 'change');
-        }
-    });
-    
-    console.log('JavaScript finished loading');
+    console.log('✅ Dashboard upload system ready!');
+});
 </script>
 {% endblock %}
