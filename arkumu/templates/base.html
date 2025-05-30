@@ -51,7 +51,6 @@
         </div>
         <ul tabindex="0" class="menu menu-sm dropdown-content mt-3 z-[1] p-2 shadow bg-base-100 rounded-box w-52">
           <li><a href="{% url 'home' %}" class="{% if request.path == '/' %}active{% endif %}">Home</a></li>
-          <li><a href="{% url 'about' %}" class="{% if request.path == '/about/' %}active{% endif %}">About</a></li>
           {% if request.user.is_authenticated %}
             <li><a href="{% url 'storage:archivist_dashboard' %}">Archivist Dashboard</a></li>
             <li><a href="{% url 'metadata:metadata_dashboard' %}">Metadata Dashboard</a></li>
@@ -72,7 +71,6 @@
     <div class="navbar-center hidden lg:flex">
       <ul class="menu menu-horizontal px-1">
         <li><a href="{% url 'home' %}" class="{% if request.path == '/' %}active{% endif %}">Home</a></li>
-        <li><a href="{% url 'about' %}" class="{% if request.path == '/about/' %}active{% endif %}">About</a></li>
         {% if request.user.is_authenticated %}
           <li><a href="{% url 'storage:archivist_dashboard' %}">Archivist Dashboard</a></li>
           <li><a href="{% url 'metadata:metadata_dashboard' %}">Metadata Dashboard</a></li>

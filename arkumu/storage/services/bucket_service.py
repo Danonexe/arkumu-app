@@ -271,55 +271,58 @@ class BucketService:
             return {"success": False, "error": str(e)}
 
     def list_bucket_contents(self, bucket_name: str, prefix: str = "") -> List[Dict[str, Any]]:
-        """
-        List contents of a bucket with optional prefix.
-        Returns a list of file/folder items compatible with the views.
-        """
+        """List contents of a bucket with optional prefix."""
         logger.info(f"Listing contents for bucket: {bucket_name}, prefix: {prefix}")
+        contents = []
         
         try:
-            contents = []
             paginator = self.base_s3_service.s3_client.get_paginator('list_objects_v2')
-            
-            # Set up pagination parameters
-            paginate_kwargs = {'Bucket': bucket_name, 'Delimiter': '/'}
-            if prefix:
-                paginate_kwargs['Prefix'] = prefix
-            
-            for page in paginator.paginate(**paginate_kwargs):
+            for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix, Delimiter='/'):
                 # Add folders (CommonPrefixes)
-                for prefix_obj in page.get('CommonPrefixes', []):
-                    folder_path = prefix_obj.get('Prefix', '')
-                    folder_name = folder_path.rstrip('/').split('/')[-1]
+                for prefix_info in page.get('CommonPrefixes', []):
+                    folder_name = prefix_info.get('Prefix')
                     contents.append({
-                        "name": folder_name,
-                        "path": folder_path,
-                        "is_dir": True,
-                        "type": "folder"
+                        "name": os.path.basename(folder_name.rstrip('/')),
+                        "path": folder_name,
+                        "type": "folder",
+                        "size": 0,
+                        "size_formatted": "0 B",
+                        "last_modified": None
                     })
                 
                 # Add files (Contents)
                 for obj in page.get('Contents', []):
-                    if not obj['Key'].endswith('/'):  # Ensure it's not a folder object
-                        file_name = obj['Key'].split('/')[-1]
+                    if not obj['Key'].endswith('/') and obj['Key'] != prefix:  # Ensure it's not a folder object or the prefix itself
                         file_size = obj.get('Size', 0)
                         contents.append({
-                            "name": file_name,
+                            "name": os.path.basename(obj['Key']),
                             "path": obj['Key'],
-                            "is_dir": False,
                             "type": "file",
                             "size": file_size,
                             "size_formatted": self.base_s3_service._format_size(file_size),
                             "last_modified": obj.get('LastModified')
                         })
             
-            logger.info(f"Found {len(contents)} items in bucket {bucket_name} with prefix '{prefix}'")
+            logger.info(f"Found {len(contents)} items in {bucket_name} with prefix '{prefix}'")
             return contents
-            
+
         except ClientError as e:
-            logger.error(f"Error listing bucket contents for {bucket_name}: {e.response.get('Error', {})}")
+            logger.error(f"Error listing contents for bucket {bucket_name}: {e.response.get('Error', {})}")
             return []
-        except Exception as e:
-            logger.error(f"Unexpected error listing bucket contents for {bucket_name}: {str(e)}")
-            return []
+
+    def get_file_content(self, bucket_name: str, file_path: str) -> Dict[str, Any]:
+        """Get file content using BaseStorageService."""
+        return self.base_s3_service.get_file_content(bucket_name, file_path)
+
+    def delete_folder(self, bucket_name: str, folder_path: str) -> Dict[str, Any]:
+        """Delete a folder and all its contents."""
+        # Ensure folder path ends with /
+        if not folder_path.endswith('/'):
+            folder_path += '/'
+        
+        return self.base_s3_service.delete_object(bucket_name, folder_path, is_directory=True)
+
+    def delete_file(self, bucket_name: str, file_path: str) -> Dict[str, Any]:
+        """Delete a single file."""
+        return self.base_s3_service.delete_object(bucket_name, file_path, is_directory=False)
 

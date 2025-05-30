@@ -8,11 +8,11 @@
         <div class="join">
             {% if page_obj.has_previous %}
                 <button class="join-item btn btn-sm" 
-                        hx-get="{% url 'metadata:data_discovery' %}?page=1{% if selected_organization %}&org_filter={{ selected_organization }}{% endif %}{% if selected_status %}&status_filter={{ selected_status }}{% endif %}{% if selected_bucket %}&bucket_filter={{ selected_bucket }}{% endif %}"
+                        hx-get="{% url 'metadata:data_discovery' %}?page=1{% if selected_organization %}&org_filter={{ selected_organization }}{% endif %}{% if selected_status %}&status_filter={{ selected_status }}{% endif %}"
                         hx-target="#files-container"
                         hx-swap="innerHTML">«</button>
                 <button class="join-item btn btn-sm"
-                        hx-get="{% url 'metadata:data_discovery' %}?page={{ page_obj.previous_page_number }}{% if selected_organization %}&org_filter={{ selected_organization }}{% endif %}{% if selected_status %}&status_filter={{ selected_status }}{% endif %}{% if selected_bucket %}&bucket_filter={{ selected_bucket }}{% endif %}"
+                        hx-get="{% url 'metadata:data_discovery' %}?page={{ page_obj.previous_page_number }}{% if selected_organization %}&org_filter={{ selected_organization }}{% endif %}{% if selected_status %}&status_filter={{ selected_status }}{% endif %}"
                         hx-target="#files-container"
                         hx-swap="innerHTML">‹</button>
             {% else %}
@@ -24,11 +24,11 @@
             
             {% if page_obj.has_next %}
                 <button class="join-item btn btn-sm"
-                        hx-get="{% url 'metadata:data_discovery' %}?page={{ page_obj.next_page_number }}{% if selected_organization %}&org_filter={{ selected_organization }}{% endif %}{% if selected_status %}&status_filter={{ selected_status }}{% endif %}{% if selected_bucket %}&bucket_filter={{ selected_bucket }}{% endif %}"
+                        hx-get="{% url 'metadata:data_discovery' %}?page={{ page_obj.next_page_number }}{% if selected_organization %}&org_filter={{ selected_organization }}{% endif %}{% if selected_status %}&status_filter={{ selected_status }}{% endif %}"
                         hx-target="#files-container"
                         hx-swap="innerHTML">›</button>
                 <button class="join-item btn btn-sm"
-                        hx-get="{% url 'metadata:data_discovery' %}?page={{ page_obj.paginator.num_pages }}{% if selected_organization %}&org_filter={{ selected_organization }}{% endif %}{% if selected_status %}&status_filter={{ selected_status }}{% endif %}{% if selected_bucket %}&bucket_filter={{ selected_bucket }}{% endif %}"
+                        hx-get="{% url 'metadata:data_discovery' %}?page={{ page_obj.paginator.num_pages }}{% if selected_organization %}&org_filter={{ selected_organization }}{% endif %}{% if selected_status %}&status_filter={{ selected_status }}{% endif %}"
                         hx-target="#files-container"
                         hx-swap="innerHTML">»</button>
             {% else %}
@@ -49,11 +49,11 @@
         <div class="join">
             {% if page_obj.has_previous %}
                 <button class="join-item btn btn-sm"
-                        hx-get="{% url 'metadata:data_discovery' %}?page=1{% if selected_organization %}&org_filter={{ selected_organization }}{% endif %}{% if selected_status %}&status_filter={{ selected_status }}{% endif %}{% if selected_bucket %}&bucket_filter={{ selected_bucket }}{% endif %}"
+                        hx-get="{% url 'metadata:data_discovery' %}?page=1{% if selected_organization %}&org_filter={{ selected_organization }}{% endif %}{% if selected_status %}&status_filter={{ selected_status }}{% endif %}"
                         hx-target="#files-container"
                         hx-swap="innerHTML">« First</button>
                 <button class="join-item btn btn-sm"
-                        hx-get="{% url 'metadata:data_discovery' %}?page={{ page_obj.previous_page_number }}{% if selected_organization %}&org_filter={{ selected_organization }}{% endif %}{% if selected_status %}&status_filter={{ selected_status }}{% endif %}{% if selected_bucket %}&bucket_filter={{ selected_bucket }}{% endif %}"
+                        hx-get="{% url 'metadata:data_discovery' %}?page={{ page_obj.previous_page_number }}{% if selected_organization %}&org_filter={{ selected_organization }}{% endif %}{% if selected_status %}&status_filter={{ selected_status }}{% endif %}"
                         hx-target="#files-container"
                         hx-swap="innerHTML">‹ Previous</button>
             {% endif %}
@@ -63,7 +63,7 @@
                     <button class="join-item btn btn-sm btn-active">{{ num }}</button>
                 {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
                     <button class="join-item btn btn-sm"
-                            hx-get="{% url 'metadata:data_discovery' %}?page={{ num }}{% if selected_organization %}&org_filter={{ selected_organization }}{% endif %}{% if selected_status %}&status_filter={{ selected_status }}{% endif %}{% if selected_bucket %}&bucket_filter={{ selected_bucket }}{% endif %}"
+                            hx-get="{% url 'metadata:data_discovery' %}?page={{ num }}{% if selected_organization %}&org_filter={{ selected_organization }}{% endif %}{% if selected_status %}&status_filter={{ selected_status }}{% endif %}"
                             hx-target="#files-container"
                             hx-swap="innerHTML">{{ num }}</button>
                 {% endif %}
@@ -71,11 +71,11 @@
             
             {% if page_obj.has_next %}
                 <button class="join-item btn btn-sm"
-                        hx-get="{% url 'metadata:data_discovery' %}?page={{ page_obj.next_page_number }}{% if selected_organization %}&org_filter={{ selected_organization }}{% endif %}{% if selected_status %}&status_filter={{ selected_status }}{% endif %}{% if selected_bucket %}&bucket_filter={{ selected_bucket }}{% endif %}"
+                        hx-get="{% url 'metadata:data_discovery' %}?page={{ page_obj.next_page_number }}{% if selected_organization %}&org_filter={{ selected_organization }}{% endif %}{% if selected_status %}&status_filter={{ selected_status }}{% endif %}"
                         hx-target="#files-container"
                         hx-swap="innerHTML">Next ›</button>
                 <button class="join-item btn btn-sm"
-                        hx-get="{% url 'metadata:data_discovery' %}?page={{ page_obj.paginator.num_pages }}{% if selected_organization %}&org_filter={{ selected_organization }}{% endif %}{% if selected_status %}&status_filter={{ selected_status }}{% endif %}{% if selected_bucket %}&bucket_filter={{ selected_bucket }}{% endif %}"
+                        hx-get="{% url 'metadata:data_discovery' %}?page={{ page_obj.paginator.num_pages }}{% if selected_organization %}&org_filter={{ selected_organization }}{% endif %}{% if selected_status %}&status_filter={{ selected_status }}{% endif %}"
                         hx-target="#files-container"
                         hx-swap="innerHTML">Last »</button>
             {% endif %}

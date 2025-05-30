@@ -28,11 +28,18 @@ class DataDiscoveryView(LoginRequiredMixin, View):
         # Get filters from request
         organization = request.GET.get('org_filter', '') or request.GET.get('org', '')
         status_filter = request.GET.get('status_filter', '')
-        bucket_filter = request.GET.get('bucket_filter', '')
         
-        logger.info(f"DataDiscoveryView filters: org='{organization}', status='{status_filter}', bucket='{bucket_filter}'")
+        # Get available organizations from BucketService first
+        bucket_service = BucketService()
+        available_organizations = bucket_service.get_predefined_organizations()
         
-        # Start with all S3 files, then filter by organization if specified
+        # Set default organization if none selected and organizations available
+        if not organization and available_organizations:
+            organization = available_organizations[0]  # Default to first organization
+        
+        logger.info(f"DataDiscoveryView filters: org='{organization}', status='{status_filter}'")
+        
+        # Start with all S3 files, then filter by organization (required)
         s3_files = S3FileObject.objects.all().select_related(
             'related_resource', 'session', 'session__user'
         ).annotate(
@@ -50,7 +57,7 @@ class DataDiscoveryView(LoginRequiredMixin, View):
             sample_all_keys = list(S3FileObject.objects.all().values_list('s3_key', flat=True)[:20])
             logger.info(f"Sample S3 keys from database (first 20): {sample_all_keys}")
             
-            # Show unique bucket prefixes
+            # Show unique bucket prefixes and session buckets
             all_keys = S3FileObject.objects.all().values_list('s3_key', flat=True)
             unique_prefixes = set()
             for key in all_keys:
@@ -59,17 +66,20 @@ class DataDiscoveryView(LoginRequiredMixin, View):
                     unique_prefixes.add(prefix)
                 else:
                     unique_prefixes.add(key)
-            logger.info(f"Unique bucket prefixes found: {sorted(list(unique_prefixes))}")
+            logger.info(f"Unique s3_key prefixes found: {sorted(list(unique_prefixes))}")
+            
+            # Show session buckets
+            session_buckets = set(S3FileObject.objects.values_list('session__s3_bucket', flat=True).distinct())
+            logger.info(f"Session buckets found: {sorted(list(session_buckets))}")
         
-        # Filter by organization bucket if specified
+        # Filter by organization bucket (required)
         if organization:
             s3_files = s3_files.filter(session__s3_bucket=organization)
             logger.info(f"After organization filter '{organization}': {s3_files.count()} files")
         
-        # Filter by specific bucket if specified (at database level)
-        if bucket_filter:
-            s3_files = s3_files.filter(session__s3_bucket=bucket_filter)
-            logger.info(f"After bucket filter '{bucket_filter}': {s3_files.count()} files")
+        # Filter by data folder within bucket (default behavior)
+        s3_files = s3_files.filter(s3_key__startswith='data/')
+        logger.info(f"After data folder filter: {s3_files.count()} files")
         
         # Filter by link status if specified
         if status_filter == 'linked':
@@ -81,9 +91,9 @@ class DataDiscoveryView(LoginRequiredMixin, View):
         
         s3_files = s3_files.order_by('s3_key')
 
-        # Log some sample s3_keys to see the data
+        # Log some sample s3_keys to see the filtered data
         sample_keys = list(s3_files.values_list('s3_key', flat=True)[:5])
-        logger.info(f"Sample S3 keys: {sample_keys}")
+        logger.info(f"Sample S3 keys after filtering: {sample_keys}")
 
         # Add pagination
         page_number = request.GET.get('page', 1)
@@ -108,26 +118,6 @@ class DataDiscoveryView(LoginRequiredMixin, View):
 
         logger.info(f"Files grouped by bucket: {[(k, len(v)) for k, v in files_by_bucket.items()]}")
 
-        # Get available organizations and all possible buckets from BucketService
-        bucket_service = BucketService()
-        available_organizations = bucket_service.get_predefined_organizations()
-        
-        # Get all unique buckets from all S3 files (not just current page) for the dropdown
-        all_buckets = set()
-        all_files_for_buckets = S3FileObject.objects.all()
-        if organization:
-            all_files_for_buckets = all_files_for_buckets.filter(session__s3_bucket=organization)
-        
-        logger.info(f"Getting all buckets from {all_files_for_buckets.count()} files for dropdown")
-        
-        # Get unique bucket names from sessions
-        bucket_names = all_files_for_buckets.values_list('session__s3_bucket', flat=True).distinct()
-        for bucket_name in bucket_names:
-            if bucket_name:  # Skip empty bucket names
-                all_buckets.add(bucket_name)
-
-        logger.info(f"All available buckets: {sorted(list(all_buckets))}")
-
         # Get statistics for all files (not just current page)
         total_files = s3_files.count()
         linked_files = s3_files.filter(related_resource__isnull=False).count()
@@ -137,11 +127,9 @@ class DataDiscoveryView(LoginRequiredMixin, View):
 
         context = {
             'files_by_bucket': files_by_bucket,
-            'buckets': sorted(list(all_buckets)),  # All possible buckets for dropdown
             'available_organizations': available_organizations,
             'selected_organization': organization,
             'selected_status': status_filter,
-            'selected_bucket': bucket_filter,
             'page_obj': page_obj,
             'total_files': total_files,
             'linked_files': linked_files,

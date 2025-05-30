@@ -219,16 +219,16 @@ def file_content(request, bucket_type, file_path):
         bucket_service = BucketService()
         
         # Determine which bucket to use
-        bucket = bucket_service.ingest_bucket
+        bucket_name = bucket_service.base_s3_service.ingest_bucket
         if bucket_type == "production":
-            bucket = bucket_service.production_bucket
+            bucket_name = bucket_service.base_s3_service.production_bucket
         elif bucket_type.startswith("org-"):
             # Handle organization-specific buckets
             org_name = bucket_type[4:]  # Remove 'org-' prefix
-            bucket = bucket_service.get_organization_bucket(org_name)
+            bucket_name = bucket_service.get_organization_bucket(org_name)
         
         # Get file content and metadata
-        result = bucket_service.get_file_content(bucket, file_path)
+        result = bucket_service.get_file_content(bucket_name, file_path)
         
         if result.get("success", False):
             content_type = result.get("content_type", "application/octet-stream")
@@ -274,9 +274,9 @@ def delete_object(request, bucket_type, object_type, object_path):
         bucket_service = BucketService()
         
         # Determine which bucket to use
-        bucket_name = bucket_service.ingest_bucket
+        bucket_name = bucket_service.base_s3_service.ingest_bucket
         if bucket_type == "production":
-            bucket_name = bucket_service.production_bucket
+            bucket_name = bucket_service.base_s3_service.production_bucket
         elif bucket_type.startswith("org-"):
             # Handle organization-specific buckets
             org_name = bucket_type[4:]  # Remove 'org-' prefix

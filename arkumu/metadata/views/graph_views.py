@@ -439,4 +439,582 @@ def get_cell_graph(cell_id, rdf_value_predicate):
         return {'nodes': nodes, 'links': links}
         
     except Resource.DoesNotExist:
-        return {'nodes': [], 'links': [], 'error': 'Cell not found'} 
+        return {'nodes': [], 'links': [], 'error': 'Cell not found'}
+
+@login_required
+def triple_viewer_view(request):
+    """Display a hierarchical tree + graph view for exploring RDF data structure."""
+    return render(request, 'triple_viewer.html')
+
+@login_required
+def tree_data_view(request):
+    """HTMX endpoint for loading tree data organized by buckets."""
+    
+    logger.info("tree_data_view called")
+    logger.info(f"Request method: {request.method}")
+    logger.info(f"Is HTMX request: {request.headers.get('HX-Request', False)}")
+    
+    # Get the hasPart and rdf:value predicates
+    has_part_predicate = Resource.objects.filter(
+        uri="http://purl.org/dc/terms/hasPart",
+        resource_type=ResourceType.PROPERTY
+    ).first()
+    
+    rdf_value_predicate = Resource.objects.filter(
+        uri="http://www.w3.org/1999/02/22-rdf-syntax-ns#value",
+        resource_type=ResourceType.PROPERTY
+    ).first()
+    
+    if not has_part_predicate or not rdf_value_predicate:
+        logger.error("Required predicates not found")
+        return render(request, 'partials/tree_error.html', {
+            'error': 'Required predicates not found'
+        })
+    
+    # Get datasets and group by bucket (organization)
+    datasets = Resource.objects.filter(
+        resource_type=ResourceType.IRI,
+        uri__regex=r'.*/datasets/[^/]+$',
+        subject_triples__predicate=has_part_predicate
+    ).annotate(
+        item_count=Count('subject_triples', filter=Q(
+            subject_triples__predicate=has_part_predicate
+        ))
+    ).order_by('-item_count')[:50]  # Get more datasets to group properly
+    
+    logger.info(f"Found {datasets.count()} datasets")
+    
+    # Group datasets by bucket (extract from URI)
+    buckets = {}
+    for dataset in datasets:
+        # Extract bucket from URI pattern: http://arkumu.org/data/{bucket}/datasets/{name}
+        bucket_name = "Default"
+        if dataset.uri:
+            try:
+                uri_parts = dataset.uri.split('/')
+                if 'data' in uri_parts:
+                    data_index = uri_parts.index('data')
+                    if data_index + 1 < len(uri_parts):
+                        bucket_name = uri_parts[data_index + 1]  # The organization/bucket name
+                        logger.debug(f"Extracted bucket '{bucket_name}' from URI: {dataset.uri}")
+            except (ValueError, IndexError):
+                logger.warning(f"Could not extract bucket from URI: {dataset.uri}")
+                pass
+        
+        if bucket_name not in buckets:
+            buckets[bucket_name] = []
+        
+        dataset_info = {
+            'id': str(dataset.id),
+            'name': dataset.name or dataset.uri.split('/')[-1] if dataset.uri else f"Dataset {dataset.id}",
+            'count': dataset.item_count,
+            'uri': dataset.uri
+        }
+        
+        buckets[bucket_name].append(dataset_info)
+        logger.debug(f"Added dataset '{dataset_info['name']}' to bucket '{bucket_name}'")
+    
+    # Sort buckets and datasets within buckets
+    for bucket_name in buckets:
+        buckets[bucket_name].sort(key=lambda x: x['name'])
+        logger.info(f"Bucket '{bucket_name}' has {len(buckets[bucket_name])} datasets")
+    
+    sorted_buckets = sorted(buckets.items())
+    logger.info(f"Returning {len(sorted_buckets)} buckets: {[b[0] for b in sorted_buckets]}")
+    
+    bucket_list_for_template = []
+    for bucket_name_key, dataset_list_val in sorted_buckets:
+        bucket_list_for_template.append({
+            'name': bucket_name_key,
+            'dataset_count': len(dataset_list_val)
+        })
+    
+    # Sort this final list by bucket name for consistent order
+    bucket_list_for_template.sort(key=lambda b: b['name'])
+
+    logger.info(f"Returning {len(bucket_list_for_template)} buckets for template: {[b['name'] for b in bucket_list_for_template]}")
+
+    return render(request, 'partials/tree_buckets.html', {
+        'buckets': bucket_list_for_template
+    })
+
+@login_required
+def tree_bucket_content_view(request, bucket_name):
+    logger.info(f"=== tree_bucket_content_view called for bucket: '{bucket_name}' ===")
+    logger.info(f"Request method: {request.method}")
+    logger.info(f"Is HTMX request: {request.headers.get('HX-Request', False)}")
+    logger.info(f"Request headers: {dict(request.headers)}")
+
+    # Pagination parameters
+    PAGE_SIZE = 20
+    offset = int(request.GET.get('offset', 0))
+
+    has_part_predicate = Resource.objects.filter(
+        uri="http://purl.org/dc/terms/hasPart",
+        resource_type=ResourceType.PROPERTY
+    ).first()
+
+    if not has_part_predicate:
+        logger.error("hasPart predicate not found in tree_bucket_content_view")
+        return render(request, 'partials/tree_error.html', {'error': 'Configuration error: hasPart predicate missing'})
+
+    datasets_in_bucket_final = []
+    total_count = 0
+
+    if bucket_name == "Default":
+        logger.info("Processing 'Default' bucket...")
+        # For "Default" bucket, iterate all datasets and apply extraction logic
+        all_datasets_for_default_check = Resource.objects.filter(
+            resource_type=ResourceType.IRI,
+            uri__regex=r'.*/datasets/[^/]+$',
+            subject_triples__predicate=has_part_predicate
+        ).annotate(
+            item_count=Count('subject_triples', filter=Q(subject_triples__predicate=has_part_predicate))
+        ).order_by('name')
+
+        # Get total count and paginated slice first, then filter for Default bucket
+        total_query = all_datasets_for_default_check
+        paginated_datasets = total_query[offset:offset + PAGE_SIZE]
+        
+        # Filter only those that belong to Default bucket  
+        for dataset in paginated_datasets:
+            extracted_bn = "Default"
+            if dataset.uri:
+                try:
+                    uri_parts = dataset.uri.split('/')
+                    if 'data' in uri_parts:
+                        data_index = uri_parts.index('data')
+                        # Check if 'datasets' follows the part after 'data'
+                        if data_index + 1 < len(uri_parts) and data_index + 2 < len(uri_parts) and uri_parts[data_index + 2] == 'datasets':
+                            extracted_bn = uri_parts[data_index + 1]
+                        # If not, it might be a URI structure where 'Default' is appropriate or extraction failed.
+                except (ValueError, IndexError):
+                    logger.warning(f"Could not extract bucket from URI for dataset {dataset.uri} during 'Default' bucket check.")
+                    pass # Keep extracted_bn as "Default"
+            
+            if extracted_bn == bucket_name: # Match "Default"
+                 datasets_in_bucket_final.append({
+                    'id': str(dataset.id),
+                    'name': dataset.name or (dataset.uri.split('/')[-1] if dataset.uri else f"Dataset {dataset.id}"),
+                    'count': dataset.item_count, 
+                    'uri': dataset.uri
+                })
+        
+        # Calculate actual total count for Default bucket specifically
+        total_count = 0
+        for dataset in all_datasets_for_default_check:
+            extracted_bn = "Default"
+            if dataset.uri:
+                try:
+                    uri_parts = dataset.uri.split('/')
+                    if 'data' in uri_parts:
+                        data_index = uri_parts.index('data')
+                        if data_index + 1 < len(uri_parts) and data_index + 2 < len(uri_parts) and uri_parts[data_index + 2] == 'datasets':
+                            extracted_bn = uri_parts[data_index + 1]
+                except (ValueError, IndexError):
+                    pass
+            if extracted_bn == bucket_name:
+                total_count += 1
+    else:
+        logger.info(f"Processing non-default bucket: '{bucket_name}'...")
+        # For non-"Default" buckets, use a more precise regex
+        # The bucket name could contain special regex characters, so escape it.
+        # Pattern: http://arkumu.org/data/{bucket}/datasets/{name}
+        precise_datasets_query = Resource.objects.filter(
+            resource_type=ResourceType.IRI,
+            uri__regex=rf'^.*/data/{re.escape(bucket_name)}/datasets/[^/]+$',
+            subject_triples__predicate=has_part_predicate
+        ).annotate(
+            item_count=Count('subject_triples', filter=Q(
+                subject_triples__predicate=has_part_predicate
+            ))
+        ).order_by('name')
+        
+        logger.info(f"Query for bucket '{bucket_name}': {precise_datasets_query.query}")
+        
+        # Get total count and paginated slice
+        total_count = precise_datasets_query.count()
+        paginated_datasets = precise_datasets_query[offset:offset + PAGE_SIZE]
+        
+        for dataset in paginated_datasets:
+            datasets_in_bucket_final.append({
+                'id': str(dataset.id),
+                'name': dataset.name or (dataset.uri.split('/')[-1] if dataset.uri else f"Dataset {dataset.id}"),
+                'count': dataset.item_count,
+                'uri': dataset.uri
+            })
+            logger.info(f"Added dataset: {dataset.name} (URI: {dataset.uri})")
+
+    # Check if there are more items to load
+    has_more = (offset + PAGE_SIZE) < total_count
+    next_offset = offset + PAGE_SIZE
+
+    logger.info(f"=== Found {len(datasets_in_bucket_final)} datasets for bucket '{bucket_name}' (offset: {offset}, total: {total_count}, has_more: {has_more}) ===")
+    
+    return render(request, 'partials/tree_datasets_list.html', {
+        'datasets': datasets_in_bucket_final,
+        'bucket_name': bucket_name,
+        'has_more': has_more,
+        'next_offset': next_offset,
+        'is_pagination': offset > 0  # Flag to determine if this is a paginated request
+    })
+
+@login_required
+def tree_bucket_more_view(request, bucket_name):
+    """HTMX endpoint for loading more datasets in a bucket."""
+    logger.info(f"=== tree_bucket_more_view called for bucket: '{bucket_name}' ===")
+    
+    # This view is identical to tree_bucket_content_view but returns a different template
+    # that only contains the additional datasets without the container structure
+    
+    # Pagination parameters
+    PAGE_SIZE = 20
+    offset = int(request.GET.get('offset', 0))
+
+    has_part_predicate = Resource.objects.filter(
+        uri="http://purl.org/dc/terms/hasPart",
+        resource_type=ResourceType.PROPERTY
+    ).first()
+
+    if not has_part_predicate:
+        logger.error("hasPart predicate not found in tree_bucket_more_view")
+        return render(request, 'partials/tree_error.html', {'error': 'Configuration error: hasPart predicate missing'})
+
+    datasets_in_bucket_final = []
+    total_count = 0
+
+    if bucket_name == "Default":
+        all_datasets_for_default_check = Resource.objects.filter(
+            resource_type=ResourceType.IRI,
+            uri__regex=r'.*/datasets/[^/]+$',
+            subject_triples__predicate=has_part_predicate
+        ).annotate(
+            item_count=Count('subject_triples', filter=Q(subject_triples__predicate=has_part_predicate))
+        ).order_by('name')
+
+        paginated_datasets = all_datasets_for_default_check[offset:offset + PAGE_SIZE]
+        total_count = all_datasets_for_default_check.count()
+
+        for dataset in paginated_datasets:
+            extracted_bn = "Default"
+            if dataset.uri:
+                try:
+                    uri_parts = dataset.uri.split('/')
+                    if 'data' in uri_parts:
+                        data_index = uri_parts.index('data')
+                        if data_index + 1 < len(uri_parts) and data_index + 2 < len(uri_parts) and uri_parts[data_index + 2] == 'datasets':
+                            extracted_bn = uri_parts[data_index + 1]
+                except (ValueError, IndexError):
+                    pass
+            
+            if extracted_bn == bucket_name:
+                 datasets_in_bucket_final.append({
+                    'id': str(dataset.id),
+                    'name': dataset.name or (dataset.uri.split('/')[-1] if dataset.uri else f"Dataset {dataset.id}"),
+                    'count': dataset.item_count, 
+                    'uri': dataset.uri
+                })
+    else:
+        precise_datasets_query = Resource.objects.filter(
+            resource_type=ResourceType.IRI,
+            uri__regex=rf'^.*/data/{re.escape(bucket_name)}/datasets/[^/]+$',
+            subject_triples__predicate=has_part_predicate
+        ).annotate(
+            item_count=Count('subject_triples', filter=Q(
+                subject_triples__predicate=has_part_predicate
+            ))
+        ).order_by('name')
+        
+        total_count = precise_datasets_query.count()
+        paginated_datasets = precise_datasets_query[offset:offset + PAGE_SIZE]
+        
+        for dataset in paginated_datasets:
+            datasets_in_bucket_final.append({
+                'id': str(dataset.id),
+                'name': dataset.name or (dataset.uri.split('/')[-1] if dataset.uri else f"Dataset {dataset.id}"),
+                'count': dataset.item_count,
+                'uri': dataset.uri
+            })
+
+    has_more = (offset + PAGE_SIZE) < total_count
+    next_offset = offset + PAGE_SIZE
+
+    logger.info(f"=== Loading more: {len(datasets_in_bucket_final)} datasets for bucket '{bucket_name}' (offset: {offset}, has_more: {has_more}) ===")
+    
+    return render(request, 'partials/tree_datasets_more.html', {
+        'datasets': datasets_in_bucket_final,
+        'bucket_name': bucket_name,
+        'has_more': has_more,
+        'next_offset': next_offset
+    })
+
+@login_required
+def tree_dataset_view(request, dataset_id):
+    """HTMX endpoint for loading dataset rows."""
+    
+    logger.info(f"tree_dataset_view called with dataset_id: {dataset_id}")
+    logger.info(f"Request method: {request.method}")
+    logger.info(f"Request headers: {dict(request.headers)}")
+    logger.info(f"Is HTMX request: {request.headers.get('HX-Request', False)}")
+    
+    # Pagination parameters
+    PAGE_SIZE = 20
+    offset = int(request.GET.get('offset', 0))
+    
+    has_part_predicate = Resource.objects.filter(
+        uri="http://purl.org/dc/terms/hasPart",
+        resource_type=ResourceType.PROPERTY
+    ).first()
+    
+    if not has_part_predicate:
+        logger.error("hasPart predicate not found")
+        return render(request, 'partials/tree_error.html', {
+            'error': 'hasPart predicate not found'
+        })
+    
+    try:
+        dataset = Resource.objects.get(id=dataset_id)
+        logger.info(f"Found dataset: {dataset.name} (URI: {dataset.uri})")
+        
+        # Get rows for this dataset
+        dataset_base_uri = dataset.uri
+        rows_pattern = f"{dataset_base_uri}/rows/"
+        logger.info(f"Looking for rows with pattern: {rows_pattern}")
+        
+        # Get all rows (without pagination first to get count and sorting)
+        all_rows_query = Resource.objects.filter(
+            resource_type=ResourceType.IRI,
+            uri__startswith=rows_pattern,
+            subject_triples__predicate=has_part_predicate
+        ).annotate(
+            cell_count=Count('subject_triples', filter=Q(
+                subject_triples__predicate=has_part_predicate
+            ))
+        )
+        
+        logger.info(f"Found {all_rows_query.count()} total rows for dataset {dataset.name}")
+        
+        # If no rows with predicate, try without predicate requirement
+        if all_rows_query.count() == 0:
+            logger.info("No rows with hasPart predicate, trying without predicate requirement")
+            all_rows_query = Resource.objects.filter(
+                resource_type=ResourceType.IRI,
+                uri__startswith=rows_pattern
+            ).annotate(
+                cell_count=Count('subject_triples')
+            )
+        
+        # Extract and sort by row number (do this for ALL rows to get proper sorting)
+        all_rows_for_sorting = []
+        for row in all_rows_query:
+            row_name = row.name or f"Row {row.id}"
+            
+            # Extract row number for sorting
+            row_number = 999999  # Default for sorting
+            if row.uri:
+                try:
+                    uri_parts = row.uri.split('/')
+                    if 'rows' in uri_parts:
+                        rows_index = uri_parts.index('rows')
+                        if rows_index + 1 < len(uri_parts):
+                            row_number = int(uri_parts[rows_index + 1])
+                except (ValueError, IndexError):
+                    pass
+            
+            all_rows_for_sorting.append({
+                'id': str(row.id),
+                'name': row_name,
+                'count': row.cell_count,
+                'sort_key': row_number
+            })
+        
+        # Sort by row number
+        all_rows_for_sorting.sort(key=lambda x: x['sort_key'])
+        
+        # Apply pagination after sorting
+        total_count = len(all_rows_for_sorting)
+        paginated_rows = all_rows_for_sorting[offset:offset + PAGE_SIZE]
+        has_more = (offset + PAGE_SIZE) < total_count
+        next_offset = offset + PAGE_SIZE
+        
+        logger.info(f"Returning {len(paginated_rows)} sorted rows (offset: {offset}, total: {total_count}, has_more: {has_more})")
+        if paginated_rows:
+            logger.info(f"First row: {paginated_rows[0]['name']} (#{paginated_rows[0]['sort_key']})")
+            logger.info(f"Last row: {paginated_rows[-1]['name']} (#{paginated_rows[-1]['sort_key']})")
+        
+        return render(request, 'partials/tree_rows.html', {
+            'dataset_id': dataset_id,
+            'rows': paginated_rows,
+            'has_more': has_more,
+            'next_offset': next_offset,
+            'is_pagination': offset > 0
+        })
+        
+    except Resource.DoesNotExist:
+        logger.error(f"Dataset not found: {dataset_id}")
+        return render(request, 'partials/tree_error.html', {
+            'error': 'Dataset not found'
+        })
+    except Exception as e:
+        logger.error(f"Error in tree_dataset_view: {e}")
+        return render(request, 'partials/tree_error.html', {
+            'error': f'Error loading dataset: {str(e)}'
+        })
+
+@login_required  
+def tree_row_view(request, dataset_id, row_id):
+    """HTMX endpoint for loading row cells."""
+    
+    rdf_value_predicate = Resource.objects.filter(
+        uri="http://www.w3.org/1999/02/22-rdf-syntax-ns#value",
+        resource_type=ResourceType.PROPERTY
+    ).first()
+    
+    try:
+        dataset = Resource.objects.get(id=dataset_id)
+        row = Resource.objects.get(id=row_id)
+        
+        # Get row_id from URI
+        row_uri_id = row.uri.split('/')[-1] if row.uri else str(row.id)
+        
+        # Find cells for this row
+        cell_resources = Resource.objects.filter(
+            resource_type=ResourceType.IRI,
+            uri__contains=f"/datasets/{dataset.uri.split('/')[-1]}/",
+            uri__endswith=f"/{row_uri_id}",
+            subject_triples__predicate=rdf_value_predicate
+        )[:15]  # Limit to 15 cells
+        
+        # Extract column names and sort
+        cells_data = []
+        for cell in cell_resources:
+            column_name = "unknown"
+            if cell.uri:
+                try:
+                    uri_parts = cell.uri.split('/')
+                    if 'datasets' in uri_parts:
+                        datasets_index = uri_parts.index('datasets')
+                        if datasets_index + 2 < len(uri_parts):
+                            column_name = uri_parts[datasets_index + 2]
+                except (ValueError, IndexError):
+                    pass
+            
+            cells_data.append({
+                'id': str(cell.id),
+                'name': column_name,
+                'column_name': column_name
+            })
+        
+        # Sort by column name
+        cells_data.sort(key=lambda x: x['column_name'])
+        
+        return render(request, 'partials/tree_cells.html', {
+            'dataset_id': dataset_id,
+            'row_id': row_id,
+            'cells': cells_data
+        })
+        
+    except Resource.DoesNotExist:
+        return render(request, 'partials/tree_error.html', {
+            'error': 'Dataset or row not found'
+        })
+
+@login_required
+def tree_dataset_more_view(request, dataset_id):
+    """HTMX endpoint for loading more rows in a dataset."""
+    logger.info(f"tree_dataset_more_view called with dataset_id: {dataset_id}")
+    
+    # Pagination parameters
+    PAGE_SIZE = 20
+    offset = int(request.GET.get('offset', 0))
+    
+    has_part_predicate = Resource.objects.filter(
+        uri="http://purl.org/dc/terms/hasPart",
+        resource_type=ResourceType.PROPERTY
+    ).first()
+    
+    if not has_part_predicate:
+        logger.error("hasPart predicate not found")
+        return render(request, 'partials/tree_error.html', {
+            'error': 'hasPart predicate not found'
+        })
+    
+    try:
+        dataset = Resource.objects.get(id=dataset_id)
+        
+        # Get rows for this dataset
+        dataset_base_uri = dataset.uri
+        rows_pattern = f"{dataset_base_uri}/rows/"
+        
+        # Get all rows query
+        all_rows_query = Resource.objects.filter(
+            resource_type=ResourceType.IRI,
+            uri__startswith=rows_pattern,
+            subject_triples__predicate=has_part_predicate
+        ).annotate(
+            cell_count=Count('subject_triples', filter=Q(
+                subject_triples__predicate=has_part_predicate
+            ))
+        )
+        
+        # If no rows with predicate, try without predicate requirement
+        if all_rows_query.count() == 0:
+            all_rows_query = Resource.objects.filter(
+                resource_type=ResourceType.IRI,
+                uri__startswith=rows_pattern
+            ).annotate(
+                cell_count=Count('subject_triples')
+            )
+        
+        # Extract and sort by row number (do this for ALL rows to get proper sorting)
+        all_rows_for_sorting = []
+        for row in all_rows_query:
+            row_name = row.name or f"Row {row.id}"
+            
+            # Extract row number for sorting
+            row_number = 999999  # Default for sorting
+            if row.uri:
+                try:
+                    uri_parts = row.uri.split('/')
+                    if 'rows' in uri_parts:
+                        rows_index = uri_parts.index('rows')
+                        if rows_index + 1 < len(uri_parts):
+                            row_number = int(uri_parts[rows_index + 1])
+                except (ValueError, IndexError):
+                    pass
+            
+            all_rows_for_sorting.append({
+                'id': str(row.id),
+                'name': row_name,
+                'count': row.cell_count,
+                'sort_key': row_number
+            })
+        
+        # Sort by row number
+        all_rows_for_sorting.sort(key=lambda x: x['sort_key'])
+        
+        # Apply pagination after sorting
+        total_count = len(all_rows_for_sorting)
+        paginated_rows = all_rows_for_sorting[offset:offset + PAGE_SIZE]
+        has_more = (offset + PAGE_SIZE) < total_count
+        next_offset = offset + PAGE_SIZE
+        
+        logger.info(f"Loading more: {len(paginated_rows)} rows for dataset {dataset.name} (offset: {offset}, has_more: {has_more})")
+        
+        return render(request, 'partials/tree_rows_more.html', {
+            'dataset_id': dataset_id,
+            'rows': paginated_rows,
+            'has_more': has_more,
+            'next_offset': next_offset
+        })
+        
+    except Resource.DoesNotExist:
+        logger.error(f"Dataset not found: {dataset_id}")
+        return render(request, 'partials/tree_error.html', {
+            'error': 'Dataset not found'
+        })
+    except Exception as e:
+        logger.error(f"Error in tree_dataset_more_view: {e}")
+        return render(request, 'partials/tree_error.html', {
+            'error': f'Error loading more rows: {str(e)}'
+        }) 

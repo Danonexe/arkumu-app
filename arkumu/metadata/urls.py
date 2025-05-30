@@ -19,6 +19,13 @@ urlpatterns = [
     path('triples/', triple_views.triple_list, name='triple_list'),
     
     # Graph visualization
+    path('triple-viewer/', graph_views.triple_viewer_view, name='triple_viewer'),
+    path('tree/data/', graph_views.tree_data_view, name='tree_data'),
+    path('tree/bucket/<str:bucket_name>/', graph_views.tree_bucket_content_view, name='tree_bucket_content'),
+    path('tree/bucket/<str:bucket_name>/more/', graph_views.tree_bucket_more_view, name='tree_bucket_more'),
+    path('tree/dataset/<uuid:dataset_id>/', graph_views.tree_dataset_view, name='tree_dataset'),
+    path('tree/dataset/<uuid:dataset_id>/more/', graph_views.tree_dataset_more_view, name='tree_dataset_more'),
+    path('tree/dataset/<uuid:dataset_id>/row/<uuid:row_id>/', graph_views.tree_row_view, name='tree_row'),
     path('graph/', graph_views.full_graph_view, name='full_graph_view'),
     path('graph/data/', graph_views.graph_data_view, name='graph_data'),
     

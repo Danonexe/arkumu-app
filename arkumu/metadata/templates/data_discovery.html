@@ -92,9 +92,8 @@
                                     hx-get="{% url 'metadata:data_discovery' %}"
                                     hx-target="#files-container"
                                     hx-swap="innerHTML"
-                                    hx-include="[name='status_filter'], [name='bucket_filter']"
+                                    hx-include="[name='status_filter']"
                                     hx-trigger="change">
-                                <option value="">All Organizations</option>
                                 {% for org in available_organizations %}
                                     <option value="{{ org }}" {% if org == selected_organization %}selected{% endif %}>
                                         {{ org|upper }}
@@ -107,24 +106,11 @@
                                     hx-get="{% url 'metadata:data_discovery' %}"
                                     hx-target="#files-container"
                                     hx-swap="innerHTML"
-                                    hx-include="[name='org_filter'], [name='bucket_filter']"
+                                    hx-include="[name='org_filter']"
                                     hx-trigger="change">
                                 <option value="">All Status</option>
                                 <option value="linked" {% if selected_status == 'linked' %}selected{% endif %}>Linked Only</option>
                                 <option value="unlinked" {% if selected_status == 'unlinked' %}selected{% endif %}>Unlinked Only</option>
-                            </select>
-                            
-                            <select name="bucket_filter" 
-                                    class="select select-sm select-bordered join-item"
-                                    hx-get="{% url 'metadata:data_discovery' %}"
-                                    hx-target="#files-container"
-                                    hx-swap="innerHTML"
-                                    hx-include="[name='org_filter'], [name='status_filter']"
-                                    hx-trigger="change">
-                                <option value="">All Buckets</option>
-                                {% for bucket in buckets %}
-                                    <option value="{{ bucket }}" {% if bucket == selected_bucket %}selected{% endif %}>{{ bucket }}</option>
-                                {% endfor %}
                             </select>
                         </div>
                     </div>
