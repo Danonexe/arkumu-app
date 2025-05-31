@@ -26,6 +26,7 @@ urlpatterns = [
     path('tree/dataset/<uuid:dataset_id>/', graph_views.tree_dataset_view, name='tree_dataset'),
     path('tree/dataset/<uuid:dataset_id>/more/', graph_views.tree_dataset_more_view, name='tree_dataset_more'),
     path('tree/dataset/<uuid:dataset_id>/row/<uuid:row_id>/', graph_views.tree_row_view, name='tree_row'),
+    path('tree/cell/<uuid:cell_id>/details/', graph_views.tree_cell_details_view, name='tree_cell_details'),
     path('graph/', graph_views.full_graph_view, name='full_graph_view'),
     path('graph/data/', graph_views.graph_data_view, name='graph_data'),
     

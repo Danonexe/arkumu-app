@@ -1,0 +1,48 @@
+<div class="cell-details">
+    <div class="mb-4">
+        <h3 class="text-lg font-semibold text-gray-900 mb-2">Cell Details</h3>
+        
+        <div class="bg-gray-50 p-3 rounded-lg mb-3">
+            <div class="grid grid-cols-2 gap-2 text-sm">
+                <div><strong>ID:</strong> {{ cell.id }}</div>
+                <div><strong>Name:</strong> {{ cell.name|default:"(unnamed)" }}</div>
+                {% if cell.uri %}
+                <div class="col-span-2"><strong>URI:</strong> <span class="text-xs text-gray-600 break-all">{{ cell.uri }}</span></div>
+                {% endif %}
+                {% if cell.value %}
+                <div class="col-span-2"><strong>Value:</strong> {{ cell.value }}</div>
+                {% endif %}
+            </div>
+        </div>
+        
+        {% if cell_values %}
+        <div class="mb-4">
+            <h4 class="font-medium text-gray-800 mb-2">Properties & Values</h4>
+            <div class="space-y-2">
+                {% for cv in cell_values %}
+                <div class="flex justify-between py-1 px-2 {% if cv.is_literal %}bg-blue-50{% else %}bg-green-50{% endif %} rounded">
+                    <span class="text-sm font-medium text-gray-700">{{ cv.predicate }}:</span>
+                    <span class="text-sm text-gray-900 ml-2 break-all">{{ cv.value }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Trigger graph update via HTMX -->
+        <div class="mt-4">
+            <button class="btn btn-sm btn-primary"
+                    hx-get="{% url 'metadata:graph_data' %}?level=cell&cell={{ cell.id }}"
+                    hx-target="#graph-content"
+                    hx-swap="innerHTML">
+                Show Graph
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Auto-trigger graph loading when cell details are loaded -->
+<div hx-get="{% url 'metadata:graph_data' %}?level=cell&cell={{ cell.id }}"
+     hx-target="#graph-content"
+     hx-trigger="load"
+     hx-swap="innerHTML"></div> 

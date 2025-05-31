@@ -5,6 +5,53 @@
 <div class="container mx-auto px-4 py-8">
     <h1 class="text-3xl font-bold mb-6">Metadata Dashboard</h1>
 
+    <!-- Quick Actions - Horizontal Layout -->
+    <div class="mb-8 p-4 bg-base-200 rounded-lg">
+        <h3 class="text-lg font-semibold mb-4">Quick Actions</h3>
+        <div class="flex flex-wrap gap-3 justify-start">
+            <!-- Browse & Discover -->
+            <a href="{% url 'metadata:resource_list' %}" class="btn btn-primary btn-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+                Browse Resources
+            </a>
+            <a href="{% url 'metadata:data_discovery' %}" class="btn btn-outline btn-primary btn-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                Data Discovery
+            </a>
+            
+            <!-- Search & Query -->
+            <a href="{% url 'metadata:triple_search' %}" class="btn btn-accent btn-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                Search Triples
+            </a>
+            <a href="{% url 'metadata:triple_list' %}" class="btn btn-outline btn-accent btn-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+                View All Triples
+            </a>
+            
+            <!-- Visualization & Editing -->
+            <a href="{% url 'metadata:triple_viewer' %}" class="btn btn-info btn-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                RDF Explorer
+            </a>
+            <a href="{% url 'metadata:bulk_triple_editor' %}" class="btn btn-error btn-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                Bulk Editor
+            </a>
+        </div>
+    </div>
 
     <!-- Database Management -->
     <div class="flex justify-between items-center mb-4">
@@ -171,38 +218,6 @@
                 <div class="card-actions justify-end mt-4">
                     <a href="{% url 'metadata:all_ingest_sessions' %}" class="btn btn-primary btn-sm">View All</a>
                 </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Quick Links -->
-    <div class="mt-8">
-        <h3 class="text-lg font-semibold mb-4">Quick Actions</h3>
-        
-        <!-- Browsing & Discovery -->
-        <div class="mb-4">
-            <h4 class="text-sm font-medium text-base-content/70 mb-2">Browse & Discover</h4>
-            <div class="flex flex-wrap gap-2">
-                <a href="{% url 'metadata:resource_list' %}" class="btn btn-primary">Browse Resources</a>
-                <a href="{% url 'metadata:data_discovery' %}" class="btn btn-outline btn-primary">Data Discovery</a>
-            </div>
-        </div>
-        
-        <!-- Search & Query -->
-        <div class="mb-4">
-            <h4 class="text-sm font-medium text-base-content/70 mb-2">Search & Query</h4>
-            <div class="flex flex-wrap gap-2">
-                <a href="{% url 'metadata:triple_search' %}" class="btn btn-accent">Search Triples</a>
-                <a href="{% url 'metadata:triple_list' %}" class="btn btn-outline btn-accent">View All Triples</a>
-            </div>
-        </div>
-        
-        <!-- Visualization & Editing -->
-        <div class="mb-4">
-            <h4 class="text-sm font-medium text-base-content/70 mb-2">Visualization & Editing</h4>
-            <div class="flex flex-wrap gap-2">
-                <a href="{% url 'metadata:full_graph_view' %}" class="btn btn-info">View Full Graph</a>
-                <a href="{% url 'metadata:bulk_triple_editor' %}" class="btn btn-error">Bulk Triple Editor</a>
             </div>
         </div>
     </div>

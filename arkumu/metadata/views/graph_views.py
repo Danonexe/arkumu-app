@@ -4,6 +4,7 @@ from django.db.models import Count, Q
 import json
 import logging
 import re
+from django.http import JsonResponse
 
 from arkumu.metadata.models.resource import Resource, ResourceType
 from arkumu.metadata.models.triples import Triple
@@ -440,6 +441,69 @@ def get_cell_graph(cell_id, rdf_value_predicate):
         
     except Resource.DoesNotExist:
         return {'nodes': [], 'links': [], 'error': 'Cell not found'}
+
+@login_required
+def tree_cell_details_view(request, cell_id):
+    """API endpoint for getting cell details and graph data."""
+    logger.info(f"tree_cell_details_view called for cell_id: {cell_id}")
+    
+    # Get the rdf:value predicate
+    rdf_value_predicate = Resource.objects.filter(
+        uri="http://www.w3.org/1999/02/22-rdf-syntax-ns#value",
+        resource_type=ResourceType.PROPERTY
+    ).first()
+    
+    if not rdf_value_predicate:
+        logger.error("rdf:value predicate not found")
+        return render(request, 'partials/tree_error.html', {
+            'error': 'Configuration error: rdf:value predicate missing'
+        })
+    
+    # Get cell information and graph data
+    try:
+        cell = Resource.objects.get(id=cell_id)
+        
+        # Get cell graph data
+        graph_data = get_cell_graph(cell_id, rdf_value_predicate)
+        
+        if 'error' in graph_data:
+            return render(request, 'partials/tree_error.html', {
+                'error': graph_data['error']
+            })
+        
+        # Get cell values/triples for display
+        cell_triples = Triple.objects.filter(
+            subject=cell
+        ).select_related('predicate', 'object')[:10]
+        
+        cell_values = []
+        for triple in cell_triples:
+            predicate_name = triple.predicate.name or (
+                triple.predicate.uri.split('/')[-1] if triple.predicate.uri 
+                else f"Predicate {triple.predicate.id}"
+            )
+            
+            if triple.object.resource_type == ResourceType.LITERAL:
+                value = triple.object.value or "(empty)"
+            else:
+                value = triple.object.name or triple.object.uri or f"Resource {triple.object.id}"
+            
+            cell_values.append({
+                'predicate': predicate_name,
+                'value': value,
+                'is_literal': triple.object.resource_type == ResourceType.LITERAL
+            })
+        
+        return render(request, 'partials/cell_details.html', {
+            'cell': cell,
+            'cell_values': cell_values,
+            'graph_data': json.dumps(graph_data)
+        })
+        
+    except Resource.DoesNotExist:
+        return render(request, 'partials/tree_error.html', {
+            'error': 'Cell not found'
+        })
 
 @login_required
 def triple_viewer_view(request):

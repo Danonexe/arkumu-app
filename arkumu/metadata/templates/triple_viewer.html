@@ -94,14 +94,15 @@
     
     /* Graph styles */
     .graph-container {
-        height: 80vh;
+        height: 100%;
     }
     
+    /* Detail panel styles */
     .detail-panel {
         background: #f1f5f9;
         border-radius: 8px;
         padding: 16px;
-        margin-bottom: 16px;
+        overflow-y: auto;
     }
     
     /* HTMX loading styles */
@@ -150,18 +151,26 @@
             </div>
         </div>
         
-        <!-- Graph Visualization (right side) -->
+        <!-- Right side with Details and Graph side by side -->
         <div class="col-span-8">
-            <div class="detail-panel">
-                <h3 class="font-bold mb-2">Details</h3>
-                <div id="detail-info" class="text-sm text-gray-600">
-                    Select an item from the tree to view its relationships
+            <div class="grid grid-cols-12 gap-4 h-[80vh]">
+                <!-- Detail Panel (left part of right side) -->
+                <div class="col-span-7">
+                    <div class="detail-panel h-full">
+                        <h3 class="font-bold mb-2">Details</h3>
+                        <div id="detail-info" class="text-sm text-gray-600">
+                            Select an item from the tree to view its relationships
+                        </div>
+                    </div>
                 </div>
-            </div>
-            
-            <div class="graph-container bg-base-200 shadow-md rounded-lg p-4">
-                <div id="graph-content" class="w-full h-full flex items-center justify-center text-gray-500">
-                    Click on a bucket, dataset, row, or cell in the tree to view its graph visualization
+                
+                <!-- Graph Container (right part of right side) -->
+                <div class="col-span-5">
+                    <div class="graph-container bg-base-200 shadow-md rounded-lg p-4 h-full">
+                        <div id="graph-content" class="w-full h-full flex items-center justify-center text-gray-500">
+                            Click on a bucket, dataset, row, or cell in the tree to view its graph visualization
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -275,7 +284,37 @@ function updateDetailInfo(type, name, id) {
     
     let typeLabel = type.charAt(0).toUpperCase() + type.slice(1);
     
-    detailInfo.innerHTML = `<strong>${typeLabel}:</strong> ${name}`;
+    if (type === 'cell') {
+        // For cells, load detailed information via HTMX
+        detailInfo.innerHTML = '<div class="loading-spinner htmx-indicator"></div> Loading cell details...';
+        
+        // Use HTMX to load cell details
+        htmx.ajax('GET', `/metadata/tree/cell/${id}/details/`, {
+            target: '#detail-info',
+            swap: 'innerHTML'
+        });
+    } else if (type === 'dataset') {
+        // For datasets, load graph data
+        detailInfo.innerHTML = `<strong>${typeLabel}:</strong> ${name}`;
+        
+        // Also trigger graph loading for datasets
+        htmx.ajax('GET', `/metadata/graph/data/?level=dataset&dataset=${id}`, {
+            target: '#graph-content',
+            swap: 'innerHTML'
+        });
+    } else if (type === 'row') {
+        // For rows, load graph data
+        detailInfo.innerHTML = `<strong>${typeLabel}:</strong> ${name}`;
+        
+        // Also trigger graph loading for rows
+        htmx.ajax('GET', `/metadata/graph/data/?level=row&row=${id}`, {
+            target: '#graph-content',
+            swap: 'innerHTML'
+        });
+    } else {
+        // For other types, show basic info
+        detailInfo.innerHTML = `<strong>${typeLabel}:</strong> ${name}`;
+    }
 }
 
 // D3.js rendering function (called by HTMX responses)
