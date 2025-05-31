@@ -405,7 +405,40 @@ def get_cell_graph(cell_id, rdf_value_predicate):
         ).select_related('predicate', 'object')[:20]
         
         for triple in cell_triples:
-            predicate_name = triple.predicate.name or triple.predicate.uri.split('/')[-1] if triple.predicate.uri else f"Pred {triple.predicate.id}"
+            # Always prioritize RDF notation from URI over stored name
+            predicate_name = None
+            
+            # Try to create RDF notation from URI first
+            if triple.predicate.uri:
+                uri = triple.predicate.uri
+                if uri == "http://www.w3.org/1999/02/22-rdf-syntax-ns#value":
+                    predicate_name = "rdf:value"
+                elif uri == "http://www.w3.org/1999/02/22-rdf-syntax-ns#type":
+                    predicate_name = "rdf:type"
+                elif uri == "http://purl.org/dc/terms/hasPart":
+                    predicate_name = "dcterms:hasPart"
+                elif uri == "http://www.w3.org/2000/01/rdf-schema#label":
+                    predicate_name = "rdfs:label"
+                elif "http://www.w3.org/1999/02/22-rdf-syntax-ns#" in uri:
+                    predicate_name = f"rdf:{uri.split('#')[-1]}"
+                elif "http://purl.org/dc/terms/" in uri:
+                    predicate_name = f"dcterms:{uri.split('/')[-1]}"
+                elif "http://www.w3.org/2000/01/rdf-schema#" in uri:
+                    predicate_name = f"rdfs:{uri.split('#')[-1]}"
+                elif "http://www.w3.org/2002/07/owl#" in uri:
+                    predicate_name = f"owl:{uri.split('#')[-1]}"
+                else:
+                    # For custom URIs, try to extract a meaningful name
+                    predicate_name = uri.split('/')[-1] if '/' in uri else uri.split('#')[-1] if '#' in uri else uri
+            
+            # Fallback to stored name if URI conversion didn't produce anything
+            if not predicate_name:
+                predicate_name = triple.predicate.name
+            
+            # Final fallback if still no name
+            if not predicate_name:
+                predicate_name = f"Property {triple.predicate.id}"
+            
             obj = triple.object
             
             if obj.resource_type == ResourceType.LITERAL:
@@ -463,6 +496,28 @@ def tree_cell_details_view(request, cell_id):
     try:
         cell = Resource.objects.get(id=cell_id)
         
+        # Extract meaningful information from cell URI for display
+        cell_display_info = {
+            'dataset': None,
+            'column': None,
+            'row_id': None,
+            'display_name': cell.name or "(unnamed)"
+        }
+        
+        if cell.uri:
+            # Expected URI pattern: http://arkumu.org/data/{institution}/datasets/{dataset}/{column}/{row_id}
+            try:
+                uri_parts = cell.uri.split('/')
+                if len(uri_parts) >= 7 and 'datasets' in uri_parts:
+                    datasets_index = uri_parts.index('datasets')
+                    if datasets_index + 3 < len(uri_parts):
+                        cell_display_info['dataset'] = uri_parts[datasets_index + 1]
+                        cell_display_info['column'] = uri_parts[datasets_index + 2] 
+                        cell_display_info['row_id'] = uri_parts[datasets_index + 3]
+                        cell_display_info['display_name'] = f"{cell_display_info['column']} → Row {cell_display_info['row_id']}"
+            except (ValueError, IndexError):
+                logger.warning(f"Could not parse cell URI: {cell.uri}")
+        
         # Get cell graph data
         graph_data = get_cell_graph(cell_id, rdf_value_predicate)
         
@@ -478,10 +533,39 @@ def tree_cell_details_view(request, cell_id):
         
         cell_values = []
         for triple in cell_triples:
-            predicate_name = triple.predicate.name or (
-                triple.predicate.uri.split('/')[-1] if triple.predicate.uri 
-                else f"Predicate {triple.predicate.id}"
-            )
+            # Always prioritize RDF notation from URI over stored name
+            predicate_name = None
+            
+            # Try to create RDF notation from URI first
+            if triple.predicate.uri:
+                uri = triple.predicate.uri
+                if uri == "http://www.w3.org/1999/02/22-rdf-syntax-ns#value":
+                    predicate_name = "rdf:value"
+                elif uri == "http://www.w3.org/1999/02/22-rdf-syntax-ns#type":
+                    predicate_name = "rdf:type"
+                elif uri == "http://purl.org/dc/terms/hasPart":
+                    predicate_name = "dcterms:hasPart"
+                elif uri == "http://www.w3.org/2000/01/rdf-schema#label":
+                    predicate_name = "rdfs:label"
+                elif "http://www.w3.org/1999/02/22-rdf-syntax-ns#" in uri:
+                    predicate_name = f"rdf:{uri.split('#')[-1]}"
+                elif "http://purl.org/dc/terms/" in uri:
+                    predicate_name = f"dcterms:{uri.split('/')[-1]}"
+                elif "http://www.w3.org/2000/01/rdf-schema#" in uri:
+                    predicate_name = f"rdfs:{uri.split('#')[-1]}"
+                elif "http://www.w3.org/2002/07/owl#" in uri:
+                    predicate_name = f"owl:{uri.split('#')[-1]}"
+                else:
+                    # For custom URIs, try to extract a meaningful name
+                    predicate_name = uri.split('/')[-1] if '/' in uri else uri.split('#')[-1] if '#' in uri else uri
+            
+            # Fallback to stored name if URI conversion didn't produce anything
+            if not predicate_name:
+                predicate_name = triple.predicate.name
+            
+            # Final fallback if still no name
+            if not predicate_name:
+                predicate_name = f"Property {triple.predicate.id}"
             
             if triple.object.resource_type == ResourceType.LITERAL:
                 value = triple.object.value or "(empty)"
@@ -490,6 +574,7 @@ def tree_cell_details_view(request, cell_id):
             
             cell_values.append({
                 'predicate': predicate_name,
+                'predicate_uri': triple.predicate.uri,  # Include full URI for reference
                 'value': value,
                 'is_literal': triple.object.resource_type == ResourceType.LITERAL
             })
@@ -497,7 +582,8 @@ def tree_cell_details_view(request, cell_id):
         return render(request, 'partials/cell_details.html', {
             'cell': cell,
             'cell_values': cell_values,
-            'graph_data': json.dumps(graph_data)
+            'graph_data': json.dumps(graph_data),
+            'cell_display_info': cell_display_info
         })
         
     except Resource.DoesNotExist:

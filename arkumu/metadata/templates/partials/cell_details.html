@@ -11,21 +11,59 @@
                     </svg>
                 </div>
                 <div class="ml-3">
-                    <h4 class="text-sm font-medium text-blue-800">Understanding This Cell</h4>
+                    <h4 class="text-sm font-medium text-blue-800">What is this?</h4>
                     <p class="text-sm text-blue-700 mt-1">
-                        This cell represents a single data point from your uploaded dataset. Each cell contains one or more <strong>properties</strong> (relationships) 
-                        that describe what this data means and how it connects to other information in your knowledge graph.
+                        This cell is a <strong>junction Resource</strong> that connects your dataset to a specific data value. 
+                        It always participates in two core triples, and may have additional row relationships depending on import settings.
                     </p>
+                    <div class="mt-2 text-xs text-blue-600 bg-blue-100 rounded p-2">
+                        <strong>Core:</strong> <code>dataset→cell</code>, <code>cell→value</code><br>
+                        <strong>Optional:</strong> Row relationships (varies by topology)
+                    </div>
                 </div>
             </div>
         </div>
         
+        <!-- Resource Information -->
         <div class="bg-gray-50 p-3 rounded-lg mb-3">
+            <div class="flex items-center mb-2">
+                <svg class="w-4 h-4 text-gray-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                </svg>
+                <h4 class="font-medium text-gray-800">Cell Information</h4>
+            </div>
             <div class="grid grid-cols-2 gap-2 text-sm">
-                <div><strong>ID:</strong> {{ cell.id }}</div>
-                <div><strong>Name:</strong> {{ cell.name|default:"(unnamed)" }}</div>
-                {% if cell.uri %}
-                <div class="col-span-2"><strong>URI:</strong> <span class="text-xs text-gray-600 break-all">{{ cell.uri }}</span></div>
+                {% if cell_display_info.column and cell_display_info.row_id %}
+                    <div class="col-span-2"><strong>Cell:</strong> 
+                        <span class="font-mono text-sm bg-blue-100 px-2 py-1 rounded">
+                            {{ cell_display_info.display_name }}
+                        </span>
+                    </div>
+                    {% if cell.uri %}
+                    <div class="col-span-2"><strong>Full URI:</strong> 
+                        <div class="font-mono text-xs bg-gray-100 px-2 py-1 rounded break-all mt-1">
+                            {{ cell.uri }}
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% if cell_display_info.dataset %}
+                    <div><strong>Dataset:</strong> {{ cell_display_info.dataset }}</div>
+                    {% endif %}
+                    <div><strong>Column:</strong> {{ cell_display_info.column }}</div>
+                    <div><strong>Row ID:</strong> {{ cell_display_info.row_id }}</div>
+                {% else %}
+                    <div><strong>Name:</strong> {{ cell.name|default:"(unnamed)" }}</div>
+                    {% if cell.uri %}
+                    <div class="col-span-2"><strong>Full URI:</strong> 
+                        <div class="font-mono text-xs bg-gray-100 px-2 py-1 rounded break-all mt-1">
+                            {{ cell.uri }}
+                        </div>
+                    </div>
+                    {% endif %}
+                {% endif %}
+                <div><strong>Type:</strong> <span class="font-mono text-xs bg-gray-200 px-1 rounded">{{ cell.resource_type }}</span></div>
+                {% if cell.source %}
+                <div><strong>Source:</strong> {{ cell.source }}</div>
                 {% endif %}
                 {% if cell.value %}
                 <div class="col-span-2"><strong>Value:</strong> {{ cell.value }}</div>
@@ -36,33 +74,57 @@
         {% if cell_values %}
         <div class="mb-4">
             <div class="flex items-center justify-between mb-2">
-                <h4 class="font-medium text-gray-800">Properties & Values</h4>
-                <div class="group relative">
-                    <svg class="w-4 h-4 text-gray-400 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                <div class="flex items-center">
+                    <svg class="w-4 h-4 text-gray-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
                     </svg>
-                    <div class="absolute bottom-full right-0 mb-2 w-64 p-2 bg-gray-800 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                        Each property shows a relationship or attribute of this cell. The left side is the <strong>predicate</strong> (what kind of relationship), 
-                        and the right side is the <strong>object</strong> (the value or target of that relationship).
-                    </div>
+                    <h4 class="font-medium text-gray-800">Data Connections</h4>
                 </div>
             </div>
             
             <div class="space-y-2">
                 {% for cv in cell_values %}
-                <div class="flex justify-between py-2 px-3 {% if cv.is_literal %}bg-blue-50 border border-blue-100{% else %}bg-green-50 border border-green-100{% endif %} rounded">
-                    <div class="flex-1">
-                        <span class="text-sm font-medium text-gray-700">{{ cv.predicate }}:</span>
-                        <div class="text-xs text-gray-500 mt-1">
-                            {% if cv.is_literal %}
-                                📝 Literal value (data content)
-                            {% else %}
-                                🔗 Reference to another resource
+                <div class="{% if cv.is_literal %}bg-blue-50 border border-blue-100{% else %}bg-green-50 border border-green-100{% endif %} rounded-lg p-3">
+                    <!-- Predicate and type info -->
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center">
+                            <div class="group relative">
+                                <span class="text-sm font-medium text-gray-700 cursor-help">{{ cv.predicate }}</span>
+                                {% if cv.predicate_uri %}
+                                <div class="absolute bottom-full left-0 mb-2 w-80 p-2 bg-gray-800 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                    <strong>Full URI:</strong><br>
+                                    <code class="text-green-300">{{ cv.predicate_uri }}</code>
+                                </div>
+                                {% endif %}
+                            </div>
+                            {% if cv.predicate == "rdf:value" %}
+                            <span class="ml-2 text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">Content</span>
+                            {% elif cv.predicate == "rdf:type" %}
+                            <span class="ml-2 text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">Type</span>
+                            {% elif "hasPart" in cv.predicate %}
+                            <span class="ml-2 text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Contains</span>
                             {% endif %}
                         </div>
+                        <span class="text-xs text-gray-500 flex items-center">
+                            {% if cv.is_literal %}
+                                📝 Data
+                            {% else %}
+                                🔗 Link
+                            {% endif %}
+                        </span>
                     </div>
-                    <div class="flex-1 text-right">
-                        <span class="text-sm text-gray-900 break-all">{{ cv.value }}</span>
+                    
+                    <!-- Value display -->
+                    <div class="mt-2">
+                        {% if cv.is_literal %}
+                            <div class="bg-white border border-blue-200 rounded p-2">
+                                <div class="text-sm font-mono text-gray-900 leading-relaxed">{{ cv.value }}</div>
+                            </div>
+                        {% else %}
+                            <div class="bg-white border border-green-200 rounded p-2">
+                                <div class="text-sm text-gray-900 leading-relaxed break-all">{{ cv.value }}</div>
+                            </div>
+                        {% endif %}
                     </div>
                 </div>
                 {% endfor %}
@@ -70,15 +132,21 @@
             
             <!-- Legend -->
             <div class="mt-3 text-xs text-gray-600 bg-gray-100 p-2 rounded">
-                <strong>Legend:</strong> 
-                <span class="inline-flex items-center ml-2">
-                    <span class="w-3 h-3 bg-blue-100 border border-blue-200 rounded mr-1"></span>
-                    Data values (literals)
-                </span>
-                <span class="inline-flex items-center ml-3">
-                    <span class="w-3 h-3 bg-green-100 border border-green-200 rounded mr-1"></span>
-                    Links to other resources
-                </span>
+                <strong>Legend:</strong>
+                {% regroup cell_values by is_literal as grouped_values %}
+                {% for group in grouped_values %}
+                    {% if group.grouper %}
+                        <span class="inline-flex items-center ml-2">
+                            <span class="w-3 h-3 bg-blue-100 border border-blue-200 rounded mr-1"></span>
+                            Data values (literals)
+                        </span>
+                    {% else %}
+                        <span class="inline-flex items-center ml-3">
+                            <span class="w-3 h-3 bg-green-100 border border-green-200 rounded mr-1"></span>
+                            Links to other resources
+                        </span>
+                    {% endif %}
+                {% endfor %}
             </div>
         </div>
         {% else %}
