@@ -1,0 +1,96 @@
+{% if error %}
+    <div class="alert alert-error">
+        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span>{{ error }}</span>
+    </div>
+{% elif success %}
+    <div class="alert alert-success mb-4">
+        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span>Successfully applied mappings! Added {{ added_count }} type triple{{ added_count|pluralize }}.</span>
+    </div>
+
+    <div class="stats stats-horizontal shadow mb-4">
+        <div class="stat">
+            <div class="stat-title">Type Triples Added</div>
+            <div class="stat-value text-success">{{ added_count }}</div>
+        </div>
+        <div class="stat">
+            <div class="stat-title">Total Triples</div>
+            <div class="stat-value">{{ total_triples }}</div>
+        </div>
+    </div>
+
+    {% if added_triples %}
+        <div class="collapse collapse-plus border border-base-300 mb-4">
+            <input type="checkbox" />
+            <div class="collapse-title text-lg font-medium">
+                View Added Type Triples ({{ added_count }})
+            </div>
+            <div class="collapse-content">
+                <div class="overflow-x-auto max-h-40">
+                    <table class="table table-sm table-zebra">
+                        <thead>
+                            <tr>
+                                <th>Subject</th>
+                                <th>Predicate</th>
+                                <th>Object</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for triple in added_triples %}
+                                <tr>
+                                    <td class="font-mono text-xs">{{ triple.subject|truncatechars:40 }}</td>
+                                    <td class="font-mono text-xs text-info">{{ triple.predicate }}</td>
+                                    <td class="font-mono text-xs text-success">{{ triple.object|truncatechars:40 }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+
+    <div class="form-control">
+        <label class="label">
+            <span class="label-text">Updated Batch (with type mappings applied)</span>
+            <span class="label-text-alt">Copy this to the batch editor above</span>
+        </label>
+        <textarea class="textarea textarea-bordered h-32 font-mono text-xs" readonly>{{ updated_batch }}</textarea>
+    </div>
+
+    <div class="flex gap-2 mt-4">
+        <button class="btn btn-primary btn-sm" onclick="copyUpdatedBatchToEditor()">
+            Copy to Batch Editor
+        </button>
+        <button class="btn btn-ghost btn-sm" onclick="selectTextarea(this.previousElementSibling.previousElementSibling.querySelector('textarea'))">
+            Select All
+        </button>
+    </div>
+{% endif %}
+
+<script>
+function copyUpdatedBatchToEditor() {
+    const updatedBatch = document.querySelector('#batch-mapping-results textarea').value;
+    document.getElementById('batch-triples').value = updatedBatch;
+    
+    // Show success feedback
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.textContent = 'Copied!';
+    btn.classList.add('btn-success');
+    setTimeout(() => {
+        btn.textContent = originalText;
+        btn.classList.remove('btn-success');
+    }, 2000);
+}
+
+function selectTextarea(textarea) {
+    textarea.select();
+    textarea.setSelectionRange(0, 99999); // For mobile devices
+}
+</script> 

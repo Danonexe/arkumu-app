@@ -1,0 +1,79 @@
+{% if error %}
+    <div class="alert alert-error mb-4">
+        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span>{{ error }}</span>
+    </div>
+{% endif %}
+
+{% if success %}
+    <div class="alert alert-success mb-4">
+        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span>{{ success }}</span>
+    </div>
+{% endif %}
+
+{% if mapping_rules %}
+    <div class="overflow-x-auto mb-4">
+        <table class="table table-sm table-zebra">
+            <thead>
+                <tr>
+                    <th>Pattern Type</th>
+                    <th>Pattern Value</th>
+                    <th>Arkumu Type</th>
+                    <th>Example Match</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for rule in mapping_rules %}
+                    <tr>
+                        <td>
+                            <span class="badge badge-sm badge-outline">{{ rule.pattern_type|capfirst }}</span>
+                        </td>
+                        <td class="font-mono text-sm">{{ rule.pattern_value }}</td>
+                        <td class="font-mono text-sm text-success">{{ rule.arkumu_type }}</td>
+                        <td class="text-xs text-base-content/70">
+                            {% if rule.pattern_type == 'prefix' %}
+                                Matches: {{ rule.pattern_value }}*
+                            {% elif rule.pattern_type == 'contains' %}
+                                Contains: *{{ rule.pattern_value }}*
+                            {% elif rule.pattern_type == 'regex' %}
+                                Regex pattern
+                            {% elif rule.pattern_type == 'column' %}
+                                Column/Dataset ID
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    
+    <div class="stats stats-horizontal shadow mb-4">
+        <div class="stat">
+            <div class="stat-title">Active Rules</div>
+            <div class="stat-value text-lg">{{ mapping_rules|length }}</div>
+            <div class="stat-desc">Ready to apply</div>
+        </div>
+    </div>
+    
+    <button class="btn btn-warning btn-sm" 
+            hx-post="{% url 'metadata:clear_mapping_rules' %}"
+            hx-target="#active-mapping-rules-display"
+            hx-confirm="Clear all mapping rules?">
+        Clear All Rules
+    </button>
+{% else %}
+    <div class="flex items-center justify-center min-h-20 border-2 border-dashed border-base-300 rounded-lg">
+        <div class="text-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto text-base-content/30 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            </svg>
+            <p class="text-sm text-base-content/50 italic">No mapping rules defined yet.</p>
+            <p class="text-xs text-base-content/40">Add a rule above to get started.</p>
+        </div>
+    </div>
+{% endif %} 

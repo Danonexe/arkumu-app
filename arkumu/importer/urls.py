@@ -10,6 +10,8 @@ urlpatterns = [
     # Task status polling endpoint  
     path("task-status/<str:task_id>/", import_views.task_status_view, name="task_status"),
     
-    # Database reset endpoint (development utility)
+    # Database management endpoints (development utilities)
     path("reset-database/", import_views.reset_database, name="reset_database"),
+    path("clear-upload-sessions/", import_views.clear_upload_sessions, name="clear_upload_sessions"),
+    path("clear-ingest-sessions/", import_views.clear_ingest_sessions, name="clear_ingest_sessions"),
 ] 

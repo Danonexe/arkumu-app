@@ -1,0 +1,34 @@
+<!-- CIDOC-CRM Specific Configuration -->
+<script>
+// CIDOC-CRM predicates for inclusion in main template
+const cidocPredicates = [
+    'P14_carried_out_by', 'P11_had_participant', 'P2_has_type', 'P1_is_identified_by',
+    'P4_has_time-span', 'P7_took_place_at', 'P16_used_specific_object', 'P17_was_motivated_by',
+    'P108_has_produced', 'P140_assigned_attribute_to', 'P141_assigned', 'P177_assigned_property_of_type'
+];
+
+// CIDOC-CRM example triples
+const cidocExamples = `http://example.org/person1|http://www.cidoc-crm.org/cidoc-crm/P14_carried_out_by|http://example.org/activity1
+new:Activity1|cidoc:P14_carried_out_by|new:Person3`;
+
+// Function to add CIDOC option to data model select
+function addCidocOption() {
+    const select = document.getElementById('data-model');
+    if (select && !document.querySelector('option[value="cidoc"]')) {
+        const option = document.createElement('option');
+        option.value = 'cidoc';
+        option.textContent = 'CIDOC-CRM';
+        select.appendChild(option);
+    }
+}
+
+// Add CIDOC predicates to the global predicateOptions if it exists
+if (typeof predicateOptions !== 'undefined') {
+    predicateOptions['cidoc'] = cidocPredicates;
+}
+
+// Initialize CIDOC integration
+document.addEventListener('DOMContentLoaded', function() {
+    addCidocOption();
+});
+</script> 

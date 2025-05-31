@@ -202,4 +202,106 @@ def task_status_view(request, task_id):
         "task_id": task_id,
         "task_info": task_info,
         "should_poll": should_poll 
-    }) 
+    })
+
+
+@login_required
+def clear_upload_sessions(request):
+    """
+    Clear all UploadSession records.
+    This is useful for development and testing.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    
+    try:
+        from arkumu.storage.models.upload_sessions import UploadSession
+        from django.db import transaction
+        
+        with transaction.atomic():
+            # Count before deletion
+            upload_count = UploadSession.objects.count()
+            # Delete all upload sessions
+            UploadSession.objects.all().delete()
+            
+        logger.info(f"Upload sessions cleared: deleted {upload_count} upload sessions")
+        
+        # Return HTMX-friendly response
+        if request.headers.get('HX-Request') == 'true':
+            success_html = f"""
+            <div class="alert alert-success">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div>
+                    <h3 class="font-bold">Upload Sessions Cleared!</h3>
+                    <div class="text-xs">Deleted {upload_count} upload sessions</div>
+                </div>
+            </div>
+            """
+            return HttpResponse(success_html)
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Upload sessions cleared! Deleted {upload_count} upload sessions.',
+            'upload_sessions_deleted': upload_count
+        })
+        
+    except Exception as e:
+        error_message = f'Failed to clear upload sessions: {str(e)}'
+        logger.error(f"Clear upload sessions error: {e}", exc_info=True)
+        
+        return JsonResponse({
+            'error': error_message
+        }, status=500)
+
+
+@login_required
+def clear_ingest_sessions(request):
+    """
+    Clear all IngestSession records.
+    This is useful for development and testing.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    
+    try:
+        from arkumu.importer.models.ingest_sessions import IngestSession
+        from django.db import transaction
+        
+        with transaction.atomic():
+            # Count before deletion
+            ingest_count = IngestSession.objects.count()
+            # Delete all ingest sessions
+            IngestSession.objects.all().delete()
+            
+        logger.info(f"Ingest sessions cleared: deleted {ingest_count} ingest sessions")
+        
+        # Return HTMX-friendly response
+        if request.headers.get('HX-Request') == 'true':
+            success_html = f"""
+            <div class="alert alert-success">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div>
+                    <h3 class="font-bold">Ingest Sessions Cleared!</h3>
+                    <div class="text-xs">Deleted {ingest_count} ingest sessions</div>
+                </div>
+            </div>
+            """
+            return HttpResponse(success_html)
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Ingest sessions cleared! Deleted {ingest_count} ingest sessions.',
+            'ingest_sessions_deleted': ingest_count
+        })
+        
+    except Exception as e:
+        error_message = f'Failed to clear ingest sessions: {str(e)}'
+        logger.error(f"Clear ingest sessions error: {e}", exc_info=True)
+        
+        return JsonResponse({
+            'error': error_message
+        }, status=500) 

@@ -34,6 +34,10 @@ urlpatterns = [
     path('bulk-editor/', bulk_editor_views.bulk_triple_editor, name='bulk_triple_editor'),
     path('bulk-editor/query/', bulk_editor_views.query_relationships, name='query_relationships'),
     path('bulk-editor/create/', bulk_editor_views.create_bulk_triples, name='create_bulk_triples'),
+    path('bulk-editor/find-matching/', bulk_editor_views.find_matching_resources, name='find_matching_resources'),
+    path('bulk-editor/add-mapping/', bulk_editor_views.add_mapping_rule, name='add_mapping_rule'),
+    path('bulk-editor/clear-mappings/', bulk_editor_views.clear_mapping_rules, name='clear_mapping_rules'),
+    path('bulk-editor/apply-mappings/', bulk_editor_views.apply_mappings_to_batch, name='apply_mappings_to_batch'),
 
     
     # Data Discovery
