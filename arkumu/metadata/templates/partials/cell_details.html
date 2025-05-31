@@ -2,6 +2,24 @@
     <div class="mb-4">
         <h3 class="text-lg font-semibold text-gray-900 mb-2">Cell Details</h3>
         
+        <!-- Explanation section -->
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+            <div class="flex items-start">
+                <div class="flex-shrink-0">
+                    <svg class="w-5 h-5 text-blue-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                </div>
+                <div class="ml-3">
+                    <h4 class="text-sm font-medium text-blue-800">Understanding This Cell</h4>
+                    <p class="text-sm text-blue-700 mt-1">
+                        This cell represents a single data point from your uploaded dataset. Each cell contains one or more <strong>properties</strong> (relationships) 
+                        that describe what this data means and how it connects to other information in your knowledge graph.
+                    </p>
+                </div>
+            </div>
+        </div>
+        
         <div class="bg-gray-50 p-3 rounded-lg mb-3">
             <div class="grid grid-cols-2 gap-2 text-sm">
                 <div><strong>ID:</strong> {{ cell.id }}</div>
@@ -17,27 +35,62 @@
         
         {% if cell_values %}
         <div class="mb-4">
-            <h4 class="font-medium text-gray-800 mb-2">Properties & Values</h4>
+            <div class="flex items-center justify-between mb-2">
+                <h4 class="font-medium text-gray-800">Properties & Values</h4>
+                <div class="group relative">
+                    <svg class="w-4 h-4 text-gray-400 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    <div class="absolute bottom-full right-0 mb-2 w-64 p-2 bg-gray-800 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                        Each property shows a relationship or attribute of this cell. The left side is the <strong>predicate</strong> (what kind of relationship), 
+                        and the right side is the <strong>object</strong> (the value or target of that relationship).
+                    </div>
+                </div>
+            </div>
+            
             <div class="space-y-2">
                 {% for cv in cell_values %}
-                <div class="flex justify-between py-1 px-2 {% if cv.is_literal %}bg-blue-50{% else %}bg-green-50{% endif %} rounded">
-                    <span class="text-sm font-medium text-gray-700">{{ cv.predicate }}:</span>
-                    <span class="text-sm text-gray-900 ml-2 break-all">{{ cv.value }}</span>
+                <div class="flex justify-between py-2 px-3 {% if cv.is_literal %}bg-blue-50 border border-blue-100{% else %}bg-green-50 border border-green-100{% endif %} rounded">
+                    <div class="flex-1">
+                        <span class="text-sm font-medium text-gray-700">{{ cv.predicate }}:</span>
+                        <div class="text-xs text-gray-500 mt-1">
+                            {% if cv.is_literal %}
+                                📝 Literal value (data content)
+                            {% else %}
+                                🔗 Reference to another resource
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="flex-1 text-right">
+                        <span class="text-sm text-gray-900 break-all">{{ cv.value }}</span>
+                    </div>
                 </div>
                 {% endfor %}
             </div>
+            
+            <!-- Legend -->
+            <div class="mt-3 text-xs text-gray-600 bg-gray-100 p-2 rounded">
+                <strong>Legend:</strong> 
+                <span class="inline-flex items-center ml-2">
+                    <span class="w-3 h-3 bg-blue-100 border border-blue-200 rounded mr-1"></span>
+                    Data values (literals)
+                </span>
+                <span class="inline-flex items-center ml-3">
+                    <span class="w-3 h-3 bg-green-100 border border-green-200 rounded mr-1"></span>
+                    Links to other resources
+                </span>
+            </div>
+        </div>
+        {% else %}
+        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+            <div class="flex items-center">
+                <svg class="w-5 h-5 text-yellow-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 15.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                </svg>
+                <p class="text-sm text-yellow-800">This cell doesn't have any properties or relationships defined yet.</p>
+            </div>
         </div>
         {% endif %}
-        
-        <!-- Trigger graph update via HTMX -->
-        <div class="mt-4">
-            <button class="btn btn-sm btn-primary"
-                    hx-get="{% url 'metadata:graph_data' %}?level=cell&cell={{ cell.id }}"
-                    hx-target="#graph-content"
-                    hx-swap="innerHTML">
-                Show Graph
-            </button>
-        </div>
     </div>
 </div>
 
