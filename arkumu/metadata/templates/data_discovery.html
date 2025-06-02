@@ -74,21 +74,6 @@
                                     Select All
                                 </button>
                                 
-                                <button class="btn btn-sm btn-primary"
-                                        hx-post="{% url 'metadata:batch_link_files' %}"
-                                        hx-include="[name='selected_files']:checked"
-                                        hx-confirm="Link selected files using automatic matching?"
-                                        hx-target="#toast-container"
-                                        hx-swap="beforeend"
-                                        disabled
-                                        id="batch-link-btn">
-                                    <span class="loading loading-spinner loading-sm htmx-indicator"></span>
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                                    </svg>
-                                    Batch Link
-                                </button>
-                                
                                 <a href="{% url 'metadata:data_discovery' %}" class="btn btn-ghost btn-sm">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -107,17 +92,33 @@
                                     Rescan S3
                                     <span class="loading loading-spinner loading-sm htmx-indicator"></span>
                                 </button>
-                                
+
                                 <button class="btn btn-accent btn-sm"
                                         hx-post="{% url 'metadata:auto_link_all' %}"
                                         hx-confirm="Run automatic linking for all unlinked files? This may take a while."
                                         hx-target="#toast-container"
-                                        hx-swap="beforeend">
+                                        hx-swap="beforeend"
+                                        disabled>
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                                     </svg>
                                     Auto-Link
                                     <span class="loading loading-spinner loading-sm htmx-indicator"></span>
+                                </button>
+
+                                <button class="btn btn-sm btn-primary"
+                                        hx-post="{% url 'metadata:batch_link_files' %}"
+                                        hx-include="[name='selected_files']:checked"
+                                        hx-confirm="Link selected files using automatic matching?"
+                                        hx-target="#toast-container"
+                                        hx-swap="beforeend"
+                                        disabled
+                                        id="batch-link-btn">
+                                    <span class="loading loading-spinner loading-sm htmx-indicator"></span>
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                                    </svg>
+                                    Batch Link
                                 </button>
                             </div>
                         </div>
