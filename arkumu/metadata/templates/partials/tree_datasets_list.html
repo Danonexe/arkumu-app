@@ -10,14 +10,20 @@
      onclick="toggleTreeNode(this.querySelector('.tree-toggle'))"
      style="cursor: pointer;">
     <span class="tree-toggle">▶</span>
-    <span class="tree-label">📁 {{ dataset.name }} ({{ dataset.count }})</span>
+    <span class="tree-label">
+        📁 {{ dataset.name }} 
+        <span class="text-sm font-normal text-gray-600">({{ dataset.count }} items)</span>
+        {% if dataset.source and dataset.source != "Unknown" %}
+            <span class="source-badge">{{ dataset.source }}</span>
+        {% endif %}
+    </span>
 </div>
 <div class="tree-content collapsed">
     <span class="loading-spinner htmx-indicator"></span>
     <!-- Rows will be loaded here via HTMX -->
 </div>
 {% empty %}
-<div class="text-gray-500 p-2">No datasets in this bucket.</div>
+<div class="text-gray-500 p-2">No datasets in this source.</div>
 {% endfor %}
 
 {% if has_more %}

@@ -1,0 +1,164 @@
+{% if search_performed %}
+    <div class="space-y-6">
+        {% if resources %}
+        <div>
+            <h3 class="text-lg font-semibold mb-3 flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+                Resources ({{ resources.count }} found)
+            </h3>
+            <div class="overflow-x-auto">
+                <table class="table table-zebra w-full">
+                    <thead>
+                        <tr>
+                            <th>Type</th>
+                            <th>Name</th>
+                            <th>URI/Value</th>
+                            <th>Institution</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for resource in resources %}
+                        <tr>
+                            <td>
+                                <span class="badge {% if resource.resource_type == 'IRI' %}badge-primary{% elif resource.resource_type == 'LITERAL' %}badge-secondary{% elif resource.resource_type == 'CLASS' %}badge-accent{% else %}badge-neutral{% endif %}">
+                                    {{ resource.get_resource_type_display }}
+                                </span>
+                            </td>
+                            <td>{{ resource.name|default:"-" }}</td>
+                            <td>
+                                {% if resource.resource_type == 'LITERAL' %}
+                                    <span class="text-sm">{{ resource.value|truncatechars:50 }}</span>
+                                {% else %}
+                                    <span class="text-sm">{{ resource.uri|truncatechars:50 }}</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ resource.source }}</td>
+                            <td>
+                                {% if resource.id %}
+                                <a href="{% url 'metadata:resource_detail' resource.id %}" class="btn btn-sm">
+                                    View
+                                </a>
+                                {% else %}
+                                <span class="text-xs text-gray-500">No ID</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if triples %}
+        <div>
+            <h3 class="text-lg font-semibold mb-3 flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                </svg>
+                Triples ({{ triples.count }} found)
+            </h3>
+            <div class="overflow-x-auto">
+                <table class="table table-zebra w-full">
+                    <thead>
+                        <tr>
+                            <th>Subject</th>
+                            <th>Predicate</th>
+                            <th>Object</th>
+                            <th>Institution</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for triple in triples %}
+                        <tr>
+                            <td>
+                                <div class="font-medium">{{ triple.subject.name|default:"-" }}</div>
+                                <div class="text-xs opacity-60">{{ triple.subject.uri|truncatechars:40 }}</div>
+                            </td>
+                            <td>
+                                <div class="font-medium">{{ triple.predicate.name|default:"-" }}</div>
+                                <div class="text-xs opacity-60">{{ triple.predicate.uri|truncatechars:40 }}</div>
+                            </td>
+                            <td>
+                                {% if triple.object.resource_type == 'LITERAL' %}
+                                    <div class="font-medium">{{ triple.object.value|truncatechars:50 }}</div>
+                                    {% if triple.object.datatype %}
+                                    <div class="text-xs opacity-60">{{ triple.object.datatype }}</div>
+                                    {% endif %}
+                                {% else %}
+                                    <div class="font-medium">{{ triple.object.name|default:"-" }}</div>
+                                    <div class="text-xs opacity-60">{{ triple.object.uri|truncatechars:40 }}</div>
+                                {% endif %}
+                            </td>
+                            <td>{{ triple.subject.source }}</td>
+                            <td class="flex gap-1">
+                                {% if triple.subject.id %}
+                                <a href="{% url 'metadata:resource_detail' triple.subject.id %}" class="btn btn-xs">S</a>
+                                {% endif %}
+                                {% if triple.predicate.id %}
+                                <a href="{% url 'metadata:resource_detail' triple.predicate.id %}" class="btn btn-xs">P</a>
+                                {% endif %}
+                                {% if triple.object.id %}
+                                <a href="{% url 'metadata:resource_detail' triple.object.id %}" class="btn btn-xs">O</a>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if not resources and not triples %}
+        <div class="text-center py-8">
+            <p>No results found matching your search criteria.</p>
+            <p class="text-sm text-base-content/70 mt-2">Try adjusting your search terms or filters.</p>
+        </div>
+        {% endif %}
+    </div>
+    
+    <!-- Pagination (if needed) -->
+    {% if page_obj and page_obj.has_other_pages %}
+    <div class="flex justify-center mt-6">
+        <div class="join">
+            {% if page_obj.has_previous %}
+            <button class="join-item btn" 
+                    hx-get="{% url 'metadata:data_explorer' %}"
+                    hx-target="#unified-results"
+                    hx-swap="innerHTML"
+                    hx-include="#unified-search-form"
+                    hx-vals='{"page": "{{ page_obj.previous_page_number }}", "view": "unified"}'>
+                «
+            </button>
+            {% else %}
+            <button class="join-item btn btn-disabled">«</button>
+            {% endif %}
+            
+            <button class="join-item btn btn-active">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</button>
+            
+            {% if page_obj.has_next %}
+            <button class="join-item btn"
+                    hx-get="{% url 'metadata:data_explorer' %}"
+                    hx-target="#unified-results"
+                    hx-swap="innerHTML"
+                    hx-include="#unified-search-form"
+                    hx-vals='{"page": "{{ page_obj.next_page_number }}", "view": "unified"}'>
+                »
+            </button>
+            {% else %}
+            <button class="join-item btn btn-disabled">»</button>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+{% else %}
+    <div class="text-center py-8">
+        <p>Enter a search term above to explore resources and triples.</p>
+        <p class="text-sm text-base-content/70 mt-2">You can search by name, URI, value, or any text content.</p>
+    </div>
+{% endif %} 

@@ -1,5 +1,5 @@
 from django.urls import path
-from arkumu.metadata.views import dashboard_views, resource_views, triple_views, graph_views, bulk_editor_views, data_discovery_views
+from arkumu.metadata.views import dashboard_views, resource_views, triple_views, graph_views, bulk_editor_views, data_discovery_views, data_explorer_views
 
 app_name = 'metadata'
 
@@ -9,14 +9,12 @@ urlpatterns = [
     path('dashboard/all-uploads/', dashboard_views.all_upload_sessions, name='all_upload_sessions'),
     path('dashboard/all-ingests/', dashboard_views.all_ingest_sessions, name='all_ingest_sessions'),
     
-    # Resources
-    path('resources/', resource_views.resource_list, name='resource_list'),
+    # Data Explorer (unified resource and triple browsing)
+    path('data-explorer/', data_explorer_views.data_explorer, name='data_explorer'),
+    
+    # Resource details (still needed for individual resource pages)
     path('resources/<uuid:resource_id>/', resource_views.resource_detail, name='resource_detail'),
     path('resources/<uuid:resource_id>/graph/', resource_views.resource_graph, name='resource_graph'),
-    
-    # Triples
-    path('triples/search/', triple_views.triple_search, name='triple_search'),
-    path('triples/', triple_views.triple_list, name='triple_list'),
     
     # Graph visualization
     path('triple-viewer/', graph_views.triple_viewer_view, name='triple_viewer'),
@@ -24,8 +22,10 @@ urlpatterns = [
     path('tree/bucket/<str:bucket_name>/', graph_views.tree_bucket_content_view, name='tree_bucket_content'),
     path('tree/bucket/<str:bucket_name>/more/', graph_views.tree_bucket_more_view, name='tree_bucket_more'),
     path('tree/dataset/<uuid:dataset_id>/', graph_views.tree_dataset_view, name='tree_dataset'),
+    path('tree/dataset/<uuid:dataset_id>/details/', graph_views.tree_dataset_details_view, name='tree_dataset_details'),
     path('tree/dataset/<uuid:dataset_id>/more/', graph_views.tree_dataset_more_view, name='tree_dataset_more'),
     path('tree/dataset/<uuid:dataset_id>/row/<uuid:row_id>/', graph_views.tree_row_view, name='tree_row'),
+    path('tree/row/<uuid:row_id>/details/', graph_views.tree_row_details_view, name='tree_row_details'),
     path('tree/cell/<uuid:cell_id>/details/', graph_views.tree_cell_details_view, name='tree_cell_details'),
     path('graph/', graph_views.full_graph_view, name='full_graph_view'),
     path('graph/data/', graph_views.graph_data_view, name='graph_data'),

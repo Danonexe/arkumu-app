@@ -27,9 +27,13 @@
                 </td>
                 <td>{{ resource.source }}</td>
                 <td>
+                    {% if resource.id %}
                     <a href="{% url 'metadata:resource_detail' resource.id %}" class="btn btn-sm">
                         View
                     </a>
+                    {% else %}
+                    <span class="text-xs text-gray-500">No ID</span>
+                    {% endif %}
                 </td>
             </tr>
             {% empty %}

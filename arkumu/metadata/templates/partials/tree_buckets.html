@@ -10,12 +10,15 @@
      onclick="toggleTreeNode(this.querySelector('.tree-toggle'))"
      style="cursor: pointer;">
     <span class="tree-toggle">▶</span>
-    <span class="tree-label">📦 {{ bucket.name }} ({{ bucket.dataset_count }} datasets)</span>
+    <span class="tree-label">
+        🏛️ {{ bucket.name }} 
+        <span class="text-sm text-gray-600">({{ bucket.dataset_count }} dataset{{ bucket.dataset_count|pluralize }})</span>
+    </span>
 </div>
 <div class="tree-content collapsed">
     <span class="loading-spinner htmx-indicator"></span>
     <!-- Datasets will be loaded here via HTMX -->
 </div>
 {% empty %}
-<div class="text-gray-500 p-4">No buckets found</div>
+<div class="text-gray-500 p-4">No data sources found</div>
 {% endfor %} 

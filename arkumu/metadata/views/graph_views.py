@@ -477,7 +477,7 @@ def get_cell_graph(cell_id, rdf_value_predicate):
 
 @login_required
 def tree_cell_details_view(request, cell_id):
-    """API endpoint for getting cell details and graph data."""
+    """HTMX view for getting cell details and graph data."""
     logger.info(f"tree_cell_details_view called for cell_id: {cell_id}")
     
     # Get the rdf:value predicate
@@ -708,6 +708,20 @@ def tree_bucket_content_view(request, bucket_name):
         logger.error("hasPart predicate not found in tree_bucket_content_view")
         return render(request, 'partials/tree_error.html', {'error': 'Configuration error: hasPart predicate missing'})
 
+    def extract_source_from_uri(uri):
+        """Extract source name from URI like http://arkumu.org/data/{source}/datasets/{name}"""
+        if not uri:
+            return "Unknown"
+        try:
+            uri_parts = uri.split('/')
+            if 'data' in uri_parts:
+                data_index = uri_parts.index('data')
+                if data_index + 1 < len(uri_parts):
+                    return uri_parts[data_index + 1]
+        except (ValueError, IndexError):
+            pass
+        return "Unknown"
+
     datasets_in_bucket_final = []
     total_count = 0
 
@@ -728,41 +742,25 @@ def tree_bucket_content_view(request, bucket_name):
         
         # Filter only those that belong to Default bucket  
         for dataset in paginated_datasets:
-            extracted_bn = "Default"
-            if dataset.uri:
-                try:
-                    uri_parts = dataset.uri.split('/')
-                    if 'data' in uri_parts:
-                        data_index = uri_parts.index('data')
-                        # Check if 'datasets' follows the part after 'data'
-                        if data_index + 1 < len(uri_parts) and data_index + 2 < len(uri_parts) and uri_parts[data_index + 2] == 'datasets':
-                            extracted_bn = uri_parts[data_index + 1]
-                        # If not, it might be a URI structure where 'Default' is appropriate or extraction failed.
-                except (ValueError, IndexError):
-                    logger.warning(f"Could not extract bucket from URI for dataset {dataset.uri} during 'Default' bucket check.")
-                    pass # Keep extracted_bn as "Default"
+            extracted_bn = extract_source_from_uri(dataset.uri)
+            if extracted_bn == "Unknown":
+                extracted_bn = "Default"
             
             if extracted_bn == bucket_name: # Match "Default"
                  datasets_in_bucket_final.append({
                     'id': str(dataset.id),
                     'name': dataset.name or (dataset.uri.split('/')[-1] if dataset.uri else f"Dataset {dataset.id}"),
                     'count': dataset.item_count, 
-                    'uri': dataset.uri
+                    'uri': dataset.uri,
+                    'source': extracted_bn
                 })
         
         # Calculate actual total count for Default bucket specifically
         total_count = 0
         for dataset in all_datasets_for_default_check:
-            extracted_bn = "Default"
-            if dataset.uri:
-                try:
-                    uri_parts = dataset.uri.split('/')
-                    if 'data' in uri_parts:
-                        data_index = uri_parts.index('data')
-                        if data_index + 1 < len(uri_parts) and data_index + 2 < len(uri_parts) and uri_parts[data_index + 2] == 'datasets':
-                            extracted_bn = uri_parts[data_index + 1]
-                except (ValueError, IndexError):
-                    pass
+            extracted_bn = extract_source_from_uri(dataset.uri)
+            if extracted_bn == "Unknown":
+                extracted_bn = "Default"
             if extracted_bn == bucket_name:
                 total_count += 1
     else:
@@ -787,13 +785,15 @@ def tree_bucket_content_view(request, bucket_name):
         paginated_datasets = precise_datasets_query[offset:offset + PAGE_SIZE]
         
         for dataset in paginated_datasets:
+            source_name = extract_source_from_uri(dataset.uri)
             datasets_in_bucket_final.append({
                 'id': str(dataset.id),
                 'name': dataset.name or (dataset.uri.split('/')[-1] if dataset.uri else f"Dataset {dataset.id}"),
                 'count': dataset.item_count,
-                'uri': dataset.uri
+                'uri': dataset.uri,
+                'source': source_name
             })
-            logger.info(f"Added dataset: {dataset.name} (URI: {dataset.uri})")
+            logger.info(f"Added dataset: {dataset.name} (URI: {dataset.uri}, Source: {source_name})")
 
     # Check if there are more items to load
     has_more = (offset + PAGE_SIZE) < total_count
@@ -830,6 +830,20 @@ def tree_bucket_more_view(request, bucket_name):
         logger.error("hasPart predicate not found in tree_bucket_more_view")
         return render(request, 'partials/tree_error.html', {'error': 'Configuration error: hasPart predicate missing'})
 
+    def extract_source_from_uri(uri):
+        """Extract source name from URI like http://arkumu.org/data/{source}/datasets/{name}"""
+        if not uri:
+            return "Unknown"
+        try:
+            uri_parts = uri.split('/')
+            if 'data' in uri_parts:
+                data_index = uri_parts.index('data')
+                if data_index + 1 < len(uri_parts):
+                    return uri_parts[data_index + 1]
+        except (ValueError, IndexError):
+            pass
+        return "Unknown"
+
     datasets_in_bucket_final = []
     total_count = 0
 
@@ -846,23 +860,17 @@ def tree_bucket_more_view(request, bucket_name):
         total_count = all_datasets_for_default_check.count()
 
         for dataset in paginated_datasets:
-            extracted_bn = "Default"
-            if dataset.uri:
-                try:
-                    uri_parts = dataset.uri.split('/')
-                    if 'data' in uri_parts:
-                        data_index = uri_parts.index('data')
-                        if data_index + 1 < len(uri_parts) and data_index + 2 < len(uri_parts) and uri_parts[data_index + 2] == 'datasets':
-                            extracted_bn = uri_parts[data_index + 1]
-                except (ValueError, IndexError):
-                    pass
+            extracted_bn = extract_source_from_uri(dataset.uri)
+            if extracted_bn == "Unknown":
+                extracted_bn = "Default"
             
             if extracted_bn == bucket_name:
                  datasets_in_bucket_final.append({
                     'id': str(dataset.id),
                     'name': dataset.name or (dataset.uri.split('/')[-1] if dataset.uri else f"Dataset {dataset.id}"),
                     'count': dataset.item_count, 
-                    'uri': dataset.uri
+                    'uri': dataset.uri,
+                    'source': extracted_bn
                 })
     else:
         precise_datasets_query = Resource.objects.filter(
@@ -879,17 +887,20 @@ def tree_bucket_more_view(request, bucket_name):
         paginated_datasets = precise_datasets_query[offset:offset + PAGE_SIZE]
         
         for dataset in paginated_datasets:
+            source_name = extract_source_from_uri(dataset.uri)
             datasets_in_bucket_final.append({
                 'id': str(dataset.id),
                 'name': dataset.name or (dataset.uri.split('/')[-1] if dataset.uri else f"Dataset {dataset.id}"),
                 'count': dataset.item_count,
-                'uri': dataset.uri
+                'uri': dataset.uri,
+                'source': source_name
             })
 
+    # Check if there are more items to load
     has_more = (offset + PAGE_SIZE) < total_count
     next_offset = offset + PAGE_SIZE
 
-    logger.info(f"=== Loading more: {len(datasets_in_bucket_final)} datasets for bucket '{bucket_name}' (offset: {offset}, has_more: {has_more}) ===")
+    logger.info(f"tree_bucket_more_view returning {len(datasets_in_bucket_final)} datasets")
     
     return render(request, 'partials/tree_datasets_more.html', {
         'datasets': datasets_in_bucket_final,
@@ -1027,13 +1038,45 @@ def tree_row_view(request, dataset_id, row_id):
         # Get row_id from URI
         row_uri_id = row.uri.split('/')[-1] if row.uri else str(row.id)
         
-        # Find cells for this row
-        cell_resources = Resource.objects.filter(
-            resource_type=ResourceType.IRI,
-            uri__contains=f"/datasets/{dataset.uri.split('/')[-1]}/",
-            uri__endswith=f"/{row_uri_id}",
-            subject_triples__predicate=rdf_value_predicate
-        )[:15]  # Limit to 15 cells
+        # Extract the full dataset path from the dataset URI to ensure source-specific filtering
+        # Expected pattern: http://arkumu.org/data/{source}/datasets/{dataset_name}
+        dataset_path_pattern = None
+        if dataset.uri:
+            try:
+                # Extract everything up to and including the dataset name
+                # e.g., "http://arkumu.org/data/RSH/datasets/Digitales_Objekt" -> "/data/RSH/datasets/Digitales_Objekt/"
+                uri_parts = dataset.uri.split('/')
+                if 'data' in uri_parts and 'datasets' in uri_parts:
+                    data_index = uri_parts.index('data')
+                    datasets_index = uri_parts.index('datasets')
+                    if datasets_index + 1 < len(uri_parts):
+                        # Reconstruct the path pattern: /data/{source}/datasets/{dataset_name}/
+                        source = uri_parts[data_index + 1]
+                        dataset_name = uri_parts[datasets_index + 1]
+                        dataset_path_pattern = f"/data/{source}/datasets/{dataset_name}/"
+                        logger.info(f"Using dataset path pattern: {dataset_path_pattern}")
+            except (ValueError, IndexError):
+                logger.warning(f"Could not extract dataset path pattern from URI: {dataset.uri}")
+        
+        # Find cells for this row using the specific dataset path pattern
+        if dataset_path_pattern:
+            # More precise filtering using the full source + dataset path
+            cell_resources = Resource.objects.filter(
+                resource_type=ResourceType.IRI,
+                uri__contains=dataset_path_pattern,  # Must be from the same source/dataset
+                uri__endswith=f"/{row_uri_id}",
+                subject_triples__predicate=rdf_value_predicate
+            )[:15]  # Limit to 15 cells
+            logger.info(f"Found {cell_resources.count()} cells using dataset path pattern: {dataset_path_pattern}")
+        else:
+            # Fallback to the old method if URI parsing fails
+            cell_resources = Resource.objects.filter(
+                resource_type=ResourceType.IRI,
+                uri__contains=f"/datasets/{dataset.uri.split('/')[-1]}/",
+                uri__endswith=f"/{row_uri_id}",
+                subject_triples__predicate=rdf_value_predicate
+            )[:15]
+            logger.warning(f"Using fallback method for cell filtering (dataset: {dataset.name})")
         
         # Extract column names and sort
         cells_data = []
@@ -1054,9 +1097,12 @@ def tree_row_view(request, dataset_id, row_id):
                 'name': column_name,
                 'column_name': column_name
             })
+            logger.debug(f"Cell: {column_name} (URI: {cell.uri})")
         
         # Sort by column name
         cells_data.sort(key=lambda x: x['column_name'])
+        
+        logger.info(f"Returning {len(cells_data)} cells for row {row.name} in dataset {dataset.name}")
         
         return render(request, 'partials/tree_cells.html', {
             'dataset_id': dataset_id,
@@ -1167,4 +1213,298 @@ def tree_dataset_more_view(request, dataset_id):
         logger.error(f"Error in tree_dataset_more_view: {e}")
         return render(request, 'partials/tree_error.html', {
             'error': f'Error loading more rows: {str(e)}'
+        })
+
+@login_required
+def tree_dataset_details_view(request, dataset_id):
+    """HTMX view for getting dataset details to display in the details panel."""
+    logger.info(f"tree_dataset_details_view called for dataset_id: {dataset_id}")
+    
+    try:
+        dataset = Resource.objects.get(id=dataset_id)
+        
+        # Extract meaningful information from dataset URI for display
+        dataset_display_info = {
+            'source': 'Unknown',
+            'institution': None,
+            'display_name': dataset.name or "(unnamed)"
+        }
+        
+        if dataset.uri:
+            # Expected URI pattern: http://arkumu.org/data/{source}/datasets/{dataset_name}
+            try:
+                uri_parts = dataset.uri.split('/')
+                if 'data' in uri_parts and 'datasets' in uri_parts:
+                    data_index = uri_parts.index('data')
+                    if data_index + 1 < len(uri_parts):
+                        dataset_display_info['source'] = uri_parts[data_index + 1]
+                        dataset_display_info['institution'] = uri_parts[data_index + 1]
+            except (ValueError, IndexError):
+                logger.warning(f"Could not parse dataset URI: {dataset.uri}")
+        
+        # Get dataset statistics
+        has_part_predicate = Resource.objects.filter(
+            uri="http://purl.org/dc/terms/hasPart",
+            resource_type=ResourceType.PROPERTY
+        ).first()
+        
+        rdf_value_predicate = Resource.objects.filter(
+            uri="http://www.w3.org/1999/02/22-rdf-syntax-ns#value",
+            resource_type=ResourceType.PROPERTY
+        ).first()
+        
+        stats = {
+            'total_rows': 0,
+            'total_cells': 0
+        }
+        
+        if has_part_predicate and dataset.uri:
+            # Debug: Let's see what we're working with
+            logger.info(f"Dataset URI: {dataset.uri}")
+            dataset_path = dataset.uri.replace('http://arkumu.org', '')  # Remove domain
+            cell_pattern = f"{dataset_path}/"
+            logger.info(f"Cell pattern: {cell_pattern}")
+            
+            # Count rows using URI pattern (more reliable than hasPart counting)
+            rows_pattern = f"{dataset.uri}/rows/"
+            row_resources = Resource.objects.filter(
+                resource_type=ResourceType.IRI,
+                uri__startswith=rows_pattern
+            )
+            rows_count = row_resources.count()
+            stats['total_rows'] = rows_count
+            logger.info(f"Row resources found: {rows_count}")
+            
+            # Count cells more efficiently using URI pattern
+            # Cell URIs follow pattern: {dataset_uri}/{column}/{row_id}
+            # So they contain the dataset URI but are not direct hasPart children
+            if rdf_value_predicate:
+                # First, let's see what resources we find with the pattern
+                all_matching_resources = Resource.objects.filter(
+                    resource_type=ResourceType.IRI,
+                    uri__contains=cell_pattern
+                ).exclude(
+                    uri=dataset.uri  # Exclude the dataset itself
+                )
+                
+                logger.info(f"All resources matching pattern: {all_matching_resources.count()}")
+                
+                # Sample a few URIs to see the pattern
+                sample_uris = list(all_matching_resources.values_list('uri', flat=True)[:5])
+                logger.info(f"Sample URIs: {sample_uris}")
+                
+                # Now count those that have rdf:value (actual cells)
+                cells_with_values = all_matching_resources.filter(
+                    subject_triples__predicate=rdf_value_predicate
+                ).distinct()
+                
+                cells_count = cells_with_values.count()
+                logger.info(f"Cells with rdf:value: {cells_count}")
+                
+                stats['total_cells'] = cells_count
+            else:
+                logger.warning("rdf:value predicate not found, using fallback")
+                # Fallback: count by URI pattern if rdf:value predicate not found
+                cells_count = Resource.objects.filter(
+                    resource_type=ResourceType.IRI,
+                    uri__contains=cell_pattern,
+                    uri__regex=r'.*/[^/]+/[^/]+/[0-9]+$'  # Pattern: .../dataset/column/row_number
+                ).distinct().count()
+                
+                stats['total_cells'] = cells_count
+        
+        # Get any additional metadata triples for this dataset
+        dataset_triples = Triple.objects.filter(
+            subject=dataset
+        ).exclude(
+            predicate=has_part_predicate  # Exclude structural relationships
+        ).select_related('predicate', 'object')[:10]
+        
+        dataset_metadata = []
+        for triple in dataset_triples:
+            # Create readable predicate name
+            predicate_name = None
+            if triple.predicate.uri:
+                uri = triple.predicate.uri
+                if uri == "http://www.w3.org/1999/02/22-rdf-syntax-ns#type":
+                    predicate_name = "rdf:type"
+                elif uri == "http://www.w3.org/2000/01/rdf-schema#label":
+                    predicate_name = "rdfs:label"
+                elif "http://www.w3.org/1999/02/22-rdf-syntax-ns#" in uri:
+                    predicate_name = f"rdf:{uri.split('#')[-1]}"
+                elif "http://purl.org/dc/terms/" in uri:
+                    predicate_name = f"dcterms:{uri.split('/')[-1]}"
+                elif "http://www.w3.org/2000/01/rdf-schema#" in uri:
+                    predicate_name = f"rdfs:{uri.split('#')[-1]}"
+                else:
+                    predicate_name = uri.split('/')[-1] if '/' in uri else uri.split('#')[-1] if '#' in uri else uri
+            
+            if not predicate_name:
+                predicate_name = triple.predicate.name or f"Property {triple.predicate.id}"
+            
+            if triple.object.resource_type == ResourceType.LITERAL:
+                value = triple.object.value or "(empty)"
+            else:
+                value = triple.object.name or triple.object.uri or f"Resource {triple.object.id}"
+            
+            dataset_metadata.append({
+                'predicate': predicate_name,
+                'predicate_uri': triple.predicate.uri,
+                'value': value,
+                'is_literal': triple.object.resource_type == ResourceType.LITERAL
+            })
+        
+        return render(request, 'partials/dataset_details.html', {
+            'dataset': dataset,
+            'dataset_display_info': dataset_display_info,
+            'stats': stats,
+            'dataset_metadata': dataset_metadata
+        })
+        
+    except Resource.DoesNotExist:
+        return render(request, 'partials/tree_error.html', {
+            'error': 'Dataset not found'
+        }) 
+
+@login_required
+def tree_row_details_view(request, row_id):
+    """HTMX view for getting row details to display in the details panel."""
+    logger.info(f"tree_row_details_view called for row_id: {row_id}")
+    
+    try:
+        row = Resource.objects.get(id=row_id)
+        
+        # Extract meaningful information from row URI for display
+        row_display_info = {
+            'dataset': 'Unknown',
+            'source': 'Unknown',
+            'row_number': None,
+            'display_name': row.name or "(unnamed)"
+        }
+        
+        if row.uri:
+            # Expected URI pattern: http://arkumu.org/data/{source}/datasets/{dataset}/rows/{row_number}
+            try:
+                uri_parts = row.uri.split('/')
+                if 'data' in uri_parts and 'datasets' in uri_parts and 'rows' in uri_parts:
+                    data_index = uri_parts.index('data')
+                    datasets_index = uri_parts.index('datasets')
+                    rows_index = uri_parts.index('rows')
+                    
+                    if (data_index + 1 < len(uri_parts) and 
+                        datasets_index + 1 < len(uri_parts) and 
+                        rows_index + 1 < len(uri_parts)):
+                        
+                        row_display_info['source'] = uri_parts[data_index + 1]
+                        row_display_info['dataset'] = uri_parts[datasets_index + 1]
+                        row_display_info['row_number'] = uri_parts[rows_index + 1]
+                        row_display_info['display_name'] = f"Row {row_display_info['row_number']}"
+            except (ValueError, IndexError):
+                logger.warning(f"Could not parse row URI: {row.uri}")
+        
+        # Get row statistics - count cells in this row
+        has_part_predicate = Resource.objects.filter(
+            uri="http://purl.org/dc/terms/hasPart",
+            resource_type=ResourceType.PROPERTY
+        ).first()
+        
+        rdf_value_predicate = Resource.objects.filter(
+            uri="http://www.w3.org/1999/02/22-rdf-syntax-ns#value",
+            resource_type=ResourceType.PROPERTY
+        ).first()
+        
+        stats = {
+            'total_cells': 0,
+            'columns': []
+        }
+        
+        # Count cells and get column information
+        if rdf_value_predicate and row.uri:
+            # Extract row number from URI for cell pattern matching
+            row_uri_parts = row.uri.split('/')
+            if 'rows' in row_uri_parts:
+                rows_index = row_uri_parts.index('rows')
+                if rows_index + 1 < len(row_uri_parts):
+                    row_number = row_uri_parts[rows_index + 1]
+                    
+                    # Find cells that end with this row number and belong to this dataset
+                    dataset_path = row.uri.replace('/rows/' + row_number, '')  # Remove /rows/123 part
+                    
+                    # Look for cells: {dataset_path}/{column}/{row_number}
+                    cell_resources = Resource.objects.filter(
+                        resource_type=ResourceType.IRI,
+                        uri__startswith=dataset_path + '/',
+                        uri__endswith='/' + row_number,
+                        subject_triples__predicate=rdf_value_predicate
+                    ).exclude(
+                        uri=row.uri  # Exclude the row itself
+                    )
+                    
+                    stats['total_cells'] = cell_resources.count()
+                    
+                    # Extract column names
+                    columns = set()
+                    for cell in cell_resources:
+                        try:
+                            # Extract column from URI: .../dataset/column/row_number
+                            cell_parts = cell.uri.split('/')
+                            if len(cell_parts) >= 2:
+                                column = cell_parts[-2]  # Second to last part is column
+                                columns.add(column)
+                        except Exception:
+                            pass
+                    
+                    stats['columns'] = sorted(list(columns))
+        
+        # Get any metadata triples for this row
+        row_triples = Triple.objects.filter(
+            subject=row
+        ).exclude(
+            predicate=has_part_predicate if has_part_predicate else None
+        ).select_related('predicate', 'object')[:10]
+        
+        row_metadata = []
+        for triple in row_triples:
+            # Create readable predicate name
+            predicate_name = None
+            if triple.predicate.uri:
+                uri = triple.predicate.uri
+                if uri == "http://www.w3.org/1999/02/22-rdf-syntax-ns#type":
+                    predicate_name = "rdf:type"
+                elif uri == "http://www.w3.org/2000/01/rdf-schema#label":
+                    predicate_name = "rdfs:label"
+                elif "http://www.w3.org/1999/02/22-rdf-syntax-ns#" in uri:
+                    predicate_name = f"rdf:{uri.split('#')[-1]}"
+                elif "http://purl.org/dc/terms/" in uri:
+                    predicate_name = f"dcterms:{uri.split('/')[-1]}"
+                elif "http://www.w3.org/2000/01/rdf-schema#" in uri:
+                    predicate_name = f"rdfs:{uri.split('#')[-1]}"
+                else:
+                    predicate_name = uri.split('/')[-1] if '/' in uri else uri.split('#')[-1] if '#' in uri else uri
+            
+            if not predicate_name:
+                predicate_name = triple.predicate.name or f"Property {triple.predicate.id}"
+            
+            if triple.object.resource_type == ResourceType.LITERAL:
+                value = triple.object.value or "(empty)"
+            else:
+                value = triple.object.name or triple.object.uri or f"Resource {triple.object.id}"
+            
+            row_metadata.append({
+                'predicate': predicate_name,
+                'predicate_uri': triple.predicate.uri,
+                'value': value,
+                'is_literal': triple.object.resource_type == ResourceType.LITERAL
+            })
+        
+        return render(request, 'partials/row_details.html', {
+            'row': row,
+            'row_display_info': row_display_info,
+            'stats': stats,
+            'row_metadata': row_metadata
+        })
+        
+    except Resource.DoesNotExist:
+        return render(request, 'partials/tree_error.html', {
+            'error': 'Row not found'
         }) 
