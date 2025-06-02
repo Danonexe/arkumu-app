@@ -16,74 +16,79 @@
             </ul>
         </div>
         
-        <div class="flex items-center justify-between">
-            <div>
+        <!-- Title and Stats inline -->
+        <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+            <div class="flex-1">
                 <h1 class="text-4xl font-bold text-base-content mb-2">Data Discovery</h1>
                 <p class="text-base-content/70">
                     Manage and link S3 files from data folders to metadata resources
                 </p>
             </div>
             
-            <!-- DaisyUI Radial Progress -->
-            <div class="radial-progress text-primary w-16 h-16" 
-                 data-progress="{{ link_percentage|default:0 }}"
-                 role="progressbar" 
-                 aria-valuenow="{{ link_percentage|default:0 }}" 
-                 aria-valuemin="0" 
-                 aria-valuemax="100">
-                {{ link_percentage|default:0 }}%
-            </div>
-        </div>
-        
-        <!-- Pure DaisyUI Stats -->
-        <div class="stats stats-vertical lg:stats-horizontal shadow w-full mt-6">
-            <div class="stat place-items-center">
-                <div class="stat-title">Total Files</div>
-                <div class="stat-value text-primary">{{ total_files }}</div>
-                <div class="stat-desc">In data folders</div>
-            </div>
-            <div class="stat place-items-center">
-                <div class="stat-title">Linked Files</div>
-                <div class="stat-value text-success">{{ linked_files }}</div>
-                <div class="stat-desc">Connected to resources</div>
-            </div>
-            <div class="stat place-items-center">
-                <div class="stat-title">Unlinked Files</div>
-                <div class="stat-value text-warning">{{ unlinked_files }}</div>
-                <div class="stat-desc">Need linking</div>
-            </div>
-            <div class="stat place-items-center">
-                <div class="stat-title">Success Rate</div>
-                <div class="stat-value text-info">{{ link_percentage }}%</div>
-                <div class="stat-desc">
-                    <progress class="progress progress-success w-16" 
-                            value="{{ link_percentage|default:0 }}" max="100"></progress>
+            <!-- Compact Stats on the right -->
+            <div class="flex-shrink-0">
+                <div class="stats stats-horizontal shadow bg-base-100">
+                    <div class="stat px-4 py-3">
+                        <div class="stat-title text-xs">Total</div>
+                        <div class="stat-value text-2xl text-primary">{{ total_files }}</div>
+                    </div>
+                    <div class="stat px-4 py-3">
+                        <div class="stat-title text-xs">Linked</div>
+                        <div class="stat-value text-2xl text-success">{{ linked_files }}</div>
+                    </div>
+                    <div class="stat px-4 py-3">
+                        <div class="stat-title text-xs">Unlinked</div>
+                        <div class="stat-value text-2xl text-warning">{{ unlinked_files }}</div>
+                    </div>
+                    <div class="stat px-4 py-3">
+                        <div class="stat-title text-xs">Success</div>
+                        <div class="stat-value text-2xl text-info">{{ link_percentage }}%</div>
+                    </div>
                 </div>
             </div>
-            {% if page_obj.has_other_pages %}
-            <div class="stat place-items-center">
-                <div class="stat-title">Current Page</div>
-                <div class="stat-value text-neutral">{{ page_obj.number }}</div>
-                <div class="stat-desc">of {{ page_obj.paginator.num_pages }} pages</div>
-            </div>
-            {% endif %}
         </div>
     </div>
 
     <!-- Pure Tailwind Grid Layout -->
     <div class="grid grid-cols-12 gap-6">
-        <!-- Left Panel - File Browser -->
-        <div class="col-span-12 lg:col-span-8">
+        <!-- File Browser - Full Width -->
+        <div class="col-span-12">
             <div class="card bg-base-100 shadow-xl">
                 <!-- Card Header -->
                 <div class="card-header bg-base-200 p-4 rounded-t-xl">
                     <div class="flex flex-col lg:flex-row justify-between gap-4">
-                        <h2 class="text-xl font-semibold flex items-center gap-2">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2V7z"/>
-                            </svg>
-                            S3 Files by Bucket
-                        </h2>
+                        <div class="flex items-center gap-3">
+                            <h2 class="text-xl font-semibold flex items-center gap-2">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2V7z"/>
+                                </svg>
+                                S3 Files by Bucket
+                            </h2>
+                            
+                            <!-- Quick Action Icons -->
+                            <div class="flex gap-1">
+                                <div class="tooltip" data-tip="Refresh Data">
+                                    <a href="{% url 'metadata:data_discovery' %}" class="btn btn-ghost btn-sm btn-square">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                        </svg>
+                                    </a>
+                                </div>
+                                
+                                <div class="tooltip" data-tip="Auto-Link All Unlinked Files">
+                                    <button class="btn btn-ghost btn-sm btn-square"
+                                            hx-post="{% url 'metadata:auto_link_all' %}"
+                                            hx-confirm="Run automatic linking for all unlinked files? This may take a while."
+                                            hx-target="#toast-container"
+                                            hx-swap="beforeend">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+                                        </svg>
+                                        <span class="loading loading-spinner loading-sm htmx-indicator"></span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                         
                         <!-- Filter Controls -->
                         <div class="join">
@@ -115,23 +120,43 @@
                         </div>
                     </div>
                     
-                    <!-- Button Group -->
-                    <div class="btn-group mt-4">
-                        <button class="btn btn-sm btn-outline" onclick="toggleSelectAll()">
-                            Select All
-                        </button>
+                    <!-- Controls Row -->
+                    <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mt-4">
+                        <!-- Button Group -->
+                        <div class="btn-group">
+                            <button class="btn btn-sm btn-outline" onclick="toggleSelectAll()">
+                                Select All
+                            </button>
+                            
+                            <button class="btn btn-sm btn-primary"
+                                    hx-post="{% url 'metadata:batch_link_files' %}"
+                                    hx-include="[name='selected_files']:checked"
+                                    hx-confirm="Link selected files using automatic matching?"
+                                    hx-target="#toast-container"
+                                    hx-swap="beforeend"
+                                    disabled
+                                    id="batch-link-btn">
+                                <span class="loading loading-spinner loading-sm htmx-indicator"></span>
+                                Batch Link
+                            </button>
+                        </div>
                         
-                        <button class="btn btn-sm btn-primary"
-                                hx-post="{% url 'metadata:batch_link_files' %}"
-                                hx-include="[name='selected_files']:checked"
-                                hx-confirm="Link selected files using automatic matching?"
-                                hx-target="#toast-container"
-                                hx-swap="beforeend"
-                                disabled
-                                id="batch-link-btn">
-                            <span class="loading loading-spinner loading-sm htmx-indicator"></span>
-                            Batch Link
-                        </button>
+                        <!-- Status Legend - Compact -->
+                        <div class="flex items-center gap-4 text-xs">
+                            <span class="font-medium">Status:</span>
+                            <div class="flex items-center gap-1">
+                                <div class="badge badge-success badge-sm">Linked</div>
+                                <span class="text-base-content/70">Connected</span>
+                            </div>
+                            <div class="flex items-center gap-1">
+                                <div class="badge badge-warning badge-sm">Unlinked</div>
+                                <span class="text-base-content/70">Needs linking</span>
+                            </div>
+                            <div class="flex items-center gap-1">
+                                <div class="badge badge-info badge-sm animate-pulse">Processing</div>
+                                <span class="text-base-content/70">In progress</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 
@@ -195,68 +220,6 @@
                         </div>
                     </div>
                     {% endif %}
-                </div>
-            </div>
-        </div>
-
-        <!-- Right Panel - Actions & Info -->
-        <div class="col-span-12 lg:col-span-4 space-y-6">
-            <!-- Quick Actions -->
-            <div class="card bg-base-100 shadow-xl">
-                <div class="card-body">
-                    <h3 class="card-title">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-                        </svg>
-                        Quick Actions
-                    </h3>
-                    
-                    <div class="space-y-3">
-                        <a href="{% url 'metadata:data_discovery' %}" class="btn btn-outline w-full">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                            </svg>
-                            Refresh Data
-                        </a>
-                        
-                        <div class="divider">Bulk Operations</div>
-                        
-                        <button class="btn btn-info w-full"
-                                hx-post="{% url 'metadata:auto_link_all' %}"
-                                hx-confirm="Run automatic linking for all unlinked files? This may take a while."
-                                hx-target="#toast-container"
-                                hx-swap="beforeend">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
-                            </svg>
-                            <span class="loading loading-spinner loading-sm htmx-indicator"></span>
-                            Auto-Link All
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Status Legend using DaisyUI Alert -->
-            <div class="alert">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-info shrink-0 w-6 h-6">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                </svg>
-                <div>
-                    <h3 class="font-bold">Status Legend</h3>
-                    <div class="text-xs space-y-1 mt-2">
-                        <div class="flex items-center gap-2">
-                            <div class="badge badge-success badge-sm">Linked</div>
-                            <span>Connected to resource</span>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <div class="badge badge-warning badge-sm">Unlinked</div>
-                            <span>Needs linking</span>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <div class="badge badge-info badge-sm animate-pulse">Processing</div>
-                            <span>Operation in progress</span>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
