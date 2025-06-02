@@ -42,24 +42,31 @@
 </div>
 
 <!-- Pagination -->
+{% if page_obj.has_other_pages %}
 <div class="flex justify-center my-4">
     <div class="btn-group">
         {% if page_obj.has_previous %}
         <button class="btn btn-sm" 
-                hx-get="{% url 'metadata:resource_list' %}?page={{ page_obj.previous_page_number }}&type={{ request.GET.type }}&institution={{ request.GET.institution }}&q={{ request.GET.q }}"
-                hx-target="#resource-list">
+                hx-get="{% url 'metadata:resource_list' %}"
+                hx-target="#resource-list"
+                hx-swap="innerHTML"
+                hx-include="#filter-form"
+                hx-vals='{"page": "{{ page_obj.previous_page_number }}"}'>
             «
         </button>
         {% else %}
         <button class="btn btn-sm" disabled>«</button>
         {% endif %}
         
-        <button class="btn btn-sm">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</button>
+        <button class="btn btn-sm btn-active">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</button>
         
         {% if page_obj.has_next %}
         <button class="btn btn-sm"
-                hx-get="{% url 'metadata:resource_list' %}?page={{ page_obj.next_page_number }}&type={{ request.GET.type }}&institution={{ request.GET.institution }}&q={{ request.GET.q }}"
-                hx-target="#resource-list">
+                hx-get="{% url 'metadata:resource_list' %}"
+                hx-target="#resource-list"
+                hx-swap="innerHTML"
+                hx-include="#filter-form"
+                hx-vals='{"page": "{{ page_obj.next_page_number }}"}'>
             »
         </button>
         {% else %}
@@ -67,3 +74,4 @@
         {% endif %}
     </div>
 </div>
+{% endif %}

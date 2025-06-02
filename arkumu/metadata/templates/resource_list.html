@@ -13,7 +13,12 @@
         <div class="card-body">
             <h2 class="card-title">Filters</h2>
             
-            <form id="filter-form" class="grid grid-cols-1 md:grid-cols-3 gap-4" hx-get="{% url 'metadata:resource_list' %}" hx-target="#resource-list" hx-swap="innerHTML" hx-trigger="change, submit">
+            <form id="filter-form" class="grid grid-cols-1 md:grid-cols-3 gap-4" 
+                  hx-get="{% url 'metadata:resource_list' %}" 
+                  hx-target="#resource-list" 
+                  hx-swap="innerHTML"
+                  hx-trigger="change, submit"
+                  hx-headers='{"X-Requested-With": "XMLHttpRequest"}'>
                 <div class="form-control">
                     <label class="label">Resource Type</label>
                     <select name="type" class="select select-bordered">
@@ -43,6 +48,9 @@
                         </button>
                     </div>
                 </div>
+                
+                <!-- Hidden fields to preserve current page -->
+                <input type="hidden" name="page" value="1">
             </form>
         </div>
     </div>
