@@ -1,5 +1,7 @@
 import logging
 import hashlib
+import csv
+import io
 from typing import Dict, List, Any, Optional, Set, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
@@ -43,6 +45,8 @@ class BulkUpdateStats:
     row_links_created: int = 0
     errors: int = 0
     truncated_values: int = 0
+    multi_value_cells_detected: int = 0
+    total_values_created: int = 0
     
     def merge(self, other: 'BulkUpdateStats'):
         """Merge another stats object into this one."""
@@ -57,18 +61,21 @@ class BulkUpdateStats:
         self.row_links_created += other.row_links_created
         self.errors += other.errors
         self.truncated_values += other.truncated_values
+        self.multi_value_cells_detected += other.multi_value_cells_detected
+        self.total_values_created += other.total_values_created
 
 
 @dataclass
 class ResourceUpdate:
     """Represents a potential resource update."""
     uri: str
-    new_value: Optional[str] = None
+    new_values: List[str] = field(default_factory=list)  # Changed from new_value to support multiple values
     new_name: Optional[str] = None
     new_datatype: Optional[str] = None
     new_language: Optional[str] = None
     action: UpdateStrategy = UpdateStrategy.SKIP_EXISTING
     existing_resource: Optional[Resource] = None
+    is_multi_value: bool = False
 
 
 class SmartBulkUpdater:
@@ -83,7 +90,8 @@ class SmartBulkUpdater:
                  institution: str = "DEFAULT",
                  base_uri: str = "http://arkumu.org/data",
                  link_row_cells: bool = True,
-                 link_topology: str = "row"
+                 link_topology: str = "row",
+                 multi_value_threshold: float = 0.2
                  ):
         """
         Initialize the smart bulk updater.
@@ -95,6 +103,7 @@ class SmartBulkUpdater:
             base_uri: Base URI for resource generation
             link_row_cells: Whether to link cells to rows
             link_topology: Topology for linking cells to rows
+            multi_value_threshold: Threshold for detecting multi-value columns (0.2 = 20%)
         """
         self.default_strategy = default_strategy
         self.timestamp_column = timestamp_column
@@ -102,6 +111,7 @@ class SmartBulkUpdater:
         self.base_uri = base_uri
         self.link_row_cells = link_row_cells
         self.link_topology = link_topology
+        self.multi_value_threshold = multi_value_threshold
         
         try:
             with transaction.atomic():
@@ -123,7 +133,121 @@ class SmartBulkUpdater:
             self.has_part_prop = None 
             self.rdf_value_prop = None
             self.dcterms_relation_prop = None
+
+    def analyze_column_for_multi_values(self, column_values: List[str]) -> Dict[str, Any]:
+        """
+        Analyze a full column to detect multi-value patterns.
         
+        Args:
+            column_values: List of string values from a single column
+            
+        Returns:
+            Dictionary with analysis results including is_multi_value and separator
+        """
+        if not column_values:
+            return {"is_multi_value": False, "separator": None, "stats": {}}
+        
+        unquoted_comma_count = 0
+        total_non_empty = 0
+        sample_splits = []
+        
+        for value in column_values:
+            if not value or not str(value).strip():
+                continue
+                
+            total_non_empty += 1
+            value_str = str(value).strip()
+            
+            try:
+                # Use csv.reader to properly handle quoted commas
+                parsed = list(csv.reader([value_str], delimiter=','))[0]
+                if len(parsed) > 1:  # Multiple values after CSV parsing
+                    unquoted_comma_count += 1
+                    # Keep sample for logging
+                    if len(sample_splits) < 3:
+                        sample_splits.append(f"{value_str} -> {parsed}")
+            except Exception as e:
+                logger.debug(f"CSV parsing failed for value '{value_str}': {e}")
+                continue
+        
+        # Calculate percentage of cells with multiple comma-separated values
+        multi_value_percentage = (unquoted_comma_count / total_non_empty) if total_non_empty > 0 else 0
+        is_multi_value = multi_value_percentage > self.multi_value_threshold
+        
+        analysis_result = {
+            "is_multi_value": is_multi_value,
+            "separator": "," if is_multi_value else None,
+            "stats": {
+                "total_cells": len(column_values),
+                "non_empty_cells": total_non_empty,
+                "multi_value_cells": unquoted_comma_count,
+                "percentage": round(multi_value_percentage * 100, 1),
+                "sample_splits": sample_splits[:3]  # Keep max 3 examples
+            }
+        }
+        
+        if is_multi_value:
+            logger.info(f"Multi-value column detected: {multi_value_percentage:.1%} of cells contain comma-separated values. Samples: {sample_splits}")
+        
+        return analysis_result
+
+    def analyze_dataset_multi_values(self, csv_data: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+        """
+        Analyze all columns in the dataset to detect multi-value patterns.
+        
+        Args:
+            csv_data: List of row dictionaries from CSV
+            
+        Returns:
+            Dictionary mapping column names to their multi-value analysis
+        """
+        if not csv_data:
+            return {}
+        
+        # Group values by column
+        column_data = {}
+        for row in csv_data:
+            for column_name, value in row.items():
+                if column_name not in column_data:
+                    column_data[column_name] = []
+                column_data[column_name].append(value)
+        
+        # Analyze each column
+        multi_value_analysis = {}
+        for column_name, values in column_data.items():
+            analysis = self.analyze_column_for_multi_values(values)
+            multi_value_analysis[column_name] = analysis
+            
+            if analysis["is_multi_value"]:
+                stats = analysis["stats"]
+                logger.info(f"Column '{column_name}': Multi-value detected ({stats['percentage']}% of {stats['non_empty_cells']} cells)")
+        
+        return multi_value_analysis
+
+    def split_cell_values(self, value: str, separator: str = ",") -> List[str]:
+        """
+        Split a cell value respecting CSV quoting rules.
+        
+        Args:
+            value: The cell value to split
+            separator: The separator to use (default: comma)
+            
+        Returns:
+            List of individual values
+        """
+        if not value or not str(value).strip():
+            return []
+        
+        try:
+            # Use csv.reader to properly handle quoted values
+            parsed = list(csv.reader([str(value).strip()], delimiter=separator))[0]
+            # Clean up each value (strip whitespace)
+            return [v.strip() for v in parsed if v.strip()]
+        except Exception as e:
+            logger.warning(f"Failed to parse multi-value cell '{value}' with separator '{separator}': {e}")
+            # Fallback to simple split
+            return [v.strip() for v in str(value).split(separator) if v.strip()]
+
     def _extract_row_id_from_uri(self, cell_uri: str) -> Optional[str]:
         """Helper to extract row_id from a standard cell URI."""
         # Standard URI: {base_uri}/{institution}/datasets/{dataset_name}/{column_name}/{row_id}
@@ -255,6 +379,9 @@ class SmartBulkUpdater:
         all_uris = []
         action_stats = BulkUpdateStats()
         
+        # First, analyze the dataset for multi-value columns
+        multi_value_analysis = self.analyze_dataset_multi_values(csv_data)
+        
         uri_to_data_map = {}
         for row_num, row in enumerate(csv_data):
             row_id_val = row.get('id', row.get('ID', str(row_num)))
@@ -290,14 +417,27 @@ class SmartBulkUpdater:
                         'value': current_value_str,
                         'column_name': column_name,
                         'row_id': safe_row_id,
-                        'row_data': row
+                        'row_data': row,
+                        'is_multi_value_column': multi_value_analysis.get(column_name, {}).get('is_multi_value', False),
+                        'separator': multi_value_analysis.get(column_name, {}).get('separator', ',')
                     }
         
         existing_resources = self.get_existing_resources_bulk(all_uris)
         
         for uri, data in uri_to_data_map.items():
             update = ResourceUpdate(uri=uri)
-            update.new_value = data['value']
+            
+            # Handle multi-value vs single-value fields
+            if data['is_multi_value_column']:
+                update.new_values = self.split_cell_values(data['value'], data['separator'])
+                update.is_multi_value = True
+                action_stats.multi_value_cells_detected += 1
+                action_stats.total_values_created += len(update.new_values)
+            else:
+                update.new_values = [data['value']]  # Single value as list for consistency
+                update.is_multi_value = False
+                action_stats.total_values_created += 1
+            
             update.new_name = data['column_name']
             update.new_datatype = "http://www.w3.org/2001/XMLSchema#string"
             
@@ -309,10 +449,15 @@ class SmartBulkUpdater:
                 if self.default_strategy == UpdateStrategy.SKIP_EXISTING:
                     update.action = UpdateStrategy.SKIP_EXISTING
                 elif self.default_strategy == UpdateStrategy.UPDATE_VALUES:
-                    if existing.value != data['value']:
+                    # For multi-value fields, we need to compare differently
+                    if update.is_multi_value:
+                        # For now, always update multi-value fields (complex comparison)
                         update.action = UpdateStrategy.UPDATE_VALUES
                     else:
-                        update.action = UpdateStrategy.SKIP_EXISTING
+                        if existing.value != data['value']:
+                            update.action = UpdateStrategy.UPDATE_VALUES
+                        else:
+                            update.action = UpdateStrategy.SKIP_EXISTING
                 elif self.default_strategy == UpdateStrategy.TIMESTAMP_BASED:
                     update.action = self._determine_timestamp_action(existing, data)
                 else:
@@ -414,7 +559,7 @@ class SmartBulkUpdater:
                                     resource_type=ResourceType.LITERAL,
                                     source=self.institution,
                                     name=original_update_item.new_name,
-                                    value=original_update_item.new_value,
+                                    value=original_update_item.new_values[0],
                                     datatype=original_update_item.new_datatype,
                                     # language=original_update_item.new_language, # Add if language is used
                                     defaults={'source': self.institution} 
@@ -519,7 +664,7 @@ class SmartBulkUpdater:
             try:
                 with transaction.atomic():
                     for update in batch:
-                        if update.existing_resource and update.existing_resource.value != update.new_value:
+                        if update.existing_resource and update.existing_resource.value != update.new_values[0]:
                             try:
                                 cell_resource_uri = update.existing_resource.uri
                                 value_triple = Triple.objects.select_related('object').filter(
@@ -530,8 +675,8 @@ class SmartBulkUpdater:
 
                                 if value_triple and value_triple.object:
                                     literal_to_update = value_triple.object
-                                    if literal_to_update.value != update.new_value:
-                                        literal_to_update.value = update.new_value
+                                    if literal_to_update.value != update.new_values[0]:
+                                        literal_to_update.value = update.new_values[0]
                                         literal_to_update.save()
                                         stats.resources_updated += 1
                                         stats.triples_updated +=1
