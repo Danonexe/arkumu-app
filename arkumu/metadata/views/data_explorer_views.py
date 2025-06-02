@@ -68,14 +68,18 @@ def _handle_resources_view(request):
             Q(name__icontains=search_query)
         )
     
+    # Get total count before pagination
+    total_count = resources.count()
+    
     # Paginate
     paginator = Paginator(resources.order_by('-id'), 20)
     page_obj = paginator.get_page(page)
     
-    logger.info(f"Resources query returned {resources.count()} total results, showing page {page}")
+    logger.info(f"Resources query returned {total_count} total results, showing page {page}")
     
     return {
         'page_obj': page_obj,
+        'total_count': total_count,
         'current_type': resource_type,
         'current_institution': institution,
         'current_query': search_query,

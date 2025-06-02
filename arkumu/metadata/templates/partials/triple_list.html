@@ -1,3 +1,27 @@
+<!-- Results Summary -->
+<div class="flex justify-between items-center mb-4">
+    <div class="text-sm text-base-content/70">
+        {% if total_count %}
+            {% if page_obj %}
+                Showing {{ page_obj.start_index }}-{{ page_obj.end_index }} of {{ total_count }} triple{{ total_count|pluralize }}
+            {% else %}
+                {{ total_count }} triple{{ total_count|pluralize }} found
+            {% endif %}
+        {% else %}
+            {% if request.GET %}
+                No triples found
+            {% else %}
+                Enter search criteria to find triples
+            {% endif %}
+        {% endif %}
+    </div>
+    {% if page_obj.has_other_pages %}
+    <div class="text-sm text-base-content/50">
+        Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+    </div>
+    {% endif %}
+</div>
+
 <div class="overflow-x-auto">
     <table class="table table-zebra w-full">
         <thead>
@@ -63,10 +87,11 @@
     <div class="join">
         {% if page_obj.has_previous %}
         <button class="join-item btn"
-                hx-get="{{ request.resolver_match.url_name|default:request.path }}"
+                hx-get="{% url 'metadata:data_explorer' %}"
                 hx-target="#triple-results"
-                hx-include="form"
-                hx-vals='{"page": "{{ page_obj.previous_page_number }}"}'>
+                hx-swap="innerHTML"
+                hx-include="#triple-search-form"
+                hx-vals='{"page": "{{ page_obj.previous_page_number }}", "view": "triples"}'>
             «
         </button>
         {% else %}
@@ -77,10 +102,11 @@
         
         {% if page_obj.has_next %}
         <button class="join-item btn"
-                hx-get="{{ request.resolver_match.url_name|default:request.path }}"
+                hx-get="{% url 'metadata:data_explorer' %}"
                 hx-target="#triple-results"
-                hx-include="form"
-                hx-vals='{"page": "{{ page_obj.next_page_number }}"}'>
+                hx-swap="innerHTML"
+                hx-include="#triple-search-form"
+                hx-vals='{"page": "{{ page_obj.next_page_number }}", "view": "triples"}'>
             »
         </button>
         {% else %}

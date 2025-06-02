@@ -1,3 +1,19 @@
+<!-- Results Summary -->
+<div class="flex justify-between items-center mb-4">
+    <div class="text-sm text-base-content/70">
+        {% if total_count %}
+            Showing {{ page_obj.start_index }}-{{ page_obj.end_index }} of {{ total_count }} resource{{ total_count|pluralize }}
+        {% else %}
+            No resources found
+        {% endif %}
+    </div>
+    {% if page_obj.has_other_pages %}
+    <div class="text-sm text-base-content/50">
+        Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+    </div>
+    {% endif %}
+</div>
+
 <div class="overflow-x-auto">
     <table class="table table-zebra w-full">
         <thead>
@@ -52,10 +68,10 @@
         {% if page_obj.has_previous %}
         <button class="btn btn-sm" 
                 hx-get="{% url 'metadata:data_explorer' %}"
-                hx-target="#resource-list"
+                hx-target="#resource-results"
                 hx-swap="innerHTML"
-                hx-include="#filter-form"
-                hx-vals='{"page": "{{ page_obj.previous_page_number }}"}'>
+                hx-include="#resource-filter-form"
+                hx-vals='{"page": "{{ page_obj.previous_page_number }}", "view": "resources"}'>
             «
         </button>
         {% else %}
@@ -67,10 +83,10 @@
         {% if page_obj.has_next %}
         <button class="btn btn-sm"
                 hx-get="{% url 'metadata:data_explorer' %}"
-                hx-target="#resource-list"
+                hx-target="#resource-results"
                 hx-swap="innerHTML"
-                hx-include="#filter-form"
-                hx-vals='{"page": "{{ page_obj.next_page_number }}"}'>
+                hx-include="#resource-filter-form"
+                hx-vals='{"page": "{{ page_obj.next_page_number }}", "view": "resources"}'>
             »
         </button>
         {% else %}
