@@ -1,0 +1,27 @@
+<!-- CSV Preview Error Content -->
+<div class="flex justify-between items-center mb-4">
+    <h3 class="text-lg font-bold text-error">CSV Preview Error</h3>
+    <button class="btn btn-sm btn-circle btn-ghost" onclick="document.getElementById('csv-preview-modal').close()">✕</button>
+</div>
+
+<div class="alert alert-error">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 15.5c-.77.833.192 2.5 1.732 2.5z" />
+    </svg>
+    <div>
+        <h3 class="font-bold">Unable to preview CSV file</h3>
+        <div class="text-xs">{{ error }}</div>
+    </div>
+</div>
+
+{% if file_path %}
+    <div class="mt-4 text-sm text-gray-500">
+        <strong>File:</strong> {{ file_path }}
+    </div>
+{% endif %}
+
+<div class="flex justify-end mt-6">
+    <button class="btn btn-sm btn-secondary" onclick="document.getElementById('csv-preview-modal').close()">
+        Close
+    </button>
+</div> 

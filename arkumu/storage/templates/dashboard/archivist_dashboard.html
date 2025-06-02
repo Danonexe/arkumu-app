@@ -8,7 +8,7 @@
         <div class="hero-content text-center">
             <div>
                 <h1 class="text-4xl font-bold">Archivist Dashboard</h1>
-                <p class="py-2 text-base-content/70">Manage organization digital assets</p>
+                <p class="py-2 text-base-content/70">Manage organization digital assets in S3 cloud storage</p>
             </div>
         </div>
     </div>
@@ -22,12 +22,11 @@
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                     </svg>
-                    Upload Files
+                    Upload Files to S3
                 </h2>
                 
                 <!-- Embedded Upload Form -->
-                <form id="streaming-upload-form" enctype="multipart/form-data">
-                    {% csrf_token %}
+                <form id="streaming-upload-form" enctype="multipart/form-data">u
                     
                     <!-- Organization selection -->
                     <div class="form-control mb-4">
@@ -35,12 +34,22 @@
                             <span class="label-text">Organization</span> 
                         </label>
                         <select id="organization" name="organization" class="select select-bordered w-full select-sm">
-                            <option value="rsh">Robert Schumann Hochschule Düsseldorf</option>
-                            <option value="khm">Kunsthochschule für Medien Köln</option>
-                            <option value="fuk">Folkwang Universität der Künste</option>
-                            <option value="hmt">Hochschule für Musik und Tanz Köln</option>
-                            <option value="det">Hochschule für Musik Detmold</option>
+                            <option value="">Choose organization...</option>
+                            {% for org in organizations %}
+                                <option value="{{ org.id }}">
+                                    {{ org.name }}{% if org.status == 'active' %} ✓{% endif %}
+                                </option>
+                            {% empty %}
+                                <option value="rsh">Robert Schumann Hochschule Düsseldorf</option>
+                                <option value="khm">Kunsthochschule für Medien Köln</option>
+                                <option value="fuk">Folkwang Universität der Künste</option>
+                                <option value="hmt">Hochschule für Musik und Tanz Köln</option>
+                                <option value="det">Hochschule für Musik Detmold</option>
+                            {% endfor %}
                         </select>
+                        <div class="label">
+                            <span class="label-text-alt">✓ indicates S3 bucket already exists</span>
+                        </div>
                     </div>
                     
                     <!-- Base folder selection (data or metadata) -->
@@ -54,7 +63,7 @@
                             <option value="metadata">metadata</option>
                         </select>
                         <div class="text-xs text-gray-500 mt-1">
-                            Files can only be uploaded to these base folders
+                            Files will be uploaded to S3 within these base folders
                         </div>
                     </div>
                     
@@ -65,7 +74,7 @@
                             <input type="checkbox" id="folder-mode" class="checkbox checkbox-primary checkbox-sm" />
                         </label>
                         <div class="text-xs text-gray-500 mt-1">
-                            Enable to upload folders and preserve their structure
+                            Enable to upload folders and preserve their structure in S3
                         </div>
                     </div>
                     
@@ -76,7 +85,7 @@
                         </label>
                         <input type="file" id="file-input" name="files" multiple class="file-input file-input-bordered file-input-sm w-full" />
                         <div class="text-xs text-gray-500 mt-1">
-                            You can select multiple files at once
+                            You can select multiple files to upload to S3 at once
                         </div>
                     </div>
                     
@@ -88,14 +97,14 @@
                     </div>
                     
                     <div class="form-control">
-                        <button type="button" id="upload-button" class="btn btn-primary btn-sm">Upload</button>
+                        <button type="button" id="upload-button" class="btn btn-primary btn-sm">Upload to S3</button>
                     </div>
                 </form>
                 
                 <!-- Progress section -->
                 <div id="upload-progress" class="mt-4 hidden">
                     <div class="flex justify-between mb-1 text-sm">
-                        <span id="progress-text">Uploading...</span>
+                        <span id="progress-text">Uploading to S3...</span>
                         <span id="progress-percentage">0%</span>
                     </div>
                     <progress class="progress progress-primary w-full" id="progress-bar" value="0" max="100"></progress>
@@ -110,7 +119,7 @@
                         <div>
                             <h3 class="font-bold">Upload Complete!</h3>
                             <div class="text-sm">
-                                <span id="result-files-count">0</span> files uploaded
+                                <span id="result-files-count">0</span> files uploaded to S3
                                 (<span id="result-total-size">0 B</span>)
                                 in <span id="result-duration">0s</span>
                             </div>
@@ -127,7 +136,7 @@
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
                     </svg>
-                    Organization Files
+                    S3 Files Browser
                 </h2>
                 
                 <!-- Reset Result Display -->
@@ -136,7 +145,7 @@
                 <!-- Organization Selection -->
                 <div class="form-control max-w-md mb-6">
                     <label class="label">
-                        <span class="label-text">Select an organization</span>
+                        <span class="label-text">Select an organization to browse S3 files</span>
                     </label>
                     <select id="organization-select" class="select select-bordered w-full"
                             hx-get="/storage/organizations/browse/"
@@ -158,7 +167,7 @@
                         {% endfor %}
                     </select>
                     <div class="label">
-                        <span class="label-text-alt">✓ indicates bucket already exists</span>
+                        <span class="label-text-alt">✓ indicates S3 bucket already exists</span>
                     </div>
                 </div>
             
@@ -168,13 +177,29 @@
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
-                        <span>Select an organization to browse its files</span>
+                        <span>Select an organization to browse its S3 files and folders</span>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+<!-- CSV Preview Modal -->
+<dialog id="csv-preview-modal" class="modal">
+    <div class="modal-box w-11/12 max-w-7xl h-5/6 max-h-screen">
+        <!-- Content will be loaded via HTMX -->
+        <div class="flex items-center justify-center h-full">
+            <div class="flex flex-col items-center">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
+                <p class="text-gray-600">Loading CSV preview...</p>
+            </div>
+        </div>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+        <button>close</button>
+    </form>
+</dialog>
 
 <script>
 // Utility functions needed by the upload handlers

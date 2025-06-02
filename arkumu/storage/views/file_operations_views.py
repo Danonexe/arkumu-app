@@ -2,6 +2,8 @@ import logging
 import os
 import mimetypes
 import tempfile
+import csv
+import io
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -327,4 +329,180 @@ def delete_object(request, bucket_type, object_type, object_path):
             
         # Only add Django messages for non-HTMX requests
         messages.error(request, error_message)
-        return JsonResponse({"success": False, "error": error_message}) 
+        return JsonResponse({"success": False, "error": error_message})
+
+
+@login_required
+def csv_preview(request, bucket_type, file_path):
+    """
+    Preview CSV file content from S3 bucket.
+    
+    Fetches the CSV file from S3, parses it, and returns an HTML table
+    showing the first 100 rows for preview purposes.
+    """
+    try:
+        bucket_service = BucketService()
+        
+        # Determine which bucket to use (same logic as file_content)
+        bucket_name = bucket_service.base_s3_service.ingest_bucket
+        if bucket_type == "production":
+            bucket_name = bucket_service.base_s3_service.production_bucket
+        elif bucket_type.startswith("org-"):
+            # Handle organization-specific buckets
+            org_name = bucket_type[4:]  # Remove 'org-' prefix
+            bucket_name = bucket_service.get_organization_bucket(org_name)
+        
+        # Get file content
+        result = bucket_service.get_file_content(bucket_name, file_path)
+        
+        if not result.get("success", False):
+            error_message = f"Failed to retrieve CSV file: {result.get('error', 'Unknown error')}"
+            logger.error(error_message)
+            return render(request, "dashboard/csv_preview_error.html", {
+                "error": error_message,
+                "file_path": file_path
+            })
+        
+        content = result.get("content")
+        if not content:
+            return render(request, "dashboard/csv_preview_error.html", {
+                "error": "File is empty",
+                "file_path": file_path
+            })
+        
+        # Decode content if it's bytes
+        if isinstance(content, bytes):
+            try:
+                content = content.decode('utf-8')
+            except UnicodeDecodeError:
+                try:
+                    content = content.decode('latin-1')
+                except UnicodeDecodeError:
+                    return render(request, "dashboard/csv_preview_error.html", {
+                        "error": "Unable to decode file content. File may not be a valid text file.",
+                        "file_path": file_path
+                    })
+        
+        # Parse CSV content
+        try:
+            # Auto-detect delimiter using csv.Sniffer
+            sample = content[:1024]  # Use first 1KB for delimiter detection
+            sniffer = csv.Sniffer()
+            delimiter = ','  # Default delimiter
+            
+            try:
+                dialect = sniffer.sniff(sample, delimiters=',;\t|')
+                delimiter = dialect.delimiter
+                logger.info(f"Auto-detected CSV delimiter: '{delimiter}'")
+            except csv.Error:
+                # If auto-detection fails, try common delimiters manually
+                common_delimiters = [',', ';', '\t', '|']
+                max_columns = 0
+                best_delimiter = ','
+                
+                for test_delimiter in common_delimiters:
+                    try:
+                        test_reader = csv.reader(io.StringIO(sample), delimiter=test_delimiter)
+                        first_row = next(test_reader)
+                        if len(first_row) > max_columns:
+                            max_columns = len(first_row)
+                            best_delimiter = test_delimiter
+                    except:
+                        continue
+                
+                delimiter = best_delimiter
+                logger.info(f"Fallback delimiter detection: '{delimiter}' (produces {max_columns} columns)")
+            
+            # Parse CSV with detected delimiter
+            csv_reader = csv.reader(io.StringIO(content), delimiter=delimiter)
+            rows = []
+            headers = None
+            row_count = 0
+            max_preview_rows = 100  # Limit preview to first 100 rows
+            
+            for i, row in enumerate(csv_reader):
+                if i == 0:
+                    # First row - treat as headers if it looks like headers
+                    headers = row
+                    # Add first row to rows for display (template will handle skipping)
+                    rows.append(row)
+                    logger.info(f"CSV headers detected: {headers[:5]}...")  # Log first 5 headers
+                elif i < max_preview_rows:
+                    rows.append(row)
+                
+                row_count = i + 1
+                
+                # Stop reading after max_preview_rows for performance
+                if i >= max_preview_rows:
+                    break
+            
+            # Ensure we have headers
+            if not headers and rows:
+                # If no headers were set but we have rows, use the first row as headers
+                headers = rows[0] if rows else []
+                logger.info(f"Using first row as headers: {headers[:5]}...")
+            
+            logger.info(f"Final headers count: {len(headers) if headers else 0}")
+            logger.info(f"Total rows: {len(rows)}, Column count: {len(headers) if headers else 0}")
+            
+            # Get total row count (approximate if we stopped at max_preview_rows)
+            total_rows = row_count
+            if row_count >= max_preview_rows:
+                # Try to count total rows more efficiently
+                try:
+                    total_rows = content.count('\n')
+                    if not content.endswith('\n'):
+                        total_rows += 1
+                except:
+                    total_rows = f"{max_preview_rows}+"
+            
+            # Calculate file stats
+            file_size_bytes = len(content.encode('utf-8'))
+            file_size_mb = file_size_bytes / (1024 * 1024)
+            
+            filename = file_path.split('/')[-1]
+            
+            # Determine delimiter name for display
+            delimiter_names = {
+                ',': 'Comma',
+                ';': 'Semicolon', 
+                '\t': 'Tab',
+                '|': 'Pipe'
+            }
+            delimiter_display = delimiter_names.get(delimiter, f"'{delimiter}'")
+            
+            return render(request, "dashboard/csv_preview_modal.html", {
+                "filename": filename,
+                "file_path": file_path,
+                "headers": headers,
+                "rows": rows,
+                "total_rows": total_rows,
+                "displayed_rows": len(rows),
+                "max_preview_rows": max_preview_rows,
+                "file_size_bytes": file_size_bytes,
+                "file_size_mb": round(file_size_mb, 2),
+                "column_count": len(headers) if headers else 0,
+                "truncated": row_count >= max_preview_rows,
+                "delimiter": delimiter,
+                "delimiter_display": delimiter_display
+            })
+            
+        except csv.Error as e:
+            return render(request, "dashboard/csv_preview_error.html", {
+                "error": f"CSV parsing error: {str(e)}",
+                "file_path": file_path
+            })
+        except Exception as e:
+            logger.exception(f"Error parsing CSV file {file_path}")
+            return render(request, "dashboard/csv_preview_error.html", {
+                "error": f"Unexpected error while parsing CSV: {str(e)}",
+                "file_path": file_path
+            })
+            
+    except Exception as e:
+        error_message = f"Error loading CSV preview: {str(e)}"
+        logger.exception(error_message)
+        return render(request, "dashboard/csv_preview_error.html", {
+            "error": error_message,
+            "file_path": file_path
+        }) 
