@@ -59,34 +59,66 @@
                     <div class="flex flex-col lg:flex-row justify-between gap-4">
                         <div class="flex items-center gap-3">
                             <h2 class="text-xl font-semibold flex items-center gap-2">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2V7z"/>
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v2z" />
                                 </svg>
                                 S3 Files by Bucket
                             </h2>
                             
-                            <!-- Quick Action Icons -->
-                            <div class="flex gap-1">
-                                <div class="tooltip" data-tip="Refresh Data">
-                                    <a href="{% url 'metadata:data_discovery' %}" class="btn btn-ghost btn-sm btn-square">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                                        </svg>
-                                    </a>
-                                </div>
+                            <!-- All Action Buttons in Single Row -->
+                            <div class="flex gap-2">
+                                <button class="btn btn-sm btn-outline" onclick="toggleSelectAll()">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    Select All
+                                </button>
                                 
-                                <div class="tooltip" data-tip="Auto-Link All Unlinked Files">
-                                    <button class="btn btn-ghost btn-sm btn-square"
-                                            hx-post="{% url 'metadata:auto_link_all' %}"
-                                            hx-confirm="Run automatic linking for all unlinked files? This may take a while."
-                                            hx-target="#toast-container"
-                                            hx-swap="beforeend">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
-                                        </svg>
-                                        <span class="loading loading-spinner loading-sm htmx-indicator"></span>
-                                    </button>
-                                </div>
+                                <button class="btn btn-sm btn-primary"
+                                        hx-post="{% url 'metadata:batch_link_files' %}"
+                                        hx-include="[name='selected_files']:checked"
+                                        hx-confirm="Link selected files using automatic matching?"
+                                        hx-target="#toast-container"
+                                        hx-swap="beforeend"
+                                        disabled
+                                        id="batch-link-btn">
+                                    <span class="loading loading-spinner loading-sm htmx-indicator"></span>
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                                    </svg>
+                                    Batch Link
+                                </button>
+                                
+                                <a href="{% url 'metadata:data_discovery' %}" class="btn btn-ghost btn-sm">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                    </svg>
+                                    Refresh
+                                </a>
+                                
+                                <button class="btn btn-outline btn-sm"
+                                        hx-post="{% url 'metadata:rescan_s3_files' %}"
+                                        hx-confirm="Rescan S3 buckets for new files? This may take a while."
+                                        hx-target="#toast-container"
+                                        hx-swap="beforeend">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                    </svg>
+                                    Rescan S3
+                                    <span class="loading loading-spinner loading-sm htmx-indicator"></span>
+                                </button>
+                                
+                                <button class="btn btn-accent btn-sm"
+                                        hx-post="{% url 'metadata:auto_link_all' %}"
+                                        hx-confirm="Run automatic linking for all unlinked files? This may take a while."
+                                        hx-target="#toast-container"
+                                        hx-swap="beforeend">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                                    </svg>
+                                    Auto-Link
+                                    <span class="loading loading-spinner loading-sm htmx-indicator"></span>
+                                </button>
                             </div>
                         </div>
                         
@@ -122,25 +154,6 @@
                     
                     <!-- Controls Row -->
                     <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mt-4">
-                        <!-- Button Group -->
-                        <div class="btn-group">
-                            <button class="btn btn-sm btn-outline" onclick="toggleSelectAll()">
-                                Select All
-                            </button>
-                            
-                            <button class="btn btn-sm btn-primary"
-                                    hx-post="{% url 'metadata:batch_link_files' %}"
-                                    hx-include="[name='selected_files']:checked"
-                                    hx-confirm="Link selected files using automatic matching?"
-                                    hx-target="#toast-container"
-                                    hx-swap="beforeend"
-                                    disabled
-                                    id="batch-link-btn">
-                                <span class="loading loading-spinner loading-sm htmx-indicator"></span>
-                                Batch Link
-                            </button>
-                        </div>
-                        
                         <!-- Status Legend - Compact -->
                         <div class="flex items-center gap-4 text-xs">
                             <span class="font-medium">Status:</span>
@@ -171,21 +184,53 @@
                             </div>
                             <div class="join">
                                 {% if page_obj.has_previous %}
-                                    <a href="?page=1{% if selected_organization %}&org={{ selected_organization }}{% endif %}" class="join-item btn btn-sm">«</a>
-                                    <a href="?page={{ page_obj.previous_page_number }}{% if selected_organization %}&org={{ selected_organization }}{% endif %}" class="join-item btn btn-sm">‹</a>
+                                    <a href="?page=1{% if selected_organization %}&org={{ selected_organization }}{% endif %}" class="join-item btn btn-sm">
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/>
+                                        </svg>
+                                    </a>
+                                    <a href="?page={{ page_obj.previous_page_number }}{% if selected_organization %}&org={{ selected_organization }}{% endif %}" class="join-item btn btn-sm">
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                                        </svg>
+                                    </a>
                                 {% else %}
-                                    <button class="join-item btn btn-sm btn-disabled">«</button>
-                                    <button class="join-item btn btn-sm btn-disabled">‹</button>
+                                    <button class="join-item btn btn-sm btn-disabled">
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/>
+                                        </svg>
+                                    </button>
+                                    <button class="join-item btn btn-sm btn-disabled">
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                                        </svg>
+                                    </button>
                                 {% endif %}
                                 
                                 <button class="join-item btn btn-sm btn-active">Page {{ page_obj.number }}</button>
                                 
                                 {% if page_obj.has_next %}
-                                    <a href="?page={{ page_obj.next_page_number }}{% if selected_organization %}&org={{ selected_organization }}{% endif %}" class="join-item btn btn-sm">›</a>
-                                    <a href="?page={{ page_obj.paginator.num_pages }}{% if selected_organization %}&org={{ selected_organization }}{% endif %}" class="join-item btn btn-sm">»</a>
+                                    <a href="?page={{ page_obj.next_page_number }}{% if selected_organization %}&org={{ selected_organization }}{% endif %}" class="join-item btn btn-sm">
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                        </svg>
+                                    </a>
+                                    <a href="?page={{ page_obj.paginator.num_pages }}{% if selected_organization %}&org={{ selected_organization }}{% endif %}" class="join-item btn btn-sm">
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"/>
+                                        </svg>
+                                    </a>
                                 {% else %}
-                                    <button class="join-item btn btn-sm btn-disabled">›</button>
-                                    <button class="join-item btn btn-sm btn-disabled">»</button>
+                                    <button class="join-item btn btn-sm btn-disabled">
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                        </svg>
+                                    </button>
+                                    <button class="join-item btn btn-sm btn-disabled">
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"/>
+                                        </svg>
+                                    </button>
                                 {% endif %}
                             </div>
                         </div>
@@ -200,21 +245,53 @@
                         <div class="flex justify-center">
                             <div class="join">
                                 {% if page_obj.has_previous %}
-                                    <a href="?page=1{% if selected_organization %}&org={{ selected_organization }}{% endif %}" class="join-item btn btn-sm">« First</a>
-                                    <a href="?page={{ page_obj.previous_page_number }}{% if selected_organization %}&org={{ selected_organization }}{% endif %}" class="join-item btn btn-sm">‹ Previous</a>
+                                    <a href="?page=1{% if selected_organization %}&org={{ selected_organization }}{% endif %}" class="join-item btn btn-sm">
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/>
+                                        </svg>
+                                    </a>
+                                    <a href="?page={{ page_obj.previous_page_number }}{% if selected_organization %}&org={{ selected_organization }}{% endif %}" class="join-item btn btn-sm">
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                                        </svg>
+                                    </a>
+                                {% else %}
+                                    <button class="join-item btn btn-sm btn-disabled">
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/>
+                                        </svg>
+                                    </button>
+                                    <button class="join-item btn btn-sm btn-disabled">
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                                        </svg>
+                                    </button>
                                 {% endif %}
                                 
-                                {% for num in page_obj.paginator.page_range %}
-                                    {% if page_obj.number == num %}
-                                        <button class="join-item btn btn-sm btn-active">{{ num }}</button>
-                                    {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
-                                        <a href="?page={{ num }}{% if selected_organization %}&org={{ selected_organization }}{% endif %}" class="join-item btn btn-sm">{{ num }}</a>
-                                    {% endif %}
-                                {% endfor %}
+                                <button class="join-item btn btn-sm btn-active">Page {{ page_obj.number }}</button>
                                 
                                 {% if page_obj.has_next %}
-                                    <a href="?page={{ page_obj.next_page_number }}{% if selected_organization %}&org={{ selected_organization }}{% endif %}" class="join-item btn btn-sm">Next ›</a>
-                                    <a href="?page={{ page_obj.paginator.num_pages }}{% if selected_organization %}&org={{ selected_organization }}{% endif %}" class="join-item btn btn-sm">Last »</a>
+                                    <a href="?page={{ page_obj.next_page_number }}{% if selected_organization %}&org={{ selected_organization }}{% endif %}" class="join-item btn btn-sm">
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                        </svg>
+                                    </a>
+                                    <a href="?page={{ page_obj.paginator.num_pages }}{% if selected_organization %}&org={{ selected_organization }}{% endif %}" class="join-item btn btn-sm">
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"/>
+                                        </svg>
+                                    </a>
+                                {% else %}
+                                    <button class="join-item btn btn-sm btn-disabled">
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                        </svg>
+                                    </button>
+                                    <button class="join-item btn btn-sm btn-disabled">
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"/>
+                                        </svg>
+                                    </button>
                                 {% endif %}
                             </div>
                         </div>
@@ -234,7 +311,7 @@
         <div class="py-4">
             <div class="alert alert-info">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                 </svg>
                 <span>Searching for: <kbd class="kbd kbd-sm" id="search-filename"></kbd></span>
             </div>

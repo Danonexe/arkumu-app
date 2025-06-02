@@ -47,4 +47,5 @@ urlpatterns = [
     path('data-discovery/batch-link/', data_discovery_views.batch_link_files, name='batch_link_files'),
     path('data-discovery/unlink-file/', data_discovery_views.unlink_file, name='unlink_file'),
     path('data-discovery/auto-link-all/', data_discovery_views.auto_link_all, name='auto_link_all'),
+    path('data-discovery/rescan-s3/', data_discovery_views.rescan_s3_files, name='rescan_s3_files'),
     ]

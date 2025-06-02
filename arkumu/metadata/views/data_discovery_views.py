@@ -16,6 +16,7 @@ from arkumu.storage.models import S3FileObject, UploadSession
 from arkumu.metadata.models import Resource
 from arkumu.metadata.services.mapping.map_resources_to_files import FileResourceMatcherService
 from arkumu.storage.services.bucket_service import BucketService
+from arkumu.storage.services.s3_sync_service import S3SyncService
 
 logger = logging.getLogger(__name__)
 
@@ -355,6 +356,62 @@ def auto_link_all(request):
 
     except Exception as e:
         error_msg = f'Auto-linking failed: {str(e)}'
+        if request.headers.get('HX-Request'):
+            return render(request, 'partials/toast.html', {
+                'message': error_msg,
+                'type': 'error'
+            })
+        return HttpResponse(error_msg, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def rescan_s3_files(request):
+    """Rescan S3 buckets for new files and sync them to the database."""
+    try:
+        # Initialize the S3 sync service
+        sync_service = S3SyncService()
+        
+        # Sync all buckets
+        results = sync_service.sync_all_buckets(prefix='data/', dry_run=False)
+        
+        # Calculate totals
+        total_found = sum(result.get('found_in_s3', 0) for result in results.values())
+        total_existing = sum(result.get('existing_in_db', 0) for result in results.values())
+        total_created = sum(result.get('created', 0) for result in results.values())
+        total_errors = sum(1 for result in results.values() if 'error' in result)
+        
+        # Create message based on results
+        if total_created > 0:
+            message = f'S3 Rescan complete. Found {total_found} files, {total_existing} already existed, {total_created} new files added'
+        elif total_found > 0:
+            message = f'S3 Rescan complete. Found {total_found} files, all were already in database'
+        else:
+            message = 'S3 Rescan complete. No files found in S3 buckets'
+            
+        if total_errors > 0:
+            message += f' ({total_errors} bucket(s) had errors)'
+        
+        logger.info(f"S3 rescan results: {results}")
+        
+        if request.headers.get('HX-Request'):
+            # Return success response and refresh page to show new files
+            response = HttpResponse()
+            response['HX-Refresh'] = 'true'  # Tell HTMX to refresh the page
+            
+            return render(request, 'partials/toast.html', {
+                'message': message,
+                'type': 'success' if total_errors == 0 else 'warning'
+            })
+        else:
+            from django.contrib import messages
+            messages.success(request, message)
+            return HttpResponseRedirect(reverse('metadata:data_discovery'))
+
+    except Exception as e:
+        error_msg = f'S3 rescan failed: {str(e)}'
+        logger.error(f"S3 rescan error: {error_msg}")
+        
         if request.headers.get('HX-Request'):
             return render(request, 'partials/toast.html', {
                 'message': error_msg,
