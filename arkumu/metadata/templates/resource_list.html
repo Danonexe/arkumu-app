@@ -14,7 +14,7 @@
             <h2 class="card-title">Filters</h2>
             
             <form id="filter-form" class="grid grid-cols-1 md:grid-cols-3 gap-4" 
-                  hx-get="{% url 'metadata:resource_list' %}" 
+                  hx-get="{% url 'metadata:data_explorer' %}" 
                   hx-target="#resource-list" 
                   hx-swap="innerHTML"
                   hx-trigger="change, submit"

@@ -51,7 +51,7 @@
     <div class="btn-group">
         {% if page_obj.has_previous %}
         <button class="btn btn-sm" 
-                hx-get="{% url 'metadata:resource_list' %}"
+                hx-get="{% url 'metadata:data_explorer' %}"
                 hx-target="#resource-list"
                 hx-swap="innerHTML"
                 hx-include="#filter-form"
@@ -66,7 +66,7 @@
         
         {% if page_obj.has_next %}
         <button class="btn btn-sm"
-                hx-get="{% url 'metadata:resource_list' %}"
+                hx-get="{% url 'metadata:data_explorer' %}"
                 hx-target="#resource-list"
                 hx-swap="innerHTML"
                 hx-include="#filter-form"
