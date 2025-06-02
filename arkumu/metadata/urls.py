@@ -32,13 +32,25 @@ urlpatterns = [
     
     # Bulk editor
     path('bulk-editor/', bulk_editor_views.bulk_triple_editor, name='bulk_triple_editor'),
+    path('bulk-editor/list-s3-csv/', bulk_editor_views.list_s3_csv_files, name='list_s3_csv_files'),
+    path('bulk-editor/auto-analyze/', bulk_editor_views.auto_analyze_csv, name='auto_analyze_csv'),
+    path('bulk-editor/preview-auto-mappings/', bulk_editor_views.preview_auto_mappings, name='preview_auto_mappings'),
+    path('bulk-editor/apply-auto-mappings/', bulk_editor_views.apply_auto_mappings, name='apply_auto_mappings'),
     path('bulk-editor/query/', bulk_editor_views.query_relationships, name='query_relationships'),
     path('bulk-editor/create/', bulk_editor_views.create_bulk_triples, name='create_bulk_triples'),
     path('bulk-editor/find-matching/', bulk_editor_views.find_matching_resources, name='find_matching_resources'),
     path('bulk-editor/add-mapping/', bulk_editor_views.add_mapping_rule, name='add_mapping_rule'),
     path('bulk-editor/clear-mappings/', bulk_editor_views.clear_mapping_rules, name='clear_mapping_rules'),
     path('bulk-editor/apply-mappings/', bulk_editor_views.apply_mappings_to_batch, name='apply_mappings_to_batch'),
-
+    path('bulk-editor/add-triple/', bulk_editor_views.add_triple_from_form, name='add_triple_from_form'),
+    path('bulk-editor/validate/', bulk_editor_views.validate_batch_triples, name='validate_batch_triples'),
+    path('bulk-editor/clear-batch/', bulk_editor_views.clear_batch_triples, name='clear_batch_triples'),
+    path('bulk-editor/update-predicates/', bulk_editor_views.update_predicate_options, name='update_predicate_options'),
+    # Step 2 transformation endpoints
+    path('bulk-editor/list-datasets/', bulk_editor_views.list_datasets, name='list_datasets'),
+    path('bulk-editor/dataset-info/', bulk_editor_views.get_dataset_info, name='get_dataset_info'),
+    path('bulk-editor/preview-transformation/', bulk_editor_views.preview_dataset_transformation, name='preview_transformation'),
+    path('bulk-editor/execute-transformation/', bulk_editor_views.execute_dataset_transformation, name='execute_transformation'),
     
     # Data Discovery
     path('data-discovery/', data_discovery_views.DataDiscoveryView.as_view(), name='data_discovery'),

@@ -4,7 +4,7 @@
 {% block content %}
 <div class="container mx-auto px-4 py-8">
     <div class="flex justify-between items-center mb-6">
-        <h1 class="text-3xl font-bold">Bulk Triple Editor</h1>
+        <h1 class="text-3xl font-bold">Smart Bulk Editor</h1>
         <a href="{% url 'metadata:metadata_dashboard' %}" class="btn btn-ghost">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -13,264 +13,409 @@
         </a>
     </div>
 
-    <!-- Step 1: Explore Patterns & Define Type Mappings -->
-    <div class="card bg-base-100 shadow-xl mb-6">
+    <!-- Auto-Discovery Wizard -->
+    <div class="card bg-gradient-to-r from-primary/10 to-secondary/10 shadow-xl mb-6">
         <div class="card-body">
-            <h2 class="card-title">Step 1: Explore Patterns & Define Type Mappings</h2>
-            <p class="text-sm text-base-content/70 mb-4">
-                First, test patterns to see which resources they match. Then, define mapping rules to assign Arkumu types.
-            </p>
+            <h2 class="card-title text-2xl">🧙‍♂️ Smart Discovery Wizard</h2>
+            <div class="alert alert-info mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <div>
+                    <h3 class="font-bold">How it works</h3>
+                    <div class="text-sm">
+                        <p><strong>1. Upload & Analyze:</strong> Upload your CSV and we'll automatically discover patterns</p>
+                        <p><strong>2. Review Suggestions:</strong> See smart mapping suggestions based on your data</p>
+                        <p><strong>3. One-Click Apply:</strong> Accept all suggestions or customize as needed</p>
+                    </div>
+                </div>
+            </div>
 
-            <!-- Pattern Testing Area -->
-            <fieldset class="border border-base-300 p-4 rounded mb-6">
-                <legend class="text-lg font-semibold px-2">Explore a Pattern</legend>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                    <div class="form-control">
-                        <label class="label">
-                            <span class="label-text">Pattern Type</span>
-                        </label>
-                        <select id="explore-pattern-type" name="pattern_type" class="select select-bordered">
-                            <option value="prefix">URI Prefix</option>
-                            <option value="contains">Contains Text</option>
-                            <option value="regex">Regex Pattern</option>
-                            <option value="column">Column/Dataset ID</option> 
-                        </select>
-                    </div>
-                    <div class="form-control">
-                        <label class="label">
-                            <span class="label-text">Pattern Value</span>
-                        </label>
-                        <input type="text" id="explore-pattern-value" name="pattern_value" placeholder="e.g., person_, /people/, dataset_col1" class="input input-bordered" />
-                    </div>
-                    <div class="form-control">
-                        <label class="label">
-                            <span class="label-text">Search Source</span>
-                        </label>
-                        <select id="explore-search-source" name="search_source" class="select select-bordered">
-                            <option value="current_batch">Current Batch Triples</option>
-                            <option value="sample_uris">Sample URIs</option>
-                        </select>
+            <!-- File Upload for Analysis -->
+            <div class="form-control mb-4">
+                <label class="label">
+                    <span class="label-text text-lg font-semibold">📁 Select CSV File from S3 to Analyze</span>
+                </label>
+                <div id="csv-files-container"
+                     hx-get="{% url 'metadata:list_s3_csv_files' %}"
+                     hx-trigger="load"
+                     hx-target="this">
+                    <div class="text-center text-base-content/60 py-4">
+                        <div class="loading loading-spinner loading-md mb-2"></div>
+                        <div>Loading available CSV files from S3...</div>
                     </div>
                 </div>
-                <div class="form-control mb-4" id="explore-sample-uris-container" style="display: none;">
-                    <label class="label">
-                        <span class="label-text">Sample URIs (one per line)</span>
-                    </label>
-                    <textarea id="explore-sample-uris" name="sample_uris" class="textarea textarea-bordered h-24" placeholder="http://example.org/res1
-new:item_abc
-dataset_xyz_column_123"></textarea>
+                <div class="label">
+                    <span class="label-text-alt">Choose from CSV files already uploaded to your organization's S3 metadata folder</span>
                 </div>
-                <button class="btn btn-primary" 
-                        hx-post="{% url 'metadata:find_matching_resources' %}"
-                        hx-include="#explore-pattern-type, #explore-pattern-value, #explore-search-source, #explore-sample-uris"
-                        hx-target="#explore-results-area"
-                        hx-indicator="#explore-spinner">
-                    <span id="explore-spinner" class="loading loading-spinner loading-sm htmx-indicator"></span>
-                    Find Matching Resources
-                </button>
-                <div id="explore-results-area" class="mt-4"></div>
-            </fieldset>
-            
-            <!-- Define Mapping Rule Area -->
-            <fieldset class="border border-base-300 p-4 rounded mb-6">
-                <legend class="text-lg font-semibold px-2">Define Type Mapping Rules</legend>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                    <div class="form-control">
-                        <label class="label">
-                            <span class="label-text">Pattern Type</span>
-                        </label>
-                        <select id="rule-pattern-type" name="rule_pattern_type" class="select select-bordered">
-                            <option value="prefix">URI Prefix</option>
-                            <option value="contains">Contains Text</option>
-                            <option value="regex">Regex Pattern</option>
-                            <option value="column">Column/Dataset ID</option>
-                        </select>
-                    </div>
-                    <div class="form-control">
-                        <label class="label">
-                            <span class="label-text">Pattern Value</span>
-                        </label>
-                        <input type="text" id="rule-pattern-value" name="rule_pattern_value" placeholder="e.g., person_, /people/" class="input input-bordered" />
-                    </div>
-                    <div class="form-control">
-                        <label class="label">
-                            <span class="label-text">Arkumu Type</span>
-                        </label>
-                        <input type="text" id="rule-arkumu-type" name="rule_arkumu_type" placeholder="e.g., arkumu:person" class="input input-bordered" />
-                    </div>
-                </div>
-                <div class="form-control mb-4">
-                    <label class="label">
-                        <span class="label-text">Common Arkumu Types</span>
-                    </label>
-                    <div class="flex flex-wrap gap-2">
-                        <button type="button" class="btn btn-sm btn-outline" onclick="document.getElementById('rule-arkumu-type').value='arkumu:person'">arkumu:person</button>
-                        <button type="button" class="btn btn-sm btn-outline" onclick="document.getElementById('rule-arkumu-type').value='arkumu:organization'">arkumu:organization</button>
-                        <button type="button" class="btn btn-sm btn-outline" onclick="document.getElementById('rule-arkumu-type').value='arkumu:activity'">arkumu:activity</button>
-                        <button type="button" class="btn btn-sm btn-outline" onclick="document.getElementById('rule-arkumu-type').value='arkumu:place'">arkumu:place</button>
-                        <button type="button" class="btn btn-sm btn-outline" onclick="document.getElementById('rule-arkumu-type').value='arkumu:resource'">arkumu:resource</button>
-                        <button type="button" class="btn btn-sm btn-outline" onclick="document.getElementById('rule-arkumu-type').value='arkumu:dataset'">arkumu:dataset</button>
-                        <button type="button" class="btn btn-sm btn-outline" onclick="document.getElementById('rule-arkumu-type').value='arkumu:collection'">arkumu:collection</button>
-                    </div>
-                </div>
-                <button class="btn btn-success" 
-                        hx-post="{% url 'metadata:add_mapping_rule' %}"
-                        hx-include="#rule-pattern-type, #rule-pattern-value, #rule-arkumu-type"
-                        hx-target="#active-mapping-rules-display"
-                        hx-indicator="#add-rule-spinner">
-                    <span id="add-rule-spinner" class="loading loading-spinner loading-sm htmx-indicator"></span>
-                    Add Mapping Rule
-                </button>
-            </fieldset>
+            </div>
 
-            <!-- Active Mapping Rules Display -->
-            <fieldset class="border border-base-300 p-4 rounded">
-                <legend class="text-lg font-semibold px-2">Active Type Mapping Rules</legend>
-                <div id="active-mapping-rules-display" class="min-h-20">
-                    {% include 'partials/mapping_rules_display.html' with mapping_rules=request.session.mapping_rules %}
+            <!-- Analysis Results -->
+            <div id="analysis-results" class="min-h-20">
+                <div class="text-center text-base-content/60 py-8">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto mb-4 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    </svg>
+                    Upload a CSV file to see intelligent mapping suggestions
                 </div>
-            </fieldset>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions Bar -->
+    <div class="flex flex-wrap gap-4 mb-6" id="quick-actions" style="display: none;">
+        <button class="btn btn-success" id="apply-all-suggestions">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+            Apply All Suggestions
+        </button>
+        <button class="btn btn-info" id="preview-all-transformations">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            Preview All Changes
+        </button>
+        <button class="btn btn-warning" id="customize-mappings">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            Customize Mappings
+        </button>
+    </div>
+
+    <!-- Step 1: Pattern Exploration (Collapsible Advanced Mode) -->
+    <div class="collapse collapse-arrow bg-base-200 mb-6" id="advanced-mode">
+        <input type="checkbox" /> 
+        <div class="collapse-title text-xl font-medium">
+            🔧 Advanced Mode: Manual Pattern Creation
+        </div>
+        <div class="collapse-content">
+            <!-- Original Step 1 content -->
+            <div class="card bg-base-100 shadow-xl mb-6">
+                <div class="card-body">
+                    <h2 class="card-title">Step 1: Explore Resources & Create Type Assignment Rules</h2>
+                    <div class="alert alert-info mb-4">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <div>
+                            <h3 class="font-bold">Step 1 Workflow</h3>
+                            <div class="text-sm">
+                                <p><strong>1. Search:</strong> Find existing resources that match naming patterns (e.g., all starting with "person_")</p>
+                                <p><strong>2. Analyze:</strong> See how many resources would be affected and review examples</p>
+                                <p><strong>3. Create Rule:</strong> Set up automatic type assignment (e.g., "person_*" → arkumu:person)</p>
+                                <p><strong>4. Repeat:</strong> Create multiple rules for different patterns in your data</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Resource Pattern Exploration -->
+                    <fieldset class="border border-base-300 p-4 rounded mb-6">
+                        <legend class="text-lg font-semibold px-2">🔍 Search for Resources by Pattern</legend>
+                        <div class="mb-4 text-sm text-base-content/80">
+                            <p><strong>Find resources that match naming patterns.</strong> Search specific fields to discover resources with similar naming conventions - these can then be automatically typed.</p>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div class="form-control">
+                                <label class="label">
+                                    <span class="label-text">Pattern Type</span>
+                                </label>
+                                <select id="explore-pattern-type" name="pattern_type" class="select select-bordered">
+                                    <option value="prefix">Starts With (Prefix)</option>
+                                    <option value="contains">Contains Text</option>
+                                    <option value="regex">Regex Pattern</option>
+                                    <option value="exact">Exact Match</option>
+                                </select>
+                                <div class="label">
+                                    <span class="label-text-alt">How to match against selected fields</span>
+                                </div>
+                            </div>
+                            <div class="form-control">
+                                <label class="label">
+                                    <span class="label-text">Pattern Value</span>
+                                </label>
+                                <input type="text" id="explore-pattern-value" name="pattern_value" 
+                                       placeholder="e.g., person_, dataset_people, /person/" 
+                                       class="input input-bordered" />
+                                <div class="label">
+                                    <span class="label-text-alt">Text or pattern to search for</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="form-control mb-4">
+                            <label class="label">
+                                <span class="label-text">Fields to Search</span>
+                                <span class="label-text-alt">Select which resource fields to search</span>
+                            </label>
+                            <div class="flex flex-wrap gap-4">
+                                <label class="label cursor-pointer">
+                                    <input type="checkbox" id="search-uri" name="search_fields" value="uri" class="checkbox checkbox-primary" checked />
+                                    <span class="label-text ml-2">
+                                        <span class="badge badge-primary badge-sm mr-1">URI</span>
+                                        Resource URI/identifier
+                                    </span>
+                                </label>
+                                <label class="label cursor-pointer">
+                                    <input type="checkbox" id="search-name" name="search_fields" value="name" class="checkbox checkbox-info" checked />
+                                    <span class="label-text ml-2">
+                                        <span class="badge badge-info badge-sm mr-1">Name</span>
+                                        Resource name/label
+                                    </span>
+                                </label>
+                                <label class="label cursor-pointer">
+                                    <input type="checkbox" id="search-value" name="search_fields" value="value" class="checkbox checkbox-success" />
+                                    <span class="label-text ml-2">
+                                        <span class="badge badge-success badge-sm mr-1">Value</span>
+                                        Literal values
+                                    </span>
+                                </label>
+                                <label class="label cursor-pointer">
+                                    <input type="checkbox" id="search-source" name="search_fields" value="source" class="checkbox checkbox-warning" />
+                                    <span class="label-text ml-2">
+                                        <span class="badge badge-warning badge-sm mr-1">Source</span>
+                                        Institution/origin
+                                    </span>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <button class="btn btn-primary" 
+                                hx-post="{% url 'metadata:find_matching_resources' %}"
+                                hx-include="#explore-pattern-type, #explore-pattern-value, input[name='search_fields']:checked"
+                                hx-target="#explore-results-area"
+                                hx-indicator="#explore-spinner">
+                            <span id="explore-spinner" class="loading loading-spinner loading-sm htmx-indicator"></span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                            Search Selected Fields
+                        </button>
+                        <div id="explore-results-area" class="mt-4"></div>
+                    </fieldset>
+                    
+                    <!-- Define Mapping Rule Area -->
+                    <fieldset class="border border-base-300 p-4 rounded mb-6">
+                        <legend class="text-lg font-semibold px-2">⚙️ Create Automatic Type Assignment Rules</legend>
+                        
+                        <div class="alert alert-success mb-4">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <div>
+                                <h3 class="font-bold">How This Works</h3>
+                                <div class="text-sm">
+                                    <p><strong>1.</strong> You searched above and found resources matching your pattern</p>
+                                    <p><strong>2.</strong> Create a rule below to automatically assign a semantic type to ALL those matching resources</p>
+                                    <p><strong>3.</strong> When you process triples later, each matching resource will automatically get: <code class="bg-base-300 px-1 rounded">resource|rdf:type|YourChosenType</code></p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-base-200 p-4 rounded mb-4">
+                            <h4 class="font-medium mb-2">Example: If you found resources like:</h4>
+                            <ul class="text-sm list-disc list-inside mb-2">
+                                <li><code>person_john_doe</code>, <code>person_mary_smith</code>, etc.</li>
+                            </ul>
+                            <p class="text-sm">Create a rule: <strong>Pattern "person_"</strong> → <strong>Type "arkumu:person"</strong></p>
+                            <p class="text-sm text-success">Result: All will automatically get <code>person_john_doe|rdf:type|arkumu:person</code></p>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                            <div class="form-control">
+                                <label class="label">
+                                    <span class="label-text">Pattern Type</span>
+                                    <span class="label-text-alt">Same as your search above</span>
+                                </label>
+                                <select id="rule-pattern-type" name="rule_pattern_type" class="select select-bordered">
+                                    <option value="prefix">Starts With (Prefix)</option>
+                                    <option value="contains">Contains Text</option>
+                                    <option value="regex">Regex Pattern</option>
+                                    <option value="exact">Exact Match</option>
+                                </select>
+                            </div>
+                            <div class="form-control">
+                                <label class="label">
+                                    <span class="label-text">Pattern Value</span>
+                                    <span class="label-text-alt">Copy from your search above</span>
+                                </label>
+                                <input type="text" id="rule-pattern-value" name="rule_pattern_value" placeholder="e.g., person_, _people_, /dataset/" class="input input-bordered" />
+                            </div>
+                            <div class="form-control">
+                                <label class="label">
+                                    <span class="label-text">Arkumu Type to Assign</span>
+                                    <span class="label-text-alt">What semantic type should they get?</span>
+                                </label>
+                                <input type="text" id="rule-arkumu-type" name="rule_arkumu_type" placeholder="e.g., arkumu:person" class="input input-bordered" />
+                            </div>
+                        </div>
+                        
+                        <button class="btn btn-success" 
+                                hx-post="{% url 'metadata:add_mapping_rule' %}"
+                                hx-include="#rule-pattern-type, #rule-pattern-value, #rule-arkumu-type"
+                                hx-target="#active-mapping-rules-display"
+                                hx-indicator="#add-rule-spinner">
+                            <span id="add-rule-spinner" class="loading loading-spinner loading-sm htmx-indicator"></span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                            </svg>
+                            Create Automatic Type Rule
+                        </button>
+                    </fieldset>
+
+                    <!-- Active Mapping Rules Display -->
+                    <fieldset class="border border-base-300 p-4 rounded">
+                        <legend class="text-lg font-semibold px-2">📋 Active Type Mapping Rules</legend>
+                        <div id="active-mapping-rules-display" class="min-h-20">
+                            {% include 'partials/mapping_rules_display.html' with mapping_rules=request.session.mapping_rules %}
+                        </div>
+                    </fieldset>
+                </div>
+            </div>
         </div>
     </div>
 
     <!-- Step 2: Prepare & Process Batch Triples -->
     <div class="card bg-base-100 shadow-xl">
         <div class="card-body">
-            <h2 class="card-title">Step 2: Prepare & Process Batch Triples</h2>
-            <p class="text-sm text-base-content/70 mb-4">
-                Build your list of triples. Then, apply your defined mapping rules to automatically add type information.
-            </p>
-
-            <!-- Data Model Selection -->
-            <div class="form-control mb-4">
-                <label class="label">
-                    <span class="label-text">Data Model (for predicate suggestions)</span>
-                </label>
-                <select id="data-model" class="select select-bordered" onchange="updatePredicateOptions()">
-                    <option value="custom">Custom/Ad-hoc</option>
-                    <option value="dublin-core">Dublin Core</option>
-                    <option value="rdf">RDF/RDFS</option>
-                </select>
-            </div>
-
-            <!-- Common Predicates based on model -->
-            <div id="predicate-suggestions" class="mb-4">
-                <div class="form-control">
-                    <label class="label">
-                        <span class="label-text">Common Predicates</span>
-                    </label>
-                    <div id="predicate-buttons" class="flex flex-wrap gap-2">
-                        <!-- Populated by JavaScript -->
+            <h2 class="card-title">Step 2: Transform Existing Datasets</h2>
+            <div class="alert alert-info mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <div>
+                    <h3 class="font-bold">Dataset Transformation Workflow</h3>
+                    <div class="text-sm">
+                        <p><strong>1. Select Dataset:</strong> Choose an existing imported dataset to transform</p>
+                        <p><strong>2. Preview Transformation:</strong> See how your mapping rules will restructure the data</p>
+                        <p><strong>3. Execute:</strong> Transform dataset cell URIs into semantic entity URIs</p>
+                        <p class="mt-2 text-warning"><strong>Note:</strong> This transforms existing data - dataset cells become semantic entities with proper types</p>
                     </div>
                 </div>
             </div>
 
-            <!-- Triple Entry Form -->
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
-                <div class="form-control">
-                    <label class="label">
-                        <span class="label-text">Subject</span>
-                    </label>
-                    <div class="join">
-                        <select id="subject-type" class="select select-bordered join-item">
-                            <option value="uri">Existing URI</option>
-                            <option value="new">New Resource</option>
-                        </select>
-                        <input type="text" id="subject-input" placeholder="URI or name" class="input input-bordered join-item flex-1" />
-                    </div>
-                    <div class="label">
-                        <span class="label-text-alt" id="subject-help">Enter full URI or search term</span>
-                    </div>
-                </div>
+            <!-- Dataset Selection -->
+            <fieldset class="border border-base-300 p-4 rounded mb-6">
+                <legend class="text-lg font-semibold px-2">📊 Select Dataset to Transform</legend>
                 
-                <div class="form-control">
-                    <label class="label">
-                        <span class="label-text">Predicate</span>
-                    </label>
-                    <div class="join">
-                        <select id="predicate-type" class="select select-bordered join-item">
-                            <option value="uri">URI</option>
-                            <option value="new">New Property</option>
-                        </select>
-                        <input type="text" id="predicate-input" placeholder="Predicate URI or name" class="input input-bordered join-item flex-1" />
-                    </div>
+                <div id="dataset-selector-container"
+                     hx-get="{% url 'metadata:list_datasets' %}"
+                     hx-trigger="load"
+                     hx-target="this">
+                    <div class="text-sm text-base-content/60">Loading available datasets...</div>
                 </div>
+
+                <!-- Dataset Information Display -->
+                <div id="dataset-info" class="mb-4">
+                    <div class="text-sm text-base-content/60">Select a dataset above to see information</div>
+                </div>
+            </fieldset>
+
+            <!-- Transformation Preview -->
+            <fieldset class="border border-base-300 p-4 rounded mb-6">
+                <legend class="text-lg font-semibold px-2">🔄 Preview Transformation</legend>
                 
-                <div class="form-control">
-                    <label class="label">
-                        <span class="label-text">Object</span>
-                    </label>
-                    <div class="join">
-                        <select id="object-type" class="select select-bordered join-item">
-                            <option value="uri">Existing URI</option>
-                            <option value="literal">Literal Value</option>
-                            <option value="new">New Resource</option>
-                        </select>
-                        <input type="text" id="object-input" placeholder="URI, value, or name" class="input input-bordered join-item flex-1" />
+                <div class="alert alert-warning mb-4">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L2.732 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+                    </svg>
+                    <div>
+                        <h4 class="font-bold">Preview Before Transformation</h4>
+                        <p class="text-sm">See exactly how your mapping rules will transform the selected dataset before applying changes</p>
                     </div>
                 </div>
-            </div>
 
-            <!-- Batch Input Area -->
-            <div class="form-control mb-4">
-                <label class="label">
-                    <span class="label-text">Batch Triple Creation</span>
-                    <span class="label-text-alt">One triple per line: subject|predicate|object</span>
-                </label>
-                <textarea id="batch-triples" class="textarea textarea-bordered h-32" 
-                          placeholder="Example:
-http://example.org/person1|http://purl.org/dc/terms/name|John Doe
-http://example.org/person1|rdf:type|http://example.org/Person
-new:Person2|dc:name|Jane Smith
-new:Activity1|hasPart|new:Person3"></textarea>
-            </div>
-
-            <!-- Institution and Source -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <div class="form-control">
-                    <label class="label">
-                        <span class="label-text">Institution/Source</span>
-                    </label>
-                    <input type="text" id="institution" value="{{ request.user.username }}" class="input input-bordered" />
-                </div>
-                <div class="form-control">
-                    <label class="label">
-                        <span class="label-text">Base URI (for new resources)</span>
-                    </label>
-                    <input type="text" id="base-uri" value="http://arkumu.org/data" class="input input-bordered" />
-                </div>
-            </div>
-
-            <!-- Actions -->
-            <div class="flex flex-wrap gap-2">
-                <!-- Apply Mappings - Now with HTMX -->
                 <button class="btn btn-accent" 
-                        hx-post="{% url 'metadata:apply_mappings_to_batch' %}"
-                        hx-include="#batch-triples"
-                        hx-target="#batch-mapping-results"
-                        hx-indicator="#apply-mappings-spinner">
-                    <span id="apply-mappings-spinner" class="loading loading-spinner loading-sm htmx-indicator"></span>
-                    Apply Defined Mappings to Batch
+                        id="preview-btn"
+                        hx-post="{% url 'metadata:preview_transformation' %}"
+                        hx-include="#dataset-selector"
+                        hx-target="#transformation-preview"
+                        hx-indicator="#preview-spinner">
+                    <span id="preview-spinner" class="loading loading-spinner loading-sm htmx-indicator"></span>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    Preview Dataset Transformation
                 </button>
-                <!-- Simple JS Actions -->
-                <button class="btn btn-success" onclick="addTripleFromForm()">Add Triple from Form</button>
-                <!-- Core HTMX Action: Create Triples -->
-                <button class="btn btn-primary" 
-                        hx-post="{% url 'metadata:create_bulk_triples' %}"
-                        hx-include="#batch-triples, #institution, #base-uri"
-                        hx-target="#creation-results"
-                        hx-indicator="#create-spinner">
-                    <span id="create-spinner" class="loading loading-spinner loading-sm htmx-indicator"></span>
-                    Create All Triples in Batch
+
+                <!-- Preview Results Area -->
+                <div id="transformation-preview" class="mt-4">
+                    <div class="text-sm text-base-content/60">Preview will appear here when you select a dataset and click preview</div>
+                </div>
+            </fieldset>
+
+            <!-- Transformation Settings -->
+            <fieldset class="border border-base-300 p-4 rounded mb-6">
+                <legend class="text-lg font-semibold px-2">⚙️ Transformation Settings</legend>
+                
+                <div class="form-control mb-4">
+                    <label class="label cursor-pointer">
+                        <span class="label-text">Update existing type assignments</span>
+                        <input type="checkbox" id="update-existing-types" name="update_existing" class="checkbox checkbox-primary" />
+                    </label>
+                    <div class="label">
+                        <span class="label-text-alt">If a resource already has an rdf:type, replace it with the new mapping</span>
+                    </div>
+                </div>
+            </fieldset>
+
+            <!-- Execute Transformation -->
+            <div class="divider">Ready to Transform?</div>
+            <div class="flex justify-center gap-4 mb-4">
+                <div class="tooltip" data-tip="Apply mapping rules to transform the selected dataset">
+                    <button class="btn btn-primary btn-lg" 
+                            id="transform-btn"
+                            hx-post="{% url 'metadata:execute_transformation' %}"
+                            hx-include="#dataset-selector, #update-existing-types"
+                            hx-target="#transformation-results"
+                            hx-indicator="#transform-spinner">
+                        <span id="transform-spinner" class="loading loading-spinner loading-md htmx-indicator"></span>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Execute Dataset Transformation
+                    </button>
+                </div>
+                <button class="btn btn-ghost" 
+                        id="simulate-btn"
+                        hx-post="{% url 'metadata:execute_transformation' %}"
+                        hx-include="#dataset-selector, #update-existing-types"
+                        hx-vals='{"dry_run": "true"}'
+                        hx-target="#simulation-results"
+                        hx-indicator="#simulate-spinner">
+                    <span id="simulate-spinner" class="loading loading-spinner loading-sm htmx-indicator"></span>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Dry Run (Simulate Only)
                 </button>
-                <!-- Simple JS Actions -->
-                <button class="btn btn-warning" onclick="validateTriples()">Validate Batch</button>
-                <button class="btn btn-ghost" onclick="clearTriples()">Clear Batch</button>
             </div>
 
-            <!-- Results -->
-            <div id="batch-mapping-results" class="mt-4"></div>
-            <div id="creation-results" class="mt-4"></div>
+            <!-- Results Areas -->
+            <div id="transformation-results" class="mt-4">
+                <div class="text-sm text-base-content/60">Transformation results will appear here</div>
+            </div>
+            <div id="simulation-results" class="mt-4">
+                <div class="text-sm text-base-content/60">Simulation results will appear here</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick template selection -->
+    <div class="templates-grid">
+        <div class="template-card" data-template="museum-objects">
+            <h3>Museum Objects</h3>
+            <p>For object collections with IDs, titles, dates</p>
+            <span class="badge">Auto-detects: ID, Title, Date, Creator</span>
+        </div>
+        
+        <div class="template-card" data-template="person-projects">
+            <h3>Person-Project Relations</h3>
+            <p>For junction tables linking people to projects</p>
+            <span class="badge">Auto-detects: Person ID, Project ID, Role</span>
         </div>
     </div>
 </div>
@@ -282,108 +427,13 @@ To enable CIDOC-CRM support, uncomment the following line:
 {% endcomment %}
 
 <script>
-// Predicate options for different data models
-const predicateOptions = {
-    'dublin-core': ['dc:title', 'dc:creator', 'dc:subject', 'dc:description', 'dc:type', 'dc:date'],
-    'rdf': ['rdf:type', 'rdfs:label', 'rdfs:comment', 'rdfs:seeAlso'],
-    'custom': ['hasPart', 'isPartOf', 'relatedTo', 'name', 'description']
-};
-
-function updatePredicateOptions() {
-    const model = document.getElementById('data-model').value;
-    const buttonsContainer = document.getElementById('predicate-buttons');
-    buttonsContainer.innerHTML = '';
-    
-    if (predicateOptions[model]) {
-        predicateOptions[model].forEach(predicate => {
-            const button = document.createElement('button');
-            button.className = 'btn btn-sm btn-outline';
-            button.textContent = predicate;
-            button.onclick = () => document.getElementById('predicate-input').value = predicate;
-            buttonsContainer.appendChild(button);
-        });
-    }
-}
-
-function addTripleFromForm() {
-    const subject = document.getElementById('subject-input').value.trim();
-    const predicate = document.getElementById('predicate-input').value.trim();
-    const object = document.getElementById('object-input').value.trim();
-    
-    if (!subject || !predicate || !object) {
-        alert('Please fill in all fields');
-        return;
-    }
-    
-    const subjectType = document.getElementById('subject-type').value;
-    const predicateType = document.getElementById('predicate-type').value;
-    const objectType = document.getElementById('object-type').value;
-    
-    const formattedSubject = subjectType === 'new' ? `new:${subject}` : subject;
-    const formattedPredicate = predicateType === 'new' ? `new:${predicate}` : predicate;
-    const formattedObject = objectType === 'new' ? `new:${object}` : object;
-    
-    const triple = `${formattedSubject}|${formattedPredicate}|${formattedObject}`;
-    const textarea = document.getElementById('batch-triples');
-    
-    if (textarea.value) {
-        textarea.value += '\n' + triple;
-    } else {
-        textarea.value = triple;
-    }
-    
-    // Clear form
-    document.getElementById('subject-input').value = '';
-    document.getElementById('predicate-input').value = '';
-    document.getElementById('object-input').value = '';
-}
-
-function validateTriples() {
-    const triples = document.getElementById('batch-triples').value.trim();
-    if (!triples) {
-        alert('No triples to validate');
-        return;
-    }
-    
-    const lines = triples.split('\n');
-    const errors = [];
-    
-    lines.forEach((line, index) => {
-        const parts = line.trim().split('|');
-        if (parts.length !== 3) {
-            errors.push(`Line ${index + 1}: Expected 3 parts, got ${parts.length}`);
-        }
-    });
-    
-    if (errors.length > 0) {
-        alert('Validation errors:\n' + errors.join('\n'));
-    } else {
-        alert(`Validation successful! ${lines.length} triples ready.`);
-    }
-}
-
-function clearTriples() {
-    if (confirm('Clear all triples?')) {
-        document.getElementById('batch-triples').value = '';
-        document.getElementById('creation-results').innerHTML = '';
-        document.getElementById('batch-mapping-results').innerHTML = '';
-    }
-}
-
 // Initialize page functionality
 document.addEventListener('DOMContentLoaded', function() {
-    // Show/hide sample URIs textarea based on search source selection
-    const searchSource = document.getElementById('explore-search-source');
-    const sampleContainer = document.getElementById('explore-sample-uris-container');
-    
-    if (searchSource) {
-        searchSource.addEventListener('change', function() {
-            sampleContainer.style.display = this.value === 'sample_uris' ? 'block' : 'none';
-        });
+    // Initialize predicate options by triggering the HTMX call
+    const dataModelSelect = document.getElementById('data-model');
+    if (dataModelSelect) {
+        dataModelSelect.dispatchEvent(new Event('change'));
     }
-    
-    // Initialize predicate options
-    updatePredicateOptions();
 });
 </script>
 {% endblock %} 

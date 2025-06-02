@@ -1,0 +1,124 @@
+{% if error %}
+    <div class="alert alert-error">
+        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span>{{ error }}</span>
+    </div>
+{% elif success %}
+    <div class="bg-base-200 p-4 rounded-lg">
+        <div class="flex items-center gap-2 mb-4">
+            {% if dry_run %}
+                <div class="badge badge-info">DRY RUN</div>
+                <h4 class="font-semibold">🧪 Simulation Results</h4>
+            {% else %}
+                <div class="badge badge-success">EXECUTED</div>
+                <h4 class="font-semibold">✅ Transformation Complete</h4>
+            {% endif %}
+        </div>
+        
+        <!-- Results Summary -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+            <div class="stat bg-base-100 rounded p-3">
+                <div class="stat-title text-xs">Total Resources</div>
+                <div class="stat-value text-lg">{{ total_resources }}</div>
+            </div>
+            <div class="stat bg-success/10 rounded p-3">
+                <div class="stat-title text-xs">
+                    {% if dry_run %}Would Create{% else %}Created{% endif %}
+                </div>
+                <div class="stat-value text-lg text-success">{{ created_triples }}</div>
+            </div>
+            <div class="stat bg-warning/10 rounded p-3">
+                <div class="stat-title text-xs">
+                    {% if dry_run %}Would Update{% else %}Updated{% endif %}
+                </div>
+                <div class="stat-value text-lg text-warning">{{ updated_triples }}</div>
+            </div>
+            <div class="stat bg-base-100 rounded p-3">
+                <div class="stat-title text-xs">Skipped</div>
+                <div class="stat-value text-lg">{{ skipped_resources }}</div>
+            </div>
+        </div>
+        
+        <!-- Type Assignments -->
+        {% if processed_types %}
+            <div class="mb-4">
+                <h5 class="font-medium mb-2">📋 Type Assignments {% if dry_run %}(Simulated){% else %}(Completed){% endif %}</h5>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {% for type, count in processed_types.items %}
+                        <div class="flex justify-between items-center bg-base-100 p-2 rounded">
+                            <span class="text-sm">{{ type }}</span>
+                            <span class="badge badge-primary">{{ count }} resource{{ count|pluralize }}</span>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        {% endif %}
+        
+        <!-- Applied Rules Summary -->
+        {% if mapping_rules %}
+            <div class="mb-4">
+                <h5 class="font-medium mb-2">⚙️ Applied Mapping Rules</h5>
+                <div class="space-y-2">
+                    {% for rule in mapping_rules %}
+                        <div class="bg-base-100 p-2 rounded text-sm">
+                            <span class="font-medium">{{ rule.pattern_type|title }}:</span>
+                            <code class="bg-base-300 px-1 rounded">{{ rule.pattern_value }}</code>
+                            →
+                            <span class="text-success">{{ rule.arkumu_type }}</span>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        {% endif %}
+        
+        <!-- Errors -->
+        {% if errors %}
+            <div class="alert alert-error mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div>
+                    <h3 class="font-bold">Errors Encountered</h3>
+                    <div class="text-sm">
+                        <ul class="list-disc list-inside">
+                            {% for error in errors %}
+                                <li>{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+        
+        <!-- Success Message -->
+        {% if not dry_run and created_triples > 0 or updated_triples > 0 %}
+            <div class="alert alert-success">
+                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <div>
+                    <h3 class="font-bold">Transformation Successful!</h3>
+                    <div class="text-sm">
+                        Your mapping rules have been applied. Resources in the dataset now have semantic types.
+                        You can view the updated data in the Triple Viewer or Data Explorer.
+                    </div>
+                </div>
+            </div>
+        {% elif dry_run %}
+            <div class="alert alert-info">
+                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <div>
+                    <h3 class="font-bold">Simulation Complete</h3>
+                    <div class="text-sm">
+                        This was a dry run - no actual changes were made. 
+                        If you're satisfied with the results, run the transformation without the dry run option.
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+{% endif %} 

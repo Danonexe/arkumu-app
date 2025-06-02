@@ -8,54 +8,140 @@
 {% else %}
     <div class="stats stats-horizontal shadow mb-4">
         <div class="stat">
-            <div class="stat-title">Total Checked</div>
-            <div class="stat-value text-sm">{{ total_checked }}</div>
+            <div class="stat-title">Total Resources</div>
+            <div class="stat-value text-sm">{{ total_checked|floatformat:0 }}</div>
+            <div class="stat-desc">In database</div>
         </div>
         <div class="stat">
             <div class="stat-title">Matches Found</div>
-            <div class="stat-value text-sm text-success">{{ match_count }}</div>
+            <div class="stat-value text-sm {% if actual_match_count > 0 %}text-success{% else %}text-base-content/50{% endif %}">{{ actual_match_count|floatformat:0 }}</div>
+            <div class="stat-desc">Would be affected</div>
         </div>
         <div class="stat">
-            <div class="stat-title">Pattern Type</div>
-            <div class="stat-value text-xs">{{ pattern_type|capfirst }}</div>
+            <div class="stat-title">Impact</div>
+            <div class="stat-value text-xs">
+                {% if total_checked > 0 %}
+                    {{ actual_match_count|floatformat:0 }}/{{ total_checked|floatformat:0 }}
+                    <div class="stat-desc">({{ percentage }}%)</div>
+                {% else %}
+                    0%
+                {% endif %}
+            </div>
         </div>
+        {% if actual_match_count > 200 %}
+            <div class="stat">
+                <div class="stat-title">Displayed</div>
+                <div class="stat-value text-xs text-warning">{{ match_count }}</div>
+                <div class="stat-desc">of {{ actual_match_count|floatformat:0 }}</div>
+            </div>
+        {% endif %}
     </div>
 
+    {% if actual_match_count > 200 %}
+        <div class="alert alert-warning mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L2.732 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+            </svg>
+            <div>
+                <h3 class="font-bold">Results Truncated</h3>
+                <p class="text-sm">Found {{ actual_match_count|floatformat:0 }} matching resources, but only showing the first {{ match_count }}. Please refine your pattern for more specific results.</p>
+            </div>
+        </div>
+    {% endif %}
+
+    <!-- Search Description -->
+    {% if search_description %}
+        <div class="alert alert-info mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <div>
+                <h3 class="font-bold">Search Performed</h3>
+                <p class="text-sm">{{ search_description }}</p>
+                {% if search_fields %}
+                    <div class="flex flex-wrap gap-1 mt-2">
+                        <span class="text-xs">Fields searched:</span>
+                        {% for field in search_fields %}
+                            <span class="badge badge-xs {% if field == 'uri' %}badge-primary{% elif field == 'name' %}badge-info{% elif field == 'value' %}badge-success{% elif field == 'source' %}badge-warning{% else %}badge-ghost{% endif %}">
+                                {{ field|capfirst }}
+                            </span>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
+
     {% if matching_resources %}
-        <div class="overflow-x-auto max-h-60 border border-base-300 rounded-lg">
+        <div class="overflow-x-auto max-h-80 border border-base-300 rounded-lg">
             <table class="table table-sm table-zebra">
                 <thead class="sticky top-0 bg-base-200">
                     <tr>
                         <th>Resource</th>
+                        <th>Matched Field</th>
                         <th>Type</th>
+                        <th>Source</th>
                         <th>Details</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for resource in matching_resources %}
                         <tr>
-                            <td class="font-mono text-xs">
+                            <td class="font-mono text-xs max-w-xs">
                                 {% if resource.uri %}
-                                    {{ resource.uri|truncatechars:60 }}
+                                    <div class="tooltip" data-tip="{{ resource.uri }}">
+                                        {{ resource.uri|truncatechars:50 }}
+                                    </div>
                                 {% elif resource.value %}
-                                    {{ resource.value|truncatechars:60 }}
+                                    <span class="italic text-base-content/70">"{{ resource.value|truncatechars:45 }}"</span>
+                                {% elif resource.name %}
+                                    <span class="text-info">{{ resource.name|truncatechars:45 }}</span>
                                 {% else %}
-                                    {{ resource|truncatechars:60 }}
+                                    <span class="text-base-content/50">{{ resource|truncatechars:45 }}</span>
                                 {% endif %}
+                            </td>
+                            <td class="text-xs">
+                                <div class="flex flex-col gap-1">
+                                    <span class="badge badge-xs {% if resource.matched_field == 'uri' %}badge-primary{% elif resource.matched_field == 'name' %}badge-info{% elif resource.matched_field == 'value' %}badge-success{% elif resource.matched_field == 'source' %}badge-warning{% else %}badge-ghost{% endif %}">
+                                        {{ resource.matched_field|capfirst }}
+                                    </span>
+                                    {% if resource.matched_value %}
+                                        <span class="text-xs text-base-content/60 font-mono">{{ resource.matched_value|truncatechars:30 }}</span>
+                                    {% endif %}
+                                </div>
                             </td>
                             <td class="text-xs">
                                 {% if resource.type %}
                                     <span class="badge badge-sm badge-outline">{{ resource.type }}</span>
+                                    {% if resource.is_placeholder %}
+                                        <span class="badge badge-xs badge-warning ml-1">Placeholder</span>
+                                    {% endif %}
                                 {% else %}
-                                    <span class="text-base-content/50">URI</span>
+                                    <span class="text-base-content/50">Unknown</span>
                                 {% endif %}
                             </td>
-                            <td class="text-xs text-base-content/70">
-                                {% if resource.name %}
-                                    {{ resource.name|truncatechars:40 }}
-                                {% elif resource.value %}
-                                    {{ resource.value|truncatechars:40 }}
+                            <td class="text-xs">
+                                {% if resource.source %}
+                                    <span class="badge badge-xs badge-ghost">{{ resource.source|truncatechars:15 }}</span>
+                                {% else %}
+                                    <span class="text-base-content/40">-</span>
                                 {% endif %}
+                            </td>
+                            <td class="text-xs text-base-content/70 max-w-xs">
+                                <div class="space-y-1">
+                                    {% if resource.name and resource.matched_field != 'name' %}
+                                        <div><strong>Name:</strong> {{ resource.name|truncatechars:30 }}</div>
+                                    {% endif %}
+                                    {% if resource.value and resource.matched_field != 'value' %}
+                                        <div><strong>Value:</strong> {{ resource.value|truncatechars:30 }}</div>
+                                    {% endif %}
+                                    {% if resource.datatype %}
+                                        <div><strong>Type:</strong> <code class="text-xs">{{ resource.datatype|truncatechars:25 }}</code></div>
+                                    {% endif %}
+                                    {% if resource.language %}
+                                        <div><strong>Lang:</strong> <code class="text-xs">{{ resource.language }}</code></div>
+                                    {% endif %}
+                                </div>
                             </td>
                         </tr>
                     {% endfor %}
@@ -64,23 +150,133 @@
         </div>
         
         <div class="mt-4 p-3 bg-base-200 rounded-lg">
-            <p class="text-sm">
-                <strong>Pattern:</strong> 
-                <code class="text-xs bg-base-300 px-1 py-0.5 rounded">{{ pattern_type }}:</code>
-                <code class="text-xs bg-base-300 px-1 py-0.5 rounded ml-1">{{ pattern_value }}</code>
-            </p>
-            <p class="text-xs text-base-content/70 mt-1">
-                Found {{ match_count }} matching resource{{ match_count|pluralize }} out of {{ total_checked }} checked.
-            </p>
+            <div class="flex justify-between items-start mb-2">
+                <div>
+                    <p class="text-sm">
+                        <strong>Impact Analysis:</strong> 
+                        {{ actual_match_count|floatformat:0 }} resource{{ actual_match_count|pluralize }} would be affected by this pattern
+                        {% if total_checked > 0 %}
+                            ({{ percentage }}% of all resources)
+                        {% endif %}
+                    </p>
+                    {% if actual_match_count > 200 %}
+                        <p class="text-xs text-warning font-medium mt-1">
+                            Showing {{ match_count }} of {{ actual_match_count|floatformat:0 }} matches - refine pattern for more specific results
+                        </p>
+                    {% endif %}
+                    <p class="text-xs text-base-content/70 mt-1">
+                        If you create a mapping rule with this pattern, all {{ actual_match_count|floatformat:0 }} matching resource{{ actual_match_count|pluralize }} will receive the specified Arkumu type.
+                    </p>
+                </div>
+                {% if actual_match_count > 0 %}
+                    <div class="text-right">
+                        <div class="text-xs text-base-content/60">Field Distribution</div>
+                        <div class="flex gap-1 mt-1">
+                            {% for resource in matching_resources %}
+                                {% if forloop.counter <= 10 %}
+                                    <span class="badge badge-xs {% if resource.matched_field == 'uri' %}badge-primary{% elif resource.matched_field == 'name' %}badge-info{% elif resource.matched_field == 'value' %}badge-success{% elif resource.matched_field == 'source' %}badge-warning{% else %}badge-ghost{% endif %}">
+                                        {{ resource.matched_field|first|upper }}
+                                    </span>
+                                {% endif %}
+                            {% endfor %}
+                            {% if actual_match_count > 10 %}
+                                <span class="text-xs text-base-content/40">+{{ actual_match_count|add:"-10" }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
         </div>
+        
+        <!-- Quick Action: Create Rule from Search -->
+        {% if actual_match_count > 0 %}
+            <div class="mt-4 p-4 bg-primary/10 border-l-4 border-primary rounded">
+                <div class="flex items-center justify-between mb-3">
+                    <div>
+                        <h4 class="font-semibold text-primary flex items-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                            </svg>
+                            Create Automatic Type Rule from This Search
+                        </h4>
+                        <p class="text-sm text-base-content/70">Pre-fill the mapping rule form below with your search pattern - then just choose a type!</p>
+                    </div>
+                    <button type="button" 
+                            id="create-rule-from-search" 
+                            class="btn btn-primary btn-sm"
+                            onclick="fillRuleFromSearch()">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                        Use This Pattern
+                    </button>
+                </div>
+                
+                <div class="bg-base-100 p-3 rounded border-l-2 border-success">
+                    <p class="text-sm font-medium text-success">Preview:</p>
+                    <p class="text-sm text-base-content/80">
+                        Pattern "<code class="bg-base-300 px-1 rounded">{{ pattern_value }}</code>" ({{ pattern_type }}) → 
+                        <em class="text-primary">Your chosen type</em>
+                    </p>
+                    <p class="text-xs text-base-content/60 mt-1">
+                        Result: All {{ actual_match_count|floatformat:0 }} matching resources will automatically get type triples
+                    </p>
+                </div>
+            </div>
+            
+            <script>
+                function fillRuleFromSearch() {
+                    // Fill in the mapping rule form with the search pattern
+                    const patternType = '{{ pattern_type }}';
+                    const patternValue = '{{ pattern_value }}';
+                    
+                    // Set the select value
+                    const selectElement = document.getElementById('rule-pattern-type');
+                    if (selectElement) {
+                        selectElement.value = patternType;
+                    }
+                    
+                    // Set the pattern value
+                    const inputElement = document.getElementById('rule-pattern-value');
+                    if (inputElement) {
+                        inputElement.value = patternValue;
+                    }
+                    
+                    // Focus on the type field
+                    const typeElement = document.getElementById('rule-arkumu-type');
+                    if (typeElement) {
+                        typeElement.focus();
+                        typeElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                    
+                    // Visual feedback
+                    const button = document.getElementById('create-rule-from-search');
+                    if (button) {
+                        const originalText = button.innerHTML;
+                        button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>Done!';
+                        button.classList.add('btn-success');
+                        button.classList.remove('btn-primary');
+                        
+                        setTimeout(() => {
+                            button.innerHTML = originalText;
+                            button.classList.remove('btn-success');
+                            button.classList.add('btn-primary');
+                        }, 2000);
+                    }
+                }
+            </script>
+        {% endif %}
     {% else %}
-        <div class="alert alert-info">
+        <div class="alert alert-warning">
             <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L2.732 16.5c-.77.833.192 2.5 1.732 2.5z"/>
             </svg>
             <div>
-                <h3 class="font-bold">No matches found</h3>
-                <p class="text-sm">Pattern "{{ pattern_value }}" ({{ pattern_type }}) didn't match any of the {{ total_checked }} resources checked.</p>
+                <h3 class="font-bold">No Resources Found</h3>
+                <div class="text-sm">
+                    <p>Pattern "{{ pattern_value }}" ({{ pattern_type }}) didn't match any of the {{ total_checked }} existing resources.</p>
+                    <p class="mt-1 text-xs">This means a mapping rule with this pattern would not affect any current data.</p>
+                </div>
             </div>
         </div>
     {% endif %}

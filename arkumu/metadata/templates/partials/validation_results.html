@@ -1,0 +1,58 @@
+{% if valid %}
+    <div class="alert alert-success">
+        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <div>
+            <h3 class="font-bold">Validation Successful!</h3>
+            <p class="text-sm">{{ total_lines }} triple{{ total_lines|pluralize }} ready for processing.</p>
+            {% if warnings %}
+                <p class="text-xs mt-1">{{ warnings|length }} warning{{ warnings|length|pluralize }} noted below.</p>
+            {% endif %}
+        </div>
+    </div>
+{% else %}
+    <div class="alert alert-error">
+        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <div>
+            <h3 class="font-bold">Validation Failed</h3>
+            <p class="text-sm">{{ errors|length }} error{{ errors|length|pluralize }} found in {{ total_lines }} line{{ total_lines|pluralize }}.</p>
+        </div>
+    </div>
+{% endif %}
+
+{% if errors %}
+    <div class="collapse collapse-open border border-error mb-4">
+        <div class="collapse-title text-lg font-medium text-error">
+            Errors ({{ errors|length }})
+        </div>
+        <div class="collapse-content">
+            <ul class="list-disc list-inside text-sm space-y-1">
+                {% for error in errors %}
+                    <li class="text-error">{{ error }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+{% endif %}
+
+{% if warnings %}
+    <div class="collapse collapse-plus border border-warning mb-4">
+        <input type="checkbox" />
+        <div class="collapse-title text-lg font-medium text-warning">
+            Warnings ({{ warnings|length }})
+        </div>
+        <div class="collapse-content">
+            <ul class="list-disc list-inside text-sm space-y-1">
+                {% for warning in warnings %}
+                    <li class="text-warning">{{ warning }}</li>
+                {% endfor %}
+            </ul>
+            <div class="mt-2 text-xs text-base-content/60">
+                Warnings don't prevent creation but may indicate potential issues.
+            </div>
+        </div>
+    </div>
+{% endif %} 

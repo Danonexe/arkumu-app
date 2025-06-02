@@ -1,0 +1,125 @@
+{% if error %}
+    <div class="alert alert-error">
+        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span>{{ error }}</span>
+    </div>
+{% else %}
+    <div class="bg-base-200 p-4 rounded-lg">
+        <h4 class="font-semibold mb-3">🔍 Transformation Preview</h4>
+        
+        <!-- Summary Statistics -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+            <div class="stat bg-base-100 rounded p-3">
+                <div class="stat-title text-xs">Total Resources</div>
+                <div class="stat-value text-lg">{{ total_resources }}</div>
+            </div>
+            <div class="stat bg-success/10 rounded p-3">
+                <div class="stat-title text-xs">Will Get Type</div>
+                <div class="stat-value text-lg text-success">{{ resources_to_create }}</div>
+            </div>
+            <div class="stat bg-warning/10 rounded p-3">
+                <div class="stat-title text-xs">Will Update Type</div>
+                <div class="stat-value text-lg text-warning">{{ resources_to_update }}</div>
+            </div>
+            <div class="stat bg-base-100 rounded p-3">
+                <div class="stat-title text-xs">No Match</div>
+                <div class="stat-value text-lg">{{ resources_unmatched }}</div>
+            </div>
+        </div>
+        
+        <!-- Type Assignment Summary -->
+        {% if type_assignments %}
+            <div class="mb-4">
+                <h5 class="font-medium mb-2">📋 Type Assignments Summary</h5>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {% for type, count in type_assignments.items %}
+                        <div class="flex justify-between items-center bg-base-100 p-2 rounded">
+                            <span class="text-sm">{{ type }}</span>
+                            <span class="badge badge-primary">{{ count }}</span>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        {% endif %}
+        
+        <!-- Sample Matches -->
+        {% if matches %}
+            <div class="mb-4">
+                <h5 class="font-medium mb-2">📝 Sample Matches {% if preview_limited %}(First 20){% endif %}</h5>
+                <div class="overflow-x-auto">
+                    <table class="table table-xs">
+                        <thead>
+                            <tr>
+                                <th>Resource</th>
+                                <th>Matched Field</th>
+                                <th>Pattern</th>
+                                <th>New Type</th>
+                                <th>Existing Type</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for match in matches %}
+                                <tr>
+                                    <td class="max-w-xs truncate">
+                                        <span class="text-xs">{{ match.resource.name|default:match.resource.uri }}</span>
+                                    </td>
+                                    <td>
+                                        <span class="badge badge-outline badge-xs">{{ match.matched_field }}</span>
+                                    </td>
+                                    <td class="text-xs">{{ match.pattern_value }}</td>
+                                    <td>
+                                        <span class="text-xs text-success">{{ match.new_type }}</span>
+                                    </td>
+                                    <td>
+                                        {% if match.existing_type %}
+                                            <span class="text-xs text-warning">{{ match.existing_type }}</span>
+                                        {% else %}
+                                            <span class="text-xs text-base-content/50">None</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if match.action == "CREATE" %}
+                                            <span class="badge badge-success badge-xs">CREATE</span>
+                                        {% else %}
+                                            <span class="badge badge-warning badge-xs">UPDATE</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% if preview_limited %}
+                    <div class="text-xs text-base-content/60 mt-2">
+                        Showing first 20 of {{ total_matches }} matches. Full transformation will process all.
+                    </div>
+                {% endif %}
+            </div>
+        {% endif %}
+        
+        {% if total_matches > 0 %}
+            <div class="alert alert-info">
+                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <div>
+                    <h3 class="font-bold">Ready to Transform</h3>
+                    <div class="text-sm">{{ total_matches }} resources match your rules and will receive type assignments.</div>
+                </div>
+            </div>
+        {% else %}
+            <div class="alert alert-warning">
+                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L2.732 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+                </svg>
+                <div>
+                    <h3 class="font-bold">No Matches Found</h3>
+                    <div class="text-sm">None of the resources in this dataset match your mapping rules. Check your patterns in Step 1.</div>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+{% endif %} 

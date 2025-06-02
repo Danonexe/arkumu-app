@@ -1,0 +1,35 @@
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+    <div class="form-control">
+        <label class="label">
+            <span class="label-text">Available Datasets</span>
+            <span class="label-text-alt">Choose dataset to transform</span>
+        </label>
+        <select id="dataset-selector" name="dataset_uri" class="select select-bordered"
+                hx-post="{% url 'metadata:get_dataset_info' %}"
+                hx-target="#dataset-info"
+                hx-trigger="change"
+                hx-include="this">
+            <option value="">Select a dataset...</option>
+            {% for dataset in datasets %}
+                <option value="{{ dataset.uri }}">{{ dataset.name|default:dataset.uri }} ({{ dataset.source }})</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="form-control">
+        <label class="label">
+            <span class="label-text">Institution/Source</span>
+            <span class="label-text-alt">Filter by source</span>
+        </label>
+        <select id="institution-filter" name="institution" class="select select-bordered"
+                hx-get="{% url 'metadata:list_datasets' %}"
+                hx-target="#dataset-selector-container"
+                hx-trigger="change">
+            <option value="">All institutions...</option>
+            {% for institution in institutions %}
+                <option value="{{ institution }}" {% if institution == selected_institution %}selected{% endif %}>
+                    {{ institution }}
+                </option>
+            {% endfor %}
+        </select>
+    </div>
+</div> 

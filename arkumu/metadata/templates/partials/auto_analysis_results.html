@@ -1,0 +1,208 @@
+<!-- Auto-Analysis Results Template -->
+<div class="bg-base-100 p-6 rounded-lg border border-base-300">
+    {% if error %}
+        <div class="alert alert-error">
+            <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>{{ error }}</span>
+        </div>
+    {% else %}
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-xl font-semibold flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Analysis Complete: {% if source_info %}{{ source_info.file_name }}{% else %}{{ analysis.filename|default:"CSV File" }}{% endif %}
+            </h3>
+            <div class="badge badge-lg {% if analysis.quality_score >= 8 %}badge-success{% elif analysis.quality_score >= 6 %}badge-warning{% else %}badge-error{% endif %}">
+                Quality: {{ analysis.quality_score|floatformat:1 }}
+            </div>
+        </div>
+
+        <!-- Source Information -->
+        {% if source_info %}
+        <div class="alert alert-info mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <div>
+                <h4 class="font-bold">Source: S3 File</h4>
+                <div class="text-sm">
+                    <strong>Organization:</strong> {{ source_info.bucket }}<br>
+                    <strong>Path:</strong> {{ source_info.s3_key }}<br>
+                    <strong>Size:</strong> {{ source_info.file_size|filesizeformat }}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Quick Stats -->
+        <div class="stats stats-horizontal shadow mb-6 w-full">
+            <div class="stat">
+                <div class="stat-figure text-primary">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2v0a2 2 0 002-2h6l2 2h6a2 2 0 012 2z" />
+                    </svg>
+                </div>
+                <div class="stat-title">Table Type</div>
+                <div class="stat-value text-lg">{{ analysis.table_type|title }}</div>
+                <div class="stat-desc">{{ analysis.row_count }} rows, {{ analysis.column_count }} columns</div>
+            </div>
+            
+            <div class="stat">
+                <div class="stat-figure text-secondary">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.99 1.99 0 013 12V7a4 4 0 014-4z" />
+                    </svg>
+                </div>
+                <div class="stat-title">Discovered Patterns</div>
+                <div class="stat-value text-lg">{{ discovered_pattern_count }}</div>
+                <div class="stat-desc">{{ institution_prefixes|length }} institutional patterns</div>
+            </div>
+            
+            <div class="stat">
+                <div class="stat-figure text-accent">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                </div>
+                <div class="stat-title">Auto Mappings</div>
+                <div class="stat-value text-lg">{{ suggested_mappings|length }}</div>
+                <div class="stat-desc">Ready to apply</div>
+            </div>
+        </div>
+
+        <!-- Smart Mapping Suggestions -->
+        <div class="mb-6">
+            <h4 class="text-lg font-semibold mb-3 flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+                Smart Mapping Suggestions
+            </h4>
+            
+            {% if suggested_mappings %}
+                <div class="space-y-3">
+                    {% for mapping in suggested_mappings %}
+                    <div class="card bg-base-200 border border-base-300">
+                        <div class="card-body p-4">
+                            <div class="flex items-center justify-between">
+                                <div class="flex-1">
+                                    <div class="flex items-center mb-2">
+                                        <span class="badge badge-primary badge-sm mr-2">{{ mapping.pattern_type|upper }}</span>
+                                        <span class="font-mono text-sm bg-base-300 px-2 py-1 rounded">{{ mapping.pattern }}</span>
+                                        <span class="mx-2">→</span>
+                                        <span class="font-semibold text-secondary">{{ mapping.suggested_type }}</span>
+                                    </div>
+                                    <div class="text-sm text-base-content/70">
+                                        Found in column: <strong>{{ mapping.column }}</strong> • 
+                                        Matches <strong>{{ mapping.match_count }}</strong> values • 
+                                        Confidence: <span class="badge badge-sm {% if mapping.confidence >= 80 %}badge-success{% elif mapping.confidence >= 60 %}badge-warning{% else %}badge-error{% endif %}">{{ mapping.confidence|floatformat:0 }}%</span>
+                                    </div>
+                                    <div class="text-xs text-base-content/60 mt-1">
+                                        Examples: {% for example in mapping.examples %}{{ example }}{% if not forloop.last %}, {% endif %}{% endfor %}
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <input type="checkbox" 
+                                           id="mapping-{{ forloop.counter }}" 
+                                           class="checkbox checkbox-primary mapping-checkbox" 
+                                           data-mapping-id="{{ mapping.id }}"
+                                           checked />
+                                    <label for="mapping-{{ forloop.counter }}" class="btn btn-ghost btn-sm">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                        </svg>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="alert alert-warning">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L2.732 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+                    </svg>
+                    <span>No automatic mappings suggested. You may need to create custom rules manually.</span>
+                </div>
+            {% endif %}
+        </div>
+
+        <!-- Discovered Institutional Patterns -->
+        {% if institution_prefixes %}
+        <div class="mb-6">
+            <h4 class="text-lg font-semibold mb-3 flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-info" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                </svg>
+                Discovered Institutional Patterns
+            </h4>
+            <div class="flex flex-wrap gap-2">
+                {% for prefix in institution_prefixes %}
+                <div class="badge badge-info badge-lg">{{ prefix }}_*</div>
+                {% endfor %}
+            </div>
+            <div class="text-sm text-base-content/70 mt-2">
+                These patterns were discovered from your data and can be used to create additional mapping rules.
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Junction Table Detection -->
+        {% if analysis.table_type == 'junction' %}
+        <div class="alert alert-info mb-6">
+            <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <div>
+                <h4 class="font-bold">Junction Table Detected</h4>
+                <p class="text-sm">This appears to be a relationship table connecting different entities. Relationship templates will be suggested automatically.</p>
+                {% if suggested_relationships %}
+                <div class="mt-2">
+                    <strong>Suggested relationships:</strong>
+                    {% for rel in suggested_relationships %}
+                    <span class="badge badge-secondary badge-sm ml-1">{{ rel.source_type }} → {{ rel.target_type }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Action Buttons -->
+        <div class="flex justify-end gap-3 pt-4 border-t border-base-300">
+            <button class="btn btn-ghost" onclick="document.getElementById('quick-actions').style.display='none'">
+                Cancel
+            </button>
+            <button class="btn btn-info" 
+                    hx-post="{% url 'metadata:preview_auto_mappings' %}"
+                    hx-include=".mapping-checkbox:checked"
+                    hx-target="#preview-modal"
+                    hx-trigger="click">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                Preview Changes
+            </button>
+            <button class="btn btn-success" 
+                    hx-post="{% url 'metadata:apply_auto_mappings' %}"
+                    hx-include=".mapping-checkbox:checked"
+                    hx-target="#mapping-results"
+                    hx-confirm="Apply {{ suggested_mappings|length }} mapping rules?">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+                Apply Selected Mappings
+            </button>
+        </div>
+    {% endif %}
+</div>
+
+<!-- Show quick actions -->
+<script>
+    document.getElementById('quick-actions').style.display = 'flex';
+</script> 

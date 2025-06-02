@@ -5,47 +5,67 @@
         </svg>
         <span>{{ error }}</span>
     </div>
+{% elif errors %}
+    <div class="alert alert-error">
+        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <div>
+            <h3 class="font-bold">Parsing Errors Found</h3>
+            <ul class="list-disc list-inside text-sm mt-2">
+                {% for error in errors %}
+                    <li>{{ error }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
 {% elif success %}
     <div class="alert alert-success mb-4">
         <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
-        <span>Successfully applied mappings! Added {{ added_count }} type triple{{ added_count|pluralize }}.</span>
+        <span>Successfully applied mappings and resolved URIs! Added {{ added_count }} type triple{{ added_count|pluralize }}.</span>
     </div>
 
     <div class="stats stats-horizontal shadow mb-4">
         <div class="stat">
+            <div class="stat-title">Original Triples</div>
+            <div class="stat-value text-primary">{{ original_count }}</div>
+            <div class="stat-desc">From your batch</div>
+        </div>
+        <div class="stat">
             <div class="stat-title">Type Triples Added</div>
             <div class="stat-value text-success">{{ added_count }}</div>
+            <div class="stat-desc">By mapping rules</div>
         </div>
         <div class="stat">
             <div class="stat-title">Total Triples</div>
             <div class="stat-value">{{ total_triples }}</div>
+            <div class="stat-desc">Ready to create</div>
         </div>
     </div>
 
-    {% if added_triples %}
+    <!-- URI Resolution Summary -->
+    {% if uri_resolutions %}
         <div class="collapse collapse-plus border border-base-300 mb-4">
             <input type="checkbox" />
             <div class="collapse-title text-lg font-medium">
-                View Added Type Triples ({{ added_count }})
+                URI Resolution Summary ({{ uri_resolutions|length }} new resource{{ uri_resolutions|length|pluralize }})
             </div>
             <div class="collapse-content">
                 <div class="overflow-x-auto max-h-40">
                     <table class="table table-sm table-zebra">
                         <thead>
                             <tr>
-                                <th>Subject</th>
-                                <th>Predicate</th>
-                                <th>Object</th>
+                                <th>Original</th>
+                                <th>Resolved URI</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {% for triple in added_triples %}
+                            {% for original, resolved in uri_resolutions.items %}
                                 <tr>
-                                    <td class="font-mono text-xs">{{ triple.subject|truncatechars:40 }}</td>
-                                    <td class="font-mono text-xs text-info">{{ triple.predicate }}</td>
-                                    <td class="font-mono text-xs text-success">{{ triple.object|truncatechars:40 }}</td>
+                                    <td class="font-mono text-xs text-info">{{ original }}</td>
+                                    <td class="font-mono text-xs">{{ resolved|truncatechars:80 }}</td>
                                 </tr>
                             {% endfor %}
                         </tbody>
@@ -55,21 +75,126 @@
         </div>
     {% endif %}
 
+    <!-- Triple-by-Triple Analysis -->
+    {% if processed_triples %}
+        <div class="collapse collapse-plus border border-base-300 mb-4">
+            <input type="checkbox" />
+            <div class="collapse-title text-lg font-medium">
+                Triple-by-Triple Analysis ({{ processed_triples|length }} original triple{{ processed_triples|length|pluralize }})
+            </div>
+            <div class="collapse-content">
+                <div class="space-y-4 max-h-60 overflow-y-auto">
+                    {% for triple in processed_triples %}
+                        <div class="card bg-base-200 shadow-sm">
+                            <div class="card-body p-4">
+                                <div class="flex justify-between items-start mb-2">
+                                    <h4 class="text-sm font-medium">Line {{ triple.line_num }}</h4>
+                                    {% if triple.type_triples_added %}
+                                        <span class="badge badge-success badge-sm">{{ triple.type_triples_added|length }} type{{ triple.type_triples_added|length|pluralize }} added</span>
+                                    {% else %}
+                                        <span class="badge badge-ghost badge-sm">No mappings applied</span>
+                                    {% endif %}
+                                </div>
+                                
+                                <!-- Before/After comparison -->
+                                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 text-xs">
+                                    <div>
+                                        <div class="label">
+                                            <span class="label-text text-xs font-medium">Original</span>
+                                        </div>
+                                        <code class="block bg-base-300 p-2 rounded font-mono text-xs">{{ triple.original }}</code>
+                                    </div>
+                                    <div>
+                                        <div class="label">
+                                            <span class="label-text text-xs font-medium">Resolved</span>
+                                        </div>
+                                        <code class="block bg-base-300 p-2 rounded font-mono text-xs">{{ triple.resolved_line|truncatechars:100 }}</code>
+                                    </div>
+                                </div>
+                                
+                                <!-- Type triples added for this resource -->
+                                {% if triple.type_triples_added %}
+                                    <div class="mt-3">
+                                        <div class="label">
+                                            <span class="label-text text-xs font-medium text-success">Type Triples Added</span>
+                                        </div>
+                                        {% for type_triple in triple.type_triples_added %}
+                                            <div class="flex items-center gap-2 bg-success/10 border border-success/20 rounded p-2 mb-1">
+                                                <code class="font-mono text-xs flex-1">{{ type_triple.full_triple|truncatechars:80 }}</code>
+                                                <span class="badge badge-xs badge-success">{{ type_triple.rule_applied.pattern_type }}</span>
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    {% endif %}
+
+    <!-- Type Triples Summary -->
+    {% if added_triples %}
+        <div class="collapse collapse-plus border border-base-300 mb-4">
+            <input type="checkbox" />
+            <div class="collapse-title text-lg font-medium">
+                Type Triples Summary ({{ added_count }})
+            </div>
+            <div class="collapse-content">
+                <div class="overflow-x-auto max-h-40">
+                    <table class="table table-sm table-zebra">
+                        <thead>
+                            <tr>
+                                <th>Subject</th>
+                                <th>Type</th>
+                                <th>Applied Rule</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for triple in added_triples %}
+                                <tr>
+                                    <td class="font-mono text-xs">{{ triple.subject|truncatechars:40 }}</td>
+                                    <td class="font-mono text-xs text-success">{{ triple.object|truncatechars:30 }}</td>
+                                    <td class="text-xs">
+                                        <span class="badge badge-xs badge-outline">{{ triple.rule_applied.pattern_type }}</span>
+                                        <code class="ml-1">{{ triple.rule_applied.pattern_value|truncatechars:20 }}</code>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+
+    <!-- Final Batch Output -->
     <div class="form-control">
         <label class="label">
-            <span class="label-text">Updated Batch (with type mappings applied)</span>
-            <span class="label-text-alt">Copy this to the batch editor above</span>
+            <span class="label-text">Complete Batch (with resolved URIs and type mappings)</span>
+            <span class="label-text-alt">{{ total_triples }} total triples ready to create</span>
         </label>
-        <textarea class="textarea textarea-bordered h-32 font-mono text-xs" readonly>{{ updated_batch }}</textarea>
+        <textarea class="textarea textarea-bordered h-40 font-mono text-xs" readonly>{{ updated_batch }}</textarea>
     </div>
 
     <div class="flex gap-2 mt-4">
         <button class="btn btn-primary btn-sm" onclick="copyUpdatedBatchToEditor()">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
             Copy to Batch Editor
         </button>
         <button class="btn btn-ghost btn-sm" onclick="selectTextarea(this.previousElementSibling.previousElementSibling.querySelector('textarea'))">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+            </svg>
             Select All
         </button>
+        <div class="divider divider-horizontal"></div>
+        <div class="text-xs text-base-content/60 flex items-center">
+            Preview complete. Click "Create All Triples in Batch" above to persist to database.
+        </div>
     </div>
 {% endif %}
 

@@ -1,0 +1,11 @@
+{% for predicate in predicates %}
+    <button type="button" 
+            class="btn btn-sm btn-outline" 
+            hx-post="{% url 'metadata:update_predicate_options' %}"
+            hx-vals='{"selected-predicate": "{{ predicate }}"}'
+            hx-target="#predicate-input"
+            hx-swap="none"
+            onclick="document.getElementById('predicate-input').value='{{ predicate }}'">
+        {{ predicate }}
+    </button>
+{% endfor %} 

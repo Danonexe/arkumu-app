@@ -1,0 +1,268 @@
+<!-- Visual Column-to-Type Mapping Interface -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-8 p-6">
+    
+    <!-- Left Panel: CSV Columns -->
+    <div class="card bg-base-100 shadow-lg">
+        <div class="card-header bg-primary text-primary-content p-4">
+            <h3 class="text-lg font-semibold flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2v0a2 2 0 002-2h6l2 2h6a2 2 0 012 2z" />
+                </svg>
+                CSV Columns ({{ columns|length }})
+            </h3>
+        </div>
+        <div class="card-body p-4 max-h-96 overflow-y-auto">
+            <div class="space-y-3">
+                {% for column in columns %}
+                <div class="column-item p-3 border border-base-300 rounded-lg bg-base-50 hover:bg-base-100 cursor-move"
+                     draggable="true"
+                     data-column="{{ column.name }}"
+                     data-type="{{ column.data_type }}"
+                     data-samples="{{ column.sample_values|join:',' }}">
+                    
+                    <div class="flex items-center justify-between mb-2">
+                        <h4 class="font-semibold text-base">{{ column.name }}</h4>
+                        <div class="flex gap-1">
+                            <span class="badge badge-info badge-sm">{{ column.data_type }}</span>
+                            {% if column.semantic_hints %}
+                                <span class="badge badge-success badge-sm">{{ column.semantic_hints.0|title }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="text-sm text-base-content/70 mb-2">
+                        {{ column.unique_count }} unique • {{ column.null_count }} missing
+                    </div>
+                    
+                    <div class="text-xs text-base-content/60">
+                        Examples: {{ column.sample_values|slice:":3"|join:", "|truncatechars:50 }}
+                    </div>
+                    
+                    {% if column.patterns %}
+                    <div class="mt-2">
+                        {% for pattern in column.patterns|slice:":2" %}
+                        <span class="badge badge-outline badge-xs mr-1">{{ pattern|truncatechars:20 }}</span>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Right Panel: Semantic Types -->
+    <div class="card bg-base-100 shadow-lg">
+        <div class="card-header bg-secondary text-secondary-content p-4">
+            <h3 class="text-lg font-semibold flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.99 1.99 0 013 12V7a4 4 0 014-4z" />
+                </svg>
+                Semantic Types
+            </h3>
+        </div>
+        <div class="card-body p-4 max-h-96 overflow-y-auto">
+            
+            <!-- Entity Types -->
+            <div class="mb-6">
+                <h4 class="font-medium text-sm text-base-content/80 mb-3 uppercase tracking-wide">Entity Types</h4>
+                <div class="space-y-2">
+                    {% for entity_type in semantic_types.entities %}
+                    <div class="semantic-type-target p-3 border-2 border-dashed border-base-300 rounded-lg min-h-16 hover:border-primary hover:bg-primary/5 transition-colors"
+                         data-type="{{ entity_type.uri }}"
+                         data-category="entity">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="font-medium">{{ entity_type.label }}</span>
+                            <span class="text-xs text-base-content/60">{{ entity_type.uri }}</span>
+                        </div>
+                        <div class="text-sm text-base-content/70">{{ entity_type.description }}</div>
+                        
+                        <!-- Mapped columns will appear here -->
+                        <div class="mapped-columns mt-2 hidden">
+                            <div class="text-xs text-primary font-medium mb-1">Mapped columns:</div>
+                            <div class="mapped-column-list flex flex-wrap gap-1"></div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            
+            <!-- Property Types -->
+            <div class="mb-6">
+                <h4 class="font-medium text-sm text-base-content/80 mb-3 uppercase tracking-wide">Property Types</h4>
+                <div class="space-y-2">
+                    {% for property_type in semantic_types.properties %}
+                    <div class="semantic-type-target p-3 border-2 border-dashed border-base-300 rounded-lg min-h-16 hover:border-accent hover:bg-accent/5 transition-colors"
+                         data-type="{{ property_type.uri }}"
+                         data-category="property">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="font-medium">{{ property_type.label }}</span>
+                            <span class="text-xs text-base-content/60">{{ property_type.uri }}</span>
+                        </div>
+                        <div class="text-sm text-base-content/70">{{ property_type.description }}</div>
+                        
+                        <!-- Mapped columns will appear here -->
+                        <div class="mapped-columns mt-2 hidden">
+                            <div class="text-xs text-accent font-medium mb-1">Mapped columns:</div>
+                            <div class="mapped-column-list flex flex-wrap gap-1"></div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            
+        </div>
+    </div>
+</div>
+
+<!-- Mapping Summary -->
+<div class="mt-6 p-4 bg-base-200 rounded-lg">
+    <h3 class="font-semibold mb-3 flex items-center">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+        </svg>
+        Mapping Summary
+    </h3>
+    <div id="mapping-summary" class="text-sm text-base-content/70">
+        Drag columns from the left to semantic types on the right to create mappings.
+    </div>
+</div>
+
+<!-- Action Buttons -->
+<div class="flex justify-end gap-3 mt-6">
+    <button class="btn btn-ghost">Reset All</button>
+    <button class="btn btn-info" id="preview-visual-mappings">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+        Preview Mappings
+    </button>
+    <button class="btn btn-success" id="apply-visual-mappings">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+        </svg>
+        Apply Mappings
+    </button>
+</div>
+
+<script>
+// Drag and Drop functionality
+document.addEventListener('DOMContentLoaded', function() {
+    const columns = document.querySelectorAll('.column-item');
+    const targets = document.querySelectorAll('.semantic-type-target');
+    const summary = document.getElementById('mapping-summary');
+    let mappings = {};
+
+    // Make columns draggable
+    columns.forEach(column => {
+        column.addEventListener('dragstart', function(e) {
+            e.dataTransfer.setData('text/plain', JSON.stringify({
+                column: this.dataset.column,
+                type: this.dataset.type,
+                samples: this.dataset.samples
+            }));
+            this.style.opacity = '0.5';
+        });
+
+        column.addEventListener('dragend', function(e) {
+            this.style.opacity = '1';
+        });
+    });
+
+    // Make semantic types drop targets
+    targets.forEach(target => {
+        target.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            this.classList.add('border-primary', 'bg-primary/10');
+        });
+
+        target.addEventListener('dragleave', function(e) {
+            this.classList.remove('border-primary', 'bg-primary/10');
+        });
+
+        target.addEventListener('drop', function(e) {
+            e.preventDefault();
+            this.classList.remove('border-primary', 'bg-primary/10');
+            
+            const data = JSON.parse(e.dataTransfer.getData('text/plain'));
+            const semanticType = this.dataset.type;
+            const category = this.dataset.category;
+            
+            // Add mapping
+            mappings[data.column] = {
+                semantic_type: semanticType,
+                category: category,
+                samples: data.samples
+            };
+            
+            // Update visual
+            updateMappingDisplay(this, data.column, data.samples);
+            updateSummary();
+        });
+    });
+
+    function updateMappingDisplay(target, columnName, samples) {
+        const mappedColumns = target.querySelector('.mapped-columns');
+        const columnList = target.querySelector('.mapped-column-list');
+        
+        mappedColumns.classList.remove('hidden');
+        
+        const columnBadge = document.createElement('span');
+        columnBadge.className = 'badge badge-primary badge-sm';
+        columnBadge.textContent = columnName;
+        columnBadge.title = `Samples: ${samples}`;
+        
+        // Add remove functionality
+        columnBadge.addEventListener('click', function() {
+            delete mappings[columnName];
+            this.remove();
+            if (columnList.children.length === 0) {
+                mappedColumns.classList.add('hidden');
+            }
+            updateSummary();
+        });
+        
+        columnList.appendChild(columnBadge);
+    }
+
+    function updateSummary() {
+        const mappingCount = Object.keys(mappings).length;
+        const totalColumns = columns.length;
+        
+        if (mappingCount === 0) {
+            summary.textContent = 'Drag columns from the left to semantic types on the right to create mappings.';
+        } else {
+            summary.innerHTML = `
+                <strong>${mappingCount}</strong> of <strong>${totalColumns}</strong> columns mapped. 
+                <span class="text-success">Ready to create ${mappingCount} mapping rules.</span>
+            `;
+        }
+    }
+
+    // Apply mappings button
+    document.getElementById('apply-visual-mappings').addEventListener('click', function() {
+        if (Object.keys(mappings).length === 0) {
+            alert('Please create at least one mapping first.');
+            return;
+        }
+        
+        // Send mappings to backend
+        fetch('{% url "metadata:apply_visual_mappings" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify(mappings)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(`Successfully created ${data.rules_created} mapping rules!`);
+            } else {
+                alert('Error creating mappings: ' + data.error);
+            }
+        });
+    });
+});
+</script> 
