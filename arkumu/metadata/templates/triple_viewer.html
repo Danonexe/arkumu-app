@@ -6,173 +6,106 @@
 {% block css %}
 {{ block.super }}
 <style>
-    /* Tree navigation styles */
-    .tree-container {
-        background: #f8f9fa;
-        border-right: 1px solid #e5e7eb;
-        overflow-y: auto;
-        max-height: 80vh;
-    }
-    
+    /* Tree node styles using DaisyUI components */
     .tree-node {
+        @apply btn btn-ghost btn-sm justify-start normal-case font-normal w-full text-left mb-1;
+        min-height: 2rem;
+        height: auto;
         padding: 8px 12px;
-        margin: 2px 0;
-        cursor: pointer;
-        border-radius: 4px;
-        transition: background-color 0.2s;
-        display: flex;
-        align-items: center;
-        font-size: 0.9em;
+        transition: all 0.2s;
     }
     
     .tree-node:hover {
-        background-color: #e5e7eb;
+        @apply btn-ghost bg-base-200;
     }
     
     .tree-node.active {
-        background-color: #3b82f6;
-        color: white;
+        @apply btn-primary text-primary-content;
     }
     
     .tree-node.bucket {
-        font-weight: bold;
-        color: #7c2d12;
-        background-color: #fef7ed;
-        border-left: 4px solid #ea580c;
+        @apply btn-outline btn-warning font-bold border-l-4 border-l-warning bg-warning/10;
         margin-bottom: 4px;
         font-size: 1em;
     }
     
     .tree-node.dataset {
         margin-left: 20px;
-        font-weight: 600;
-        color: #1f2937;
-        background-color: #f0f9ff;
-        border-left: 3px solid #0284c7;
+        @apply btn-outline btn-info font-semibold border-l-4 border-l-info bg-info/10;
         margin-bottom: 2px;
         padding-left: 16px;
     }
     
     .tree-node.row {
         margin-left: 40px;
-        color: #4b5563;
+        @apply btn-ghost text-base-content/70 border-l-2 border-l-base-300 bg-base-50;
         font-size: 0.85em;
-        background-color: #f9fafb;
-        border-left: 2px solid #9ca3af;
         padding-left: 20px;
     }
     
     .tree-node.cell {
         margin-left: 60px;
-        color: #6b7280;
+        @apply btn-ghost text-base-content/60 border-l border-l-base-300 bg-base-100;
         font-size: 0.8em;
         padding-left: 24px;
-        background-color: #ffffff;
-        border-left: 1px solid #d1d5db;
     }
     
     .tree-node.load-more {
-        color: #3b82f6;
-        font-style: italic;
-        background-color: #f8fafc;
-        border: 1px dashed #cbd5e1;
-        border-radius: 4px;
+        @apply btn-outline btn-accent btn-sm border-dashed italic;
         margin: 4px 0;
-        transition: all 0.2s;
     }
     
     .tree-node.load-more:hover {
-        background-color: #e0f2fe;
-        border-color: #0284c7;
-        color: #0369a1;
+        @apply btn-accent;
     }
     
+    /* Tree navigation structure */
     .tree-toggle {
-        width: 16px;
-        text-align: center;
-        margin-right: 8px;
-        font-family: monospace;
-        cursor: pointer;
-        font-weight: bold;
+        @apply w-4 text-center mr-2 font-mono font-bold cursor-pointer;
     }
     
     .tree-content {
+        @apply border-l border-base-300 mb-2;
         margin-left: 0px;
-        border-left: 1px solid #e5e7eb;
-        margin-bottom: 8px;
     }
     
     .tree-content.collapsed {
         display: none;
     }
     
-    /* Add visual separation between different source buckets */
+    /* Visual separation between source buckets */
     .tree-node.bucket + .tree-content {
-        margin-bottom: 16px;
-        padding-bottom: 8px;
-        border-bottom: 1px solid #e5e7eb;
+        @apply border-b border-base-300 mb-4 pb-2;
     }
     
-    /* Graph styles */
-    .graph-container {
-        height: 100%;
+    /* Tree label styling */
+    .tree-label {
+        @apply flex-1 leading-relaxed;
     }
     
-    /* Detail panel styles */
-    .detail-panel {
-        background: #f1f5f9;
-        border-radius: 8px;
-        padding: 16px;
-        overflow-y: auto;
+    /* Source badge using DaisyUI badge component */
+    .source-badge {
+        @apply badge badge-neutral badge-sm ml-2;
     }
     
-    /* HTMX loading styles */
+    /* HTMX loading states */
     .htmx-indicator {
         display: none;
     }
     
     .htmx-request .htmx-indicator {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
+        @apply inline-flex items-center justify-center;
     }
     
+    /* DaisyUI loading spinner for HTMX */
     .loading-spinner {
-        border: 2px solid #f3f4f6;
-        border-top: 2px solid #3b82f6;
-        border-radius: 50%;
-        width: 16px;
-        height: 16px;
-        animation: spin 1s linear infinite;
-        margin-left: 8px;
-    }
-    
-    @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-    }
-    
-    /* Better typography for tree labels */
-    .tree-label {
-        flex: 1;
-        line-height: 1.4;
-    }
-    
-    /* Source badge styling */
-    .source-badge {
-        background-color: #1f2937;
-        color: white;
-        font-size: 0.7em;
-        padding: 2px 6px;
-        border-radius: 10px;
-        margin-left: 8px;
-        font-weight: 500;
+        @apply loading loading-spinner loading-sm text-primary ml-2;
     }
 </style>
 {% endblock css %}
 
 {% block content %}
-<div class="container-fluid mx-auto p-4">
+<div class="max-w-full mx-auto p-4">
     <div class="flex justify-between items-center mb-4">
         <h1 class="text-2xl font-bold text-center">Dataset Explorer</h1>
         <a href="{% url 'metadata:metadata_dashboard' %}" class="btn btn-outline btn-sm">
@@ -183,38 +116,51 @@
         </a>
     </div>
     
-    <div class="grid grid-cols-12 gap-4">
-        <!-- Tree Navigation (left side) -->
-        <div class="col-span-4">
-            <div class="tree-container p-4 rounded-lg">
-                <h3 class="font-bold mb-3">Metadata Tree</h3>
-                <div id="tree-view" 
-                     hx-get="{% url 'metadata:tree_data' %}" 
-                     hx-trigger="load"
-                     hx-swap="innerHTML">
-                    <div class="loading-spinner"></div> Loading buckets...
+    <div class="grid grid-cols-12 gap-6">
+        <!-- Tree Navigation (left side) - reduced from 4 to 3 columns -->
+        <div class="col-span-3">
+            <div class="card bg-base-100 shadow-md border-r border-base-300 overflow-hidden">
+                <div class="card-body p-4">
+                    <h3 class="card-title font-bold mb-3">Metadata Tree</h3>
+                    <div class="overflow-y-auto max-h-[70vh]">
+                        <div id="tree-view" 
+                             hx-get="{% url 'metadata:tree_data' %}" 
+                             hx-trigger="load"
+                             hx-swap="innerHTML">
+                            <div class="flex items-center justify-center py-4">
+                                <span class="loading loading-spinner loading-sm text-primary mr-2"></span>
+                                Loading buckets...
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
         
-        <!-- Right side with Details and Graph side by side -->
-        <div class="col-span-8">
-            <div class="grid grid-cols-12 gap-4 h-[80vh]">
-                <!-- Detail Panel (left part of right side) -->
-                <div class="col-span-7">
-                    <div class="detail-panel h-full">
-                        <h3 class="font-bold mb-2">Details</h3>
-                        <div id="detail-info" class="text-sm text-gray-600">
-                            Select an item from the tree to view its relationships
+        <!-- Right side with Details and Graph side by side - increased from 8 to 9 columns -->
+        <div class="col-span-9">
+            <div class="grid grid-cols-12 gap-6 h-[80vh]">
+                <!-- Detail Panel (left part of right side) - reduced from 7 to 5 columns -->
+                <div class="col-span-5">
+                    <div class="card bg-base-100 shadow-md h-full">
+                        <div class="card-body">
+                            <h3 class="card-title font-bold mb-2">Details</h3>
+                            <div class="overflow-y-auto flex-1">
+                                <div id="detail-info" class="text-sm text-base-content/70">
+                                    Select an item from the tree to view its relationships
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
                 
-                <!-- Graph Container (right part of right side) -->
-                <div class="col-span-5">
-                    <div class="graph-container bg-base-200 shadow-md rounded-lg p-4 h-full">
-                        <div id="graph-content" class="w-full h-full flex items-center justify-center text-gray-500">
-                            Click on a bucket, dataset, row, or cell in the tree to view its graph visualization
+                <!-- Graph Container (right part of right side) - increased from 5 to 7 columns -->
+                <div class="col-span-7">
+                    <div class="card bg-base-100 shadow-md h-full">
+                        <div class="card-body">
+                            <div id="graph-content" class="w-full h-full flex items-center justify-center text-base-content/50">
+                                Click on a bucket, dataset, row, or cell in the tree to view its graph visualization
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -332,7 +278,7 @@ function updateDetailInfo(type, name, id) {
     
     if (type === 'dataset') {
         // For datasets, show dataset info and load graph data
-        detailInfo.innerHTML = '<div class="loading-spinner htmx-indicator"></div> Loading dataset details...';
+        detailInfo.innerHTML = '<div class="flex items-center justify-center py-4"><span class="loading loading-spinner loading-sm text-primary mr-2"></span>Loading dataset details...</div>';
         
         // Use HTMX to load dataset details
         htmx.ajax('GET', `/metadata/tree/dataset/${id}/details/`, '#detail-info');
@@ -341,7 +287,7 @@ function updateDetailInfo(type, name, id) {
         htmx.ajax('GET', `/metadata/graph/data/?level=dataset&dataset=${id}`, '#graph-content');
     } else if (type === 'row') {
         // For rows, show row info and load graph data
-        detailInfo.innerHTML = '<div class="loading-spinner htmx-indicator"></div> Loading row details...';
+        detailInfo.innerHTML = '<div class="flex items-center justify-center py-4"><span class="loading loading-spinner loading-sm text-primary mr-2"></span>Loading row details...</div>';
         
         // Use HTMX to load row details
         htmx.ajax('GET', `/metadata/tree/row/${id}/details/`, '#detail-info');
@@ -350,13 +296,13 @@ function updateDetailInfo(type, name, id) {
         htmx.ajax('GET', `/metadata/graph/data/?level=row&row=${id}`, '#graph-content');
     } else if (type === 'cell') {
         // For cells, load detailed information via HTMX
-        detailInfo.innerHTML = '<div class="loading-spinner htmx-indicator"></div> Loading cell details...';
+        detailInfo.innerHTML = '<div class="flex items-center justify-center py-4"><span class="loading loading-spinner loading-sm text-primary mr-2"></span>Loading cell details...</div>';
         
         // Use HTMX to load cell details
         htmx.ajax('GET', `/metadata/tree/cell/${id}/details/`, '#detail-info');
     } else {
         // For other types, show basic info
-        detailInfo.innerHTML = `<strong>${typeLabel}:</strong> ${name}`;
+        detailInfo.innerHTML = `<div class="alert alert-info"><strong>${typeLabel}:</strong> ${name}</div>`;
     }
 }
 
@@ -371,27 +317,41 @@ function renderGraph(graphData) {
     const width = container.clientWidth - 32;
     const height = container.clientHeight - 32;
 
-    svg.attr("viewBox", [-width / 2, -height / 2, width, height])
+    svg.attr("viewBox", [0, 0, width, height])
        .attr("width", width)
        .attr("height", height);
     
     if (!graphData.nodes || graphData.nodes.length === 0) {
         svg.append("text")
            .attr("text-anchor", "middle")
-           .attr("y", 0)
-           .attr("class", "text-gray-500")
+           .attr("x", width / 2)
+           .attr("y", height / 2)
+           .attr("class", "text-base-content/50 text-sm")
            .text("No data to display");
         return;
     }
     
+    // Add zoom and pan functionality
+    const zoom = d3.zoom()
+        .scaleExtent([0.1, 10])  // Allow zoom from 10% to 1000%
+        .on("zoom", function(event) {
+            g.attr("transform", event.transform);
+        });
+    
+    svg.call(zoom);
+    
+    // Create main group for zoomable content
+    const g = svg.append("g");
+    
+    // Simple force simulation (original style)
     const simulation = d3.forceSimulation(graphData.nodes)
         .force("link", d3.forceLink(graphData.links).id(d => d.id).distance(100))
         .force("charge", d3.forceManyBody().strength(-300))
-        .force("center", d3.forceCenter())
+        .force("center", d3.forceCenter(width / 2, height / 2))
         .force("collision", d3.forceCollide().radius(20));
 
     // Links
-    const link = svg.append("g")
+    const link = g.append("g")
         .attr("class", "links")
         .selectAll("line")
         .data(graphData.links)
@@ -401,16 +361,17 @@ function renderGraph(graphData) {
         .attr("stroke-width", d => Math.sqrt(d.value || 1));
 
     // Link labels
-    const linkLabel = svg.append("g")
+    const linkLabel = g.append("g")
         .attr("class", "link-labels")
         .selectAll("text")
         .data(graphData.links)
         .join("text")
         .attr("class", "text-xs fill-current text-gray-600")
+        .attr("pointer-events", "none")
         .text(d => d.label);
 
     // Nodes
-    const node = svg.append("g")
+    const node = g.append("g")
         .attr("class", "nodes")
         .selectAll("g")
         .data(graphData.nodes)
@@ -424,12 +385,13 @@ function renderGraph(graphData) {
             return baseSize[d.type] || 8;
         })
         .attr("fill", d => {
+            // Original colors restored
             const colors = {
-                'bucket': '#ea580c',
-                'dataset': '#2563eb',
-                'row': '#059669',
-                'cell': '#dc2626',
-                'literal': '#7c3aed'
+                'bucket': '#ea580c',      // orange for buckets
+                'dataset': '#2563eb',     // blue for datasets  
+                'row': '#059669',         // green for rows
+                'cell': '#dc2626',        // red for cells
+                'literal': '#7c3aed'     // purple for literals
             };
             return colors[d.type] || '#6b7280';
         })
@@ -440,7 +402,94 @@ function renderGraph(graphData) {
         .text(d => d.name)
         .attr("x", 12)
         .attr("y", 3)
-        .attr("class", "text-xs fill-current text-gray-800");
+        .attr("class", "text-xs fill-current text-gray-800")
+        .attr("pointer-events", "none");
+
+    // Add zoom controls with better styling
+    const zoomControls = svg.append("g")
+        .attr("class", "zoom-controls")
+        .attr("transform", `translate(${width - 60}, 10)`);
+    
+    // Zoom in button
+    const zoomInBtn = zoomControls.append("g")
+        .attr("class", "zoom-btn")
+        .attr("cursor", "pointer")
+        .on("click", function() {
+            svg.transition().duration(300).call(
+                zoom.scaleBy, 1.5
+            );
+        });
+    
+    zoomInBtn.append("rect")
+        .attr("width", 30)
+        .attr("height", 30)
+        .attr("rx", 4)
+        .attr("fill", "#ffffff")
+        .attr("stroke", "#d1d5db")
+        .attr("stroke-width", 1);
+    
+    zoomInBtn.append("text")
+        .attr("x", 15)
+        .attr("y", 20)
+        .attr("text-anchor", "middle")
+        .attr("class", "text-sm font-bold")
+        .attr("fill", "#374151")
+        .text("+");
+    
+    // Zoom out button
+    const zoomOutBtn = zoomControls.append("g")
+        .attr("class", "zoom-btn")
+        .attr("cursor", "pointer")
+        .attr("transform", "translate(0, 35)")
+        .on("click", function() {
+            svg.transition().duration(300).call(
+                zoom.scaleBy, 1 / 1.5
+            );
+        });
+    
+    zoomOutBtn.append("rect")
+        .attr("width", 30)
+        .attr("height", 30)
+        .attr("rx", 4)
+        .attr("fill", "#ffffff")
+        .attr("stroke", "#d1d5db")
+        .attr("stroke-width", 1);
+    
+    zoomOutBtn.append("text")
+        .attr("x", 15)
+        .attr("y", 20)
+        .attr("text-anchor", "middle")
+        .attr("class", "text-sm font-bold")
+        .attr("fill", "#374151")
+        .text("−");
+    
+    // Reset zoom button
+    const resetBtn = zoomControls.append("g")
+        .attr("class", "zoom-btn")
+        .attr("cursor", "pointer")
+        .attr("transform", "translate(0, 70)")
+        .on("click", function() {
+            svg.transition().duration(500).call(
+                zoom.transform,
+                d3.zoomIdentity
+            );
+        });
+    
+    resetBtn.append("rect")
+        .attr("width", 30)
+        .attr("height", 30)
+        .attr("rx", 4)
+        .attr("fill", "#ffffff")
+        .attr("stroke", "#d1d5db")
+        .attr("stroke-width", 1);
+    
+    resetBtn.append("text")
+        .attr("x", 15)
+        .attr("y", 20)
+        .attr("text-anchor", "middle")
+        .attr("class", "text-xs font-bold")
+        .attr("fill", "#374151")
+        .text("⌂");
 
     simulation.on("tick", () => {
         link
