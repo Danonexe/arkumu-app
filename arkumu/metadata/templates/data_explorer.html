@@ -36,7 +36,7 @@
             <div class="card-body">
                 <h2 class="card-title">Filter Resources</h2>
                 
-                <form id="resource-filter-form" class="grid grid-cols-1 md:grid-cols-4 gap-4" 
+                <form id="resource-filter-form" class="grid grid-cols-1 md:grid-cols-6 gap-4" 
                       hx-get="{% url 'metadata:data_explorer' %}" 
                       hx-target="#resource-results" 
                       hx-swap="innerHTML"
@@ -63,7 +63,17 @@
                         </select>
                     </div>
                     
-                    <div class="form-control md:col-span-2">
+                    <div class="form-control">
+                        <label class="label">Search Mode</label>
+                        <select name="search_mode" class="select select-bordered">
+                            <option value="contains" {% if request.GET.search_mode == "contains" or not request.GET.search_mode %}selected{% endif %}>Contains (substring)</option>
+                            <option value="startswith" {% if request.GET.search_mode == "startswith" %}selected{% endif %}>Starts with</option>
+                            <option value="exact" {% if request.GET.search_mode == "exact" %}selected{% endif %}>Exact match</option>
+                            <option value="regex" {% if request.GET.search_mode == "regex" %}selected{% endif %}>Regular expression</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-control md:col-span-3">
                         <label class="label">Search</label>
                         <div class="input-group">
                             <input type="text" name="q" value="{{ request.GET.q }}" 
@@ -75,6 +85,21 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                                 </svg>
                             </button>
+                        </div>
+                        <div class="label">
+                            <span class="label-text-alt text-xs">
+                                <span id="search-mode-hint">
+                                    {% if request.GET.search_mode == "startswith" %}
+                                        Find items that begin with your search term
+                                    {% elif request.GET.search_mode == "exact" %}
+                                        Find exact matches only
+                                    {% elif request.GET.search_mode == "regex" %}
+                                        Use regular expressions (e.g., ^abc.*xyz$)
+                                    {% else %}
+                                        Find items containing your search term anywhere
+                                    {% endif %}
+                                </span>
+                            </span>
                         </div>
                     </div>
                     
@@ -99,44 +124,59 @@
             <div class="card-body">
                 <h2 class="card-title">Search Triples</h2>
                 
-                <form id="triple-search-form" class="grid grid-cols-1 md:grid-cols-3 gap-4" 
+                <form id="triple-search-form" class="space-y-4" 
                       hx-get="{% url 'metadata:data_explorer' %}" 
                       hx-target="#triple-results" 
                       hx-swap="innerHTML" 
                       hx-trigger="change, submit"
                       hx-vals='{"view": "triples"}'>
-                    <div class="form-control">
-                        <label class="label">Subject</label>
-                        <input type="text" name="subject" value="{{ request.GET.subject }}" 
-                               placeholder="Subject URI or name..." 
-                               class="input input-bordered w-full" 
-                               hx-trigger="keyup changed delay:500ms">
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="form-control">
+                            <label class="label">Subject</label>
+                            <input type="text" name="subject" value="{{ request.GET.subject }}" 
+                                   placeholder="Subject URI or name..." 
+                                   class="input input-bordered w-full" 
+                                   hx-trigger="keyup changed delay:500ms">
+                        </div>
+                        
+                        <div class="form-control">
+                            <label class="label">Predicate</label>
+                            <input type="text" name="predicate" value="{{ request.GET.predicate }}" 
+                                   placeholder="Predicate URI or name..." 
+                                   class="input input-bordered w-full" 
+                                   hx-trigger="keyup changed delay:500ms">
+                        </div>
+                        
+                        <div class="form-control">
+                            <label class="label">Object</label>
+                            <input type="text" name="object" value="{{ request.GET.object }}" 
+                                   placeholder="Object URI, name, or value..." 
+                                   class="input input-bordered w-full" 
+                                   hx-trigger="keyup changed delay:500ms">
+                        </div>
                     </div>
                     
-                    <div class="form-control">
-                        <label class="label">Predicate</label>
-                        <input type="text" name="predicate" value="{{ request.GET.predicate }}" 
-                               placeholder="Predicate URI or name..." 
-                               class="input input-bordered w-full" 
-                               hx-trigger="keyup changed delay:500ms">
-                    </div>
-                    
-                    <div class="form-control">
-                        <label class="label">Object</label>
-                        <input type="text" name="object" value="{{ request.GET.object }}" 
-                               placeholder="Object URI, name, or value..." 
-                               class="input input-bordered w-full" 
-                               hx-trigger="keyup changed delay:500ms">
-                    </div>
-                    
-                    <div class="form-control md:col-span-3">
-                        <label class="label">Institution</label>
-                        <select name="institution" class="select select-bordered">
-                            <option value="">All Institutions</option>
-                            {% for institution in institutions %}
-                            <option value="{{ institution }}" {% if request.GET.institution == institution %}selected{% endif %}>{{ institution }}</option>
-                            {% endfor %}
-                        </select>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="form-control">
+                            <label class="label">Search Mode</label>
+                            <select name="search_mode" class="select select-bordered">
+                                <option value="contains" {% if request.GET.search_mode == "contains" or not request.GET.search_mode %}selected{% endif %}>Contains (substring)</option>
+                                <option value="startswith" {% if request.GET.search_mode == "startswith" %}selected{% endif %}>Starts with</option>
+                                <option value="exact" {% if request.GET.search_mode == "exact" %}selected{% endif %}>Exact match</option>
+                                <option value="regex" {% if request.GET.search_mode == "regex" %}selected{% endif %}>Regular expression</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-control">
+                            <label class="label">Institution</label>
+                            <select name="institution" class="select select-bordered">
+                                <option value="">All Institutions</option>
+                                {% for institution in institutions %}
+                                <option value="{{ institution }}" {% if request.GET.institution == institution %}selected{% endif %}>{{ institution }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
                     </div>
                 </form>
             </div>
@@ -159,45 +199,60 @@
                 <h2 class="card-title">Unified Search</h2>
                 <p class="text-sm text-base-content/70 mb-4">Search across both resources and triples simultaneously</p>
                 
-                <form id="unified-search-form" class="grid grid-cols-1 md:grid-cols-2 gap-4" 
+                <form id="unified-search-form" class="space-y-4" 
                       hx-get="{% url 'metadata:data_explorer' %}" 
                       hx-target="#unified-results" 
                       hx-swap="innerHTML" 
                       hx-trigger="change, submit"
                       hx-vals='{"view": "unified"}'>
-                    <div class="form-control">
-                        <label class="label">Search Term</label>
-                        <input type="text" name="search" value="{{ request.GET.search }}" 
-                               placeholder="Search resources and triples..." 
-                               class="input input-bordered w-full" 
-                               hx-trigger="keyup changed delay:500ms">
+                      
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="form-control md:col-span-2">
+                            <label class="label">Search Term</label>
+                            <input type="text" name="search" value="{{ request.GET.search }}" 
+                                   placeholder="Search resources and triples..." 
+                                   class="input input-bordered w-full" 
+                                   hx-trigger="keyup changed delay:500ms">
+                        </div>
+                        
+                        <div class="form-control">
+                            <label class="label">Search Mode</label>
+                            <select name="search_mode" class="select select-bordered">
+                                <option value="contains" {% if request.GET.search_mode == "contains" or not request.GET.search_mode %}selected{% endif %}>Contains (substring)</option>
+                                <option value="startswith" {% if request.GET.search_mode == "startswith" %}selected{% endif %}>Starts with</option>
+                                <option value="exact" {% if request.GET.search_mode == "exact" %}selected{% endif %}>Exact match</option>
+                                <option value="regex" {% if request.GET.search_mode == "regex" %}selected{% endif %}>Regular expression</option>
+                            </select>
+                        </div>
                     </div>
                     
-                    <div class="form-control">
-                        <label class="label">Institution</label>
-                        <select name="institution" class="select select-bordered">
-                            <option value="">All Institutions</option>
-                            {% for institution in institutions %}
-                            <option value="{{ institution }}" {% if request.GET.institution == institution %}selected{% endif %}>{{ institution }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    
-                    <div class="form-control md:col-span-2">
-                        <label class="label">Result Types</label>
-                        <div class="flex gap-4">
-                            <label class="label cursor-pointer">
-                                <input type="checkbox" name="include_resources" value="1" 
-                                       {% if request.GET.include_resources != "0" %}checked{% endif %} 
-                                       class="checkbox checkbox-primary" />
-                                <span class="label-text ml-2">Resources</span>
-                            </label>
-                            <label class="label cursor-pointer">
-                                <input type="checkbox" name="include_triples" value="1" 
-                                       {% if request.GET.include_triples != "0" %}checked{% endif %} 
-                                       class="checkbox checkbox-primary" />
-                                <span class="label-text ml-2">Triples</span>
-                            </label>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="form-control">
+                            <label class="label">Institution</label>
+                            <select name="institution" class="select select-bordered">
+                                <option value="">All Institutions</option>
+                                {% for institution in institutions %}
+                                <option value="{{ institution }}" {% if request.GET.institution == institution %}selected{% endif %}>{{ institution }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="form-control">
+                            <label class="label">Result Types</label>
+                            <div class="flex gap-4 pt-2">
+                                <label class="label cursor-pointer">
+                                    <input type="checkbox" name="include_resources" value="1" 
+                                           {% if request.GET.include_resources != "0" %}checked{% endif %} 
+                                           class="checkbox checkbox-primary" />
+                                    <span class="label-text ml-2">Resources</span>
+                                </label>
+                                <label class="label cursor-pointer">
+                                    <input type="checkbox" name="include_triples" value="1" 
+                                           {% if request.GET.include_triples != "0" %}checked{% endif %} 
+                                           class="checkbox checkbox-primary" />
+                                    <span class="label-text ml-2">Triples</span>
+                                </label>
+                            </div>
                         </div>
                     </div>
                 </form>
@@ -237,11 +292,35 @@ function switchView(view) {
     window.history.replaceState({}, '', url);
 }
 
+// Update search mode hint
+function updateSearchModeHint() {
+    const searchMode = document.querySelector('select[name="search_mode"]')?.value || 'contains';
+    const hints = {
+        'contains': 'Find items containing your search term anywhere',
+        'startswith': 'Find items that begin with your search term',
+        'exact': 'Find exact matches only',
+        'regex': 'Use regular expressions (e.g., ^abc.*xyz$)'
+    };
+    
+    const hintElement = document.getElementById('search-mode-hint');
+    if (hintElement) {
+        hintElement.textContent = hints[searchMode];
+    }
+}
+
 // Initialize view based on URL parameter
 document.addEventListener('DOMContentLoaded', function() {
     const urlParams = new URLSearchParams(window.location.search);
     const view = urlParams.get('view') || 'resources';
     switchView(view);
+    
+    // Add event listeners for search mode changes
+    document.querySelectorAll('select[name="search_mode"]').forEach(select => {
+        select.addEventListener('change', updateSearchModeHint);
+    });
+    
+    // Initial hint update
+    updateSearchModeHint();
 });
 </script>
 {% endblock %} 

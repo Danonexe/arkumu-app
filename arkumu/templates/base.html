@@ -54,7 +54,6 @@
           {% if request.user.is_authenticated %}
             <li><a href="{% url 'storage:archivist_dashboard' %}">Archivist Dashboard</a></li>
             <li><a href="{% url 'metadata:metadata_dashboard' %}">Metadata Dashboard</a></li>
-            <li><a href="{% url 'users:detail' request.user.username %}">{% translate "My Profile" %}</a></li>
             <li><a href="{% url 'account_logout' %}">{% translate "Sign Out" %}</a></li>
           {% else %}
             {% if ACCOUNT_ALLOW_REGISTRATION %}
@@ -73,7 +72,6 @@
         {% if request.user.is_authenticated %}
           <li><a href="{% url 'storage:archivist_dashboard' %}">Archivist Dashboard</a></li>
           <li><a href="{% url 'metadata:metadata_dashboard' %}">Metadata Dashboard</a></li>
-          <li><a href="{% url 'users:detail' request.user.username %}">My Profile</a></li>
         {% endif %}
       </ul>
     </div>
