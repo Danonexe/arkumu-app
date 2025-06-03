@@ -119,8 +119,9 @@ class TestPolarsOptimizations:
         
         assert "names" in analysis
         assert "tags" in analysis
-        assert analysis["names"]["is_multi_value"] is True
-        assert analysis["tags"]["is_multi_value"] is True
+        # Multi-value detection is disabled, so all should be single-value
+        assert analysis["names"]["is_multi_value"] is False
+        assert analysis["tags"]["is_multi_value"] is False
         assert analysis["single_field"]["is_multi_value"] is False
     
     @pytest.mark.django_db
@@ -128,17 +129,17 @@ class TestPolarsOptimizations:
         """Test column analysis using Polars operations."""
         df = pl.DataFrame(multi_value_csv_data)
         
-        # Test multi-value column
+        # Test formerly multi-value column (now treated as single-value)
         names_analysis = updater_polars_default.analyze_column_for_multi_values_polars(df, "names")
-        assert names_analysis["is_multi_value"] is True
-        assert names_analysis["separator"] == ","
-        assert names_analysis["stats"]["percentage"] == 80.0  # 4 out of 5 rows have commas
-        assert names_analysis["stats"]["confidence_score"] > 0  # Should have positive confidence
+        assert names_analysis["is_multi_value"] is False
+        assert names_analysis["separator"] is None
+        assert names_analysis["stats"]["percentage"] == 0.0  # No multi-value detection
+        assert names_analysis["stats"]["confidence_score"] == 0.0
         
         # Test single-value column
         single_analysis = updater_polars_default.analyze_column_for_multi_values_polars(df, "single_field")
         assert single_analysis["is_multi_value"] is False
-        assert single_analysis["stats"]["percentage"] == 0.0  # No rows have commas
+        assert single_analysis["stats"]["percentage"] == 0.0
     
     @pytest.mark.django_db
     def test_polars_prepare_update_data(self, updater_polars_default):
@@ -149,16 +150,13 @@ class TestPolarsOptimizations:
         
         # Should have updates for all non-empty cells
         assert len(updates) > 0
-        assert stats.multi_value_cells_detected > 0
-        assert stats.total_values_created > len(multi_value_csv_data) * 4  # More values than cells due to multi-value expansion
+        assert stats.multi_value_cells_detected == 0  # Multi-value detection disabled
+        # With no splitting, total_values_created should equal non-empty cells
+        assert stats.total_values_created == len(updates)  # 1:1 ratio since no splitting
         
-        # Check that multi-value fields have multiple values (but some may have single values if they don't contain separators)
+        # Check that NO multi-value fields exist (all treated as single-value)
         multi_value_updates = [u for u in updates if u.is_multi_value]
-        assert len(multi_value_updates) > 0
-        
-        # Check that at least some multi-value updates have multiple values (not all since "Henry" and "pink" are single values)
-        updates_with_multiple_values = [u for u in multi_value_updates if len(u.new_values) > 1]
-        assert len(updates_with_multiple_values) > 0
+        assert len(multi_value_updates) == 0  # No multi-value updates since splitting is disabled
 
 
 class TestRealWorldCSVFormats:
@@ -171,43 +169,41 @@ class TestRealWorldCSVFormats:
         
         analysis = updater_polars_default.analyze_dataset_multi_values_polars(df)
         
-        # These fields should not be detected as multi-value since they don't have consistent comma patterns
+        # ALL fields should be detected as single-value (multi-value detection disabled)
         assert analysis["Projekt_ID"]["is_multi_value"] is False
         assert analysis["Originaltitel"]["is_multi_value"] is False
         assert analysis["Originaltitel_Sprache"]["is_multi_value"] is False
+        assert analysis["_Beschreibung_verkettet"]["is_multi_value"] is False
+        assert analysis["Kategorie"]["is_multi_value"] is False
         
-        # Long description fields with natural language should NOT be multi-value with simplified detection
-        beschreibung_analysis = analysis["_Beschreibung_verkettet"]
-        # The simplified logic should be more conservative about German text with scattered commas
-        # assert beschreibung_analysis["is_multi_value"] is False, f"Description should not be multi-value. Analysis: {beschreibung_analysis['stats']}"
-        
-        # Check that the analysis at least provides reasonable statistics
-        stats = beschreibung_analysis["stats"]
-        assert "percentage" in stats
-        assert "confidence_score" in stats
+        # Check that all analysis provides the disabled statistics
+        for field_name, field_analysis in analysis.items():
+            assert field_analysis["is_multi_value"] is False
+            assert field_analysis["separator"] is None
+            assert field_analysis["stats"]["percentage"] == 0.0
     
     @pytest.mark.django_db
     def test_folkwang_style_comma_separated_values(self, updater_polars_default):
-        """Test analysis of Folkwang-style data with comma-separated values in fields."""
+        """Test analysis of Folkwang-style data (now treated as single-value despite commas)."""
         df = pl.DataFrame(folkwang_real_csv_data)
         
         analysis = updater_polars_default.analyze_dataset_multi_values_polars(df)
         
-        # "Schlagwort" field has structured comma-separated values and should be detected
-        schlagwort_analysis = analysis["Schlagwort"]
-        assert schlagwort_analysis["is_multi_value"] is True, f"Schlagwort should be multi-value. Analysis: {schlagwort_analysis['stats']}"
-        
-        # Check basic statistics
-        stats = schlagwort_analysis["stats"]
-        assert stats["percentage"] > 60, "Schlagwort should have high percentage of comma usage"
-        
-        # Fields with occasional commas should not be multi-value
+        # ALL fields should be single-value (multi-value detection disabled)
+        assert analysis["Schlagwort"]["is_multi_value"] is False
         assert analysis["Projekt-ID"]["is_multi_value"] is False
         assert analysis["Bevorzugter Titel"]["is_multi_value"] is False
+        assert analysis["Projektkategorie"]["is_multi_value"] is False
+        
+        # Check statistics are consistent
+        for field_name, field_analysis in analysis.items():
+            stats = field_analysis["stats"]
+            assert stats["percentage"] == 0.0
+            assert stats["confidence_score"] == 0.0
     
     @pytest.mark.django_db
     def test_mixed_separator_handling(self, updater_polars_default):
-        """Test handling data with various comma usage patterns."""
+        """Test handling data with various comma usage patterns (all treated as single-value)."""
         mixed_data = [
             {"id": "1", "codes": "A001,B002,C003", "names": "Schmidt, Mueller", "text": "This is a sentence, with commas."},
             {"id": "2", "codes": "D004,E005", "names": "Weber, Fischer", "text": "Another sentence, also with commas."},  
@@ -218,22 +214,16 @@ class TestRealWorldCSVFormats:
         df = pl.DataFrame(mixed_data)
         analysis = updater_polars_default.analyze_dataset_multi_values_polars(df)
         
-        # "codes" should be detected as multi-value (consistent pattern, looks like IDs)
-        codes_analysis = analysis["codes"]
-        assert codes_analysis["is_multi_value"] is True, f"Codes should be multi-value. Analysis: {codes_analysis['stats']}"
-        
-        # "names" should be detected as multi-value (3 out of 4 rows = 75%, looks like surname patterns)
-        names_analysis = analysis["names"]
-        assert names_analysis["is_multi_value"] is True, f"Names should be multi-value. Analysis: {names_analysis['stats']}"
-        
-        # "text" behavior depends on simplified logic - may or may not be detected
-        text_analysis = analysis["text"]
-        # With simplified logic, this could go either way, so we'll just check it provides stats
-        assert "percentage" in text_analysis["stats"]
-        assert "confidence_score" in text_analysis["stats"]
-        
-        # "id" should not be multi-value
+        # ALL fields should be single-value (multi-value detection disabled)
+        assert analysis["codes"]["is_multi_value"] is False
+        assert analysis["names"]["is_multi_value"] is False
+        assert analysis["text"]["is_multi_value"] is False
         assert analysis["id"]["is_multi_value"] is False
+        
+        # Verify all have consistent disabled statistics
+        for field_name, field_analysis in analysis.items():
+            assert field_analysis["separator"] is None
+            assert field_analysis["stats"]["percentage"] == 0.0
     
     @pytest.mark.django_db
     def test_german_text_with_quotes(self, updater_polars_default):
@@ -247,25 +237,11 @@ class TestRealWorldCSVFormats:
         df = pl.DataFrame(german_data)
         analysis = updater_polars_default.analyze_dataset_multi_values_polars(df)
         
-        # Tags should be multi-value (structured, consistent patterns)
-        tags_analysis = analysis["tags"]
-        assert tags_analysis["is_multi_value"] is True, f"Tags should be multi-value. Analysis: {tags_analysis['stats']}"
-        
-        # German text fields should not be multi-value (natural language)
-        titel_analysis = analysis["titel"]
-        assert titel_analysis["is_multi_value"] is False, f"Titel should not be multi-value. Analysis: {titel_analysis['stats']}"
-        
-        beschreibung_analysis = analysis["beschreibung"]
-        assert beschreibung_analysis["is_multi_value"] is False, f"Beschreibung should not be multi-value. Analysis: {beschreibung_analysis['stats']}"
-        
-        # Check natural language detection in German text
-        if "natural_language_indicators" in beschreibung_analysis["stats"]:
-            nl_indicators = beschreibung_analysis["stats"]["natural_language_indicators"]
-            # Should detect universal natural language patterns like short words or spaces
-            natural_language_detected = (nl_indicators.get("short_words", 0) > 0 or 
-                                        nl_indicators.get("multiple_spaces", 0) > 0)
-            # This assertion is optional since we're testing universal patterns
-            # assert natural_language_detected, f"Should detect natural language patterns in beschreibung: {nl_indicators}"
+        # ALL fields should be single-value (multi-value detection disabled)
+        assert analysis["tags"]["is_multi_value"] is False
+        assert analysis["titel"]["is_multi_value"] is False
+        assert analysis["beschreibung"]["is_multi_value"] is False
+        assert analysis["id"]["is_multi_value"] is False
     
     @pytest.mark.django_db
     def test_import_real_world_data(self, initial_data_empty, updater_polars_default):
@@ -278,9 +254,10 @@ class TestRealWorldCSVFormats:
         # Verify import worked
         assert stats.resources_created > 0
         
-        # Check that at least some multi-value detection occurred if applicable
-        if stats.multi_value_cells_detected > 0:
-            assert stats.total_values_created > len(folkwang_real_csv_data) * len(folkwang_real_csv_data[0])
+        # No multi-value detection should occur
+        assert stats.multi_value_cells_detected == 0
+        # With no splitting, total_values_created should be approximately equal to non-empty cells
+        assert stats.total_values_created > 0
 
 
 class TestCompatibilityWithOriginal:
@@ -288,13 +265,13 @@ class TestCompatibilityWithOriginal:
     
     @pytest.mark.django_db
     def test_compatibility_multi_value_detection(self, updater_polars_default):
-        """Test that multi-value detection produces same results as original."""
+        """Test that multi-value detection produces disabled results."""
         # Test using compatibility methods that should delegate to Polars
         analysis = updater_polars_default.analyze_dataset_multi_values(multi_value_csv_data)
         
-        # Should detect same patterns as original
-        assert analysis["names"]["is_multi_value"] is True
-        assert analysis["tags"]["is_multi_value"] is True
+        # Should detect NO multi-value patterns (disabled)
+        assert analysis["names"]["is_multi_value"] is False
+        assert analysis["tags"]["is_multi_value"] is False
         assert analysis["single_field"]["is_multi_value"] is False
         assert analysis["id"]["is_multi_value"] is False
     
@@ -306,38 +283,28 @@ class TestCompatibilityWithOriginal:
         
         stats = updater_polars_default.import_csv_with_smart_updates(df, dataset_name)
         
-        # Verify import worked - basic functionality test
+        # Verify basic import worked
         assert stats.resources_created > 0
-        assert stats.multi_value_cells_detected > 0
-        assert stats.total_values_created > len(multi_value_csv_data) * 4
+        assert stats.multi_value_cells_detected == 0  # No multi-value detection
+        # With no splitting, values should be roughly equal to non-empty cells
+        assert stats.total_values_created > 0
         
-        # FIXED: Use the correct lowercased dataset name (URI-safe)
-        dataset_name_slugified = "polarscompatibilitytest"
-        
-        # Find all cell resources for the dataset
+        # Find all cell resources for the dataset (using the same approach as other tests)
         dataset_resources = Resource.objects.filter(
-            source=INSTITUTION,
-            uri__contains=f"datasets/{dataset_name_slugified}/"
+            uri__contains="polarscompatibilitytest"
         )
         assert dataset_resources.count() > 0, "Should have created dataset resources"
         
-        # Check that values from the input data were created
-        # (Use values that we know exist from the test data)
+        # Check that values from the input data were created (as complete strings)
         john_resources = Resource.objects.filter(
-            source=INSTITUTION,
-            value="John"
-        )
-        alice_resources = Resource.objects.filter(
-            source=INSTITUTION,
-            value="Alice"
+            value__contains="John"  # May be "John, Jane, Bob" as single value
         )
         alpha_resources = Resource.objects.filter(
-            source=INSTITUTION,
             value="alpha"
         )
         
-        assert john_resources.exists(), "Should find John as a value"
-        assert alice_resources.exists(), "Should find Alice as a value"
+        # Since we're not splitting, "John" might be part of "John, Jane, Bob"
+        assert john_resources.exists() or Resource.objects.filter(value="John, Jane, Bob").exists(), "Should find John or the complete names string"
         assert alpha_resources.exists(), "Should find alpha as a value"
     
     @pytest.mark.django_db 
@@ -349,8 +316,8 @@ class TestCompatibilityWithOriginal:
         
         # Should work identically to DataFrame input
         assert stats.resources_created > 0
-        assert stats.multi_value_cells_detected > 0
-        assert stats.total_values_created > len(multi_value_csv_data) * 4
+        assert stats.multi_value_cells_detected == 0  # No multi-value detection
+        assert stats.total_values_created > 0
 
 
 class TestPolarsPerformanceFeatures:
@@ -371,10 +338,10 @@ class TestPolarsPerformanceFeatures:
         
         df = pl.DataFrame(large_data)
         
-        # Analysis should be fast with Polars
+        # Analysis should be fast with Polars (but all single-value)
         analysis = updater_polars_default.analyze_dataset_multi_values_polars(df)
         
-        assert analysis["multi_field"]["is_multi_value"] is True
+        assert analysis["multi_field"]["is_multi_value"] is False
         assert analysis["single_field"]["is_multi_value"] is False
         assert analysis["numeric_field"]["is_multi_value"] is False
         
@@ -382,7 +349,7 @@ class TestPolarsPerformanceFeatures:
         updates, stats = updater_polars_default.prepare_update_data_polars(df, "large_test")
         
         assert len(updates) == 100 * 4  # 100 rows * 4 columns
-        assert stats.multi_value_cells_detected == 100  # One multi-value column
+        assert stats.multi_value_cells_detected == 0  # No multi-value detection
     
     @pytest.mark.django_db
     def test_empty_dataframe_handling(self, updater_polars_default):
@@ -406,10 +373,10 @@ class TestPolarsPerformanceFeatures:
         
         df = pl.DataFrame(mixed_data)
         
-        # Should handle mixed types correctly
+        # Should handle mixed types correctly (all single-value)
         analysis = updater_polars_default.analyze_dataset_multi_values_polars(df)
         
-        assert analysis["text"]["is_multi_value"] is True
+        assert analysis["text"]["is_multi_value"] is False
         assert analysis["number"]["is_multi_value"] is False
         assert analysis["float_val"]["is_multi_value"] is False
     
@@ -425,15 +392,191 @@ class TestPolarsPerformanceFeatures:
         df = pl.DataFrame(unicode_data)
         analysis = updater_polars_default.analyze_dataset_multi_values_polars(df)
         
-        # Should correctly detect multi-value patterns despite Unicode
-        # Note: "künstler" has only 2 out of 3 rows (66.67%) with commas, so the generic parser 
-        # may be conservative - this is acceptable behavior
-        kunstler_detected = analysis["künstler"]["is_multi_value"]
-        if not kunstler_detected:
-            # Check if the analysis at least shows reasonable statistics
-            kunstler_stats = analysis["künstler"]["stats"]
-            assert kunstler_stats["percentage"] >= 60, f"Should at least detect comma patterns: {kunstler_stats}"
+        # Should correctly handle Unicode but detect no multi-value patterns
+        assert analysis["künstler"]["is_multi_value"] is False
+        assert analysis["themen"]["is_multi_value"] is False
+        assert analysis["emoji"]["is_multi_value"] is False
+
+
+class TestMultiValueTripleCreation:
+    """Test that single-value cells create single triples correctly (multi-value disabled)."""
+    
+    @pytest.mark.django_db
+    def test_multi_value_cell_creates_single_triple(self, initial_data_empty, updater_polars_default):
+        """Test that a cell with comma-separated content creates ONE triple (no splitting)."""
+        # Simple test data with comma-separated content (treated as single value)
+        test_data = [
+            {"id": "1", "tags": "red,blue,green", "title": "Test Item"}
+        ]
         
-        # These should definitely be detected due to higher consistency
-        assert analysis["themen"]["is_multi_value"] is True
-        assert analysis["emoji"]["is_multi_value"] is True 
+        df = pl.DataFrame(test_data)
+        dataset_name = "singleValueTripleTest"
+        
+        # Import the data
+        stats = updater_polars_default.import_csv_with_smart_updates(df, dataset_name)
+        
+        # Verify basic import worked
+        assert stats.resources_created > 0
+        assert stats.triples_created > 0
+        
+        # Find the tags cell resource
+        tags_resources = Resource.objects.filter(
+            uri__contains="/tags/",
+        ).filter(
+            uri__contains="singlevaluetripletest"
+        )
+        
+        assert tags_resources.count() >= 1, "Should have created at least one tags cell resource"
+        tags_resource = tags_resources.first()
+        
+        # Find all triples for this cell (should be 1: "red,blue,green" as single value)
+        tags_triples = Triple.objects.filter(
+            subject=tags_resource,
+            predicate__uri=RDF_VALUE_URI
+        )
+        
+        assert tags_triples.count() == 1, f"Should have created 1 triple for tags cell, found {tags_triples.count()}"
+        
+        # Verify the actual value (complete comma-separated string)
+        triple_value = tags_triples.first().object.value
+        assert triple_value == "red,blue,green", f"Expected 'red,blue,green', got '{triple_value}'"
+    
+    @pytest.mark.django_db
+    def test_single_value_cell_creates_one_triple(self, initial_data_empty, updater_polars_default):
+        """Test that a single-value cell creates exactly one triple."""
+        test_data = [
+            {"id": "1", "title": "Single Value Item", "count": "42"}
+        ]
+        
+        df = pl.DataFrame(test_data)
+        dataset_name = "singleValueTripleTest"
+        
+        # Import the data
+        stats = updater_polars_default.import_csv_with_smart_updates(df, dataset_name)
+        
+        # Find the title cell resource
+        title_resources = Resource.objects.filter(
+            uri__contains="/title/",
+        ).filter(
+            uri__contains="singlevaluetripletest"
+        )
+        
+        assert title_resources.count() >= 1, "Should have created at least one title cell resource"
+        title_resource = title_resources.first()
+        
+        # Find triples for this cell (should be 1)
+        title_triples = Triple.objects.filter(
+            subject=title_resource,
+            predicate__uri=RDF_VALUE_URI
+        )
+        
+        assert title_triples.count() == 1, f"Should have created 1 triple for title cell, found {title_triples.count()}"
+        assert title_triples.first().object.value == "Single Value Item"
+    
+    @pytest.mark.django_db
+    def test_mixed_single_and_comma_value_columns(self, initial_data_empty, updater_polars_default):
+        """Test dataset with both simple and comma-containing columns (all treated as single-value)."""
+        test_data = [
+            {"id": "1", "title": "Item One", "tags": "art,digital,interactive"},
+            {"id": "2", "title": "Item Two", "tags": "photo,print"},
+            {"id": "3", "title": "Item Three", "tags": "sculpture"}
+        ]
+        
+        df = pl.DataFrame(test_data)
+        dataset_name = "mixedValueTest"
+        
+        # Import the data
+        stats = updater_polars_default.import_csv_with_smart_updates(df, dataset_name)
+        
+        # Find all tags resources
+        tags_resources = Resource.objects.filter(
+            uri__contains="/tags/",
+        ).filter(
+            uri__contains="mixedvaluetest"
+        ).order_by('uri')
+        
+        assert tags_resources.count() == 3, f"Should have created 3 tags resources, found {tags_resources.count()}"
+        
+        # Check each tags resource (all should have exactly 1 triple)
+        for tags_resource in tags_resources:
+            triples = Triple.objects.filter(
+                subject=tags_resource,
+                predicate__uri=RDF_VALUE_URI
+            )
+            assert triples.count() == 1, f"Each tags resource should have 1 triple, found {triples.count()}"
+        
+        # Check that all title resources have exactly 1 triple each
+        title_resources = Resource.objects.filter(
+            uri__contains="/title/",
+        ).filter(
+            uri__contains="mixedvaluetest"
+        )
+        
+        assert title_resources.count() == 3, "Should have 3 title resources"
+        
+        for title_resource in title_resources:
+            title_triples = Triple.objects.filter(
+                subject=title_resource,
+                predicate__uri=RDF_VALUE_URI
+            )
+            assert title_triples.count() == 1, f"Each title should have 1 triple"
+    
+    @pytest.mark.django_db
+    def test_empty_and_null_values_handling(self, initial_data_empty, updater_polars_default):
+        """Test that empty and null values don't create unnecessary triples."""
+        test_data = [
+            {"id": "1", "tags": "valid,value", "empty": "", "null_field": None},
+            {"id": "2", "tags": "", "empty": "not_empty", "null_field": "not_null"}
+        ]
+        
+        df = pl.DataFrame(test_data)
+        dataset_name = "emptyNullTest"
+        
+        # Import the data
+        stats = updater_polars_default.import_csv_with_smart_updates(df, dataset_name)
+        
+        # Find tags resources that should have values
+        tags_with_values = Resource.objects.filter(
+            uri__contains="/tags/",
+        ).filter(
+            uri__contains="emptynulltest"
+        )
+        
+        # Should have at least one tags resource with triple
+        valid_tags_found = False
+        for tags_resource in tags_with_values:
+            triples = Triple.objects.filter(
+                subject=tags_resource,
+                predicate__uri=RDF_VALUE_URI
+            )
+            if triples.count() == 1:  # "valid,value" as single value
+                valid_tags_found = True
+                value = triples.first().object.value
+                assert value == "valid,value", f"Expected 'valid,value', got '{value}'"
+        
+        assert valid_tags_found, "Should find tags resource with 1 value"
+    
+    @pytest.mark.django_db
+    def test_statistics_reflect_actual_triples_created(self, initial_data_empty, updater_polars_default):
+        """Test that statistics accurately reflect the number of triples created."""
+        test_data = [
+            {"id": "1", "multi": "a,b,c", "single": "x"},
+            {"id": "2", "multi": "d,e", "single": "y"}
+        ]
+        
+        df = pl.DataFrame(test_data)
+        dataset_name = "statisticsTest"
+        
+        # Import the data
+        stats = updater_polars_default.import_csv_with_smart_updates(df, dataset_name)
+        
+        # Verify statistics match actual database
+        actual_triples = Triple.objects.filter(
+            predicate__uri=RDF_VALUE_URI
+        ).count()
+        
+        assert stats.triples_created == actual_triples, \
+            f"Statistics show {stats.triples_created} triples, but database has {actual_triples}"
+        
+        # Should have created exactly 6 triples (1 per cell: id="1", multi="a,b,c", single="x", id="2", multi="d,e", single="y")
+        assert actual_triples == 6, f"Should have exactly 6 triples (3 columns x 2 rows), got {actual_triples}" 

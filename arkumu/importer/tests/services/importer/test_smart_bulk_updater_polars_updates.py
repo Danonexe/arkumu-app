@@ -8,7 +8,11 @@ from arkumu.importer.services.importer.smart_bulk_updater import UpdateStrategy,
 
 # Test constants
 UPDATE_TEST_INSTITUTION = "UPDATE_TEST"
+UPDATE_TEST_INSTITUTION_SLUGIFIED = "update-test"  # What our code actually uses
 UPDATE_TEST_BASE_URI = "http://test.arkumu.org/data"
+
+# Standard vocabulary URIs
+RDF_VALUE_URI = "http://www.w3.org/1999/02/22-rdf-syntax-ns#value"
 
 # Test Data with Multi-Value Columns (consistent with main test file)
 multi_value_test_data: List[Dict[str, Any]] = [
@@ -76,11 +80,13 @@ mixed_pattern_test_data: List[Dict[str, Any]] = [
 @pytest.fixture
 def clear_update_test_data(db):
     """Clear any existing test data before and after tests."""
-    # Clear before test
-    Resource.objects.filter(source=UPDATE_TEST_INSTITUTION).delete()
+    # Clear before test - use slugified institution name
+    Resource.objects.filter(source=UPDATE_TEST_INSTITUTION_SLUGIFIED).delete()
+    Triple.objects.all().delete()  # Clear triples too
     yield
-    # Clear after test
-    Resource.objects.filter(source=UPDATE_TEST_INSTITUTION).delete()
+    # Clear after test - use slugified institution name
+    Resource.objects.filter(source=UPDATE_TEST_INSTITUTION_SLUGIFIED).delete()
+    Triple.objects.all().delete()
 
 @pytest.fixture
 def updater_for_updates() -> SmartBulkUpdaterPolars:
@@ -105,6 +111,31 @@ def updater_skip_existing() -> SmartBulkUpdaterPolars:
     )
 
 
+def find_value_in_system(value: str) -> bool:
+    """Helper function to find if a value exists in our triple-based system."""
+    # Look for literal resources with the value
+    value_resources = Resource.objects.filter(
+        source=UPDATE_TEST_INSTITUTION_SLUGIFIED,
+        resource_type=ResourceType.LITERAL,
+        value=value
+    )
+    return value_resources.exists()
+
+
+def get_all_values_in_system() -> set:
+    """Helper function to get all values stored in the system."""
+    value_resources = Resource.objects.filter(
+        source=UPDATE_TEST_INSTITUTION_SLUGIFIED,
+        resource_type=ResourceType.LITERAL
+    )
+    return {r.value for r in value_resources if r.value}
+
+
+def count_system_resources() -> int:
+    """Helper function to count resources created by our system."""
+    return Resource.objects.filter(source=UPDATE_TEST_INSTITUTION_SLUGIFIED).count()
+
+
 class TestSingleValueUpdates:
     """Test updating single-value fields with different scenarios."""
     
@@ -121,14 +152,13 @@ class TestSingleValueUpdates:
         df_initial = pl.DataFrame(initial_data)
         stats1 = updater_for_updates.import_csv_with_smart_updates(df_initial, "test_projects")
         
-        # Verify initial import - adjust expectations based on actual behavior
-        # System creates additional resources (predicates, types, etc.)
+        # Verify initial import
         assert stats1.resources_created > 8  # More than just cell values
         assert stats1.resources_updated == 0
         assert stats1.resources_skipped == 0
         
-        # Check that resources were created
-        initial_resources = Resource.objects.filter(source=UPDATE_TEST_INSTITUTION).count()
+        # Check that resources were created using helper function
+        initial_resources = count_system_resources()
         assert initial_resources > 8
         
         # === UPDATE WITH DIFFERENT VALUES ===
@@ -143,20 +173,11 @@ class TestSingleValueUpdates:
         
         # Verify update results
         assert stats2.resources_created > 0  # New project3 resources
-        # Note: Updates may appear as resources_updated == 0 if values are "updated" via deletion and recreation
         
-        # Check specific value updates by looking for resources with the new values
-        updated_title_resources = Resource.objects.filter(
-            source=UPDATE_TEST_INSTITUTION,
-            value="NEW Project Alpha"
-        )
-        assert updated_title_resources.exists(), "Updated title should exist"
-        
-        updated_category_resources = Resource.objects.filter(
-            source=UPDATE_TEST_INSTITUTION,
-            value="Performance"
-        )
-        assert updated_category_resources.exists(), "Updated category should exist"
+        # Check specific value updates using our helper functions
+        assert find_value_in_system("NEW Project Alpha"), "Updated title should exist"
+        assert find_value_in_system("Performance"), "Updated category should exist"
+        assert find_value_in_system("Project Gamma"), "New project title should exist"
     
     @pytest.mark.django_db
     def test_no_changes_detected(self, clear_update_test_data, updater_for_updates):
@@ -181,11 +202,11 @@ class TestSingleValueUpdates:
 
 
 class TestMultiValueUpdates:
-    """Test updating multi-value fields with comma-separated values."""
+    """Test updating single-value fields (multi-value detection disabled)."""
     
     @pytest.mark.django_db
     def test_multi_value_field_updates(self, clear_update_test_data, updater_for_updates):
-        """Test that multi-value fields are correctly updated when values change."""
+        """Test that fields with commas are treated as single values (no splitting)."""
         
         # === INITIAL IMPORT ===
         initial_data = [
@@ -196,15 +217,14 @@ class TestMultiValueUpdates:
         df_initial = pl.DataFrame(initial_data)
         stats1 = updater_for_updates.import_csv_with_smart_updates(df_initial, "research_projects")
         
-        # Verify multi-value detection
-        assert stats1.multi_value_cells_detected > 0
-        # Note: total_values_created may be less than cells_processed due to empty cells or other factors
+        # Verify NO multi-value detection (disabled)
+        assert stats1.multi_value_cells_detected == 0
         assert stats1.total_values_created > 0  # Should create some values
         
-        # === UPDATE WITH DIFFERENT MULTI-VALUES ===
+        # === UPDATE WITH DIFFERENT VALUES ===
         updated_data = [
-            {"Projekt-ID": "3", "Bevorzugter Titel": "AI Research", "Schlagwort": "Q161439,Q1129653,Q160402,Q33767,Q328835", "Projektkategorie": "9,13,17"},  # Added values
-            {"Projekt-ID": "25", "Bevorzugter Titel": "Data Science", "Schlagwort": "Q7860,Q107425,Q11461,Q179448", "Projektkategorie": "9,14"},  # Changed values
+            {"Projekt-ID": "3", "Bevorzugter Titel": "AI Research", "Schlagwort": "Q161439,Q1129653,Q160402,Q33767,Q328835", "Projektkategorie": "9,13,17"},  # Changed values (as single strings)
+            {"Projekt-ID": "25", "Bevorzugter Titel": "Data Science", "Schlagwort": "Q7860,Q107425,Q11461,Q179448", "Projektkategorie": "9,14"},  # Changed values (as single strings)
             {"Projekt-ID": "60", "Bevorzugter Titel": "Robotics", "Schlagwort": "Q756,Q22676,Q177998", "Projektkategorie": "9,16"},  # New project
         ]
         
@@ -213,36 +233,36 @@ class TestMultiValueUpdates:
         
         # Verify updates occurred
         assert stats2.resources_created > 0  # New project
-        assert stats2.multi_value_cells_detected > 0
+        assert stats2.multi_value_cells_detected == 0  # No multi-value detection
         
-        # Check that new values are present - look for any of the new keywords
-        # Since the system may create resources for individual keywords differently,
-        # we check for any evidence of the new content
-        all_research_resources = Resource.objects.filter(source=UPDATE_TEST_INSTITUTION)
-        all_values = {r.value for r in all_research_resources}
+        # Check that new comma-separated values are present as complete strings
+        all_values = get_all_values_in_system()
         
-        # Check if any of the new keywords or values are present
-        new_keywords_present = any(keyword in all_values for keyword in ["Q33767", "Q328835", "Q11461", "Q179448", "Q756", "Q22676", "Q177998", "17", "14", "16"])
-        assert new_keywords_present, f"At least some new keywords should be present. Found values: {sorted(list(all_values))}"
+        # Look for the complete comma-separated strings (not individual keywords)
+        comma_values_present = any(
+            "Q161439,Q1129653,Q160402,Q33767,Q328835" in str(val) or
+            "Q7860,Q107425,Q11461,Q179448" in str(val) or
+            "Q756,Q22676,Q177998" in str(val)
+            for val in all_values
+        )
+        assert comma_values_present, f"Complete comma-separated values should be present. Found values: {sorted(list(all_values))}"
     
     @pytest.mark.django_db
     def test_multi_value_detection_accuracy(self, clear_update_test_data, updater_for_updates):
-        """Test that multi-value detection correctly identifies comma-separated fields."""
+        """Test that multi-value detection is disabled and all fields are treated as single-value."""
         
         df = pl.DataFrame(mixed_pattern_test_data)
         
         # Analyze before import
         analysis = updater_for_updates.analyze_dataset_multi_values_polars(df)
         
-        # "codes" should be detected as multi-value (structured pattern)
-        assert analysis["codes"]["is_multi_value"] is True
-        assert analysis["codes"]["separator"] == ","
-        assert analysis["codes"]["stats"]["percentage"] > 50  # Most rows have commas
+        # ALL fields should be detected as single-value (multi-value detection disabled)
+        assert analysis["codes"]["is_multi_value"] is False
+        assert analysis["codes"]["separator"] is None
+        assert analysis["codes"]["stats"]["percentage"] == 0.0
         
-        # "description" detection depends on the sophistication of the algorithm
-        # but should provide reasonable stats
-        assert "percentage" in analysis["text"]["stats"]
-        assert "confidence_score" in analysis["text"]["stats"]
+        assert analysis["names"]["is_multi_value"] is False
+        assert analysis["text"]["is_multi_value"] is False
 
 
 class TestUpdateStrategies:
@@ -280,11 +300,7 @@ class TestUpdateStrategies:
         assert stats_skip.resources_skipped > 0  # Existing items skipped
         
         # Verify original values are still present
-        original_item_resources = Resource.objects.filter(
-            source=UPDATE_TEST_INSTITUTION,
-            value="Original Item"
-        )
-        assert original_item_resources.exists(), "Original values should remain unchanged"
+        assert find_value_in_system("Original Item"), "Original values should remain unchanged"
     
     @pytest.mark.django_db
     def test_update_values_strategy(self, clear_update_test_data, updater_for_updates):
@@ -313,17 +329,8 @@ class TestUpdateStrategies:
         assert stats_update.resources_created > 0  # New item3
         
         # Verify changed values are present
-        changed_item_resources = Resource.objects.filter(
-            source=UPDATE_TEST_INSTITUTION,
-            value="CHANGED Item"
-        )
-        assert changed_item_resources.exists(), "Changed values should be present"
-        
-        new_item_resources = Resource.objects.filter(
-            source=UPDATE_TEST_INSTITUTION,
-            value="New Item"
-        )
-        assert new_item_resources.exists(), "New items should be present"
+        assert find_value_in_system("CHANGED Item"), "Changed values should be present"
+        assert find_value_in_system("New Item"), "New items should be present"
 
 
 class TestReportingAndStats:
@@ -331,9 +338,9 @@ class TestReportingAndStats:
     
     @pytest.mark.django_db
     def test_detailed_statistics_reporting(self, clear_update_test_data, updater_for_updates):
-        """Test that detailed statistics are correctly reported."""
+        """Test that detailed statistics are correctly reported (with multi-value disabled)."""
         
-        # Use Folkwang-style data with multi-value fields
+        # Use Folkwang-style data with comma-separated fields
         df = pl.DataFrame(folkwang_style_test_data)
         stats = updater_for_updates.import_csv_with_smart_updates(df, "complex_test")
         
@@ -341,21 +348,18 @@ class TestReportingAndStats:
         assert stats.rows_processed >= 0
         assert stats.cells_processed > 0
         assert stats.resources_created > 0
-        # Note: triples_created may be less than resources_created due to predicates/types being shared
         assert stats.triples_created > 0  # Should create some triples
-        assert stats.multi_value_cells_detected >= 0
-        # Note: total_values_created may be less than cells_processed due to empty cells or other factors
+        assert stats.multi_value_cells_detected == 0  # Multi-value detection disabled
         assert stats.total_values_created > 0  # Should create some values
         assert stats.errors == 0  # Should be no errors with valid data
         
-        # Test derived metrics calculation
+        # With multi-value disabled, values_per_cell should be close to 1
         if stats.cells_processed > 0:
             multi_value_ratio = stats.multi_value_cells_detected / stats.cells_processed
-            assert 0 <= multi_value_ratio <= 1  # Should be a valid percentage
+            assert multi_value_ratio == 0  # Should be 0 since multi-value is disabled
             
-            if stats.total_values_created > 0:
-                values_per_cell = stats.total_values_created / stats.cells_processed
-                assert values_per_cell > 0  # Should have some values per cell
+            values_per_cell = stats.total_values_created / stats.cells_processed
+            assert values_per_cell <= 1.1  # Should be close to 1 (allowing small margin for empty cells)
     
     @pytest.mark.django_db
     def test_stats_merging_across_operations(self, clear_update_test_data, updater_for_updates):
@@ -382,7 +386,7 @@ class TestReportingAndStats:
         assert stats2.resources_updated >= 0  # Possible updates to batch1
         
         # Total resources should make sense
-        total_resources = Resource.objects.filter(source=UPDATE_TEST_INSTITUTION).count()
+        total_resources = count_system_resources()
         assert total_resources > 0
 
 
@@ -415,18 +419,12 @@ class TestEdgeCases:
         assert stats.errors == 0
         
         # Verify Unicode values are preserved by checking they exist
-        munich_resources = Resource.objects.filter(
-            source=UPDATE_TEST_INSTITUTION,
-            value__contains="München"
-        )
-        assert munich_resources.exists(), "Unicode characters should be preserved"
+        assert find_value_in_system("Café München"), "Unicode characters should be preserved"
         
-        # Check that emoji triples exist
-        emoji_resources = Resource.objects.filter(
-            source=UPDATE_TEST_INSTITUTION,
-            value__in=["🎨", "🖼️", "🎭", "🌟", "✨"]
-        )
-        assert emoji_resources.exists(), "Emoji values should be created"
+        # Check that emoji values exist (as comma-separated strings since splitting is disabled)
+        emoji_strings = ["🎨,🖼️,🎭", "🌟,✨"]
+        emoji_found = any(find_value_in_system(emoji_str) for emoji_str in emoji_strings)
+        assert emoji_found, "Emoji comma-separated values should be created"
     
     @pytest.mark.django_db
     def test_large_values_truncation(self, clear_update_test_data, updater_for_updates):
@@ -447,11 +445,9 @@ class TestEdgeCases:
         assert stats.truncated_values > 0  # Should report truncation
         
         # Verify truncated value exists with truncation marker
-        truncated_resources = Resource.objects.filter(
-            source=UPDATE_TEST_INSTITUTION,
-            value__endswith="..."
-        )
-        assert truncated_resources.exists(), "Truncated values should end with '...'"
+        all_values = get_all_values_in_system()
+        truncated_values = [v for v in all_values if v and v.endswith("...")]
+        assert len(truncated_values) > 0, "Truncated values should end with '...'"
 
 
 class TestCompatibilityAndIntegration:
@@ -485,9 +481,8 @@ class TestCompatibilityAndIntegration:
         assert stats.errors == 0
         
         # Verify resources exist and have correct structure
-        resources = Resource.objects.filter(source=UPDATE_TEST_INSTITUTION)
-        assert resources.count() > 6
+        total_resources = count_system_resources()
+        assert total_resources > 6
         
         # Verify specific values exist
-        test_item_resources = resources.filter(value="Test Item")
-        assert test_item_resources.exists(), "Test values should exist"
+        assert find_value_in_system("Test Item"), "Test values should exist"

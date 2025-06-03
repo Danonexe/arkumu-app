@@ -119,117 +119,59 @@ class SmartBulkUpdaterPolars:
 
     def analyze_column_for_multi_values_polars(self, df: pl.DataFrame, column_name: str) -> dict:
         """
-        Simplified analysis: If CSV likely uses semicolons as delimiters, 
-        then commas within cells are probably multi-value separators.
+        Simplified analysis: Disable multi-value splitting for now.
+        Import everything as single values - split later if needed.
         """
         if column_name not in df.columns:
             return {"is_multi_value": False, "separator": None, "stats": {"percentage": 0.0}}
         
-        # Get the column as string
-        col = df.select(pl.col(column_name).cast(pl.Utf8, strict=False))
-        
-        # Remove null/empty values for analysis
-        non_empty = col.filter(
-            (pl.col(column_name).is_not_null()) & 
-            (pl.col(column_name).str.strip_chars() != "")
-        )
-        
-        total_rows = non_empty.height
-        if total_rows == 0:
-            return {"is_multi_value": False, "separator": None, "stats": {"percentage": 0.0}}
-        
-        # Simple comma analysis
-        comma_stats = non_empty.with_columns([
-            pl.col(column_name).str.count_matches(",").alias("comma_count"),
-            (pl.col(column_name).str.count_matches(",") > 0).alias("has_commas")
-        ]).select([
-            pl.col("has_commas").sum().alias("rows_with_commas"),
-            pl.col("comma_count").mean().alias("avg_commas_per_row")
-        ]).row(0)
-        
-        rows_with_commas = comma_stats[0] or 0
-        avg_commas = comma_stats[1] or 0
-        
-        percentage_with_commas = (rows_with_commas / total_rows) * 100
-        
-        # Simple decision logic
-        is_multi_value = False
-        confidence_score = 0
-        
-        # If enough rows have commas, likely multi-value
-        if percentage_with_commas >= self.multi_value_threshold * 100:  # 20% threshold
-            confidence_score = min(percentage_with_commas, 80)  # Cap at 80
-            
-            # If most rows have commas and average > 1 comma per row, very likely multi-value
-            if percentage_with_commas >= 60 and avg_commas >= 1.0:
-                confidence_score += 20
-                
-            # Decision threshold
-            if confidence_score >= 30:  # Lower threshold for simple detection
-                is_multi_value = True
-        
+        # Always return single-value for safety and simplicity
         return {
-            "is_multi_value": is_multi_value,
-            "separator": "," if is_multi_value else None,
+            "is_multi_value": False,
+            "separator": None,
             "stats": {
-                "percentage": percentage_with_commas,
-                "confidence_score": confidence_score,
-                "avg_commas_per_row": avg_commas,
-                "total_rows": total_rows,
-                "rows_with_commas": rows_with_commas
+                "percentage": 0.0,
+                "confidence_score": 0.0,
+                "avg_commas_per_row": 0.0,
+                "total_rows": df.height,
+                "rows_with_commas": 0
             }
         }
 
     def analyze_dataset_multi_values_polars(self, df: pl.DataFrame) -> Dict[str, Dict[str, Any]]:
         """
-        Analyze all columns in the dataset to detect multi-value patterns using Polars.
-        
-        Args:
-            df: Polars DataFrame
-            
-        Returns:
-            Dictionary mapping column names to their multi-value analysis
+        Simplified analysis: No multi-value detection - all columns treated as single-value.
         """
         if df.height == 0:
             return {}
         
         multi_value_analysis = {}
-        
         for column_name in df.columns:
-            analysis = self.analyze_column_for_multi_values_polars(df, column_name)
-            multi_value_analysis[column_name] = analysis
-            
-            if analysis["is_multi_value"]:
-                stats = analysis["stats"]
-                logger.info(f"Column '{column_name}': Multi-value detected ({stats['percentage']}% of {stats['rows_with_commas']} rows)")
+            multi_value_analysis[column_name] = {
+                "is_multi_value": False,
+                "separator": None,
+                "stats": {
+                    "percentage": 0.0,
+                    "confidence_score": 0.0,
+                    "avg_commas_per_row": 0.0,
+                    "total_rows": df.height,
+                    "rows_with_commas": 0
+                }
+            }
         
+        logger.info(f"Multi-value detection disabled - all {len(df.columns)} columns treated as single-value")
         return multi_value_analysis
 
     def split_cell_values_polars(self, value: str, separator: str = ",") -> List[str]:
         """
-        Split cell values on separator, but respect quoted fields.
-        This handles CSV data where commas might be inside quotes.
+        Simplified: No splitting - return single value as list.
         """
-        if not value or not separator or separator not in value:
-            return [value.strip()] if value else []
-        
-        # Use a simple approach that respects quotes
-        import csv
-        from io import StringIO
-        
-        try:
-            # Try to parse as a CSV row to handle quotes properly
-            reader = csv.reader(StringIO(value), delimiter=separator, quotechar='"')
-            row = next(reader)
-            return [item.strip() for item in row if item.strip()]
-        except Exception:
-            # Fallback to simple split if CSV parsing fails
-            return [item.strip() for item in value.split(separator) if item.strip()]
+        return [value.strip()] if value and value.strip() else []
 
     def prepare_update_data_vectorized(self, df: pl.DataFrame, dataset_name: str) -> Tuple[List[ResourceUpdate], BulkUpdateStats]:
         """
-        OPTIMIZED: Fully vectorized approach for preparing update data.
-        This efficiently handles mixed single/multi-value scenarios.
+        OPTIMIZED: Fully vectorized approach without multi-value complexity.
+        Much faster since no splitting logic needed.
         
         Args:
             df: Polars DataFrame with CSV data
@@ -245,28 +187,20 @@ class SmartBulkUpdaterPolars:
         logger.debug(f"Step 1: Applying vectorized Unicode normalization")
         df_normalized = self._normalize_unicode_vectorized(df)
         
-        # STEP 2: Analyze multi-value patterns (once per column)
-        logger.debug(f"Step 2: Analyzing multi-value patterns")
-        multi_value_analysis = self.analyze_dataset_multi_values_polars(df_normalized)
+        # STEP 2: Skip multi-value analysis (disabled)
+        logger.debug(f"Step 2: Multi-value analysis skipped (disabled)")
         
-        # STEP 3: Vectorized multi-value processing 
-        logger.debug(f"Step 3: Applying vectorized multi-value processing")
-        df_processed = self._process_multi_values_vectorized(df_normalized, multi_value_analysis)
+        # STEP 3: Add row identifiers
+        logger.debug(f"Step 3: Adding row identifiers")
+        df_with_ids = df_normalized.with_row_index(name='row_id')
         
-        # STEP 4: Add row identifiers
-        logger.debug(f"Step 4: Adding row identifiers")
-        df_with_ids = df_processed.with_row_index(name='row_id')
-        
-        # STEP 5: More efficient conversion to updates
-        logger.debug(f"Step 5: Converting to ResourceUpdate objects")
+        # STEP 4: Efficient conversion to updates (vectorized)
+        logger.debug(f"Step 4: Converting to ResourceUpdate objects")
         updates = []
         stats = BulkUpdateStats()
         
-        # Pre-compute column analysis for efficiency
-        multi_value_columns = {
-            col: analysis for col, analysis in multi_value_analysis.items() 
-            if analysis.get('is_multi_value', False)
-        }
+        # Track statistics properly
+        stats.rows_processed = df.height
         
         row_iterator = df_with_ids.iter_rows(named=True)
         
@@ -275,14 +209,17 @@ class SmartBulkUpdaterPolars:
             safe_row_id = slugify_uri_part(str(row_id_val))
             
             for column_name, value in row_data.items():
-                # Skip internal columns we added
-                if column_name in ['row_id'] or column_name.endswith(('_has_separator', '_split_values', '_value_count')):
+                # Skip internal columns
+                if column_name == 'row_id':
                     continue
+                    
+                # Count all cells processed (including empty ones)
+                stats.cells_processed += 1
                     
                 if value is not None and str(value).strip():
                     current_value_str = str(value).strip()
                     
-                    # Truncation logic (could be vectorized later)
+                    # Vectorized truncation logic
                     try:
                         original_byte_size = len(current_value_str.encode('utf-8'))
                         if original_byte_size > MAX_INDEXED_VALUE_SIZE:
@@ -298,42 +235,18 @@ class SmartBulkUpdaterPolars:
                     except UnicodeEncodeError:
                         logger.warning(f"SBU Polars: Could not encode value to check size for dataset '{dataset_name}', column '{column_name}', row_id '{safe_row_id}'.")
                     
-                    # Create resource update
+                    # Create resource update (simplified - no multi-value)
                     safe_column_name = slugify_uri_part(column_name)
                     cell_uri = mint_uri(self.base_uri, self.institution, "datasets", dataset_name, safe_column_name, safe_row_id)
                     
                     update = ResourceUpdate(uri=cell_uri)
-                    
-                    # OPTIMIZED: Check if column is multi-value (pre-computed lookup)
-                    if column_name in multi_value_columns:
-                        # OPTIMIZED: Use pre-computed vectorized detection
-                        has_separator_key = f"{column_name}_has_separator"
-                        has_separator = row_data.get(has_separator_key, False)
-                        
-                        if has_separator:
-                            # Actually a multi-value cell - apply splitting
-                            separator = multi_value_columns[column_name].get('separator', ',')
-                            update.new_values = self.split_cell_values_polars(current_value_str, separator)
-                            update.is_multi_value = True
-                            stats.multi_value_cells_detected += 1  # Only count actual multi-value cells!
-                            stats.total_values_created += len(update.new_values)
-                        else:
-                            # Single-value cell in multi-value column (no parsing needed!)
-                            update.new_values = [current_value_str]
-                            update.is_multi_value = False  # Mark as single even though column is multi-value
-                            stats.total_values_created += 1
-                    else:
-                        # Single-value column
-                        update.new_values = [current_value_str]
-                        update.is_multi_value = False
-                        stats.total_values_created += 1
-                    
-                    update.new_name = column_name
-                    update.new_datatype = "http://www.w3.org/2001/XMLSchema#string"
+                    update.new_values = [current_value_str]  # Always single value
+                    update.is_multi_value = False
+                    stats.total_values_created += 1
                     
                     updates.append(update)
         
-        stats.cells_processed = len(updates)
+        logger.info(f"SBU Polars: Generated {len(updates)} updates for dataset '{dataset_name}' without multi-value splitting")
         return updates, stats
 
     def get_existing_resources_bulk(self, uris: List[str]) -> Dict[str, Resource]:
@@ -376,6 +289,7 @@ class SmartBulkUpdaterPolars:
                 # Determine update strategy
                 if self.default_strategy == UpdateStrategy.SKIP_EXISTING:
                     update.action = UpdateStrategy.SKIP_EXISTING
+                    action_stats.resources_skipped += 1
                 elif self.default_strategy == UpdateStrategy.UPDATE_VALUES:
                     # For multi-value fields, we need to compare differently
                     if update.is_multi_value:
@@ -386,6 +300,7 @@ class SmartBulkUpdaterPolars:
                             update.action = UpdateStrategy.UPDATE_VALUES
                         else:
                             update.action = UpdateStrategy.SKIP_EXISTING
+                            action_stats.resources_skipped += 1
                 elif self.default_strategy == UpdateStrategy.TIMESTAMP_BASED:
                     # This would need the row data for timestamp comparison
                     # For now, default to UPDATE_VALUES
@@ -404,28 +319,154 @@ class SmartBulkUpdaterPolars:
                           action_phase_stats: BulkUpdateStats,
                           batch_size: int = 1000) -> BulkUpdateStats:
         """
-        Execute bulk updates. This reuses the logic from the original implementation
-        since the database operations don't benefit significantly from Polars optimization.
+        Execute bulk updates with proper multi-value support.
+        Creates multiple triples for multi-value cells (same subject/predicate, different objects).
         """
-        from arkumu.importer.services.importer.smart_bulk_updater import SmartBulkUpdater
+        from django.db import transaction
+        from arkumu.metadata.models import Resource, Triple
+        from arkumu.metadata.models.resource import ResourceType
         
-        # Create a temporary instance of the original updater to reuse the execution logic
-        temp_updater = SmartBulkUpdater(
-            default_strategy=self.default_strategy,
-            timestamp_column=self.timestamp_column,
-            institution=self.institution,
-            base_uri=self.base_uri,
-            link_row_cells=self.link_row_cells,
-            link_topology=self.link_topology,
-            multi_value_threshold=self.multi_value_threshold
+        stats = BulkUpdateStats()
+        stats.merge(action_phase_stats)
+        
+        if not updates:
+            logger.info("No updates to execute")
+            return stats
+        
+        logger.info(f"Executing {len(updates)} updates for dataset '{dataset_name}' with batch size {batch_size}")
+        
+        # Process updates in batches
+        for i in range(0, len(updates), batch_size):
+            batch = updates[i:i + batch_size]
+            
+            with transaction.atomic():
+                self._execute_batch_with_multi_value_support(batch, dataset_name, stats)
+        
+        logger.info(f"Bulk update execution completed: {stats}")
+        return stats
+    
+    def _execute_batch_with_multi_value_support(self, 
+                                              batch: List[ResourceUpdate], 
+                                              dataset_name: str, 
+                                              stats: BulkUpdateStats):
+        """
+        Execute a batch of updates without multi-value complexity.
+        Creates dataset and row resources with proper hasPart relationships.
+        """
+        from arkumu.metadata.models import Resource, Triple
+        from arkumu.metadata.models.resource import ResourceType
+        
+        if not batch:
+            return
+        
+        resource_creates = []
+        triple_creates = []
+        structural_triple_creates = []  # Separate tracking for structural triples
+        
+        # Create dataset resource first
+        dataset_uri = mint_uri(self.base_uri, self.institution, "datasets", dataset_name)
+        dataset_resource, ds_created = Resource.objects.get_or_create(
+            uri=dataset_uri,
+            defaults={"resource_type": ResourceType.IRI, "name": dataset_name, "source": self.institution}
         )
+        if ds_created:
+            resource_creates.append(dataset_resource)
+            stats.resources_created += 1
         
-        # Copy the properties
-        temp_updater.has_part_prop = self.has_part_prop
-        temp_updater.rdf_value_prop = self.rdf_value_prop
-        temp_updater.dcterms_relation_prop = self.dcterms_relation_prop
+        # Group by row to create row resources
+        row_grouping: Dict[str, List[ResourceUpdate]] = {}
+        for update in batch:
+            row_id = self._extract_row_id_from_uri(update.uri)
+            if row_id:
+                if row_id not in row_grouping:
+                    row_grouping[row_id] = []
+                row_grouping[row_id].append(update)
         
-        return temp_updater.execute_bulk_update(updates, dataset_name, action_phase_stats, batch_size)
+        # Create row resources and their relationships
+        for row_id, row_updates in row_grouping.items():
+            safe_row_id = slugify_uri_part(str(row_id))
+            row_uri = mint_uri(self.base_uri, self.institution, "datasets", dataset_name, "rows", safe_row_id)
+            
+            row_resource, row_created = Resource.objects.get_or_create(
+                uri=row_uri,
+                defaults={"resource_type": ResourceType.IRI, "name": f"Row {row_id}", "source": self.institution}
+            )
+            if row_created:
+                resource_creates.append(row_resource)
+                stats.resources_created += 1
+            
+            # Link dataset to row
+            if not Triple.objects.filter(subject=dataset_resource, predicate=self.has_part_prop, object=row_resource).exists():
+                structural_triple = Triple(subject=dataset_resource, predicate=self.has_part_prop, object=row_resource)
+                structural_triple_creates.append(structural_triple)
+        
+        # Process each cell update (simplified without multi-value complexity)
+        for update in batch:
+            # Skip if action is SKIP_EXISTING
+            if update.action == UpdateStrategy.SKIP_EXISTING:
+                continue
+                
+            cell_resource, created = Resource.objects.get_or_create(
+                uri=update.uri,
+                defaults={"resource_type": ResourceType.IRI, "name": f"Cell", "source": self.institution}
+            )
+            
+            if created:
+                resource_creates.append(cell_resource)
+                stats.resources_created += 1
+            
+            # Link row to cell
+            row_id = self._extract_row_id_from_uri(update.uri)
+            if row_id:
+                safe_row_id = slugify_uri_part(str(row_id))
+                row_uri = mint_uri(self.base_uri, self.institution, "datasets", dataset_name, "rows", safe_row_id)
+                try:
+                    row_resource = Resource.objects.get(uri=row_uri)
+                    if not Triple.objects.filter(subject=row_resource, predicate=self.has_part_prop, object=cell_resource).exists():
+                        structural_triple = Triple(subject=row_resource, predicate=self.has_part_prop, object=cell_resource)
+                        structural_triple_creates.append(structural_triple)
+                except Resource.DoesNotExist:
+                    logger.warning(f"Row resource not found: {row_uri}")
+            
+            # Create value triples (simplified - always single value)
+            for value in update.new_values:
+                if value and value.strip():
+                    value_resource, val_created = Resource.objects.get_or_create(
+                        value=value,
+                        resource_type=ResourceType.LITERAL,
+                        source=self.institution,
+                        defaults={"name": value}
+                    )
+                    
+                    if val_created:
+                        resource_creates.append(value_resource)
+                        stats.resources_created += 1
+                    
+                    # Create rdf:value triple
+                    if not Triple.objects.filter(subject=cell_resource, predicate=self.rdf_value_prop, object=value_resource).exists():
+                        value_triple = Triple(subject=cell_resource, predicate=self.rdf_value_prop, object=value_resource)
+                        triple_creates.append(value_triple)
+        
+        # Bulk create operations
+        if structural_triple_creates:
+            Triple.objects.bulk_create(structural_triple_creates, ignore_conflicts=True)
+            logger.info(f"Created {len(structural_triple_creates)} structural triples")
+        
+        if triple_creates:
+            Triple.objects.bulk_create(triple_creates, ignore_conflicts=True)
+            stats.triples_created += len(triple_creates)  # Only count rdf:value triples
+            logger.info(f"Created {len(triple_creates)} value triples")
+        
+        logger.info(f"Batch processed: {len(batch)} updates, {stats.resources_created} resources, {stats.triples_created} value triples")
+
+    def _extract_row_id_from_uri(self, cell_uri: str) -> Optional[str]:
+        """Helper to extract row_id from a standard cell URI."""
+        # Standard URI: {base_uri}/{institution}/datasets/{dataset_name}/{column_name}/{row_id}
+        try:
+            return cell_uri.split('/')[-1]
+        except IndexError:
+            logger.warning(f"SBU Polars: Could not parse row_id from cell_uri: {cell_uri}")
+            return None
 
     def import_csv_with_smart_updates(self,
                                     csv_data: Union[List[Dict[str, Any]], pl.DataFrame],
@@ -493,33 +534,10 @@ class SmartBulkUpdaterPolars:
 
     def _process_multi_values_vectorized(self, df: pl.DataFrame, multi_value_analysis: Dict[str, Dict[str, Any]]) -> pl.DataFrame:
         """
-        Vectorized processing of multi-value columns using Polars operations.
-        This efficiently detects which cells actually contain separators.
-        
-        Args:
-            df: Input DataFrame with normalized Unicode
-            multi_value_analysis: Analysis results per column
-            
-        Returns:
-            DataFrame with additional columns for multi-value detection flags
+        Simplified: No multi-value processing needed since we disabled splitting.
+        Just return the original dataframe.
         """
-        result_df = df
-        
-        for column_name, analysis in multi_value_analysis.items():
-            if not analysis.get('is_multi_value', False) or column_name not in df.columns:
-                continue
-                
-            separator = analysis.get('separator', ',')
-            
-            logger.debug(f"Vectorizing multi-value detection for column '{column_name}' with separator '{separator}'")
-            
-            # Add vectorized column for efficient multi-value detection
-            result_df = result_df.with_columns([
-                # Detect which cells actually contain the separator
-                pl.col(column_name).str.contains(f"\\{separator}").fill_null(False).alias(f"{column_name}_has_separator")
-            ])
-        
-        return result_df
+        return df
 
     def prepare_update_data_polars(self, df: pl.DataFrame, dataset_name: str) -> Tuple[List[ResourceUpdate], BulkUpdateStats]:
         """
