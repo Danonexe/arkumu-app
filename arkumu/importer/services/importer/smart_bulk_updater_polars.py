@@ -525,4 +525,177 @@ class SmartBulkUpdaterPolars:
         Legacy method for backward compatibility. 
         Delegates to the optimized vectorized version.
         """
-        return self.prepare_update_data_vectorized(df, dataset_name) 
+        return self.prepare_update_data_vectorized(df, dataset_name)
+
+    def analyze_dataset_changes(self, 
+                              dataset_name: str,
+                              csv_data: Union[List[Dict[str, Any]], pl.DataFrame]) -> Dict[str, Any]:
+        """
+        Analyze what would change if we imported this CSV data.
+        This is a dry-run analysis without making any changes.
+        Polars-optimized version.
+        
+        Args:
+            dataset_name: Name of the dataset
+            csv_data: List of row dictionaries from CSV or Polars DataFrame
+            
+        Returns:
+            Analysis report with statistics and recommendations
+        """
+        # Ensure we have a DataFrame
+        df = self._ensure_dataframe(csv_data)
+        
+        analysis = {
+            "total_rows": df.height,
+            "new_resources": 0,
+            "existing_resources": 0,
+            "potential_updates": 0,
+            "conflicts": [],
+            "recommendations": []
+        }
+        
+        # Get all existing resources for this dataset
+        dataset_uri_pattern = mint_uri(self.base_uri, self.institution, "datasets", dataset_name, "", "")
+        dataset_uri_prefix = dataset_uri_pattern.rsplit('/', 2)[0]  # Remove the last two empty parts
+        
+        existing_resources = Resource.objects.filter(
+            uri__startswith=dataset_uri_prefix
+        ).values('uri', 'value', 'name', 'updated_at')
+        
+        existing_uri_map = {res['uri']: res for res in existing_resources}
+        
+        # Add row indices for processing
+        df_with_ids = df.with_row_index(name='row_id')
+        
+        # Analyze each row using Polars iteration
+        for row_data in df_with_ids.iter_rows(named=True):
+            row_num = row_data.get('row_id', 0)
+            row_id_val = row_data.get('id', row_data.get('ID', str(row_num)))
+            
+            for column_name, value in row_data.items():
+                # Skip internal columns
+                if column_name == 'row_id':
+                    continue
+                    
+                if value and str(value).strip():
+                    # Ensure row_id is slugified for URI consistency
+                    safe_row_id = slugify_uri_part(str(row_id_val))
+                    safe_column_name = slugify_uri_part(column_name)
+                    cell_uri = mint_uri(self.base_uri, self.institution, "datasets", dataset_name, safe_column_name, safe_row_id)
+                    
+                    if cell_uri in existing_uri_map:
+                        existing = existing_uri_map[cell_uri]
+                        analysis["existing_resources"] += 1
+                        
+                        # Check if value would change
+                        if existing['value'] != str(value).strip():
+                            analysis["potential_updates"] += 1
+                            
+                            conflict_info = {
+                                "uri": cell_uri,
+                                "column": column_name,
+                                "row_id": row_id_val,
+                                "existing_value": existing['value'],
+                                "new_value": str(value).strip(),
+                                "last_updated": existing.get('updated_at')
+                            }
+                            
+                            # Add timestamp comparison if timestamp column is configured
+                            if self.timestamp_column and self.timestamp_column in row_data:
+                                new_timestamp_str = str(row_data.get(self.timestamp_column, '')).strip()
+                                new_timestamp = self._parse_timestamp(new_timestamp_str)
+                                
+                                if new_timestamp:
+                                    # Try to get existing timestamp for this row
+                                    existing_timestamp = self._get_existing_timestamp_for_analysis(
+                                        dataset_name, safe_row_id, existing.get('updated_at')
+                                    )
+                                    
+                                    conflict_info.update({
+                                        "new_timestamp": new_timestamp_str,
+                                        "new_timestamp_parsed": new_timestamp.isoformat() if new_timestamp else None,
+                                        "existing_timestamp": existing_timestamp.isoformat() if existing_timestamp else None,
+                                        "timestamp_comparison": (
+                                            "newer" if existing_timestamp and new_timestamp > existing_timestamp else
+                                            "older" if existing_timestamp and new_timestamp < existing_timestamp else
+                                            "equal" if existing_timestamp and new_timestamp == existing_timestamp else
+                                            "unknown"
+                                        )
+                                    })
+                            
+                            analysis["conflicts"].append(conflict_info)
+                    else:
+                        analysis["new_resources"] += 1
+        
+        # Generate recommendations
+        if analysis["potential_updates"] > 0:
+            analysis["recommendations"].append(
+                f"Found {analysis['potential_updates']} potential updates. "
+                f"Consider using UPDATE_VALUES strategy."
+            )
+        
+        if analysis["existing_resources"] > analysis["new_resources"]:
+            analysis["recommendations"].append(
+                "Mostly existing data detected. Consider SKIP_EXISTING for faster processing."
+            )
+        
+        return analysis
+
+    def _parse_timestamp(self, timestamp_str: str) -> Optional[datetime]:
+        """
+        Parse a timestamp string into a datetime object.
+        """
+        if not timestamp_str or not timestamp_str.strip():
+            return None
+            
+        timestamp_str = timestamp_str.strip()
+        
+        try:
+            # Try common ISO formats first
+            for fmt in [
+                "%Y-%m-%d %H:%M:%S",
+                "%Y-%m-%d %H:%M:%S.%f",
+                "%Y-%m-%dT%H:%M:%S",
+                "%Y-%m-%dT%H:%M:%S.%f",
+                "%Y-%m-%dT%H:%M:%SZ",
+                "%Y-%m-%dT%H:%M:%S.%fZ",
+                "%Y-%m-%d",
+                "%d.%m.%Y",
+                "%d/%m/%Y",
+                "%m/%d/%Y"
+            ]:
+                try:
+                    dt = datetime.strptime(timestamp_str, fmt)
+                    # Add timezone info if missing
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    return dt
+                except ValueError:
+                    continue
+            
+            # Fallback to dateutil parser
+            return dateutil.parser.parse(timestamp_str, default=datetime.now(timezone.utc))
+            
+        except Exception as e:
+            logger.warning(f"Failed to parse timestamp '{timestamp_str}': {e}")
+            return None
+
+    def _get_existing_timestamp_for_analysis(self, dataset_name: str, row_id: str, fallback_updated_at) -> Optional[datetime]:
+        """
+        Get existing timestamp for analysis purposes.
+        """
+        if not self.timestamp_column:
+            return fallback_updated_at
+            
+        # Try to find the timestamp cell for this row
+        safe_column_name = slugify_uri_part(self.timestamp_column)
+        timestamp_cell_uri = mint_uri(self.base_uri, self.institution, "datasets", dataset_name, safe_column_name, row_id)
+        
+        try:
+            timestamp_resource = Resource.objects.get(uri=timestamp_cell_uri)
+            if timestamp_resource.value:
+                return self._parse_timestamp(timestamp_resource.value)
+        except Resource.DoesNotExist:
+            pass
+            
+        return fallback_updated_at 

@@ -127,6 +127,7 @@ class ImportWorkflowService:
         link_row_cells: bool = True,
         link_to_first_column: bool = False,
         use_smart_updater: bool = False,
+        use_polars: bool = False,
         update_strategy: UpdateStrategy = UpdateStrategy.SKIP_EXISTING,
         timestamp_column: Optional[str] = None
     ) -> Dict[str, Any]:
@@ -148,6 +149,7 @@ class ImportWorkflowService:
             link_row_cells: Whether to create links between cells in the same row
             link_to_first_column: If True, use the first column as the anchor for row links
             use_smart_updater: If True, use smart bulk updater for all files
+            use_polars: If True, use Polars version for processing
             update_strategy: Strategy for handling existing data (only used if use_smart_updater=True)
             timestamp_column: Column name for timestamp-based updates (only used if use_smart_updater=True)
             
@@ -330,12 +332,22 @@ class ImportWorkflowService:
         
         try:
             # Initialize smart updater
-            smart_updater = SmartBulkUpdater(
-                default_strategy=update_strategy,
-                timestamp_column=timestamp_column,
-                institution=institution,
-                base_uri=base_uri
-            )
+            if use_polars:
+                logger.info(f"🚀 Using Polars-optimized SmartBulkUpdaterPolars")
+                smart_updater = SmartBulkUpdaterPolars(
+                    default_strategy=update_strategy,
+                    timestamp_column=timestamp_column,
+                    institution=institution,
+                    base_uri=base_uri
+                )
+            else:
+                logger.info(f"🚀 Using original SmartBulkUpdater")
+                smart_updater = SmartBulkUpdater(
+                    default_strategy=update_strategy,
+                    timestamp_column=timestamp_column,
+                    institution=institution,
+                    base_uri=base_uri
+                )
             
             # Read CSV data
             import csv
