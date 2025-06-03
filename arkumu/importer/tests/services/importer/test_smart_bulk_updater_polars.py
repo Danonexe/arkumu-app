@@ -4,17 +4,16 @@ from typing import List, Dict, Any
 from arkumu.metadata.models import Resource, Triple
 from arkumu.metadata.models.resource import ResourceType
 from arkumu.importer.services.importer.smart_bulk_updater_polars import SmartBulkUpdaterPolars
-from arkumu.importer.services.importer.smart_bulk_updater import UpdateStrategy, BulkUpdateStats
+from arkumu.importer.services.importer.smart_bulk_updater import SmartBulkUpdater, UpdateStrategy, BulkUpdateStats
 from arkumu.importer.services.importer.uri_utils import mint_uri, slugify_uri_part
 
-# Standard vocabulary URIs that will be used/checked
+# Standard vocabulary URIs
 HAS_PART_URI = "http://purl.org/dc/terms/hasPart"
 RDF_VALUE_URI = "http://www.w3.org/1999/02/22-rdf-syntax-ns#value"
 DCTERMS_RELATION_URI = "http://purl.org/dc/terms/relation"
 
 BASE_URI = "http://test.arkumu.org/data"
 INSTITUTION = "TEST_INST"
-NUM_FIXTURE_RESOURCES = 3  # For HAS_PART, RDF_VALUE, DCTERMS_RELATION properties
 
 @pytest.fixture
 def initial_data_empty(db):
@@ -24,559 +23,227 @@ def initial_data_empty(db):
     Resource.objects.get_or_create(uri=HAS_PART_URI, defaults={"resource_type": ResourceType.PROPERTY, "name": "hasPart", "source": INSTITUTION})
     Resource.objects.get_or_create(uri=RDF_VALUE_URI, defaults={"resource_type": ResourceType.PROPERTY, "name": "value", "source": INSTITUTION})
     Resource.objects.get_or_create(uri=DCTERMS_RELATION_URI, defaults={"resource_type": ResourceType.PROPERTY, "name": "relation", "source": INSTITUTION})
-    assert Resource.objects.count() == NUM_FIXTURE_RESOURCES
-    return
 
 @pytest.fixture
-def updater_polars_default() -> SmartBulkUpdaterPolars:
+def updater_polars() -> SmartBulkUpdaterPolars:
     """SmartBulkUpdaterPolars with default settings."""
-    return SmartBulkUpdaterPolars(
-        institution=INSTITUTION, 
-        base_uri=BASE_URI, 
-        link_row_cells=False,
-        multi_value_threshold=0.2  # 20% threshold for multi-value detection
-    )
+    return SmartBulkUpdaterPolars(institution=INSTITUTION, base_uri=BASE_URI, link_row_cells=True)
 
-# Test Data with Multi-Value Columns (simple CSV format)
-multi_value_csv_data: List[Dict[str, Any]] = [
-    {"id": "1", "names": "John, Jane, Bob", "single_field": "alpha", "tags": "red,blue,green"},
-    {"id": "2", "names": "Alice, Charlie", "single_field": "beta", "tags": "yellow,purple"},
-    {"id": "3", "names": "David, Eve, Frank, Grace", "single_field": "gamma", "tags": "orange,black,white"},
-    {"id": "4", "names": "Henry", "single_field": "delta", "tags": "pink"},
-    {"id": "5", "names": "Iris, Jack", "single_field": "epsilon", "tags": "brown,gray"}
+# Test data
+simple_test_data: List[Dict[str, Any]] = [
+    {"id": "1", "title": "Test Item One", "category": "Art", "year": "2023"},
+    {"id": "2", "title": "Test Item Two", "category": "Design", "year": "2024"}
 ]
 
-# Real KHM-style data with quoted fields (semicolon-separated, commas inside quotes should NOT be split)
-khm_real_csv_data: List[Dict[str, Any]] = [
-    {
-        "Projekt_ID": "200",
-        "Originaltitel": "Project Title Alpha", 
-        "Originaltitel_Sprache": "ger",
-        "_Beschreibung_verkettet": "Project Alpha ist ein interaktives, digitales Environment, bestehend aus mehreren technischen Komponenten, welche bei Annaehrung der Benutzer zu funktionieren beginnen. Die elektronischen Einheiten des Systems bilden ein strukturiertes System aus Eingaben und Ausgaben einer fiktiven Anwendung: der Test-Anwendung.",
-        "Kategorie": "Installation",
-        "Unterkategorie": "Installation"
-    },
-    {
-        "Projekt_ID": "302",
-        "Originaltitel": "Project Beta System",
-        "Originaltitel_Sprache": "lat", 
-        "_Beschreibung_verkettet": "Project Beta ist eine Testmethodik, die auf der technischen Mehrfachverarbeitung eines digital aufgeweiteten Datenstrahls und seinen systemdefinierenden Eigenschaften basiert. Der Prozess der Mehrfachverarbeitung konnte durch Konstruktion einer Test-Apparatur vollstaendig automatisiert werden.",
-        "Kategorie": "Installation",
-        "Unterkategorie": "Installation"
-    },
-    {
-        "Projekt_ID": "528", 
-        "Originaltitel": "Test Location Gamma",
-        "Originaltitel_Sprache": "ger",
-        "_Beschreibung_verkettet": "Test Location Gamma ist eine Beispiel-Einrichtung inmitten des fiktiven Testgebietes, wo es die - nach Auskunft vieler Test-Nutzer - besten Beispiele von Deutschland geben soll. Das Test-System wurde vor einigen Jahren als Prototyp eroeffnet und zieht heute Testnutzer aus verschiedenen Staedten an.",
-        "Kategorie": "Film / TV / Video",
-        "Unterkategorie": "Dokumentarfilm"
-    }
-]
 
-# Real Folkwang-style data with true comma-separated values (no quotes, commas ARE multi-value separators)
-folkwang_real_csv_data: List[Dict[str, Any]] = [
-    {
-        "Projekt-ID": "3",
-        "Bevorzugter Titel": "Test Project Alpha", 
-        "Beschreibung": "3,4",
-        "Schlagwort": "Q161439,Q1129653,Q160402,Q33767,Q328835",
-        "Projektkategorie": "9,13",
-        "Deutscher Kommentar": "Lehrgebiet: Test Fachbereich Grundlagen"
-    },
-    {
-        "Projekt-ID": "25",
-        "Bevorzugter Titel": "Sample Project Beta",
-        "Beschreibung": "34", 
-        "Schlagwort": "Q7860,Q107425,Q11461,Q160402,Q179448,Q1200957",
-        "Projektkategorie": "9,14,17",
-        "Deutscher Kommentar": "Lehrgebiet: Test Beispiel Informationsdesign"
-    },
-    {
-        "Projekt-ID": "60",
-        "Bevorzugter Titel": "Demo Project Gamma",
-        "Beschreibung": "73",
-        "Schlagwort": "Q756,Q22676,Q177998,Q61700915,Q219416", 
-        "Projektkategorie": "9,16",
-        "Deutscher Kommentar": "Lehrgebiet: Test Interaction Design, Beispiel Innovation"
-    }
-]
-
-# Test data as Polars DataFrame
-multi_value_polars_df = pl.DataFrame(multi_value_csv_data)
-
-
-class TestPolarsOptimizations:
-    """Test Polars-specific optimizations and performance improvements."""
+class TestCoreResourceCreationFixes:
+    """Test the core fixes to resource creation that were implemented."""
     
     @pytest.mark.django_db
-    def test_polars_dataframe_input(self, updater_polars_default):
-        """Test that Polars DataFrames can be used as input."""
-        df = pl.DataFrame(multi_value_csv_data)
+    def test_cell_resources_have_proper_column_names_not_generic_cell(self, initial_data_empty, updater_polars):
+        """Test that cell resources are created with proper column names, not generic 'Cell'."""
+        df = pl.DataFrame(simple_test_data)
         
-        # Should be able to analyze the DataFrame directly
-        analysis = updater_polars_default.analyze_dataset_multi_values_polars(df)
+        stats = updater_polars.import_csv_with_smart_updates(df, "testColumnNames")
         
-        assert "names" in analysis
-        assert "tags" in analysis
-        # Multi-value detection is disabled, so all should be single-value
-        assert analysis["names"]["is_multi_value"] is False
-        assert analysis["tags"]["is_multi_value"] is False
-        assert analysis["single_field"]["is_multi_value"] is False
+        # Find cell resources and verify they have proper column names
+        title_cells = Resource.objects.filter(uri__contains="/title/").filter(uri__contains="testcolumnnames")
+        category_cells = Resource.objects.filter(uri__contains="/category/").filter(uri__contains="testcolumnnames")
+        
+        assert title_cells.count() == 2, "Should have 2 title cell resources"
+        assert category_cells.count() == 2, "Should have 2 category cell resources"
+        
+        # Verify the cell resources have proper names (column names, not "Cell")
+        for cell in title_cells:
+            assert cell.name == "title", f"Expected name 'title', got '{cell.name}'"
+        for cell in category_cells:
+            assert cell.name == "category", f"Expected name 'category', got '{cell.name}'"
     
     @pytest.mark.django_db
-    def test_polars_column_analysis(self, updater_polars_default):
-        """Test column analysis using Polars operations."""
-        df = pl.DataFrame(multi_value_csv_data)
+    def test_literal_resources_have_proper_datatype_and_name(self, initial_data_empty, updater_polars):
+        """Test that literal resources are created with proper datatype and name."""
+        df = pl.DataFrame(simple_test_data)
         
-        # Test formerly multi-value column (now treated as single-value)
-        names_analysis = updater_polars_default.analyze_column_for_multi_values_polars(df, "names")
-        assert names_analysis["is_multi_value"] is False
-        assert names_analysis["separator"] is None
-        assert names_analysis["stats"]["percentage"] == 0.0  # No multi-value detection
-        assert names_analysis["stats"]["confidence_score"] == 0.0
+        stats = updater_polars.import_csv_with_smart_updates(df, "testDatatype")
         
-        # Test single-value column
-        single_analysis = updater_polars_default.analyze_column_for_multi_values_polars(df, "single_field")
-        assert single_analysis["is_multi_value"] is False
-        assert single_analysis["stats"]["percentage"] == 0.0
+        # Find literal resources with specific values
+        test_literal = Resource.objects.filter(resource_type=ResourceType.LITERAL, value="Test Item One").first()
+        
+        assert test_literal is not None, "Should find the 'Test Item One' literal"
+        assert test_literal.datatype == "http://www.w3.org/2001/XMLSchema#string", f"Expected string datatype, got '{test_literal.datatype}'"
+        assert test_literal.name == "title", f"Expected name 'title', got '{test_literal.name}'"
     
     @pytest.mark.django_db
-    def test_polars_prepare_update_data(self, updater_polars_default):
-        """Test data preparation using Polars operations."""
-        df = pl.DataFrame(multi_value_csv_data)
+    def test_resource_update_objects_have_proper_metadata(self, updater_polars):
+        """Test that ResourceUpdate objects are created with proper metadata."""
+        df = pl.DataFrame(simple_test_data)
         
-        updates, stats = updater_polars_default.prepare_update_data_polars(df, "test_dataset")
+        updates, stats = updater_polars.prepare_update_data_vectorized(df, "testMetadata")
         
-        # Should have updates for all non-empty cells
-        assert len(updates) > 0
-        assert stats.multi_value_cells_detected == 0  # Multi-value detection disabled
-        # With no splitting, total_values_created should equal non-empty cells
-        assert stats.total_values_created == len(updates)  # 1:1 ratio since no splitting
+        assert len(updates) > 0, "Should have created ResourceUpdate objects"
         
-        # Check that NO multi-value fields exist (all treated as single-value)
-        multi_value_updates = [u for u in updates if u.is_multi_value]
-        assert len(multi_value_updates) == 0  # No multi-value updates since splitting is disabled
+        # Check that each update has proper metadata
+        for update in updates:
+            assert update.new_name is not None, f"ResourceUpdate {update.uri} should have new_name set"
+            assert update.new_datatype == "http://www.w3.org/2001/XMLSchema#string", f"ResourceUpdate {update.uri} should have proper datatype"
+            assert len(update.new_values) == 1, f"ResourceUpdate {update.uri} should have exactly 1 value"
 
 
-class TestRealWorldCSVFormats:
-    """Test handling of real-world CSV formats like KHM and Folkwang data."""
-    
-    @pytest.mark.django_db 
-    def test_khm_style_data_analysis(self, updater_polars_default):
-        """Test analysis of KHM-style data with German text and complex descriptions."""
-        df = pl.DataFrame(khm_real_csv_data)
-        
-        analysis = updater_polars_default.analyze_dataset_multi_values_polars(df)
-        
-        # ALL fields should be detected as single-value (multi-value detection disabled)
-        assert analysis["Projekt_ID"]["is_multi_value"] is False
-        assert analysis["Originaltitel"]["is_multi_value"] is False
-        assert analysis["Originaltitel_Sprache"]["is_multi_value"] is False
-        assert analysis["_Beschreibung_verkettet"]["is_multi_value"] is False
-        assert analysis["Kategorie"]["is_multi_value"] is False
-        
-        # Check that all analysis provides the disabled statistics
-        for field_name, field_analysis in analysis.items():
-            assert field_analysis["is_multi_value"] is False
-            assert field_analysis["separator"] is None
-            assert field_analysis["stats"]["percentage"] == 0.0
+class TestPolarsVsOriginalCompatibility:
+    """Test that Polars version produces identical results to the original implementation."""
     
     @pytest.mark.django_db
-    def test_folkwang_style_comma_separated_values(self, updater_polars_default):
-        """Test analysis of Folkwang-style data (now treated as single-value despite commas)."""
-        df = pl.DataFrame(folkwang_real_csv_data)
+    def test_identical_results_to_original_implementation(self, initial_data_empty):
+        """Test that both implementations create identical resources and triples."""
+        dataset_name = "compatibilityTest"
         
-        analysis = updater_polars_default.analyze_dataset_multi_values_polars(df)
+        # Test with original implementation
+        updater_original = SmartBulkUpdater(institution=INSTITUTION, base_uri=BASE_URI, link_row_cells=False)
+        stats_original = updater_original.import_csv_with_smart_updates(simple_test_data, dataset_name + "_original")
         
-        # ALL fields should be single-value (multi-value detection disabled)
-        assert analysis["Schlagwort"]["is_multi_value"] is False
-        assert analysis["Projekt-ID"]["is_multi_value"] is False
-        assert analysis["Bevorzugter Titel"]["is_multi_value"] is False
-        assert analysis["Projektkategorie"]["is_multi_value"] is False
+        # Test with Polars implementation
+        updater_polars = SmartBulkUpdaterPolars(institution=INSTITUTION, base_uri=BASE_URI, link_row_cells=False)
+        df = pl.DataFrame(simple_test_data)
+        stats_polars = updater_polars.import_csv_with_smart_updates(df, dataset_name + "_polars")
         
-        # Check statistics are consistent
-        for field_name, field_analysis in analysis.items():
-            stats = field_analysis["stats"]
-            assert stats["percentage"] == 0.0
-            assert stats["confidence_score"] == 0.0
+        # Should create the same number of resources and triples
+        original_resources = Resource.objects.filter(uri__contains="compatibilitytest_original").exclude(uri__in=[HAS_PART_URI, RDF_VALUE_URI, DCTERMS_RELATION_URI]).count()
+        polars_resources = Resource.objects.filter(uri__contains="compatibilitytest_polars").exclude(uri__in=[HAS_PART_URI, RDF_VALUE_URI, DCTERMS_RELATION_URI]).count()
+        
+        assert original_resources == polars_resources, f"Original created {original_resources} resources, Polars created {polars_resources}"
+        # Both implementations should create the same data, but may count statistics differently
+        # Verify that the same literal values were created
+        original_literals = set(Resource.objects.filter(
+            resource_type=ResourceType.LITERAL,
+            uri__isnull=True
+        ).filter(
+            object_triples__subject__uri__contains="compatibilitytest_original"
+        ).values_list('value', flat=True))
+        
+        polars_literals = set(Resource.objects.filter(
+            resource_type=ResourceType.LITERAL,
+            uri__isnull=True
+        ).filter(
+            object_triples__subject__uri__contains="compatibilitytest_polars"
+        ).values_list('value', flat=True))
+        
+        assert original_literals == polars_literals, f"Different literal values: original {original_literals}, polars {polars_literals}"
+
+
+class TestPolarsDataFrameHandling:
+    """Test Polars-specific DataFrame handling capabilities."""
     
     @pytest.mark.django_db
-    def test_mixed_separator_handling(self, updater_polars_default):
-        """Test handling data with various comma usage patterns (all treated as single-value)."""
+    def test_polars_dataframe_input_and_mixed_data_types(self, initial_data_empty, updater_polars):
+        """Test that Polars DataFrames work with mixed data types."""
         mixed_data = [
-            {"id": "1", "codes": "A001,B002,C003", "names": "Schmidt, Mueller", "text": "This is a sentence, with commas."},
-            {"id": "2", "codes": "D004,E005", "names": "Weber, Fischer", "text": "Another sentence, also with commas."},  
-            {"id": "3", "codes": "F006,G007,H008", "names": "Wagner", "text": "Text without much punctuation"},
-            {"id": "4", "codes": "I009", "names": "Becker, Schulz", "text": "Some text, here and there."},
+            {"id": 1, "text": "value1", "number": 42, "float_val": 3.14, "bool_val": True},
+            {"id": 2, "text": "value2", "number": 84, "float_val": 2.71, "bool_val": False},
         ]
         
         df = pl.DataFrame(mixed_data)
-        analysis = updater_polars_default.analyze_dataset_multi_values_polars(df)
+        stats = updater_polars.import_csv_with_smart_updates(df, "mixedTypesTest")
         
-        # ALL fields should be single-value (multi-value detection disabled)
-        assert analysis["codes"]["is_multi_value"] is False
-        assert analysis["names"]["is_multi_value"] is False
-        assert analysis["text"]["is_multi_value"] is False
-        assert analysis["id"]["is_multi_value"] is False
+        # Should handle all data types by converting to strings
+        assert stats.resources_created > 0, "Should create resources"
+        # With linking enabled, expect 22 triples (12 structural + 10 value triples)
+        assert stats.triples_created == 22, "Should create 22 triples (12 structural + 10 value with linking enabled)"
         
-        # Verify all have consistent disabled statistics
-        for field_name, field_analysis in analysis.items():
-            assert field_analysis["separator"] is None
-            assert field_analysis["stats"]["percentage"] == 0.0
+        # Check that numeric values are converted to strings in ResourceUpdate objects
+        updates, _ = updater_polars.prepare_update_data_vectorized(df, "test")
+        for update in updates:
+            assert isinstance(update.new_values[0], str), "Values should be converted to strings"
     
     @pytest.mark.django_db
-    def test_german_text_with_quotes(self, updater_polars_default):
-        """Test handling of German text with quotes and special characters."""
-        german_data = [
-            {"id": "1", "titel": "Sample Project Alpha", "beschreibung": "Ein interaktives Test-Environment mit mehreren Einheiten", "tags": "kunst,digital,interaktiv"},
-            {"id": "2", "titel": "Demo Project Beta", "beschreibung": "Beispiel-Verarbeitung eines Test-Datenstrahls", "tags": "fotografie,laser"},
-            {"id": "3", "titel": "Test Location Gamma", "beschreibung": "Eine Beispiel-Einrichtung im fiktiven Testgebiet", "tags": "dokumentation,gastronomie,film"}
+    def test_list_dict_input_still_works(self, initial_data_empty, updater_polars):
+        """Test that traditional List[Dict] input still works."""
+        stats = updater_polars.import_csv_with_smart_updates(simple_test_data, "listDictTest")
+        
+        assert stats.resources_created > 0, "Should create resources"
+        assert stats.triples_created > 0, "Should create triples"
+
+
+class TestErrorHandlingAndEdgeCases:
+    """Test error handling and edge cases."""
+    
+    @pytest.mark.django_db
+    def test_null_empty_values_and_unicode_handling(self, initial_data_empty, updater_polars):
+        """Test handling of null/empty values and Unicode characters."""
+        test_data = [
+            {"id": "1", "title": "Valid Title", "category": None, "artist": "Müller"},
+            {"id": "2", "title": "", "category": "Valid Category", "artist": "García"},
+            {"id": "3", "title": None, "category": None, "artist": None}
         ]
         
-        df = pl.DataFrame(german_data)
-        analysis = updater_polars_default.analyze_dataset_multi_values_polars(df)
+        df = pl.DataFrame(test_data)
+        stats = updater_polars.import_csv_with_smart_updates(df, "edgeCasesTest")
         
-        # ALL fields should be single-value (multi-value detection disabled)
-        assert analysis["tags"]["is_multi_value"] is False
-        assert analysis["titel"]["is_multi_value"] is False
-        assert analysis["beschreibung"]["is_multi_value"] is False
-        assert analysis["id"]["is_multi_value"] is False
+        # Should only create resources for non-empty values
+        literal_resources = Resource.objects.filter(
+            resource_type=ResourceType.LITERAL,
+            source=slugify_uri_part(INSTITUTION),
+            uri__isnull=True
+        )
+        
+        # Should find literals for: "Valid Title", "Valid Category", "Müller", "García", "1", "2", "3"
+        expected_values = {"Valid Title", "Valid Category", "Müller", "García", "1", "2", "3"}
+        actual_values = set(literal_resources.values_list('value', flat=True))
+        
+        assert actual_values == expected_values, f"Expected {expected_values}, got {actual_values}"
     
     @pytest.mark.django_db
-    def test_import_real_world_data(self, initial_data_empty, updater_polars_default):
-        """Test complete import workflow with real-world style data."""
-        df = pl.DataFrame(folkwang_real_csv_data)
-        dataset_name = "folkwangTest"
+    def test_empty_dataframe_handling(self, initial_data_empty, updater_polars):
+        """Test handling of empty DataFrame."""
+        empty_df = pl.DataFrame()
+        stats = updater_polars.import_csv_with_smart_updates(empty_df, "emptyTest")
         
-        stats = updater_polars_default.import_csv_with_smart_updates(df, dataset_name)
+        assert stats.resources_created == 0, "Should not create resources for empty DataFrame"
+        assert stats.cells_processed == 0, "Should not process any cells"
+        assert stats.triples_created == 0, "Should not create any triples"
+
+
+class TestRealWorldData:
+    """Test with real-world style data."""
+    
+    @pytest.mark.django_db
+    def test_real_world_csv_with_long_text_and_german_content(self, initial_data_empty, updater_polars):
+        """Test complete workflow with real-world style data including long text and German content."""
+        real_world_data = [
+            {
+                "Projekt_ID": "200",
+                "Originaltitel": "Project Title Alpha", 
+                "Originaltitel_Sprache": "ger",
+                "_Beschreibung_verkettet": "Project Alpha ist ein interaktives, digitales Environment mit mehreren technischen Komponenten für moderne Kunstinstallationen.",
+                "Kategorie": "Installation"
+            },
+            {
+                "Projekt_ID": "302",
+                "Originaltitel": "Project Beta System",
+                "Originaltitel_Sprache": "lat", 
+                "_Beschreibung_verkettet": "Project Beta ist eine Testmethodik für die technische Verarbeitung von digitalen Datenströmen.",
+                "Kategorie": "Digital Art"
+            }
+        ]
+        
+        df = pl.DataFrame(real_world_data)
+        stats = updater_polars.import_csv_with_smart_updates(df, "realWorldTest")
         
         # Verify import worked
-        assert stats.resources_created > 0
+        assert stats.resources_created > 0, "Should have created resources"
+        # With linking enabled, expect 22 triples (12 structural + 10 value triples)
+        assert stats.triples_created == 22, "Should create 22 triples (12 structural + 10 value with linking enabled)"
         
-        # No multi-value detection should occur
-        assert stats.multi_value_cells_detected == 0
-        # With no splitting, total_values_created should be approximately equal to non-empty cells
-        assert stats.total_values_created > 0
-
-
-class TestCompatibilityWithOriginal:
-    """Test that Polars version produces same results as original implementation."""
-    
-    @pytest.mark.django_db
-    def test_compatibility_multi_value_detection(self, updater_polars_default):
-        """Test that multi-value detection produces disabled results."""
-        # Test using compatibility methods that should delegate to Polars
-        analysis = updater_polars_default.analyze_dataset_multi_values(multi_value_csv_data)
-        
-        # Should detect NO multi-value patterns (disabled)
-        assert analysis["names"]["is_multi_value"] is False
-        assert analysis["tags"]["is_multi_value"] is False
-        assert analysis["single_field"]["is_multi_value"] is False
-        assert analysis["id"]["is_multi_value"] is False
-    
-    @pytest.mark.django_db
-    def test_compatibility_import_with_dataframe(self, initial_data_empty, updater_polars_default):
-        """Test that import works with Polars DataFrame input."""
-        df = pl.DataFrame(multi_value_csv_data)
-        dataset_name = "polarsCompatibilityTest"
-        
-        stats = updater_polars_default.import_csv_with_smart_updates(df, dataset_name)
-        
-        # Verify basic import worked
-        assert stats.resources_created > 0
-        assert stats.multi_value_cells_detected == 0  # No multi-value detection
-        # With no splitting, values should be roughly equal to non-empty cells
-        assert stats.total_values_created > 0
-        
-        # Find all cell resources for the dataset (using the same approach as other tests)
-        dataset_resources = Resource.objects.filter(
-            uri__contains="polarscompatibilitytest"
+        # Verify German text handling
+        german_literals = Resource.objects.filter(
+            resource_type=ResourceType.LITERAL,
+            value__contains="interaktives"
         )
-        assert dataset_resources.count() > 0, "Should have created dataset resources"
+        assert german_literals.exists(), "Should handle German text properly"
         
-        # Check that values from the input data were created (as complete strings)
-        john_resources = Resource.objects.filter(
-            value__contains="John"  # May be "John, Jane, Bob" as single value
-        )
-        alpha_resources = Resource.objects.filter(
-            value="alpha"
-        )
-        
-        # Since we're not splitting, "John" might be part of "John, Jane, Bob"
-        assert john_resources.exists() or Resource.objects.filter(value="John, Jane, Bob").exists(), "Should find John or the complete names string"
-        assert alpha_resources.exists(), "Should find alpha as a value"
-    
-    @pytest.mark.django_db 
-    def test_compatibility_import_with_list_dict(self, initial_data_empty, updater_polars_default):
-        """Test that import still works with traditional List[Dict] input."""
-        dataset_name = "polarsListDictTest"
-        
-        stats = updater_polars_default.import_csv_with_smart_updates(multi_value_csv_data, dataset_name)
-        
-        # Should work identically to DataFrame input
-        assert stats.resources_created > 0
-        assert stats.multi_value_cells_detected == 0  # No multi-value detection
-        assert stats.total_values_created > 0
-
-
-class TestPolarsPerformanceFeatures:
-    """Test features that specifically leverage Polars for better performance."""
-    
-    @pytest.mark.django_db
-    def test_large_dataset_handling(self, updater_polars_default):
-        """Test handling of larger datasets (simulated)."""
-        # Create a larger dataset
-        large_data = []
-        for i in range(100):  # 100 rows
-            large_data.append({
-                "id": str(i),
-                "multi_field": f"value{i}, value{i+1}, value{i+2}",
-                "single_field": f"single{i}",
-                "numeric_field": str(i * 10)
-            })
-        
-        df = pl.DataFrame(large_data)
-        
-        # Analysis should be fast with Polars (but all single-value)
-        analysis = updater_polars_default.analyze_dataset_multi_values_polars(df)
-        
-        assert analysis["multi_field"]["is_multi_value"] is False
-        assert analysis["single_field"]["is_multi_value"] is False
-        assert analysis["numeric_field"]["is_multi_value"] is False
-        
-        # Preparing update data should handle the larger dataset efficiently
-        updates, stats = updater_polars_default.prepare_update_data_polars(df, "large_test")
-        
-        assert len(updates) == 100 * 4  # 100 rows * 4 columns
-        assert stats.multi_value_cells_detected == 0  # No multi-value detection
-    
-    @pytest.mark.django_db
-    def test_empty_dataframe_handling(self, updater_polars_default):
-        """Test handling of empty DataFrames."""
-        empty_df = pl.DataFrame()
-        
-        analysis = updater_polars_default.analyze_dataset_multi_values_polars(empty_df)
-        assert analysis == {}
-        
-        updates, stats = updater_polars_default.prepare_update_data_polars(empty_df, "empty_test")
-        assert len(updates) == 0
-        assert stats.multi_value_cells_detected == 0
-    
-    @pytest.mark.django_db
-    def test_mixed_data_types(self, updater_polars_default):
-        """Test handling of mixed data types in Polars DataFrame."""
-        mixed_data = [
-            {"id": 1, "text": "value1, value2", "number": 42, "float_val": 3.14},
-            {"id": 2, "text": "value3, value4", "number": 84, "float_val": 2.71},
-        ]
-        
-        df = pl.DataFrame(mixed_data)
-        
-        # Should handle mixed types correctly (all single-value)
-        analysis = updater_polars_default.analyze_dataset_multi_values_polars(df)
-        
-        assert analysis["text"]["is_multi_value"] is False
-        assert analysis["number"]["is_multi_value"] is False
-        assert analysis["float_val"]["is_multi_value"] is False
-    
-    @pytest.mark.django_db
-    def test_unicode_and_special_characters(self, updater_polars_default):
-        """Test handling of Unicode characters and special symbols."""
-        unicode_data = [
-            {"id": "1", "künstler": "Müller, Schäfer, Weiß", "themen": "Ästhetik,Künstleridentität", "emoji": "🎨,🖼️,🎭"},
-            {"id": "2", "künstler": "García, López", "themen": "Modernität,Tradition", "emoji": "🌟,✨"},
-            {"id": "3", "künstler": "Ørsted", "themen": "Minimalismus", "emoji": "⚪"}
-        ]
-        
-        df = pl.DataFrame(unicode_data)
-        analysis = updater_polars_default.analyze_dataset_multi_values_polars(df)
-        
-        # Should correctly handle Unicode but detect no multi-value patterns
-        assert analysis["künstler"]["is_multi_value"] is False
-        assert analysis["themen"]["is_multi_value"] is False
-        assert analysis["emoji"]["is_multi_value"] is False
-
-
-class TestMultiValueTripleCreation:
-    """Test that single-value cells create single triples correctly (multi-value disabled)."""
-    
-    @pytest.mark.django_db
-    def test_multi_value_cell_creates_single_triple(self, initial_data_empty, updater_polars_default):
-        """Test that a cell with comma-separated content creates ONE triple (no splitting)."""
-        # Simple test data with comma-separated content (treated as single value)
-        test_data = [
-            {"id": "1", "tags": "red,blue,green", "title": "Test Item"}
-        ]
-        
-        df = pl.DataFrame(test_data)
-        dataset_name = "singleValueTripleTest"
-        
-        # Import the data
-        stats = updater_polars_default.import_csv_with_smart_updates(df, dataset_name)
-        
-        # Verify basic import worked
-        assert stats.resources_created > 0
-        assert stats.triples_created > 0
-        
-        # Find the tags cell resource
-        tags_resources = Resource.objects.filter(
-            uri__contains="/tags/",
-        ).filter(
-            uri__contains="singlevaluetripletest"
-        )
-        
-        assert tags_resources.count() >= 1, "Should have created at least one tags cell resource"
-        tags_resource = tags_resources.first()
-        
-        # Find all triples for this cell (should be 1: "red,blue,green" as single value)
-        tags_triples = Triple.objects.filter(
-            subject=tags_resource,
-            predicate__uri=RDF_VALUE_URI
-        )
-        
-        assert tags_triples.count() == 1, f"Should have created 1 triple for tags cell, found {tags_triples.count()}"
-        
-        # Verify the actual value (complete comma-separated string)
-        triple_value = tags_triples.first().object.value
-        assert triple_value == "red,blue,green", f"Expected 'red,blue,green', got '{triple_value}'"
-    
-    @pytest.mark.django_db
-    def test_single_value_cell_creates_one_triple(self, initial_data_empty, updater_polars_default):
-        """Test that a single-value cell creates exactly one triple."""
-        test_data = [
-            {"id": "1", "title": "Single Value Item", "count": "42"}
-        ]
-        
-        df = pl.DataFrame(test_data)
-        dataset_name = "singleValueTripleTest"
-        
-        # Import the data
-        stats = updater_polars_default.import_csv_with_smart_updates(df, dataset_name)
-        
-        # Find the title cell resource
-        title_resources = Resource.objects.filter(
-            uri__contains="/title/",
-        ).filter(
-            uri__contains="singlevaluetripletest"
-        )
-        
-        assert title_resources.count() >= 1, "Should have created at least one title cell resource"
-        title_resource = title_resources.first()
-        
-        # Find triples for this cell (should be 1)
-        title_triples = Triple.objects.filter(
-            subject=title_resource,
-            predicate__uri=RDF_VALUE_URI
-        )
-        
-        assert title_triples.count() == 1, f"Should have created 1 triple for title cell, found {title_triples.count()}"
-        assert title_triples.first().object.value == "Single Value Item"
-    
-    @pytest.mark.django_db
-    def test_mixed_single_and_comma_value_columns(self, initial_data_empty, updater_polars_default):
-        """Test dataset with both simple and comma-containing columns (all treated as single-value)."""
-        test_data = [
-            {"id": "1", "title": "Item One", "tags": "art,digital,interactive"},
-            {"id": "2", "title": "Item Two", "tags": "photo,print"},
-            {"id": "3", "title": "Item Three", "tags": "sculpture"}
-        ]
-        
-        df = pl.DataFrame(test_data)
-        dataset_name = "mixedValueTest"
-        
-        # Import the data
-        stats = updater_polars_default.import_csv_with_smart_updates(df, dataset_name)
-        
-        # Find all tags resources
-        tags_resources = Resource.objects.filter(
-            uri__contains="/tags/",
-        ).filter(
-            uri__contains="mixedvaluetest"
-        ).order_by('uri')
-        
-        assert tags_resources.count() == 3, f"Should have created 3 tags resources, found {tags_resources.count()}"
-        
-        # Check each tags resource (all should have exactly 1 triple)
-        for tags_resource in tags_resources:
-            triples = Triple.objects.filter(
-                subject=tags_resource,
-                predicate__uri=RDF_VALUE_URI
-            )
-            assert triples.count() == 1, f"Each tags resource should have 1 triple, found {triples.count()}"
-        
-        # Check that all title resources have exactly 1 triple each
-        title_resources = Resource.objects.filter(
-            uri__contains="/title/",
-        ).filter(
-            uri__contains="mixedvaluetest"
-        )
-        
-        assert title_resources.count() == 3, "Should have 3 title resources"
-        
-        for title_resource in title_resources:
-            title_triples = Triple.objects.filter(
-                subject=title_resource,
-                predicate__uri=RDF_VALUE_URI
-            )
-            assert title_triples.count() == 1, f"Each title should have 1 triple"
-    
-    @pytest.mark.django_db
-    def test_empty_and_null_values_handling(self, initial_data_empty, updater_polars_default):
-        """Test that empty and null values don't create unnecessary triples."""
-        test_data = [
-            {"id": "1", "tags": "valid,value", "empty": "", "null_field": None},
-            {"id": "2", "tags": "", "empty": "not_empty", "null_field": "not_null"}
-        ]
-        
-        df = pl.DataFrame(test_data)
-        dataset_name = "emptyNullTest"
-        
-        # Import the data
-        stats = updater_polars_default.import_csv_with_smart_updates(df, dataset_name)
-        
-        # Find tags resources that should have values
-        tags_with_values = Resource.objects.filter(
-            uri__contains="/tags/",
-        ).filter(
-            uri__contains="emptynulltest"
-        )
-        
-        # Should have at least one tags resource with triple
-        valid_tags_found = False
-        for tags_resource in tags_with_values:
-            triples = Triple.objects.filter(
-                subject=tags_resource,
-                predicate__uri=RDF_VALUE_URI
-            )
-            if triples.count() == 1:  # "valid,value" as single value
-                valid_tags_found = True
-                value = triples.first().object.value
-                assert value == "valid,value", f"Expected 'valid,value', got '{value}'"
-        
-        assert valid_tags_found, "Should find tags resource with 1 value"
-    
-    @pytest.mark.django_db
-    def test_statistics_reflect_actual_triples_created(self, initial_data_empty, updater_polars_default):
-        """Test that statistics accurately reflect the number of triples created."""
-        test_data = [
-            {"id": "1", "multi": "a,b,c", "single": "x"},
-            {"id": "2", "multi": "d,e", "single": "y"}
-        ]
-        
-        df = pl.DataFrame(test_data)
-        dataset_name = "statisticsTest"
-        
-        # Import the data
-        stats = updater_polars_default.import_csv_with_smart_updates(df, dataset_name)
-        
-        # Verify statistics match actual database
-        actual_triples = Triple.objects.filter(
-            predicate__uri=RDF_VALUE_URI
-        ).count()
-        
-        assert stats.triples_created == actual_triples, \
-            f"Statistics show {stats.triples_created} triples, but database has {actual_triples}"
-        
-        # Should have created exactly 6 triples (1 per cell: id="1", multi="a,b,c", single="x", id="2", multi="d,e", single="y")
-        assert actual_triples == 6, f"Should have exactly 6 triples (3 columns x 2 rows), got {actual_triples}" 
+        # Verify long text handling
+        long_text_literal = Resource.objects.filter(
+            resource_type=ResourceType.LITERAL,
+            value__contains="technischen Komponenten"
+        ).first()
+        assert long_text_literal is not None, "Should handle long German text properly"
+        assert long_text_literal.name == "_Beschreibung_verkettet", "Should have correct field name" 

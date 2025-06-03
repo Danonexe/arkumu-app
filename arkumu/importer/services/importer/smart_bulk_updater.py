@@ -19,8 +19,8 @@ from arkumu.importer.services.importer.data_utils import normalize_string_nfc
 logger = logging.getLogger(__name__)
 
 # Maximum size for values to avoid btree index errors (PostgreSQL limit is ~2704 bytes)
-# Using a slightly lower limit for safety and to accommodate potential overhead.
-MAX_INDEXED_VALUE_SIZE = 2500 
+# Using a significantly lower limit to account for index overhead (other columns + metadata).
+MAX_INDEXED_VALUE_SIZE = 1000
 
 class UpdateStrategy(Enum):
     """Strategies for handling existing data during bulk imports."""

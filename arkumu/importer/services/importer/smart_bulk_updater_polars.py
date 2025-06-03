@@ -213,9 +213,6 @@ class SmartBulkUpdaterPolars:
                 if column_name == 'row_id':
                     continue
                     
-                # Count all cells processed (including empty ones)
-                stats.cells_processed += 1
-                    
                 if value is not None and str(value).strip():
                     current_value_str = str(value).strip()
                     
@@ -239,10 +236,14 @@ class SmartBulkUpdaterPolars:
                     safe_column_name = slugify_uri_part(column_name)
                     cell_uri = mint_uri(self.base_uri, self.institution, "datasets", dataset_name, safe_column_name, safe_row_id)
                     
-                    update = ResourceUpdate(uri=cell_uri)
-                    update.new_values = [current_value_str]  # Always single value
-                    update.is_multi_value = False
-                    stats.total_values_created += 1
+                    update = ResourceUpdate(
+                        uri=cell_uri,
+                        new_values=[current_value_str],
+                        new_name=column_name,
+                        new_datatype="http://www.w3.org/2001/XMLSchema#string",
+                        action=UpdateStrategy.SKIP_EXISTING  # Will be determined later
+                    )
+                    # Note: Don't count total_values_created here - count during actual execution
                     
                     updates.append(update)
         
@@ -295,21 +296,51 @@ class SmartBulkUpdaterPolars:
                     if update.is_multi_value:
                         # For now, always update multi-value fields (complex comparison)
                         update.action = UpdateStrategy.UPDATE_VALUES
+                        action_stats.resources_updated += 1
                     else:
-                        if existing.value != update.new_values[0]:
+                        # For single values, check if the literal value has changed
+                        # The existing resource is a cell resource (IRI type)
+                        # We need to find the literal resource connected to it via rdf:value triple
+                        try:
+                            value_triple = Triple.objects.filter(
+                                subject=existing,
+                                predicate=self.rdf_value_prop
+                            ).first()
+                            
+                            if value_triple and value_triple.object:
+                                # Compare the literal value with the new value
+                                current_literal_value = value_triple.object.value
+                                new_value = update.new_values[0]
+                                
+                                if current_literal_value == new_value:
+                                    # Value hasn't changed
+                                    update.action = UpdateStrategy.SKIP_EXISTING
+                                    action_stats.resources_skipped += 1
+                                else:
+                                    # Value has changed
+                                    update.action = UpdateStrategy.UPDATE_VALUES
+                                    action_stats.resources_updated += 1
+                            else:
+                                # No existing value triple, so this is effectively new
+                                update.action = UpdateStrategy.UPDATE_VALUES
+                                action_stats.resources_updated += 1
+                        except Exception as e:
+                            logger.warning(f"Error comparing values for {update.uri}: {e}")
+                            # If we can't determine, default to update
                             update.action = UpdateStrategy.UPDATE_VALUES
-                        else:
-                            update.action = UpdateStrategy.SKIP_EXISTING
-                            action_stats.resources_skipped += 1
+                            action_stats.resources_updated += 1
                 elif self.default_strategy == UpdateStrategy.TIMESTAMP_BASED:
                     # This would need the row data for timestamp comparison
                     # For now, default to UPDATE_VALUES
                     update.action = UpdateStrategy.UPDATE_VALUES
+                    action_stats.resources_updated += 1
                 else:
-                    update.action = self.default_strategy
+                    update.action = UpdateStrategy.UPDATE_VALUES
+                    action_stats.resources_updated += 1
             else:
                 # New resource
                 update.action = UpdateStrategy.UPDATE_VALUES  # Create new
+                action_stats.resources_created += 1
         
         return updates, action_stats
 
@@ -319,28 +350,62 @@ class SmartBulkUpdaterPolars:
                           action_phase_stats: BulkUpdateStats,
                           batch_size: int = 1000) -> BulkUpdateStats:
         """
-        Execute bulk updates with proper multi-value support.
-        Creates multiple triples for multi-value cells (same subject/predicate, different objects).
-        """
-        from django.db import transaction
-        from arkumu.metadata.models import Resource, Triple
-        from arkumu.metadata.models.resource import ResourceType
+        Execute bulk updates with multi-value support and optimized batch processing.
         
-        stats = BulkUpdateStats()
-        stats.merge(action_phase_stats)
+        Args:
+            updates: List of ResourceUpdate objects to execute
+            dataset_name: Name of the dataset being processed
+            action_phase_stats: Statistics from the action determination phase
+            batch_size: Size of batches for processing
+            
+        Returns:
+            BulkUpdateStats with execution metrics
+        """
+        logger.info(f"Executing {len(updates)} updates for dataset '{dataset_name}' with batch size {batch_size}")
         
         if not updates:
-            logger.info("No updates to execute")
-            return stats
+            return BulkUpdateStats()
         
-        logger.info(f"Executing {len(updates)} updates for dataset '{dataset_name}' with batch size {batch_size}")
+        stats = BulkUpdateStats()
+        # Note: Don't count cells_processed here since it's already counted in prepare_update_data_vectorized
+        
+        # Extract row_ids for row linking if enabled
+        row_ids = set()
+        if self.link_row_cells:
+            for update in updates:
+                row_id = self._extract_row_id_from_uri(update.uri)
+                if row_id:
+                    row_ids.add(row_id)
         
         # Process updates in batches
         for i in range(0, len(updates), batch_size):
             batch = updates[i:i + batch_size]
+            active_updates = [u for u in batch if u.action in {UpdateStrategy.UPDATE_VALUES}]
             
-            with transaction.atomic():
-                self._execute_batch_with_multi_value_support(batch, dataset_name, stats)
+            # Process the batch
+            self._execute_batch_with_multi_value_support(active_updates, dataset_name, stats)
+        
+        # Handle row linking if enabled
+        if self.link_row_cells and row_ids:
+            # For each row_id, ensure row-level resources are created and properly linked
+            for row_id in row_ids:
+                safe_row_id = slugify_uri_part(str(row_id))
+                row_dataset_uri = mint_uri(self.base_uri, self.institution, "datasets", dataset_name, "", safe_row_id)
+                
+                # Create row resource if it doesn't exist
+                row_resource, created = Resource.objects.get_or_create(
+                    uri=row_dataset_uri,
+                    defaults={
+                        "name": f"Row {row_id}",
+                        "resource_type": ResourceType.IRI,
+                        "source": self.institution,
+                        "datatype": "http://www.w3.org/2001/XMLSchema#string"
+                    }
+                )
+                
+                if created:
+                    stats.resources_created += 1
+                    stats.row_links_created += 1
         
         logger.info(f"Bulk update execution completed: {stats}")
         return stats
@@ -350,7 +415,7 @@ class SmartBulkUpdaterPolars:
                                               dataset_name: str, 
                                               stats: BulkUpdateStats):
         """
-        Execute a batch of updates without multi-value complexity.
+        Execute a batch of updates with proper bulk operations.
         Creates dataset and row resources with proper hasPart relationships.
         """
         from arkumu.metadata.models import Resource, Triple
@@ -359,10 +424,6 @@ class SmartBulkUpdaterPolars:
         if not batch:
             return
         
-        resource_creates = []
-        triple_creates = []
-        structural_triple_creates = []  # Separate tracking for structural triples
-        
         # Create dataset resource first
         dataset_uri = mint_uri(self.base_uri, self.institution, "datasets", dataset_name)
         dataset_resource, ds_created = Resource.objects.get_or_create(
@@ -370,94 +431,124 @@ class SmartBulkUpdaterPolars:
             defaults={"resource_type": ResourceType.IRI, "name": dataset_name, "source": self.institution}
         )
         if ds_created:
-            resource_creates.append(dataset_resource)
             stats.resources_created += 1
         
-        # Group by row to create row resources
-        row_grouping: Dict[str, List[ResourceUpdate]] = {}
-        for update in batch:
+        # Filter out skipped updates
+        active_updates = [update for update in batch if update.action != UpdateStrategy.SKIP_EXISTING]
+        if not active_updates:
+            return
+        
+        # Track rows processed (count unique row IDs in this batch)
+        row_ids_in_batch = set()
+        for update in active_updates:
+            row_id = self._extract_row_id_from_uri(update.uri)
+            if row_id:
+                row_ids_in_batch.add(row_id)
+        stats.rows_processed += len(row_ids_in_batch)
+        
+        # Track cells processed (active updates count)
+        stats.cells_processed += len(active_updates)
+        
+        # Prepare cell resources for bulk creation
+        cell_resources_to_create = []
+        uri_to_update_map = {}
+        
+        for update in active_updates:
+            cell_resources_to_create.append(Resource(
+                uri=update.uri,
+                resource_type=ResourceType.IRI,
+                source=self.institution,
+                name=update.new_name or "Cell"
+            ))
+            uri_to_update_map[update.uri] = update
+        
+        # Bulk create cell resources
+        if cell_resources_to_create:
+            Resource.objects.bulk_create(
+                cell_resources_to_create,
+                ignore_conflicts=True,
+                batch_size=500
+            )
+            stats.resources_created += len({u.uri for u in active_updates})
+        
+        # Group updates by row for row creation
+        row_grouping = {}
+        for update in active_updates:
             row_id = self._extract_row_id_from_uri(update.uri)
             if row_id:
                 if row_id not in row_grouping:
                     row_grouping[row_id] = []
                 row_grouping[row_id].append(update)
         
-        # Create row resources and their relationships
-        for row_id, row_updates in row_grouping.items():
-            safe_row_id = slugify_uri_part(str(row_id))
-            row_uri = mint_uri(self.base_uri, self.institution, "datasets", dataset_name, "rows", safe_row_id)
-            
-            row_resource, row_created = Resource.objects.get_or_create(
-                uri=row_uri,
-                defaults={"resource_type": ResourceType.IRI, "name": f"Row {row_id}", "source": self.institution}
-            )
-            if row_created:
-                resource_creates.append(row_resource)
-                stats.resources_created += 1
-            
-            # Link dataset to row
-            if not Triple.objects.filter(subject=dataset_resource, predicate=self.has_part_prop, object=row_resource).exists():
-                structural_triple = Triple(subject=dataset_resource, predicate=self.has_part_prop, object=row_resource)
-                structural_triple_creates.append(structural_triple)
+        # Create row resources and prepare structural triples
+        structural_triples = []
+        value_triples = []
         
-        # Process each cell update (simplified without multi-value complexity)
-        for update in batch:
-            # Skip if action is SKIP_EXISTING
-            if update.action == UpdateStrategy.SKIP_EXISTING:
-                continue
-                
-            cell_resource, created = Resource.objects.get_or_create(
-                uri=update.uri,
-                defaults={"resource_type": ResourceType.IRI, "name": f"Cell", "source": self.institution}
-            )
-            
-            if created:
-                resource_creates.append(cell_resource)
-                stats.resources_created += 1
-            
-            # Link row to cell
-            row_id = self._extract_row_id_from_uri(update.uri)
-            if row_id:
+        # Create row resources if needed - only when linking is enabled
+        if self.link_row_cells:
+            for row_id, row_updates in row_grouping.items():
                 safe_row_id = slugify_uri_part(str(row_id))
                 row_uri = mint_uri(self.base_uri, self.institution, "datasets", dataset_name, "rows", safe_row_id)
-                try:
-                    row_resource = Resource.objects.get(uri=row_uri)
-                    if not Triple.objects.filter(subject=row_resource, predicate=self.has_part_prop, object=cell_resource).exists():
-                        structural_triple = Triple(subject=row_resource, predicate=self.has_part_prop, object=cell_resource)
-                        structural_triple_creates.append(structural_triple)
-                except Resource.DoesNotExist:
-                    logger.warning(f"Row resource not found: {row_uri}")
-            
-            # Create value triples (simplified - always single value)
-            for value in update.new_values:
-                if value and value.strip():
-                    value_resource, val_created = Resource.objects.get_or_create(
-                        value=value,
-                        resource_type=ResourceType.LITERAL,
-                        source=self.institution,
-                        defaults={"name": value}
-                    )
-                    
-                    if val_created:
-                        resource_creates.append(value_resource)
-                        stats.resources_created += 1
-                    
-                    # Create rdf:value triple
-                    if not Triple.objects.filter(subject=cell_resource, predicate=self.rdf_value_prop, object=value_resource).exists():
-                        value_triple = Triple(subject=cell_resource, predicate=self.rdf_value_prop, object=value_resource)
-                        triple_creates.append(value_triple)
+                
+                row_resource, row_created = Resource.objects.get_or_create(
+                    uri=row_uri,
+                    defaults={"resource_type": ResourceType.IRI, "name": f"Row {row_id}", "source": self.institution}
+                )
+                if row_created:
+                    stats.resources_created += 1
+                
+                # Link dataset to row
+                structural_triples.append(Triple(subject=dataset_resource, predicate=self.has_part_prop, object=row_resource))
         
-        # Bulk create operations
-        if structural_triple_creates:
-            Triple.objects.bulk_create(structural_triple_creates, ignore_conflicts=True)
-            logger.info(f"Created {len(structural_triple_creates)} structural triples")
+        # Process each cell and create value resources and triples
+        for cell_uri, update in uri_to_update_map.items():
+            try:
+                cell_resource = Resource.objects.get(uri=cell_uri)
+                
+                # Link row to cell - only when linking is enabled
+                if self.link_row_cells:
+                    row_id = self._extract_row_id_from_uri(cell_uri)
+                    if row_id:
+                        safe_row_id = slugify_uri_part(str(row_id))
+                        row_uri = mint_uri(self.base_uri, self.institution, "datasets", dataset_name, "rows", safe_row_id)
+                        try:
+                            row_resource = Resource.objects.get(uri=row_uri)
+                            structural_triples.append(Triple(subject=row_resource, predicate=self.has_part_prop, object=cell_resource))
+                        except Resource.DoesNotExist:
+                            logger.warning(f"Row resource not found: {row_uri}")
+                
+                # Create value resources and triples
+                for value in update.new_values:
+                    if value and value.strip():
+                        value_resource, val_created = Resource.objects.get_or_create(
+                            value=value,
+                            resource_type=ResourceType.LITERAL,
+                            source=self.institution,
+                            defaults={"name": update.new_name or value, "datatype": update.new_datatype}
+                        )
+                        
+                        if val_created:
+                            stats.resources_created += 1
+                        
+                        # Create rdf:value triple
+                        value_triples.append(Triple(subject=cell_resource, predicate=self.rdf_value_prop, object=value_resource))
+                        stats.total_values_created += 1
+                        
+            except Resource.DoesNotExist:
+                logger.error(f"Cell resource {cell_uri} not found after bulk create. Skipping.")
+                stats.errors += 1
+            except Exception as e:
+                logger.error(f"Error processing cell {cell_uri}: {e}", exc_info=True)
+                stats.errors += 1
         
-        if triple_creates:
-            Triple.objects.bulk_create(triple_creates, ignore_conflicts=True)
-            stats.triples_created += len(triple_creates)  # Only count rdf:value triples
-            logger.info(f"Created {len(triple_creates)} value triples")
+        # Bulk create all triples
+        all_triples = structural_triples + value_triples
+        if all_triples:
+            Triple.objects.bulk_create(all_triples, ignore_conflicts=True)
+            stats.triples_created += len(all_triples)  # Count all triples like the original
+            logger.info(f"Created {len(structural_triples)} structural triples and {len(value_triples)} value triples")
         
-        logger.info(f"Batch processed: {len(batch)} updates, {stats.resources_created} resources, {stats.triples_created} value triples")
+        logger.info(f"Batch processed: {len(batch)} updates, {len({u.uri for u in active_updates})} resources, {len(value_triples)} value triples")
 
     def _extract_row_id_from_uri(self, cell_uri: str) -> Optional[str]:
         """Helper to extract row_id from a standard cell URI."""
