@@ -79,13 +79,13 @@ def ingest_file(request):
             s3_bucket_name=s3_bucket_name,
             s3_object_key=s3_object_key,
             dataset_name=dataset_name,
-            institution=organization_slug.upper(), # Convention from previous versions
+            institution=organization_slug, # Keep original case (lowercase)
             base_uri="http://arkumu.org/data",
             delimiter=';',
             has_quoted_fields=True,
             link_row_cells=True,
             link_to_first_column=False, # Default, or make configurable
-            update_strategy=UpdateStrategy.SKIP_EXISTING, # Default, or make configurable
+            update_strategy=UpdateStrategy.UPDATE_VALUES, # Default: Update existing data when re-importing
             task_id_for_cache=polling_task_id, # Pass the generated ID for caching
             upload_session_id=ingest_session.id # Pass the ID of the new IngestSession (keeping param name for compatibility)
         )
@@ -183,6 +183,8 @@ def task_status_view(request, task_id):
     cache_key = f"task_status_{task_id}"
     task_info = cache.get(cache_key)
 
+    logger.info(f"Task status check for {task_id}: cache_key={cache_key}, task_info={task_info}")
+
     if not task_info:
         task_info = {
             "status": "pending",
@@ -193,6 +195,8 @@ def task_status_view(request, task_id):
     # Determine if polling should continue
     # Stop polling if status is 'completed' or 'failed'
     should_poll = task_info.get("status") not in ["completed", "failed"]
+    
+    logger.info(f"Task {task_id}: status='{task_info.get('status')}', should_poll={should_poll}")
     
     # Default polling interval is 2 seconds, can be adjusted
     # If task is completed or failed, hx-trigger can be set to none or a very long interval if needed

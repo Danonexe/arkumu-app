@@ -44,7 +44,7 @@ class SmartBulkUpdaterPolars:
         Args:
             default_strategy: Default strategy for handling existing resources
             timestamp_column: Column name containing timestamps for timestamp-based updates
-            institution: Institution code for URI generation
+            institution: Institution code for URI generation (will be automatically slugified)
             base_uri: Base URI for resource generation
             link_row_cells: Whether to link cells to rows
             link_topology: Topology for linking cells to rows
@@ -52,7 +52,8 @@ class SmartBulkUpdaterPolars:
         """
         self.default_strategy = default_strategy
         self.timestamp_column = timestamp_column
-        self.institution = institution
+        # Pre-slugify institution once to avoid repeated slugification during URI generation
+        self.institution = slugify_uri_part(str(institution)) if institution else "default"
         self.base_uri = base_uri
         self.link_row_cells = link_row_cells
         self.link_topology = link_topology
