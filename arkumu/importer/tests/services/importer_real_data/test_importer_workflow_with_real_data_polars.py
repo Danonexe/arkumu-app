@@ -37,21 +37,19 @@ class MockUploadService:
         return True, mock_url
 
 
-
-
 @pytest.mark.django_db
-def test_import_with_file_paths():
+def test_import_with_file_paths_polars():
     """
-    Test import using real CSV files with file path columns.
+    Test import using real CSV files with file path columns using the Polars-optimized SmartBulkUpdaterPolars.
     All data is imported as literals without relationship resolution.
     
     This test can be run in two ways:
     
     1. Using environment variables:
-       CSV_DIR=/path/to/csv/dir FILE_COLUMNS_CONFIG=/path/to/file_columns.json FILES_BASE_DIR=/path/to/files pytest arkumu/importer/tests/services/importer_real_data/test_importer_workflow_with_real_data.py::test_import_with_file_paths -v
+       CSV_DIR=/path/to/csv/dir FILE_COLUMNS_CONFIG=/path/to/file_columns.json FILES_BASE_DIR=/path/to/files pytest arkumu/importer/tests/services/importer_real_data/test_importer_workflow_with_real_data_polars.py::test_import_with_file_paths_polars -v
     
     2. Using command line arguments:
-       pytest arkumu/importer/tests/services/importer_real_data/test_importer_workflow_with_real_data.py::test_import_with_file_paths -v --csv-dir=/path/to/csv/dir --file-columns-config=/path/to/file_columns.json --files-base-dir=/path/to/files
+       pytest arkumu/importer/tests/services/importer_real_data/test_importer_workflow_with_real_data_polars.py::test_import_with_file_paths_polars -v --csv-dir=/path/to/csv/dir --file-columns-config=/path/to/file_columns.json --files-base-dir=/path/to/files
     """
     # First check environment variables
     csv_dir = os.environ.get('CSV_DIR')
@@ -121,12 +119,13 @@ def test_import_with_file_paths():
     initial_triple_count = Triple.objects.count()
     
     # Run the import
-    print(f"\nStarting import from {csv_dir} (using SmartBulkUpdater - Legacy Version)")
+    print(f"\nStarting import from {csv_dir} (using SmartBulkUpdaterPolars - Optimized Version)")
     print(f"Files base directory: {files_base_dir}")
-    print(f"Note: All data will be imported with full triple creation using SmartBulkUpdater (Legacy):")
-    print(f"  ✅ Standard bulk operations")
-    print(f"  ✅ Multi-value detection and splitting")
-    print(f"  ✅ Efficient resource and triple handling")
+    print(f"Note: All data will be imported with full triple creation using SmartBulkUpdaterPolars with:")
+    print(f"  🚀 Vectorized Unicode normalization (Rust-powered Polars performance)")
+    print(f"  🚀 Optimized multi-value detection and splitting")
+    print(f"  🚀 Efficient mixed single/multi-value cell handling")
+    print(f"  🚀 DataFrame-based operations for better performance")
     
     stats = ImportWorkflowService.import_csv_directory(
         directory_path=csv_dir,
@@ -139,7 +138,7 @@ def test_import_with_file_paths():
         files_base_directory=files_base_dir,
         upload_service=upload_service,
         use_smart_updater=True,
-        use_polars=False,  # 🚀 USE LEGACY SMARTBULKUPDATER VERSION!
+        use_polars=True,  # 🚀 USE OPTIMIZED POLARS VERSION!
         update_strategy=UpdateStrategy.SKIP_EXISTING,
         link_row_cells=True
     )
@@ -155,7 +154,7 @@ def test_import_with_file_paths():
     print(f"\nResource creation:")
     print(f"New resources created: {new_resources}")
     print(f"New triples created: {new_triples}")
-    print(f"Data imported with SmartBulkUpdater, including structural and linking triples.")
+    print(f"Data imported with SmartBulkUpdaterPolars, including structural and linking triples.")
     
     # Check for file uploads
     print(f"\nFiles uploaded: {stats.get('files_uploaded', 0)}")
@@ -183,7 +182,7 @@ def test_import_with_file_paths():
     
     # Basic assertions
     assert new_resources > 0, "No resources were created"
-    assert new_triples > 0, "No triples were created. SmartBulkUpdater should create structural and linking triples."
+    assert new_triples > 0, "No triples were created. SmartBulkUpdaterPolars should create structural and linking triples."
     
     # If file columns were specified, check that files were uploaded
     if any(file_columns.values()):
@@ -289,7 +288,7 @@ def test_import_with_file_paths():
                     assert value_triple.object.value is not None and value_triple.object.value != "", f"Cell {cell.uri} for column {column_name} should have a value."
                 else:
                     print(f"  ❌ {column_name}: <no value found>")
-                    assert value_triple is not None, f"No value triple found for cell {cell.uri} (column: {column_name}). SmartBulkUpdater should create these."
+                    assert value_triple is not None, f"No value triple found for cell {cell.uri} (column: {column_name}). SmartBulkUpdaterPolars should create these."
         else:
             print("❌ No row IDs found in dataset")
     else:
@@ -304,10 +303,7 @@ def test_import_with_file_paths():
         for res in dataset_related:
             print(f"  - {res.uri}")
     
-    print(f"\n✅ SUCCESS: Import completed with SmartBulkUpdater (Legacy)!")
+    print(f"\n✅ SUCCESS: Import completed with SmartBulkUpdaterPolars (Optimized)!")
     print(f"📊 {new_resources} resources and {new_triples} triples created")
-    print(f"🔗 Data imported with SmartBulkUpdater (Legacy), including structural, value, and linking triples.")
-
-
-
-
+    print(f"🚀 Data imported with SmartBulkUpdaterPolars, including structural, value, and linking triples.")
+    print(f"🚀 Polars optimization enabled: vectorized operations, improved performance!") 

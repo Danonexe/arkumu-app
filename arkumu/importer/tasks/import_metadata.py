@@ -91,6 +91,9 @@ def run_csv_import_workflow(
             if error_type:
                 payload["error_type"] = error_type
             cache.set(cache_key, payload, timeout=3600)
+            logger.info(f"Task {actual_task_id or 'UnknownID'}: Cache updated - Key: {cache_key}, Status: {status}, Message: {message[:50]}...")
+        else:
+            logger.warning(f"Task {actual_task_id or 'UnknownID'}: Cannot update cache - cache_key is None")
 
     # Update IngestSession helper (updated from UploadSession)
     def update_upload_session_status(status: str, message: Optional[str] = None, files_processed: int = 0, errors_count: int = 0):
@@ -117,7 +120,7 @@ def run_csv_import_workflow(
     logger.info(
         f"Task {actual_task_id or 'UnknownID'}: Starting CSV import workflow for dataset '{dataset_name}' "
         f"from S3 object '{s3_bucket_name}/{s3_object_key}' for institution '{institution}'. Strategy: {update_strategy.name}. "
-        f"IngestSession ID: {upload_session_id}"
+        f"IngestSession ID: {upload_session_id}. Cache key: {cache_key}"
     )
     
     temp_local_path = None # To store the path of the downloaded temp file
@@ -146,13 +149,14 @@ def run_csv_import_workflow(
         stats: BulkUpdateStats = ImportWorkflowService.import_csv(
             csv_path=temp_local_path, # Use the new local temp path
             dataset_name=dataset_name,
-            institution=institution.upper(),
+            institution=institution,  # Keep original case (lowercase)
             base_uri=base_uri,
             delimiter=delimiter,
             has_quoted_fields=has_quoted_fields,
             link_row_cells=link_row_cells,
             link_to_first_column=link_to_first_column,
             use_smart_updater=True,
+            use_polars=True,  # Use Polars-optimized version for better performance
             update_strategy=update_strategy
         )
         
@@ -183,6 +187,7 @@ def run_csv_import_workflow(
             f" Errors: {actual_stats_data.get('errors', 0)}."
         )
         update_cache("completed", success_message, 100, details=final_stats_dict)
+        logger.info(f"Task {actual_task_id or 'UnknownID'}: Updated cache with 'completed' status. Cache key: {cache_key}")
         update_upload_session_status('completed', success_message, 1, final_stats_dict['errors']) # 1 file processed
         
         logger.info(

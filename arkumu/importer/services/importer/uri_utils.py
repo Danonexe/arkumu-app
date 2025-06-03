@@ -65,7 +65,7 @@ def mint_uri(base_uri_for_institution, institution_code_slug, *parts):
     Mints a URI for a resource.
     Output format: <base_uri_for_institution>/<institution_code_slug>/<slugified_part1>/<slugified_part2>/...
     Assumes base_uri_for_institution already ends with a slash if that's the convention.
-    institution_code_slug is pre-slugified.
+    institution_code_slug is expected to be pre-slugified for efficiency.
     Other parts are slugified by this function.
     """
     slugged_dynamic_parts = []

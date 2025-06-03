@@ -5,6 +5,7 @@ from typing import Dict, List, Any, Optional
 from arkumu.importer.services.importer.bulk_import import import_csv_as_cells
 from arkumu.importer.services.importer.file_handler import FileHandler
 from arkumu.importer.services.importer.smart_bulk_updater import SmartBulkUpdater, UpdateStrategy
+from arkumu.importer.services.importer.smart_bulk_updater_polars import SmartBulkUpdaterPolars
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,7 @@ class ImportWorkflowService:
         link_row_cells: bool = True,
         link_to_first_column: bool = False,
         use_smart_updater: bool = False,
+        use_polars: bool = False,
         update_strategy: UpdateStrategy = UpdateStrategy.SKIP_EXISTING,
         timestamp_column: Optional[str] = None
     ) -> Dict[str, Any]:
@@ -51,6 +53,7 @@ class ImportWorkflowService:
             link_row_cells: Whether to create links between cells in the same row
             link_to_first_column: If True, use the first column as the anchor for row links
             use_smart_updater: If True, use smart bulk updater (slower but handles existing data)
+            use_polars: If True, use Polars version for processing
             update_strategy: Strategy for handling existing data (only used if use_smart_updater=True)
             timestamp_column: Column name for timestamp-based updates (only used if use_smart_updater=True)
             
@@ -69,7 +72,7 @@ class ImportWorkflowService:
             logger.info(f"   Auto-detected dataset name: {dataset_name}")
         
         try:
-            # Route to appropriate importer based on flag
+            # Route to appropriate importer based on flags
             if use_smart_updater:
                 logger.info(f"📋 Using smart bulk updater for existing data handling")
                 return ImportWorkflowService.import_csv_with_smart_updates(
@@ -81,7 +84,8 @@ class ImportWorkflowService:
                     has_quoted_fields=has_quoted_fields,
                     update_strategy=update_strategy,
                     timestamp_column=timestamp_column,
-                    analyze_first=True
+                    analyze_first=True,
+                    use_polars=use_polars
                 )
             else:
                 # Default: Use fast bulk import
@@ -123,6 +127,7 @@ class ImportWorkflowService:
         link_row_cells: bool = True,
         link_to_first_column: bool = False,
         use_smart_updater: bool = False,
+        use_polars: bool = False,
         update_strategy: UpdateStrategy = UpdateStrategy.SKIP_EXISTING,
         timestamp_column: Optional[str] = None
     ) -> Dict[str, Any]:
@@ -144,6 +149,7 @@ class ImportWorkflowService:
             link_row_cells: Whether to create links between cells in the same row
             link_to_first_column: If True, use the first column as the anchor for row links
             use_smart_updater: If True, use smart bulk updater for all files
+            use_polars: If True, use Polars version for processing
             update_strategy: Strategy for handling existing data (only used if use_smart_updater=True)
             timestamp_column: Column name for timestamp-based updates (only used if use_smart_updater=True)
             
@@ -251,6 +257,7 @@ class ImportWorkflowService:
                         link_row_cells=link_row_cells,
                         link_to_first_column=link_to_first_column,
                         use_smart_updater=use_smart_updater,
+                        use_polars=use_polars,
                         update_strategy=update_strategy,
                         timestamp_column=timestamp_column
                     )
@@ -292,7 +299,8 @@ class ImportWorkflowService:
         has_quoted_fields: bool = False,
         update_strategy: UpdateStrategy = UpdateStrategy.SKIP_EXISTING,
         timestamp_column: Optional[str] = None,
-        analyze_first: bool = True
+        analyze_first: bool = True,
+        use_polars: bool = False
     ) -> Dict[str, Any]:
         """
         Import a CSV file with intelligent update handling.
@@ -308,6 +316,7 @@ class ImportWorkflowService:
             update_strategy: Strategy for handling existing data
             timestamp_column: Column name for timestamp-based updates
             analyze_first: Whether to perform analysis before import
+            use_polars: If True, use Polars version for processing
             
         Returns:
             Dict with import statistics and analysis
@@ -323,12 +332,22 @@ class ImportWorkflowService:
         
         try:
             # Initialize smart updater
-            smart_updater = SmartBulkUpdater(
-                default_strategy=update_strategy,
-                timestamp_column=timestamp_column,
-                institution=institution,
-                base_uri=base_uri
-            )
+            if use_polars:
+                logger.info(f"🚀 Using Polars-optimized SmartBulkUpdaterPolars")
+                smart_updater = SmartBulkUpdaterPolars(
+                    default_strategy=update_strategy,
+                    timestamp_column=timestamp_column,
+                    institution=institution,
+                    base_uri=base_uri
+                )
+            else:
+                logger.info(f"🚀 Using original SmartBulkUpdater")
+                smart_updater = SmartBulkUpdater(
+                    default_strategy=update_strategy,
+                    timestamp_column=timestamp_column,
+                    institution=institution,
+                    base_uri=base_uri
+                )
             
             # Read CSV data
             import csv
