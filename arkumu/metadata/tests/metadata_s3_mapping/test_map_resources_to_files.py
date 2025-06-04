@@ -9,7 +9,7 @@ from django.conf import settings
 
 from arkumu.storage.models import S3FileObject, UploadSession
 from arkumu.metadata.models import Resource
-from arkumu.metadata.services.mapping.map_resources_to_files import (
+from arkumu.metadata.services.metatdata_s3_mapping import (
     FileResourceMatcherService,
     MatchingConfig,
     FileMatchingError,
@@ -50,7 +50,7 @@ def service(matching_config, mock_logger):
 @pytest.fixture
 def mock_bucket_service():
     """Fixture for mock bucket service."""
-    with patch('arkumu.metadata.services.map_resources_to_files.BucketService') as mock:
+    with patch('arkumu.metadata.services.metatdata_s3_mapping.map_resources_to_files.BucketService') as mock:
         yield mock.return_value
 
 

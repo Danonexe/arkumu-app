@@ -114,7 +114,7 @@ class ValidationService:
             issues.extend(self._validate_entity_type(entity_data['type']))
         
         # Property validation
-        if 'properties' in entity_data:
+        if 'properties' in entity_data and entity_data['properties'] is not None:
             issues.extend(self._validate_entity_properties(entity_data['properties']))
         
         # Data consistency validation
@@ -192,8 +192,8 @@ class ValidationService:
             ValidationResult with dataset-level validation
         """
         issues = []
-        entities = dataset_data.get('entities', {})
-        relationships = dataset_data.get('relationships', [])
+        entities = dataset_data.get('entities', {}) or {}
+        relationships = dataset_data.get('relationships', []) or []
         
         # Validate individual entities
         entity_validations = {}
@@ -453,7 +453,7 @@ class ValidationService:
         """Validate dataset-level consistency"""
         issues = []
         
-        entities = dataset_data.get('entities', {})
+        entities = dataset_data.get('entities', {}) or {}
         
         # Check for duplicate entity IDs (should not happen, but good to verify)
         entity_ids = list(entities.keys())
@@ -473,8 +473,8 @@ class ValidationService:
         """Validate dataset completeness"""
         issues = []
         
-        entities = dataset_data.get('entities', {})
-        relationships = dataset_data.get('relationships', [])
+        entities = dataset_data.get('entities', {}) or {}
+        relationships = dataset_data.get('relationships', []) or []
         
         # Check if dataset is empty
         if not entities and not relationships:

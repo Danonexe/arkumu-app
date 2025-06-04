@@ -432,15 +432,15 @@ class ReferenceResolutionService:
     def export_registry(self) -> Dict[str, Any]:
         """Export the entity registry for persistence"""
         return {
-            'entities': self.entity_registry.entities,
-            'datasets': self.entity_registry.datasets,
+            'entities': self.entity_registry.entities.copy(),
+            'datasets': self.entity_registry.datasets.copy(),
             # Skip indices as they can be rebuilt
         }
     
     def import_registry(self, registry_data: Dict[str, Any], rebuild_indices: bool = True):
         """Import entity registry from exported data"""
-        self.entity_registry.entities = registry_data.get('entities', {})
-        self.entity_registry.datasets = registry_data.get('datasets', {})
+        self.entity_registry.entities = registry_data.get('entities', {}).copy()
+        self.entity_registry.datasets = registry_data.get('datasets', {}).copy()
         
         if rebuild_indices:
             self._rebuild_indices()

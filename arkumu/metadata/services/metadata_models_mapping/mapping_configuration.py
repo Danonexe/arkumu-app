@@ -218,6 +218,9 @@ class MappingConfigurationService:
         self._configurations[config_id] = configuration
         self._active_configuration_id = config_id
         
+        # Save to session if available
+        self._save_to_session()
+        
         return configuration
     
     def add_mapping_rule_to_configuration(self, config_id: str, mapping_rule: MappingRule) -> bool:
@@ -450,26 +453,31 @@ class MappingConfigurationService:
     
     def _save_to_session(self):
         """Save configurations to session storage"""
-        if self.session_storage:
-            # Convert to JSON-serializable format
-            session_data = {
-                'configurations': {},
-                'active_configuration_id': self._active_configuration_id
-            }
-            
-            for config_id, config in self._configurations.items():
-                session_data['configurations'][config_id] = asdict(config)
+        if self.session_storage is not None:
+            try:
+                # Convert to JSON-serializable format
+                session_data = {
+                    'configurations': {},
+                    'active_configuration_id': self._active_configuration_id
+                }
                 
-                # Convert enums to strings for JSON serialization
-                for rule in session_data['configurations'][config_id]['mapping_rules']:
-                    rule['mapping_type'] = rule['mapping_type'].value
-                    rule['pattern_rule']['pattern_type'] = rule['pattern_rule']['pattern_type'].value
-            
-            self.session_storage['mapping_configurations'] = session_data
+                for config_id, config in self._configurations.items():
+                    session_data['configurations'][config_id] = asdict(config)
+                    
+                    # Convert enums to strings for JSON serialization
+                    for rule in session_data['configurations'][config_id]['mapping_rules']:
+                        rule['mapping_type'] = rule['mapping_type'].value
+                        rule['pattern_rule']['pattern_type'] = rule['pattern_rule']['pattern_type'].value
+                
+                self.session_storage['mapping_configurations'] = session_data
+            except Exception as e:
+                logger.error(f"Error saving to session: {str(e)}")
+                import traceback
+                logger.error(traceback.format_exc())
     
     def _load_from_session(self):
         """Load configurations from session storage"""
-        if self.session_storage and 'mapping_configurations' in self.session_storage:
+        if self.session_storage is not None and 'mapping_configurations' in self.session_storage:
             try:
                 session_data = self.session_storage['mapping_configurations']
                 

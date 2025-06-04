@@ -14,7 +14,7 @@ import logging
 
 from arkumu.storage.models import S3FileObject, UploadSession
 from arkumu.metadata.models import Resource
-from arkumu.metadata.services.mapping.map_resources_to_files import FileResourceMatcherService
+from arkumu.metadata.services.metatdata_s3_mapping.map_resources_to_files import FileResourceMatcherService
 from arkumu.storage.services.bucket_service import BucketService
 from arkumu.storage.services.s3_sync_service import S3SyncService
 

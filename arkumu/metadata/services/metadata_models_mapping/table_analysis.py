@@ -191,14 +191,35 @@ class TableAnalysisService:
         prefixes = Counter()
         
         for value in values:
-            # Try different prefix lengths
-            for length in range(1, min(len(value), 10)):
+            # First check for delimiter-based prefixes (e.g., "ARTIST_001" -> "ARTIST")
+            if '_' in value:
+                delimiter_prefix = value.split('_')[0]
+                if len(delimiter_prefix) >= 1:  # Accept single char for delimited values
+                    prefixes[delimiter_prefix] += 1
+            
+            # Also check for common character prefixes  
+            # For alphanumeric values like "P001", allow single character prefixes
+            # For longer alphabetic values, require at least 2 characters
+            min_length = 1 if any(c.isdigit() for c in value) else 2
+            
+            for length in range(min_length, min(len(value), 10)):
                 prefix = value[:length]
-                prefixes[prefix] += 1
+                # Allow single chars for alphanumeric patterns, 2+ chars for pure alpha
+                if ((length == 1 and prefix.isalpha() and any(c.isdigit() for c in value)) or
+                    (length >= 2 and prefix.isalpha() and 2 <= len(prefix) <= 8)):
+                    prefixes[prefix] += 1
         
-        # Filter by frequency
+        # Filter by frequency and prioritize longer prefixes
         threshold = len(values) * min_frequency
-        return [prefix for prefix, count in prefixes.most_common(5) if count >= threshold]
+        valid_prefixes = [prefix for prefix, count in prefixes.items() if count >= threshold]
+        
+        # Remove shorter prefixes that are substrings of longer ones
+        filtered_prefixes = []
+        for prefix in sorted(valid_prefixes, key=len, reverse=True):  # Sort by length, longest first
+            if not any(prefix in longer for longer in filtered_prefixes):
+                filtered_prefixes.append(prefix)
+        
+        return filtered_prefixes[:5]  # Return top 5
 
     def _find_common_suffixes(self, values: List[str], min_frequency: float = 0.3) -> List[str]:
         """Find common suffixes in values"""
@@ -361,8 +382,9 @@ class TableAnalysisService:
             for pattern in col.patterns:
                 if pattern.startswith('prefix:'):
                     prefix = pattern[7:]
-                    # Filter for likely institutional prefixes (2-5 chars)
-                    if 2 <= len(prefix) <= 5 and prefix.isalpha():
+                    # Filter for likely institutional prefixes
+                    # Allow 1-8 chars for alphabetic prefixes (1 char only for special cases like 'P' in IDs)
+                    if 1 <= len(prefix) <= 8 and prefix.isalpha():
                         prefixes.add(prefix.upper())
         
         return sorted(list(prefixes))
