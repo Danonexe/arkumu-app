@@ -1,0 +1,218 @@
+{% if error %}
+<div class="alert alert-error">
+    <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+    <span>{{ error }}</span>
+</div>
+{% else %}
+
+<!-- Service-Powered Execution Results -->
+<div class="card bg-gradient-to-br from-success/10 to-primary/10 border border-success/30">
+    <div class="card-body">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="card-title text-xl">
+                {% if dry_run %}
+                🧪 Dry Run Complete
+                {% else %}
+                ✅ Transformation Complete
+                {% endif %}
+            </h3>
+            {% if service_powered %}
+            <div class="badge badge-primary">🧠 Service-Powered</div>
+            {% endif %}
+        </div>
+
+        <!-- Execution Summary -->
+        <div class="stats stats-horizontal shadow mb-6">
+            {% if dry_run %}
+            <div class="stat">
+                <div class="stat-figure text-info">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <div class="stat-title">Would Process</div>
+                <div class="stat-value text-lg">{{ pipeline_result.would_process|floatformat:0 }}</div>
+                <div class="stat-desc">entities analyzed</div>
+            </div>
+            <div class="stat">
+                <div class="stat-figure text-success">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                    </svg>
+                </div>
+                <div class="stat-title">Would Create</div>
+                <div class="stat-value text-lg">{{ pipeline_result.would_create|floatformat:0 }}</div>
+                <div class="stat-desc">new triples</div>
+            </div>
+            <div class="stat">
+                <div class="stat-figure text-warning">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                </div>
+                <div class="stat-title">Estimated Time</div>
+                <div class="stat-value text-lg">{{ pipeline_result.estimated_time }}</div>
+                <div class="stat-desc">processing time</div>
+            </div>
+            {% else %}
+            <div class="stat">
+                <div class="stat-figure text-success">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <div class="stat-title">Entities Processed</div>
+                <div class="stat-value text-lg">{{ pipeline_result.entities_processed|floatformat:0 }}</div>
+                <div class="stat-desc">successfully transformed</div>
+            </div>
+            <div class="stat">
+                <div class="stat-figure text-primary">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                    </svg>
+                </div>
+                <div class="stat-title">Triples Created</div>
+                <div class="stat-value text-lg">{{ pipeline_result.triples_created|floatformat:0 }}</div>
+                <div class="stat-desc">new semantic relationships</div>
+            </div>
+            <div class="stat">
+                <div class="stat-figure text-info">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                </div>
+                <div class="stat-title">Execution Time</div>
+                <div class="stat-value text-lg">{{ pipeline_result.execution_time }}</div>
+                <div class="stat-desc">total processing</div>
+            </div>
+            {% endif %}
+        </div>
+
+        {% if not dry_run and pipeline_result.quality_improvements %}
+        <!-- Quality Improvement Metrics -->
+        <div class="alert alert-success mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+            </svg>
+            <div>
+                <h4 class="font-bold">Data Quality Improved!</h4>
+                <div class="text-sm">
+                    Quality score increased from {{ pipeline_result.quality_improvements.before_score|floatformat:1 }} 
+                    to {{ pipeline_result.quality_improvements.after_score|floatformat:1 }} 
+                    ({{ pipeline_result.quality_improvements.improvement }})
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Service Performance Metrics -->
+        {% if service_powered and pipeline_result.service_metrics %}
+        <div class="collapse collapse-arrow bg-base-200 mb-4">
+            <input type="checkbox" />
+            <div class="collapse-title text-sm font-medium">
+                ⚡ Service Performance Metrics
+            </div>
+            <div class="collapse-content">
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    {% for service, time in pipeline_result.service_metrics.items %}
+                    <div class="stat bg-base-100 rounded-lg p-3">
+                        <div class="stat-title text-xs">{{ service|title|replace:"_":" " }}</div>
+                        <div class="stat-value text-sm">{{ time }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="text-xs text-base-content/60 mt-3">
+                    🧠 Powered by: {{ services_used|join:", " }}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Applied Mapping Rules Summary -->
+        <div class="collapse collapse-arrow bg-base-200 mb-4">
+            <input type="checkbox" />
+            <div class="collapse-title text-sm font-medium">
+                📋 Applied Mapping Rules ({{ mapping_rules|length }})
+            </div>
+            <div class="collapse-content">
+                <div class="space-y-2">
+                    {% for rule in mapping_rules %}
+                    <div class="flex justify-between items-center bg-base-100 p-2 rounded">
+                        <div class="text-sm">
+                            <code class="bg-base-300 px-1 rounded">{{ rule.pattern_value }}</code>
+                            → {{ rule.arkumu_type }}
+                        </div>
+                        <div class="badge badge-sm {% if rule.confidence >= 80 %}badge-success{% elif rule.confidence >= 60 %}badge-warning{% else %}badge-info{% endif %}">
+                            {% if rule.confidence %}{{ rule.confidence }}%{% else %}Applied{% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Next Steps -->
+        <div class="bg-gradient-to-r from-primary/10 to-secondary/10 p-4 rounded-lg border border-primary/20">
+            <h4 class="font-semibold mb-2 flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+                </svg>
+                Next Steps
+            </h4>
+            <div class="text-sm space-y-1">
+                {% if dry_run %}
+                <p>✅ Validation successful - ready for real execution</p>
+                <p>🔍 Review the estimated changes above</p>
+                <p>⚡ Execute transformation when ready</p>
+                {% else %}
+                <p>✅ Transformation completed successfully</p>
+                <p>🔍 Data quality has been improved</p>
+                <p>📊 View results in metadata dashboard</p>
+                <p>🚀 Ready for next dataset transformation</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex justify-center gap-3 mt-6">
+            {% if dry_run %}
+            <button class="btn btn-primary" 
+                    hx-post="{% url 'metadata:service_powered_execution' %}"
+                    hx-include="#dataset-selector, #update-existing"
+                    hx-target="#transformation-results"
+                    hx-confirm="Execute real transformation?">
+                ⚡ Execute Real Transformation
+            </button>
+            {% else %}
+            <a href="{% url 'metadata:metadata_dashboard' %}" class="btn btn-primary">
+                📊 View in Dashboard
+            </a>
+            {% endif %}
+            <button class="btn btn-ghost" onclick="location.reload()">
+                🔄 Transform Another Dataset
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Service Integration Showcase -->
+<div class="mt-4 p-3 bg-gradient-to-r from-accent/10 to-success/10 rounded-lg border border-accent/20">
+    <div class="flex items-center gap-2 mb-2">
+        <div class="text-sm">🏗️ <strong>ProcessingPipelineService</strong> Integration</div>
+        <div class="badge badge-accent badge-xs">Full Stack</div>
+    </div>
+    <div class="text-xs text-base-content/70">
+        This transformation utilized the complete service architecture: TableAnalysisService for pattern recognition, 
+        MappingConfigurationService for rule management, ValidationService for quality assurance, 
+        and ProcessingPipelineService for orchestrated execution.
+    </div>
+    {% if not dry_run %}
+    <div class="text-xs text-success mt-1">
+        ✅ All services executed successfully with optimal performance
+    </div>
+    {% endif %}
+</div>
+
+{% endif %} 

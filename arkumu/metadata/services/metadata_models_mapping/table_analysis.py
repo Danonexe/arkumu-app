@@ -74,8 +74,25 @@ class TableAnalysisService:
         Analyze a CSV file to discover patterns and suggest mappings
         """
         try:
-            # Read CSV with polars
-            df = pl.read_csv(file_path)
+            # Read CSV with polars - handle malformed CSV files and auto-detect delimiter
+            # Try semicolon first (common in European CSV files), then comma
+            try:
+                df = pl.read_csv(file_path, 
+                               separator=';',
+                               infer_schema_length=0,
+                               truncate_ragged_lines=True)
+                # Check if we got multiple columns (successful parsing)
+                if len(df.columns) > 1:
+                    logger.info(f"Successfully parsed CSV with semicolon delimiter: {len(df.columns)} columns")
+                else:
+                    raise ValueError("Single column detected, try comma delimiter")
+            except:
+                # Fallback to comma delimiter
+                logger.info("Semicolon delimiter failed, trying comma delimiter")
+                df = pl.read_csv(file_path, 
+                               separator=',',
+                               infer_schema_length=0,
+                               truncate_ragged_lines=True)
             
             # Sample if file is large
             if len(df) > sample_size:

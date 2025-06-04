@@ -14,7 +14,7 @@ from .triple_views import triple_search, triple_list
 from .graph_views import full_graph_view, graph_data_view
 
 # Bulk editor views
-from .bulk_editor_views import bulk_triple_editor, query_relationships, create_bulk_triples
+from .bulk_editor_views import bulk_triple_editor
 
 
 # Data discovery views
@@ -38,9 +38,7 @@ __all__ = [
     'graph_data_view',
     
     # Bulk editing
-    'bulk_triple_editor', 
-    'query_relationships', 
-    'create_bulk_triples',
+    'bulk_triple_editor',
 
     # Data discovery
     'DataDiscoveryView',
