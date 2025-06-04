@@ -1,0 +1,180 @@
+<!-- Filter Component with Theme Support -->
+<div class="filter-component w-full p-6">
+  
+  <!-- Search Bar -->
+  <div class="flex mb-8">
+    <div class="flex-1 relative">
+      <div class="absolute left-3 top-1/2 transform -translate-y-1/2">
+        <svg class="w-4 h-4 transition-colors
+                   text-arkumu-dark
+                   theme-dark:text-arkumu-light
+                   theme-blue:text-arkumu-blue" 
+             fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+        </svg>
+      </div>
+      <input type="text" 
+             placeholder="{{ search_placeholder|default:'Placeholder' }}"
+             class="w-full pl-10 pr-4 py-3 border transition-colors
+                    border-gray-300 bg-white
+                    theme-dark:border-gray-600 theme-dark:bg-arkumu-dark
+                    theme-blue:border-arkumu-blue theme-blue:bg-white
+                    font-mono text-sm italic
+                    text-gray-500
+                    theme-dark:text-gray-400
+                    theme-blue:text-gray-500
+                    focus:outline-none focus:border-gray-500">
+    </div>
+    <button class="ml-2 px-6 py-3 font-mono text-sm transition-colors
+                   bg-arkumu-dark text-arkumu-light
+                   theme-dark:bg-arkumu-light theme-dark:text-arkumu-dark
+                   theme-blue:bg-arkumu-blue theme-blue:text-arkumu-light
+                   hover:opacity-80">
+      {{ button_text|default:"Buttontext" }}
+    </button>
+  </div>
+  
+  <!-- Filter Section -->
+  <div class="mb-8">
+    <h3 class="text-lg font-bold mb-6 transition-colors
+               text-arkumu-dark
+               theme-dark:text-arkumu-light
+               theme-blue:text-arkumu-blue">
+      Filter
+    </h3>
+    
+    <!-- Filter Dropdowns -->
+    <div class="grid grid-cols-3 gap-4 mb-8">
+      
+      <!-- Filter 1 -->
+      <div class="relative">
+        <select class="w-full appearance-none border px-4 py-3 transition-colors
+                       border-gray-400 bg-white
+                       theme-dark:border-gray-600 theme-dark:bg-arkumu-dark
+                       theme-blue:border-arkumu-blue theme-blue:bg-white
+                       font-mono text-sm
+                       text-arkumu-dark
+                       theme-dark:text-arkumu-light
+                       theme-blue:text-arkumu-blue
+                       focus:outline-none focus:border-gray-600">
+          <option>{{ filter1_text|default:"Buttontext" }}</option>
+          <option>Option 1</option>
+          <option>Option 2</option>
+        </select>
+        <div class="absolute right-0 top-0 h-full flex items-center">
+          <div class="h-full w-px transition-colors
+                      bg-gray-400
+                      theme-dark:bg-gray-600
+                      theme-blue:bg-arkumu-blue mr-3"></div>
+          <div class="mr-3 transition-colors
+                      text-arkumu-dark
+                      theme-dark:text-arkumu-light
+                      theme-blue:text-arkumu-blue">
+            ∨
+          </div>
+        </div>
+      </div>
+      
+      <!-- Filter 2 -->
+      <div class="relative">
+        <select class="w-full appearance-none border px-4 py-3 transition-colors
+                       border-gray-400 bg-white
+                       theme-dark:border-gray-600 theme-dark:bg-arkumu-dark
+                       theme-blue:border-arkumu-blue theme-blue:bg-white
+                       font-mono text-sm
+                       text-arkumu-dark
+                       theme-dark:text-arkumu-light
+                       theme-blue:text-arkumu-blue
+                       focus:outline-none focus:border-gray-600">
+          <option>{{ filter2_text|default:"Buttontext" }}</option>
+          <option>Option 1</option>
+          <option>Option 2</option>
+        </select>
+        <div class="absolute right-0 top-0 h-full flex items-center pointer-events-none">
+          <div class="h-full w-px transition-colors
+                      bg-gray-400
+                      theme-dark:bg-gray-600
+                      theme-blue:bg-arkumu-blue mr-3"></div>
+          <div class="mr-3 transition-colors
+                      text-arkumu-dark
+                      theme-dark:text-arkumu-light
+                      theme-blue:text-arkumu-blue">
+            ∨
+          </div>
+        </div>
+      </div>
+      
+      <!-- Filter 3 -->
+      <div class="relative">
+        <select class="w-full appearance-none border px-4 py-3 transition-colors
+                       border-gray-400 bg-white
+                       theme-dark:border-gray-600 theme-dark:bg-arkumu-dark
+                       theme-blue:border-arkumu-blue theme-blue:bg-white
+                       font-mono text-sm
+                       text-arkumu-dark
+                       theme-dark:text-arkumu-light
+                       theme-blue:text-arkumu-blue
+                       focus:outline-none focus:border-gray-600">
+          <option>{{ filter3_text|default:"Buttontext" }}</option>
+          <option>Option 1</option>
+          <option>Option 2</option>
+        </select>
+        <div class="absolute right-0 top-0 h-full flex items-center pointer-events-none">
+          <div class="h-full w-px transition-colors
+                      bg-gray-400
+                      theme-dark:bg-gray-600
+                      theme-blue:bg-arkumu-blue mr-3"></div>
+          <div class="mr-3 transition-colors
+                      text-arkumu-dark
+                      theme-dark:text-arkumu-light
+                      theme-blue:text-arkumu-blue">
+            ∨
+          </div>
+        </div>
+      </div>
+      
+    </div>
+  </div>
+  
+  <!-- Zeitraum Section -->
+  <div class="mb-6">
+    <h3 class="text-lg font-bold mb-6 transition-colors
+               text-arkumu-dark
+               theme-dark:text-arkumu-light
+               theme-blue:text-arkumu-blue">
+      Zeitraum
+    </h3>
+    
+    <!-- Range Slider -->
+    <div class="relative">
+      <!-- Year Labels -->
+      <div class="flex justify-between mb-4 font-mono text-sm transition-colors
+                  text-arkumu-dark
+                  theme-dark:text-arkumu-light
+                  theme-blue:text-arkumu-blue">
+        <span>{{ start_year|default:"1950" }}</span>
+        <span>{{ year_1960|default:"1960" }}</span>
+        <span>{{ year_1970|default:"1970" }}</span>
+        <span>{{ year_1980|default:"1980" }}</span>
+        <span>{{ year_1990|default:"1990" }}</span>
+        <span>{{ year_2000|default:"2000" }}</span>
+        <span>{{ year_2010|default:"2010" }}</span>
+        <span>{{ year_2020|default:"2020" }}</span>
+        <span>{{ end_year|default:"Heute" }}</span>
+      </div>
+      
+      <!-- Slider Track Visual -->
+      <div class="relative h-1 mb-4 transition-colors
+                  bg-gray-300
+                  theme-dark:bg-gray-600
+                  theme-blue:bg-gray-300">
+        <div class="absolute h-full transition-colors
+                    bg-arkumu-dark
+                    theme-dark:bg-arkumu-light
+                    theme-blue:bg-arkumu-blue" 
+             style="left: {{ slider_start|default:'60' }}%; width: {{ slider_width|default:'15' }}%;"></div>
+      </div>
+      
+    </div>
+  </div>
+</div>
