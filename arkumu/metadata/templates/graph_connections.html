@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold">Graph Connections</h1>
+        <a href="{% url 'metadata:metadata_dashboard' %}" class="btn btn-ghost">← Back</a>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 h-[calc(100vh-200px)]">
+        <!-- Datasets -->
+        <div class="bg-base-100 shadow rounded-lg p-4">
+            <h2 class="font-semibold mb-3 text-blue-600">Datasets</h2>
+            <div id="datasets-container" 
+                 hx-get="{% url 'metadata:get_datasets_htmx' %}" 
+                 hx-trigger="load"
+                 class="space-y-2 overflow-y-auto max-h-full">
+                <div class="loading loading-spinner loading-sm"></div>
+            </div>
+        </div>
+
+        <!-- Columns -->
+        <div class="bg-base-100 shadow rounded-lg p-4">
+            <h2 class="font-semibold mb-3 text-green-600">Columns</h2>
+            <div id="columns-container" class="space-y-2 overflow-y-auto max-h-full">
+                <p class="text-gray-500 text-sm">Select a dataset to see columns</p>
+            </div>
+        </div>
+
+        <!-- Cells -->
+        <div class="bg-base-100 shadow rounded-lg p-4">
+            <h2 class="font-semibold mb-3 text-orange-600">Cells</h2>
+            <div id="cells-container" class="space-y-2 overflow-y-auto max-h-full">
+                <p class="text-gray-500 text-sm">Select a column to see cells</p>
+            </div>
+        </div>
+
+        <!-- Connections -->
+        <div class="bg-base-100 shadow rounded-lg p-4">
+            <h2 class="font-semibold mb-3 text-red-600">Connections</h2>
+            <div id="connections-container" class="space-y-2 overflow-y-auto max-h-full">
+                <p class="text-gray-500 text-sm">Select a cell to see connections</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/htmx.org@1.9.10/dist/htmx.min.js"></script>
+{% endblock %} 

@@ -6,7 +6,14 @@
 {% block css %}
 {{ block.super }}
 <style>
-    /* Tree node styles using DaisyUI components */
+    /* 
+    Tree node styles using DaisyUI components
+    
+    Current topology structure (column-only):
+    - Buckets (sources) → Datasets → Columns → Cells → Values
+    - Row information is embedded in cell URIs (e.g., /datasets/test/title/1, /datasets/test/title/2)
+    - No explicit row resources are created for better performance
+    */
     .tree-node {
         @apply btn btn-ghost btn-sm justify-start normal-case font-normal w-full text-left mb-1;
         min-height: 2rem;
@@ -36,7 +43,7 @@
         padding-left: 16px;
     }
     
-    .tree-node.row {
+    .tree-node.column {
         margin-left: 40px;
         @apply btn-ghost text-base-content/70 border-l-2 border-l-base-300 bg-base-50;
         font-size: 0.85em;
@@ -159,7 +166,7 @@
                     <div class="card bg-base-100 shadow-md h-full">
                         <div class="card-body">
                             <div id="graph-content" class="w-full h-full flex items-center justify-center text-base-content/50">
-                                Click on a bucket, dataset, row, or cell in the tree to view its graph visualization
+                                Click on a bucket, dataset, column, or cell in the tree to view its graph visualization
                             </div>
                         </div>
                     </div>
@@ -285,21 +292,25 @@ function updateDetailInfo(type, name, id) {
         
         // Also trigger graph loading for datasets
         htmx.ajax('GET', `/metadata/graph/data/?level=dataset&dataset=${id}`, '#graph-content');
-    } else if (type === 'row') {
-        // For rows, show row info and load graph data
-        detailInfo.innerHTML = '<div class="flex items-center justify-center py-4"><span class="loading loading-spinner loading-sm text-primary mr-2"></span>Loading row details...</div>';
+    } else if (type === 'column') {
+        // For columns, show column info and load graph data
+        detailInfo.innerHTML = '<div class="flex items-center justify-center py-4"><span class="loading loading-spinner loading-sm text-primary mr-2"></span>Loading column details...</div>';
         
-        // Use HTMX to load row details
-        htmx.ajax('GET', `/metadata/tree/row/${id}/details/`, '#detail-info');
+        // Use HTMX to load column details
+        htmx.ajax('GET', `/metadata/tree/column/${id}/details/`, '#detail-info');
         
-        // Also trigger graph loading for rows
-        htmx.ajax('GET', `/metadata/graph/data/?level=row&row=${id}`, '#graph-content');
+        // Also trigger graph loading for columns
+        htmx.ajax('GET', `/metadata/graph/data/?level=column&column=${id}`, '#graph-content');
     } else if (type === 'cell') {
         // For cells, load detailed information via HTMX
+        // Note: In column-only topology, cells contain row information in their URIs
         detailInfo.innerHTML = '<div class="flex items-center justify-center py-4"><span class="loading loading-spinner loading-sm text-primary mr-2"></span>Loading cell details...</div>';
         
         // Use HTMX to load cell details
         htmx.ajax('GET', `/metadata/tree/cell/${id}/details/`, '#detail-info');
+        
+        // Also trigger graph loading for cells
+        htmx.ajax('GET', `/metadata/graph/data/?level=cell&cell=${id}`, '#graph-content');
     } else {
         // For other types, show basic info
         detailInfo.innerHTML = `<div class="alert alert-info"><strong>${typeLabel}:</strong> ${name}</div>`;
@@ -381,7 +392,7 @@ function renderGraph(graphData) {
 
     node.append("circle")
         .attr("r", d => {
-            const baseSize = { bucket: 18, dataset: 15, row: 12, cell: 10, literal: 6 };
+            const baseSize = { bucket: 18, dataset: 15, column: 12, cell: 10, literal: 6 };
             return baseSize[d.type] || 8;
         })
         .attr("fill", d => {
@@ -389,7 +400,7 @@ function renderGraph(graphData) {
             const colors = {
                 'bucket': '#ea580c',      // orange for buckets
                 'dataset': '#2563eb',     // blue for datasets  
-                'row': '#059669',         // green for rows
+                'column': '#059669',      // green for columns
                 'cell': '#dc2626',        // red for cells
                 'literal': '#7c3aed'     // purple for literals
             };

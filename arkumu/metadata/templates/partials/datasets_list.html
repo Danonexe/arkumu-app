@@ -1,0 +1,19 @@
+{% for dataset_info in datasets %}
+<div class="border border-base-300 rounded p-3 hover:bg-base-50 cursor-pointer"
+     hx-get="{% url 'metadata:get_dataset_columns_htmx' dataset_info.resource.id %}"
+     hx-target="#columns-container"
+     onclick="clearDownstream()">
+    <div class="font-medium text-sm">{{ dataset_info.resource.name }}</div>
+    <div class="text-xs text-gray-500">{{ dataset_info.column_count }} columns</div>
+    <div class="text-xs text-gray-400 truncate">{{ dataset_info.resource.uri }}</div>
+</div>
+{% empty %}
+<p class="text-gray-500 text-sm">No datasets found</p>
+{% endfor %}
+
+<script>
+function clearDownstream() {
+    document.getElementById('cells-container').innerHTML = '<p class="text-gray-500 text-sm">Select a column to see cells</p>';
+    document.getElementById('connections-container').innerHTML = '<p class="text-gray-500 text-sm">Select a cell to see connections</p>';
+}
+</script> 

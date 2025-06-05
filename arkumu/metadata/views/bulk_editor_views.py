@@ -2,7 +2,7 @@ from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
 from django.core.paginator import Paginator
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.db import transaction
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
@@ -1166,9 +1166,21 @@ def semantic_graph_editor(request):
 
 @login_required
 def graph_table_data(request):
-    """API endpoint for table-level graph data."""
+    """API endpoint for dataset tree view data."""
     if request.method != 'GET':
         return JsonResponse({'error': 'GET method required'}, status=405)
+    
+    # Check if this is a request for specific dataset columns
+    dataset_uri = request.GET.get('dataset')
+    include_columns = request.GET.get('include_columns', 'false').lower() == 'true'
+    
+    if dataset_uri and include_columns:
+        return _handle_dataset_columns_request(request, dataset_uri)
+    
+    # Check if this is a request for relationships
+    relationships_for = request.GET.get('relationships_for')
+    if relationships_for:
+        return _handle_relationships_request(request, relationships_for)
     
     # Check if this is a request for specific node properties (for HTMX)
     node_id = request.GET.get('node')
@@ -1176,11 +1188,21 @@ def graph_table_data(request):
         return _handle_node_properties_request(request, node_id)
     
     try:
-        # Find all datasets by looking for resources that have hasPart relationships
-        # These represent "tables" in our semantic model
-        dataset_uris = Triple.objects.filter(
+        # Find actual dataset resources by looking for resources that:
+        # 1. Have hasPart relationships (Dataset → hasPart → Column)
+        # 2. Are located in the /datasets/ URI path (not /columns/)
+        # 3. Don't have incoming hasPart relationships (Columns have Dataset → hasPart → Column)
+        
+        # First get all subjects of hasPart triples
+        hasPart_subjects = Triple.objects.filter(
             predicate__uri="http://purl.org/dc/terms/hasPart"
         ).values_list('subject__uri', flat=True).distinct()
+        
+        # Filter to only actual dataset URIs (contain /datasets/ but not /columns/)
+        dataset_uris = []
+        for uri in hasPart_subjects:
+            if '/datasets/' in uri and '/columns/' not in uri:
+                dataset_uris.append(uri)
         
         # Get basic info about each dataset/table
         datasets = Resource.objects.filter(
@@ -1188,8 +1210,10 @@ def graph_table_data(request):
             resource_type=ResourceType.IRI
         ).select_related().values('id', 'uri', 'name', 'source')
         
-        # Build nodes data for D3.js
+        # Build dataset nodes for tree view
         nodes = []
+        total_columns = 0
+        
         for i, dataset in enumerate(datasets):
             # Count records in this table (number of hasPart relationships)
             record_count = Triple.objects.filter(
@@ -1197,68 +1221,336 @@ def graph_table_data(request):
                 predicate__uri="http://purl.org/dc/terms/hasPart"
             ).count()
             
-            # Determine node color based on source/institution
-            color_map = {
-                'CSV_Import': '#69b3a2',
-                'Manual': '#404080', 
-                'Generated': '#ff6b6b'
-            }
+            # Count columns for this dataset (approximate by looking at distinct predicates used with these records)
+            column_count = _get_dataset_column_count(dataset['uri'])
+            total_columns += column_count
+            
             source = dataset.get('source', 'Unknown')
-            color = color_map.get(source, '#cccccc')
             
             nodes.append({
                 'id': dataset['uri'],
                 'label': dataset['name'] or f"Table {i+1}",
-                'type': 'table',
+                'type': 'dataset',
                 'source': source,
                 'records': record_count,
-                'size': max(15, min(50, record_count / 10)),  # Scale node size by record count
-                'color': color
+                'columns': column_count
             })
         
-        # Find inter-table connections
-        # Look for triples where the object points to a cell from another table
-        links = []
+        # Find ACTUAL inter-dataset relationships by looking at triples that cross dataset boundaries
+        links = _find_actual_dataset_relationships(nodes)
         
-        # For now, create sample connections based on naming patterns
-        # TODO: Implement actual cross-table reference detection
-        for i, node1 in enumerate(nodes):
-            for j, node2 in enumerate(nodes):
-                if i != j:
-                    # Check if there might be a relationship based on naming patterns
-                    # This is a simplified heuristic - in reality you'd check actual data
-                    if (node1['label'].lower().replace('_', '') in node2['label'].lower() or
-                        node2['label'].lower().replace('_', '') in node1['label'].lower()):
-                        
-                        # Don't create too many connections - limit to strongest matches
-                        if len([l for l in links if l['source'] == node1['id']]) < 2:
-                            links.append({
-                                'source': node1['id'],
-                                'target': node2['id'],
-                                'type': 'references',
-                                'value': 2,  # Line thickness
-                                'label': 'references'
-                            })
-        
-        graph_data = {
+        tree_data = {
             'nodes': nodes,
             'links': links,
+            'total_columns': total_columns,
             'metadata': {
-                'total_tables': len(nodes),
+                'total_datasets': len(nodes),
                 'total_connections': len(links),
-                'view_type': 'table'
+                'view_type': 'tree'
             }
         }
         
-        return JsonResponse(graph_data)
+        return JsonResponse(tree_data)
         
     except Exception as e:
-        logger.error(f"Error generating table graph data: {e}", exc_info=True)
+        logger.error(f"Error generating tree data: {e}", exc_info=True)
         return JsonResponse({
-            'error': f'Error loading graph data: {str(e)}',
+            'error': f'Error loading tree data: {str(e)}',
             'nodes': [],
             'links': []
         }, status=500)
+
+
+def _get_dataset_column_count(dataset_uri):
+    """Get approximate column count for a dataset by looking at distinct predicates."""
+    try:
+        # Get all records (cells) for this dataset
+        record_uris = Triple.objects.filter(
+            subject__uri=dataset_uri,
+            predicate__uri="http://purl.org/dc/terms/hasPart"
+        ).values_list('object__uri', flat=True)
+        
+        if not record_uris:
+            return 0
+        
+        # Count distinct predicates used across all records (these represent columns)
+        distinct_predicates = Triple.objects.filter(
+            subject__uri__in=record_uris
+        ).values('predicate__uri').distinct().count()
+        
+        return distinct_predicates
+    except Exception as e:
+        logger.error(f"Error counting columns for {dataset_uri}: {e}")
+        return 0
+
+
+def _find_actual_dataset_relationships(datasets):
+    """Find actual relationships between datasets based on shared data references."""
+    links = []
+    
+    for dataset1 in datasets:
+        for dataset2 in datasets:
+            if dataset1['id'] != dataset2['id']:
+                # Look for triples where data from dataset1 references data from dataset2
+                relationship_strength = _calculate_relationship_strength(dataset1['id'], dataset2['id'])
+                
+                if relationship_strength > 0:
+                    links.append({
+                        'source': dataset1['id'],
+                        'target': dataset2['id'],
+                        'type': 'data_reference',
+                        'strength': relationship_strength,
+                        'label': f'references ({relationship_strength} connections)'
+                    })
+    
+    return links
+
+
+def _calculate_relationship_strength(dataset1_uri, dataset2_uri):
+    """Calculate the strength of relationship between two datasets based on actual data references."""
+    try:
+        # Get all cells from dataset1 (skip columns - get objects of Column hasPart triples)
+        dataset1_columns = Triple.objects.filter(
+            subject__uri=dataset1_uri,
+            predicate__uri="http://purl.org/dc/terms/hasPart"
+        ).values_list('object__uri', flat=True)
+        
+        dataset1_cells = Triple.objects.filter(
+            subject__uri__in=dataset1_columns,
+            predicate__uri="http://purl.org/dc/terms/hasPart"
+        ).values_list('object__uri', flat=True)
+        
+        # Get all cells from dataset2
+        dataset2_columns = Triple.objects.filter(
+            subject__uri=dataset2_uri,
+            predicate__uri="http://purl.org/dc/terms/hasPart"
+        ).values_list('object__uri', flat=True)
+        
+        dataset2_cells = Triple.objects.filter(
+            subject__uri__in=dataset2_columns,
+            predicate__uri="http://purl.org/dc/terms/hasPart"
+        ).values_list('object__uri', flat=True)
+        
+        if not dataset1_cells or not dataset2_cells:
+            return 0
+        
+        # Count cross-references between cells (excluding rdf:value and dcterms:hasPart)
+        cross_references = Triple.objects.filter(
+            subject__uri__in=dataset1_cells,
+            object__uri__in=dataset2_cells
+        ).exclude(
+            predicate__uri__in=[
+                "http://purl.org/dc/terms/hasPart",
+                "http://www.w3.org/1999/02/22-rdf-syntax-ns#value"
+            ]
+        ).count()
+        
+        return cross_references
+        
+    except Exception as e:
+        logger.error(f"Error calculating relationship strength: {e}")
+        return 0
+
+
+def _handle_dataset_columns_request(request, dataset_uri):
+    """Handle request for columns within a specific dataset."""
+    try:
+        # The new import structure is: Dataset → hasPart → Column → hasPart → Cell
+        # So we need to get Column resources that are direct children of the dataset
+        
+        # Get all column resources for this dataset
+        column_uris = Triple.objects.filter(
+            subject__uri=dataset_uri,
+            predicate__uri="http://purl.org/dc/terms/hasPart"
+        ).values_list('object__uri', flat=True)
+        
+        if not column_uris:
+            return JsonResponse({'columns': []})
+        
+        # Get column resources (these should have URIs containing /columns/)
+        column_resources = Resource.objects.filter(
+            uri__in=column_uris,
+            uri__contains='/columns/'  # Filter to actual column resources
+        ).values('uri', 'name')
+        
+        columns = []
+        for col_resource in column_resources:
+            # Count cells for this column (Column → hasPart → Cell)
+            cell_count = Triple.objects.filter(
+                subject__uri=col_resource['uri'],
+                predicate__uri="http://purl.org/dc/terms/hasPart"
+            ).count()
+            
+            # Count relationships for this column
+            relationship_count = _count_column_relationships_new(col_resource['uri'])
+            
+            # Get actual column type from literal datatypes (not guessing!)
+            column_type = _get_actual_column_type(col_resource['uri'])
+            
+            columns.append({
+                'id': col_resource['uri'],
+                'name': col_resource['name'],
+                'type': column_type,
+                'cell_count': cell_count,
+                'relationships': [{'count': relationship_count}] if relationship_count > 0 else []
+            })
+        
+        return JsonResponse({'columns': columns})
+        
+    except Exception as e:
+        logger.error(f"Error loading columns for {dataset_uri}: {e}", exc_info=True)
+        return JsonResponse({'error': str(e), 'columns': []})
+
+
+def _count_column_relationships(predicate_uri, record_uris):
+    """Count how many relationships this column has to other datasets."""
+    try:
+        # Count triples using this predicate that point to resources outside the current dataset
+        external_references = Triple.objects.filter(
+            subject__uri__in=record_uris,
+            predicate__uri=predicate_uri
+        ).exclude(
+            object__uri__in=record_uris
+        ).count()
+        
+        return external_references
+    except Exception as e:
+        logger.error(f"Error counting relationships for {predicate_uri}: {e}")
+        return 0
+
+
+def _determine_column_type(predicate_uri):
+    """Determine column type based on predicate URI patterns."""
+    uri_lower = predicate_uri.lower()
+    
+    if 'date' in uri_lower or 'time' in uri_lower:
+        return 'date'
+    elif 'id' in uri_lower or 'key' in uri_lower:
+        return 'string'
+    elif 'count' in uri_lower or 'number' in uri_lower or 'amount' in uri_lower:
+        return 'number'
+    elif 'flag' in uri_lower or 'boolean' in uri_lower:
+        return 'boolean'
+    else:
+        return 'string'
+
+
+def _get_actual_column_type(column_uri):
+    """Get the actual column type from the datatypes of its literal values."""
+    try:
+        # Get cells for this column: Column → hasPart → Cell
+        cell_uris = Triple.objects.filter(
+            subject__uri=column_uri,
+            predicate__uri="http://purl.org/dc/terms/hasPart"
+        ).values_list('object__uri', flat=True)
+        
+        if not cell_uris:
+            return 'unknown'
+        
+        # Get literal values: Cell → rdf:value → Literal
+        literal_resources = Triple.objects.filter(
+            subject__uri__in=cell_uris,
+            predicate__uri="http://www.w3.org/1999/02/22-rdf-syntax-ns#value",
+            object__resource_type=ResourceType.LITERAL
+        ).values_list('object__datatype', flat=True)
+        
+        # Count datatypes and return the most common one
+        datatype_counts = {}
+        for datatype in literal_resources:
+            if datatype:
+                datatype_counts[datatype] = datatype_counts.get(datatype, 0) + 1
+        
+        if not datatype_counts:
+            return 'string'  # Default if no datatypes found
+        
+        # Get the most common datatype
+        most_common_datatype = max(datatype_counts, key=datatype_counts.get)
+        
+        # Convert XSD datatypes to simple types
+        if 'string' in most_common_datatype.lower():
+            return 'string'
+        elif any(t in most_common_datatype.lower() for t in ['int', 'decimal', 'float', 'double']):
+            return 'number'
+        elif any(t in most_common_datatype.lower() for t in ['date', 'time']):
+            return 'date'  
+        elif 'boolean' in most_common_datatype.lower():
+            return 'boolean'
+        else:
+            return 'string'  # Default fallback
+            
+    except Exception as e:
+        logger.error(f"Error getting actual column type for {column_uri}: {e}")
+        return 'string'
+
+
+def _count_column_relationships_new(column_uri):
+    """Count relationships for a column resource based on its cells."""
+    try:
+        # Get all cells for this column
+        cell_uris = Triple.objects.filter(
+            subject__uri=column_uri,
+            predicate__uri="http://purl.org/dc/terms/hasPart"
+        ).values_list('object__uri', flat=True)
+        
+        if not cell_uris:
+            return 0
+        
+        # Count external references from these cells (excluding rdf:value and hasPart)
+        external_references = Triple.objects.filter(
+            subject__uri__in=cell_uris
+        ).exclude(
+            predicate__uri__in=[
+                "http://purl.org/dc/terms/hasPart",
+                "http://www.w3.org/1999/02/22-rdf-syntax-ns#value"
+            ]
+        ).count()
+        
+        return external_references
+        
+    except Exception as e:
+        logger.error(f"Error counting relationships for column {column_uri}: {e}")
+        return 0
+
+
+def _handle_relationships_request(request, item_id):
+    """Handle request for relationships of a specific item."""
+    try:
+        # Find relationships for this item (could be dataset, column, or record)
+        relationships = []
+        
+        # Look for outgoing relationships
+        outgoing = Triple.objects.filter(
+            subject__uri=item_id
+        ).select_related('predicate', 'object')[:20]
+        
+        for triple in outgoing:
+            if triple.object and hasattr(triple.object, 'name'):
+                relationships.append({
+                    'type': triple.predicate.name or 'references',
+                    'target_name': triple.object.name or triple.object.uri,
+                    'strength': 1.0,
+                    'description': f"Points to {triple.object.name or 'resource'}"
+                })
+        
+        # Look for incoming relationships
+        incoming = Triple.objects.filter(
+            object__uri=item_id
+        ).select_related('predicate', 'subject')[:20]
+        
+        for triple in incoming:
+            if triple.subject and hasattr(triple.subject, 'name'):
+                relationships.append({
+                    'type': f"referenced_by_{triple.predicate.name or 'unknown'}",
+                    'target_name': triple.subject.name or triple.subject.uri,
+                    'strength': 0.8,
+                    'description': f"Referenced by {triple.subject.name or 'resource'}"
+                })
+        
+        return JsonResponse({'relationships': relationships})
+        
+    except Exception as e:
+        logger.error(f"Error loading relationships for {item_id}: {e}")
+        return JsonResponse({'error': str(e), 'relationships': []})
 
 
 def _handle_node_properties_request(request, node_id):
@@ -1303,5 +1595,237 @@ def _handle_node_properties_request(request, node_id):
         return render(request, 'partials/node_properties.html', {
             'error': f'Error loading properties: {str(e)}'
         })
+
+@login_required
+def service_powered_csv_import(request):
+    """Import CSV files using the modern table-based service architecture."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST method required'}, status=405)
+    
+    s3_file_id = request.POST.get('s3_file_id')
+    use_auto_mapping = request.POST.get('use_auto_mapping', 'true').lower() == 'true'
+    institution = request.POST.get('institution', 'DEFAULT')
+    
+    if not s3_file_id:
+        return render(request, 'partials/service_import_results.html', {
+            'error': 'No S3 file selected'
+        })
+    
+    try:
+        from arkumu.storage.services.bucket_service import BucketService
+        from arkumu.importer.services.importer.import_workflow import ImportWorkflowService
+        import tempfile
+        import os
+        
+        # Parse the file ID to get organization and S3 key
+        logger.info(f"Starting service-powered import for: {s3_file_id}")
+        if '_' not in s3_file_id:
+            return render(request, 'partials/service_import_results.html', {
+                'error': 'Invalid file ID format'
+            })
+        
+        organization, s3_key = s3_file_id.split('_', 1)
+        dataset_name = os.path.splitext(os.path.basename(s3_key))[0]
+        
+        # Download file from S3
+        bucket_service = BucketService()
+        bucket_name = bucket_service.get_organization_bucket(organization)
+        file_content_result = bucket_service.get_file_content(bucket_name, s3_key)
+        
+        if not file_content_result.get('success'):
+            return render(request, 'partials/service_import_results.html', {
+                'error': f'Failed to download file: {file_content_result.get("error", "Unknown error")}'
+            })
+        
+        # Save to temporary file for processing
+        with tempfile.NamedTemporaryFile(mode='wb', suffix='.csv', delete=False) as temp_file:
+            temp_file.write(file_content_result['content'])
+            temp_path = temp_file.name
+        
+        try:
+            # Use the modern table-based import approach
+            logger.info(f"Importing {dataset_name} using table-based services")
+            
+            import_result = ImportWorkflowService.import_csv_with_table_services(
+                csv_path=temp_path,
+                dataset_name=dataset_name,
+                institution=organization,
+                base_uri="http://arkumu.org/data",
+                delimiter=';',
+                has_quoted_fields=False,
+                auto_mapping=use_auto_mapping,
+                session_dict=dict(request.session)  # Pass session for service state
+            )
+            
+            # Update session with any new mapping rules created during import
+            if 'mapping_rules' in import_result:
+                request.session['mapping_rules'] = import_result['mapping_rules']
+                request.session.modified = True
+            
+            return render(request, 'partials/service_import_results.html', {
+                'import_result': import_result,
+                'dataset_name': dataset_name,
+                'organization': organization,
+                'file_name': os.path.basename(s3_key),
+                'approach': 'table_based_services',
+                'success': True
+            })
+            
+        finally:
+            # Clean up temporary file
+            try:
+                os.unlink(temp_path)
+            except OSError as e:
+                logger.warning(f"Could not delete temporary file {temp_path}: {e}")
+                
+    except Exception as e:
+        logger.error(f"Error in service-powered CSV import: {e}", exc_info=True)
+        return render(request, 'partials/service_import_results.html', {
+            'error': f'Import error: {str(e)}'
+        })
+
+@login_required
+def graph_connections_view(request):
+    """Simple graph viewer showing actual database connections."""
+    return render(request, 'graph_connections.html')
+
+@login_required
+def get_datasets_htmx(request):
+    """Get all datasets with actual hasPart connections."""
+    from arkumu.metadata.models.triples import Triple
+    
+    # Find dataset resources (URIs containing /datasets/ but not /columns/ or /rows/)
+    dataset_resources = Resource.objects.filter(
+        uri__contains='/datasets/',
+        resource_type=ResourceType.IRI
+    ).exclude(
+        uri__contains='/columns/'
+    ).exclude(
+        uri__contains='/rows/'
+    ).exclude(
+        uri__regex=r'/datasets/[^/]+/[^/]+/[^/]+$'  # Exclude cell URIs (have column/row pattern)
+    ).order_by('name')
+    
+    # Get connection counts for each dataset
+    datasets_with_counts = []
+    for dataset in dataset_resources:
+        # Count columns connected via hasPart
+        column_count = Triple.objects.filter(
+            subject=dataset,
+            predicate__uri="http://purl.org/dc/terms/hasPart"
+        ).count()
+        
+        datasets_with_counts.append({
+            'resource': dataset,
+            'column_count': column_count
+        })
+    
+    return render(request, 'partials/datasets_list.html', {
+        'datasets': datasets_with_counts
+    })
+
+@login_required  
+def get_dataset_columns_htmx(request, dataset_id):
+    """Get columns for a specific dataset via hasPart relationships."""
+    from arkumu.metadata.models.triples import Triple
+    
+    try:
+        dataset = Resource.objects.get(id=dataset_id)
+        
+        # Get columns via hasPart triples
+        hasPart_triples = Triple.objects.filter(
+            subject=dataset,
+            predicate__uri="http://purl.org/dc/terms/hasPart"
+        ).select_related('object')
+        
+        columns_with_counts = []
+        for triple in hasPart_triples:
+            column = triple.object
+            # Only include actual column resources (not rows)
+            if '/columns/' in column.uri:
+                # Count cells connected to this column
+                cell_count = Triple.objects.filter(
+                    subject=column,
+                    predicate__uri="http://purl.org/dc/terms/hasPart"
+                ).count()
+                
+                columns_with_counts.append({
+                    'resource': column,
+                    'cell_count': cell_count
+                })
+        
+        return render(request, 'partials/columns_list.html', {
+            'columns': columns_with_counts,
+            'dataset': dataset
+        })
+        
+    except Resource.DoesNotExist:
+        return HttpResponse('<p class="text-red-500">Dataset not found</p>')
+
+@login_required
+def get_column_cells_htmx(request, column_id):
+    """Get cells for a specific column via hasPart relationships."""
+    from arkumu.metadata.models.triples import Triple
+    
+    try:
+        column = Resource.objects.get(id=column_id)
+        
+        # Get cells via hasPart triples
+        cell_triples = Triple.objects.filter(
+            subject=column,
+            predicate__uri="http://purl.org/dc/terms/hasPart"
+        ).select_related('object')
+        
+        cells_with_values = []
+        for triple in cell_triples:
+            cell = triple.object
+            
+            # Get the literal value via rdf:value
+            value_triple = Triple.objects.filter(
+                subject=cell,
+                predicate__uri="http://www.w3.org/1999/02/22-rdf-syntax-ns#value"
+            ).select_related('object').first()
+            
+            literal_value = None
+            if value_triple and value_triple.object:
+                literal_value = value_triple.object.value
+                
+            cells_with_values.append({
+                'resource': cell,
+                'literal_value': literal_value,
+                'row_id': cell.uri.split('/')[-1] if cell.uri else 'unknown'
+            })
+        
+        # Sort by row_id for better display
+        cells_with_values.sort(key=lambda x: x['row_id'])
+        
+        return render(request, 'partials/cells_list.html', {
+            'cells': cells_with_values,
+            'column': column
+        })
+        
+    except Resource.DoesNotExist:
+        return HttpResponse('<p class="text-red-500">Column not found</p>')
+
+@login_required
+def get_cell_connections_htmx(request, cell_id):
+    """Get all connections for a specific cell."""
+    from arkumu.metadata.models.triples import Triple
+    
+    try:
+        cell = Resource.objects.get(id=cell_id)
+        
+        # Get all triples where this cell is subject or object
+        outgoing_triples = Triple.objects.filter(subject=cell).select_related('predicate', 'object')
+        incoming_triples = Triple.objects.filter(object=cell).select_related('subject', 'predicate')
+        
+        return render(request, 'partials/cell_connections.html', {
+            'cell': cell,
+            'outgoing_triples': outgoing_triples,
+            'incoming_triples': incoming_triples
+        })
+        
+    except Resource.DoesNotExist:
+        return HttpResponse('<p class="text-red-500">Cell not found</p>')
 
  

@@ -1,0 +1,17 @@
+{% for cell_info in cells %}
+<div class="border border-base-300 rounded p-3 hover:bg-base-50 cursor-pointer"
+     hx-get="{% url 'metadata:get_cell_connections_htmx' cell_info.resource.id %}"
+     hx-target="#connections-container">
+    <div class="font-medium text-sm">Cell {{ cell_info.row_id }}</div>
+    <div class="text-xs text-gray-600 break-words">
+        {% if cell_info.literal_value %}
+            "{{ cell_info.literal_value|truncatechars:50 }}"
+        {% else %}
+            <span class="italic">No value</span>
+        {% endif %}
+    </div>
+    <div class="text-xs text-gray-400 truncate">{{ cell_info.resource.uri }}</div>
+</div>
+{% empty %}
+<p class="text-gray-500 text-sm">No cells found</p>
+{% endfor %} 

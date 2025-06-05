@@ -54,6 +54,13 @@ urlpatterns = [
     path('graph-editor/', bulk_editor_views.semantic_graph_editor, name='semantic_graph_editor'),
     path('graph-editor/table-data/', bulk_editor_views.graph_table_data, name='graph_table_data'),
     
+    # Graph Connections Viewer
+    path('graph-connections/', bulk_editor_views.graph_connections_view, name='graph_connections'),
+    path('htmx/datasets/', bulk_editor_views.get_datasets_htmx, name='get_datasets_htmx'),
+    path('htmx/dataset/<uuid:dataset_id>/columns/', bulk_editor_views.get_dataset_columns_htmx, name='get_dataset_columns_htmx'),
+    path('htmx/column/<uuid:column_id>/cells/', bulk_editor_views.get_column_cells_htmx, name='get_column_cells_htmx'),
+    path('htmx/cell/<uuid:cell_id>/connections/', bulk_editor_views.get_cell_connections_htmx, name='get_cell_connections_htmx'),
+    
     # Data Discovery
     path('data-discovery/', data_discovery_views.DataDiscoveryView.as_view(), name='data_discovery'),
     path('data-discovery/search-resources/', data_discovery_views.search_resources, name='search_resources'),

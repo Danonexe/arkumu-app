@@ -2,682 +2,482 @@
 {% load static %}
 
 {% block content %}
-<div class="container mx-auto px-4 py-8 max-w-full">
-    <!-- Header -->
-    <div class="navbar bg-base-100 rounded-box shadow-sm mb-6">
-        <div class="navbar-start">
-            <h1 class="text-2xl font-bold">🕸️ Semantic Graph Editor</h1>
-            <div class="badge badge-primary badge-outline ml-3">Interactive Mode</div>
+<div class="container mx-auto px-4 py-8">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold">Dataset Graph Explorer</h1>
+        <div class="flex gap-2">
+            <a href="{% url 'metadata:graph_connections' %}" class="btn btn-outline btn-sm">List View</a>
+            <a href="{% url 'metadata:metadata_dashboard' %}" class="btn btn-ghost">← Back</a>
         </div>
-        <div class="navbar-center">
-            <!-- View Level Controls -->
-            <div class="btn-group">
-                <button class="btn btn-sm btn-active" id="table-view-btn" onclick="switchView('table')">
-                    📊 Tables
-                </button>
-                <button class="btn btn-sm" id="column-view-btn" onclick="switchView('column')">
-                    📋 Columns
-                </button>
-                <button class="btn btn-sm" id="cell-view-btn" onclick="switchView('cell')">
-                    🔍 Cells
-                </button>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 h-[calc(100vh-200px)]">
+        <!-- Graph Visualization -->
+        <div class="lg:col-span-3 bg-base-100 shadow rounded-lg">
+            <div class="p-4 border-b">
+                <div class="flex justify-between items-center">
+                    <h2 class="font-semibold">Connection Tree</h2>
+                    <div class="flex gap-2">
+                        <button onclick="fitTree()" class="btn btn-xs btn-outline">Fit</button>
+                        <button onclick="resetTree()" class="btn btn-xs btn-outline">Reset</button>
+                        <button onclick="zoomIn()" class="btn btn-xs btn-outline">+</button>
+                        <button onclick="zoomOut()" class="btn btn-xs btn-outline">-</button>
+                    </div>
+                </div>
+                <p class="text-sm text-gray-600 mt-1">Click nodes to expand connections • Drag to pan • Scroll to zoom</p>
+            </div>
+            <div id="tree-container" class="w-full h-full overflow-auto">
+                <svg id="tree-svg" width="100%" height="100%"></svg>
             </div>
         </div>
-        <div class="navbar-end">
-            <div class="flex gap-2">
-                <button class="btn btn-outline btn-sm" onclick="saveChanges()">
-                    💾 Save
-                </button>
-                <a href="{% url 'metadata:metadata_dashboard' %}" class="btn btn-ghost btn-sm">
-                    ← Dashboard
-                </a>
+
+        <!-- Info Panel -->
+        <div class="bg-base-100 shadow rounded-lg p-4">
+            <h2 class="font-semibold mb-3">Node Info</h2>
+            <div id="node-info" class="space-y-3">
+                <p class="text-gray-500 text-sm">Click a node to see details</p>
             </div>
         </div>
     </div>
 
-    <!-- Main Layout: Sidebar + Graph Area -->
-    <div class="grid grid-cols-12 gap-6 h-[calc(100vh-200px)]">
-        
-        <!-- Left Sidebar: Controls & Properties -->
-        <div class="col-span-3 space-y-4">
-            
-            <!-- View Info Panel -->
-            <div class="card bg-base-100 shadow-sm">
-                <div class="card-body p-4">
-                    <h3 class="card-title text-sm">Current View</h3>
-                    <div id="view-info">
-                        <div class="stat">
-                            <div class="stat-title text-xs">Level</div>
-                            <div class="stat-value text-lg" id="current-level">Tables</div>
-                            <div class="stat-desc" id="current-level-desc">Inter-table relationships</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Graph Controls -->
-            <div class="card bg-base-100 shadow-sm">
-                <div class="card-body p-4">
-                    <h3 class="card-title text-sm">Graph Controls</h3>
-                    <div class="space-y-3">
-                        <div class="form-control">
-                            <label class="label cursor-pointer">
-                                <span class="label-text text-sm">Show Labels</span>
-                                <input type="checkbox" class="toggle toggle-sm" checked id="show-labels">
-                            </label>
-                        </div>
-                        <div class="form-control">
-                            <label class="label cursor-pointer">
-                                <span class="label-text text-sm">Show Connections</span>
-                                <input type="checkbox" class="toggle toggle-sm" checked id="show-connections">
-                            </label>
-                        </div>
-                        <div class="form-control">
-                            <label class="label cursor-pointer">
-                                <span class="label-text text-sm">Auto Layout</span>
-                                <input type="checkbox" class="toggle toggle-sm" checked id="auto-layout">
-                            </label>
-                        </div>
-                        <div class="divider my-2"></div>
-                        <button class="btn btn-outline btn-sm w-full" onclick="resetView()">
-                            🔄 Reset View
-                        </button>
-                        <button class="btn btn-outline btn-sm w-full" onclick="exportGraph()">
-                            📤 Export Graph
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Selection Properties Panel -->
-            <div class="card bg-base-100 shadow-sm">
-                <div class="card-body p-4">
-                    <h3 class="card-title text-sm">Properties</h3>
-                    <div id="properties-panel">
-                        <div class="text-center text-gray-500 py-4">
-                            <div class="text-2xl">👆</div>
-                            <div class="text-sm">Select a node to edit properties</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Quick Actions -->
-            <div class="card bg-base-100 shadow-sm">
-                <div class="card-body p-4">
-                    <h3 class="card-title text-sm">Quick Actions</h3>
-                    <div class="space-y-2">
-                        <button class="btn btn-primary btn-sm w-full" onclick="createConnection()">
-                            🔗 Create Connection
-                        </button>
-                        <button class="btn btn-secondary btn-sm w-full" onclick="bulkEdit()">
-                            ✏️ Bulk Edit
-                        </button>
-                        <button class="btn btn-accent btn-sm w-full" onclick="detectPatterns()">
-                            🧠 Detect Patterns
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-        </div>
-
-        <!-- Main Graph Visualization Area -->
-        <div class="col-span-9">
-            <div class="card bg-base-100 shadow-sm h-full">
-                <div class="card-body p-2">
-                    <!-- Graph Toolbar -->
-                    <div class="flex justify-between items-center mb-4 px-2">
-                        <div class="flex gap-2">
-                            <div class="badge badge-outline" id="graph-stats">
-                                Loading...
-                            </div>
-                            <div class="badge badge-info" id="selection-info" style="display: none;">
-                                No selection
-                            </div>
-                        </div>
-                        <div class="flex gap-2">
-                            <button class="btn btn-circle btn-sm" onclick="zoomIn()" title="Zoom In">
-                                ➕
-                            </button>
-                            <button class="btn btn-circle btn-sm" onclick="zoomOut()" title="Zoom Out">
-                                ➖
-                            </button>
-                            <button class="btn btn-circle btn-sm" onclick="fitToScreen()" title="Fit to Screen">
-                                🔲
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- vis.js Graph Container -->
-                    <div id="graph-container" class="w-full h-full border border-base-300 rounded-lg overflow-hidden">
-                        <div id="graph-network" class="w-full h-full">
-                            <!-- Graph will be rendered here -->
-                        </div>
-                    </div>
-
-                    <!-- Loading Overlay -->
-                    <div id="graph-loading" class="absolute inset-0 bg-base-100 bg-opacity-75 flex items-center justify-center" style="display: none;">
-                        <div class="text-center">
-                            <div class="loading loading-spinner loading-lg"></div>
-                            <div class="mt-2">Loading graph data...</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-    </div>
-
-    <!-- Context Menu (Hidden by default) -->
-    <div id="context-menu" class="menu bg-base-100 border border-base-300 rounded-box shadow-lg absolute z-50" style="display: none;">
-        <li><a onclick="editNode()">✏️ Edit Properties</a></li>
-        <li><a onclick="createConnectionFrom()">🔗 Create Connection</a></li>
-        <li><a onclick="duplicateNode()">📋 Duplicate</a></li>
-        <li><a onclick="deleteNode()">🗑️ Delete</a></li>
-    </div>
-
-    <!-- Modals -->
-    
-    <!-- Create Connection Modal -->
-    <div id="connection-modal" class="modal">
-        <div class="modal-box">
-            <h3 class="font-bold text-lg">Create New Connection</h3>
-            <div class="py-4">
-                <div class="form-control">
-                    <label class="label">
-                        <span class="label-text">Source</span>
-                    </label>
-                    <input type="text" id="connection-source" class="input input-bordered" readonly>
-                </div>
-                <div class="form-control mt-4">
-                    <label class="label">
-                        <span class="label-text">Target</span>
-                    </label>
-                    <select id="connection-target" class="select select-bordered">
-                        <option disabled selected>Select target...</option>
-                    </select>
-                </div>
-                <div class="form-control mt-4">
-                    <label class="label">
-                        <span class="label-text">Relationship Type</span>
-                    </label>
-                    <select id="connection-type" class="select select-bordered">
-                        <option value="references">References</option>
-                        <option value="contains">Contains</option>
-                        <option value="derives_from">Derives From</option>
-                        <option value="related_to">Related To</option>
-                    </select>
-                </div>
-            </div>
-            <div class="modal-action">
-                <button class="btn btn-primary" onclick="confirmConnection()">Create</button>
-                <button class="btn" onclick="closeConnectionModal()">Cancel</button>
-            </div>
-        </div>
-    </div>
-
+    <!-- Hidden HTMX target for loading data -->
+    <div id="htmx-target" style="display: none;"></div>
 </div>
 
-<!-- Include vis.js for graph visualization -->
-<script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script src="https://unpkg.com/htmx.org@1.9.10/dist/htmx.min.js"></script>
 
 <script>
-// Global variables for graph state
-let currentView = 'table';
-let graphData = null;
-let network = null;
-let selectedNode = null;
-let nodes, edges;
+let svg, g, tree, root, zoom;
+let expandedNodes = new Set();
+let nodeCounter = 0;
 
-// Initialize the graph editor
+const margin = {top: 40, right: 200, bottom: 40, left: 120};
+const width = 1000 - margin.left - margin.right;
+const height = 600 - margin.top - margin.bottom;
+
 document.addEventListener('DOMContentLoaded', function() {
-    initializeGraph();
-    loadTableView();
+    initializeTree();
+    loadInitialDatasets();
 });
 
-function initializeGraph() {
-    const container = document.getElementById('graph-network');
+function initializeTree() {
+    svg = d3.select("#tree-svg")
+        .attr("width", "100%")
+        .attr("height", "100%")
+        .attr("viewBox", `0 0 ${width + margin.left + margin.right} ${height + margin.top + margin.bottom}`);
     
-    // Initialize empty datasets
-    nodes = new vis.DataSet([]);
-    edges = new vis.DataSet([]);
-    
-    // Create network
-    const data = { nodes: nodes, edges: edges };
-    const options = {
-        interaction: {
-            dragNodes: true,
-            dragView: true,
-            zoomView: true,
-            selectConnectedEdges: false
-        },
-        manipulation: {
-            enabled: true,
-            addNode: function(data, callback) {
-                // Custom node creation - will trigger HTMX
-                createNodeDialog(data, callback);
-            },
-            addEdge: function(data, callback) {
-                // Custom edge creation - will trigger HTMX
-                createEdgeDialog(data, callback);
-            },
-            deleteNode: function(data, callback) {
-                // Custom node deletion - will trigger HTMX
-                deleteNodeDialog(data, callback);
-            },
-            deleteEdge: function(data, callback) {
-                // Custom edge deletion - will trigger HTMX  
-                deleteEdgeDialog(data, callback);
-            }
-        },
-        physics: {
-            enabled: true,
-            stabilization: { iterations: 100 }
-        },
-        nodes: {
-            shape: 'dot',
-            size: 20,
-            font: {
-                size: 14,
-                color: '#333333'
-            },
-            borderWidth: 2,
-            shadow: true
-        },
-        edges: {
-            width: 2,
-            color: { inherit: 'from' },
-            smooth: {
-                type: 'continuous'
-            },
-            arrows: {
-                to: { enabled: true, scaleFactor: 1 }
-            }
-        }
-    };
-    
-    network = new vis.Network(container, data, options);
-    
-    // Set up event listeners for HTMX integration
-    setupNetworkEvents();
-}
-
-function setupNetworkEvents() {
-    // Node selection for properties panel
-    network.on("click", function(params) {
-        if (params.nodes.length > 0) {
-            const nodeId = params.nodes[0];
-            selectedNode = nodes.get(nodeId);
-            updatePropertiesPanel(selectedNode);
-            
-            // Update selection info
-            document.getElementById('selection-info').textContent = `Selected: ${selectedNode.label}`;
-            document.getElementById('selection-info').style.display = 'block';
-            
-            // Load properties via HTMX
-            htmx.ajax('GET', `{% url "metadata:graph_table_data" %}?node=${nodeId}`, '#properties-panel');
-        } else {
-            // Clear selection
-            selectedNode = null;
-            document.getElementById('selection-info').style.display = 'none';
-            clearPropertiesPanel();
-        }
-    });
-    
-    // Node position changes - save to server
-    network.on("dragEnd", function(params) {
-        if (params.nodes.length > 0) {
-            const positions = network.getPositions(params.nodes);
-            // Save positions via HTMX
-            htmx.ajax('POST', '/graph-editor/save-positions/', 'body', {
-                values: JSON.stringify(positions)
-            });
-        }
-    });
-    
-    // Double click for detailed view
-    network.on("doubleClick", function(params) {
-        if (params.nodes.length > 0) {
-            const nodeId = params.nodes[0];
-            // Drill down to column view for this table
-            if (currentView === 'table') {
-                drillDownToColumns(nodeId);
-            }
-        }
-    });
-}
-
-function switchView(viewType) {
-    currentView = viewType;
-    
-    // Update button states
-    document.querySelectorAll('.btn-group .btn').forEach(btn => btn.classList.remove('btn-active'));
-    document.getElementById(`${viewType}-view-btn`).classList.add('btn-active');
-    
-    // Update view info
-    const viewInfo = {
-        table: { level: 'Tables', desc: 'Inter-table relationships' },
-        column: { level: 'Columns', desc: 'Intra-table column relationships' },
-        cell: { level: 'Cells', desc: 'Individual cell connections' }
-    };
-    
-    document.getElementById('current-level').textContent = viewInfo[viewType].level;
-    document.getElementById('current-level-desc').textContent = viewInfo[viewType].desc;
-    
-    // Load appropriate view
-    switch(viewType) {
-        case 'table':
-            loadTableView();
-            break;
-        case 'column':
-            loadColumnView();
-            break;
-        case 'cell':
-            loadCellView();
-            break;
-    }
-}
-
-function loadTableView() {
-    showLoading();
-    
-    // Load data via HTMX-compatible fetch
-    fetch('{% url "metadata:graph_table_data" %}')
-        .then(response => response.json())
-        .then(data => {
-            renderGraph(data);
-            updateGraphStats(data);
-            hideLoading();
-        })
-        .catch(error => {
-            console.error('Error loading table data:', error);
-            hideLoading();
+    // Add zoom behavior
+    zoom = d3.zoom()
+        .scaleExtent([0.1, 3])
+        .on("zoom", function(event) {
+            g.attr("transform", event.transform);
         });
+    
+    svg.call(zoom);
+    
+    g = svg.append("g")
+        .attr("transform", `translate(${margin.left},${margin.top})`);
+    
+    tree = d3.tree()
+        .size([height, width])
+        .separation((a, b) => (a.parent == b.parent ? 1 : 2) / a.depth);
+    
+    root = d3.hierarchy({
+        id: 'root',
+        name: 'Datasets',
+        type: 'root',
+        children: []
+    });
+    
+    root.x0 = height / 2;
+    root.y0 = 0;
+    
+    updateTree();
 }
 
-function loadColumnView() {
-    showLoading();
-    // TODO: Implement column view - will load column data via HTMX
-    console.log('Loading column view...');
-    hideLoading();
-}
-
-function loadCellView() {
-    showLoading();
-    // TODO: Implement cell view - will load cell data via HTMX
-    console.log('Loading cell view...');
-    hideLoading();
-}
-
-function renderGraph(data) {
-    // Convert data to vis.js format
-    const visNodes = (data.nodes || []).map(node => ({
-        id: node.id,
-        label: node.label,
-        color: node.color || '#69b3a2',
-        size: node.size || 20,
-        title: `${node.label}\nType: ${node.type}\nRecords: ${node.records}`,
-        // Store additional data
-        nodeType: node.type,
-        records: node.records,
-        source: node.source
-    }));
-    
-    const visEdges = (data.links || []).map((link, index) => ({
-        id: `edge_${index}`,
-        from: link.source,
-        to: link.target,
-        label: link.label || link.type,
-        title: `Relationship: ${link.type}`,
-        width: link.value || 2,
-        // Store additional data
-        relationshipType: link.type
-    }));
-    
-    // Update the network
-    nodes.clear();
-    edges.clear();
-    nodes.add(visNodes);
-    edges.add(visEdges);
-    
-    // Fit the network to view
-    network.fit({
-        animation: {
-            duration: 1000,
-            easingFunction: "easeInOutQuad"
-        }
+function loadInitialDatasets() {
+    htmx.ajax('GET', '{% url "metadata:get_datasets_htmx" %}', {
+        target: '#htmx-target',
+        swap: 'innerHTML'
+    }).then(function() {
+        parseDatasets();
     });
 }
 
-function updatePropertiesPanel(node) {
-    const panel = document.getElementById('properties-panel');
-    panel.innerHTML = `
-        <div class="space-y-3">
-            <div>
-                <label class="label label-text-alt">Name</label>
-                <input type="text" class="input input-bordered input-sm w-full" value="${node.label}" 
-                       onchange="updateNodeProperty('${node.id}', 'label', this.value)">
-            </div>
-            <div>
-                <label class="label label-text-alt">Type</label>
-                <input type="text" class="input input-bordered input-sm w-full" value="${node.nodeType || 'table'}"
-                       onchange="updateNodeProperty('${node.id}', 'type', this.value)">
-            </div>
-            <div>
-                <label class="label label-text-alt">Records</label>
-                <input type="number" class="input input-bordered input-sm w-full" value="${node.records || 0}" readonly>
-            </div>
-            <div class="divider my-2"></div>
-            <button class="btn btn-primary btn-sm w-full" 
-                    hx-post="/graph-editor/save-node-properties/"
-                    hx-vals='{"nodeId": "${node.id}"}' 
-                    hx-include="[onchange]">
-                💾 Save Changes
-            </button>
-            <button class="btn btn-outline btn-sm w-full" onclick="drillDownToColumns('${node.id}')">
-                🔍 View Columns
-            </button>
-        </div>
-    `;
-}
-
-function clearPropertiesPanel() {
-    const panel = document.getElementById('properties-panel');
-    panel.innerHTML = `
-        <div class="text-center text-gray-500 py-4">
-            <div class="text-2xl">👆</div>
-            <div class="text-sm">Select a node to edit properties</div>
-        </div>
-    `;
-}
-
-function updateNodeProperty(nodeId, property, value) {
-    // Update the node in vis.js
-    const nodeUpdate = {};
-    nodeUpdate[property] = value;
-    nodes.update({id: nodeId, ...nodeUpdate});
+function parseDatasets() {
+    const container = document.getElementById('htmx-target');
+    const datasetDivs = container.querySelectorAll('[hx-get*="dataset"][hx-get*="columns"]');
+    console.log('Found dataset divs:', datasetDivs.length);
     
-    // Update selectedNode if it's the same
-    if (selectedNode && selectedNode.id === nodeId) {
-        selectedNode[property] = value;
+    root.data.children = [];
+    
+    datasetDivs.forEach(div => {
+        const url = div.getAttribute('hx-get');
+        const datasetId = url.match(/dataset\/([^/]+)\/columns/)[1];
+        const name = div.querySelector('.font-medium').textContent;
+        const columnCount = div.querySelector('.text-gray-500').textContent;
+        
+        root.data.children.push({
+            id: `dataset-${datasetId}`,
+            name: name,
+            details: columnCount,
+            type: 'dataset',
+            datasetId: datasetId,
+            children: []
+        });
+    });
+    
+    root = d3.hierarchy(root.data);
+    root.x0 = height / 2;
+    root.y0 = 0;
+    
+    // Expand the root node by default to show datasets
+    if (root.children) {
+        expandedNodes.add('root');
+    }
+    
+    updateTree();
+}
+
+function updateTree() {
+    const treeData = tree(root);
+    const nodes = treeData.descendants();
+    const links = treeData.descendants().slice(1);
+    
+    // Update nodes
+    const node = g.selectAll('.node')
+        .data(nodes, d => d.id || (d.id = ++nodeCounter));
+    
+    const nodeEnter = node.enter().append('g')
+        .attr('class', 'node')
+        .attr('transform', d => {
+            if (d.parent) {
+                return `translate(${d.parent.y0 || 0},${d.parent.x0 || 0})`;
+            }
+            return `translate(${root.y0},${root.x0})`;
+        })
+        .style('cursor', 'pointer')
+        .on('click', function(event, d) {
+            event.stopPropagation();
+            handleNodeClick(event, d);
+        });
+    
+    // Add rectangles
+    nodeEnter.append('rect')
+        .attr('width', 160)
+        .attr('height', 40)
+        .attr('x', -80)
+        .attr('y', -20)
+        .attr('rx', 5)
+        .style('fill', d => getNodeColor(d.data.type))
+        .style('stroke', d => getNodeBorderColor(d.data.type))
+        .style('stroke-width', 2);
+    
+    // Add text
+    nodeEnter.append('text')
+        .attr('dy', '-5')
+        .attr('text-anchor', 'middle')
+        .style('font-size', '12px')
+        .style('font-weight', 'bold')
+        .text(d => d.data.name);
+    
+    nodeEnter.append('text')
+        .attr('dy', '10')
+        .attr('text-anchor', 'middle')
+        .style('font-size', '10px')
+        .style('fill', '#666')
+        .text(d => d.data.details || '');
+    
+    // Transition nodes to their new position
+    const nodeUpdate = nodeEnter.merge(node);
+    
+    // Ensure all nodes have click handlers
+    nodeUpdate.style('cursor', 'pointer')
+        .on('click', function(event, d) {
+            event.stopPropagation();
+            handleNodeClick(event, d);
+        });
+    
+    nodeUpdate.transition()
+        .duration(500)
+        .attr('transform', d => `translate(${d.y},${d.x})`);
+    
+    // Remove exiting nodes
+    const nodeExit = node.exit().transition()
+        .duration(500)
+        .attr('transform', d => `translate(${root.y0},${root.x0})`)
+        .remove();
+    
+    // Update links
+    const link = g.selectAll('.link')
+        .data(links, d => d.id);
+    
+    const linkEnter = link.enter().insert('path', 'g')
+        .attr('class', 'link')
+        .style('fill', 'none')
+        .style('stroke', '#666')
+        .style('stroke-width', 2)
+        .attr('d', d => {
+            const o = {x: root.x0, y: root.y0};
+            return diagonal(o, o);
+        });
+    
+    const linkUpdate = linkEnter.merge(link);
+    
+    linkUpdate.transition()
+        .duration(500)
+        .attr('d', d => diagonal(d, d.parent));
+    
+    // Remove exiting links
+    link.exit().transition()
+        .duration(500)
+        .attr('d', d => {
+            const o = {x: root.x0, y: root.y0};
+            return diagonal(o, o);
+        })
+        .remove();
+    
+    // Store old positions
+    nodes.forEach(d => {
+        d.x0 = d.x;
+        d.y0 = d.y;
+    });
+}
+
+function diagonal(s, d) {
+    return `M ${s.y} ${s.x}
+            C ${(s.y + d.y) / 2} ${s.x},
+              ${(s.y + d.y) / 2} ${d.x},
+              ${d.y} ${d.x}`;
+}
+
+function restoreExpandedState(node) {
+    if (expandedNodes.has(node.data.id)) {
+        // Keep children visible
+        if (node._children) {
+            node.children = node._children;
+            node._children = null;
+        }
+    } else {
+        // Hide children
+        if (node.children) {
+            node._children = node.children;
+            node.children = null;
+        }
+    }
+    
+    // Recursively restore state for all children
+    if (node.children) {
+        node.children.forEach(child => restoreExpandedState(child));
+    }
+    if (node._children) {
+        node._children.forEach(child => restoreExpandedState(child));
     }
 }
 
-function updateGraphStats(data) {
-    const nodeCount = data.nodes?.length || 0;
-    const linkCount = data.links?.length || 0;
-    document.getElementById('graph-stats').textContent = `${nodeCount} nodes, ${linkCount} connections`;
+function handleNodeClick(event, d) {
+    console.log('Node clicked:', d.data);
+    selectNode(d.data);
+    
+    if (d.data.type === 'dataset') {
+        if (d.children) {
+            // Collapse
+            expandedNodes.delete(d.data.id);
+            d._children = d.children;
+            d.children = null;
+        } else if (d._children) {
+            // Expand from collapsed state
+            expandedNodes.add(d.data.id);
+            d.children = d._children;
+            d._children = null;
+        } else {
+            // Load new data
+            expandedNodes.add(d.data.id);
+            expandDataset(d);
+            return;
+        }
+        updateTree();
+    } else if (d.data.type === 'column') {
+        if (d.children) {
+            // Collapse
+            expandedNodes.delete(d.data.id);
+            d._children = d.children;
+            d.children = null;
+        } else if (d._children) {
+            // Expand from collapsed state
+            expandedNodes.add(d.data.id);
+            d.children = d._children;
+            d._children = null;
+        } else {
+            // Load new data
+            expandedNodes.add(d.data.id);
+            expandColumn(d);
+            return;
+        }
+        updateTree();
+    }
 }
 
-function showLoading() {
-    document.getElementById('graph-loading').style.display = 'flex';
-}
-
-function hideLoading() {
-    document.getElementById('graph-loading').style.display = 'none';
-}
-
-// vis.js Network utility functions
-function zoomIn() {
-    const scale = network.getScale();
-    network.moveTo({
-        scale: scale * 1.2
+function expandDataset(datasetNode) {
+    console.log('Expanding dataset:', datasetNode.data);
+    htmx.ajax('GET', `/metadata/htmx/dataset/${datasetNode.data.datasetId}/columns/`, {
+        target: '#htmx-target',
+        swap: 'innerHTML'
+    }).then(function() {
+        console.log('HTMX response received for dataset');
+        parseColumns(datasetNode);
+    }).catch(function(error) {
+        console.error('HTMX request failed:', error);
     });
+}
+
+function parseColumns(datasetNode) {
+    const container = document.getElementById('htmx-target');
+    const columnDivs = container.querySelectorAll('[hx-get*="column"][hx-get*="cells"]');
+    console.log('Found column divs:', columnDivs.length);
+    
+    const columns = [];
+    columnDivs.forEach(div => {
+        const url = div.getAttribute('hx-get');
+        const columnId = url.match(/column\/([^/]+)\/cells/)[1];
+        const name = div.querySelector('.font-medium').textContent;
+        const cellCount = div.querySelector('.text-gray-500').textContent;
+        
+        columns.push({
+            id: `column-${columnId}`,
+            name: name,
+            details: cellCount,
+            type: 'column',
+            columnId: columnId,
+            children: []
+        });
+    });
+    
+    // Create child hierarchy nodes
+    datasetNode.data.children = columns;
+    datasetNode.children = columns.map(child => {
+        const childNode = d3.hierarchy(child);
+        childNode.parent = datasetNode;
+        childNode.depth = datasetNode.depth + 1;
+        return childNode;
+    });
+    
+    updateTree();
+}
+
+function expandColumn(columnNode) {
+    htmx.ajax('GET', `/metadata/htmx/column/${columnNode.data.columnId}/cells/`, {
+        target: '#htmx-target',
+        swap: 'innerHTML'
+    }).then(function() {
+        parseCells(columnNode);
+    });
+}
+
+function parseCells(columnNode) {
+    const container = document.getElementById('htmx-target');
+    const cellDivs = container.querySelectorAll('[hx-get*="cell"][hx-get*="connections"]');
+    
+    const cells = [];
+    const maxCells = 10;
+    
+    for (let i = 0; i < Math.min(cellDivs.length, maxCells); i++) {
+        const div = cellDivs[i];
+        const url = div.getAttribute('hx-get');
+        const cellId = url.match(/cell\/([^/]+)\/connections/)[1];
+        const rowId = div.querySelector('.font-medium').textContent;
+        const valueElement = div.querySelector('.text-gray-600');
+        const value = valueElement ? valueElement.textContent.replace(/"/g, '').trim() : '';
+        
+        cells.push({
+            id: `cell-${cellId}`,
+            name: value.substring(0, 20) + (value.length > 20 ? '...' : ''),
+            details: rowId.replace('Cell ', ''),
+            type: 'cell',
+            cellId: cellId,
+            value: value
+        });
+    }
+    
+    // Create child hierarchy nodes
+    columnNode.data.children = cells;
+    columnNode.children = cells.map(child => {
+        const childNode = d3.hierarchy(child);
+        childNode.parent = columnNode;
+        childNode.depth = columnNode.depth + 1;
+        return childNode;
+    });
+    
+    updateTree();
+}
+
+function getNodeColor(type) {
+    switch(type) {
+        case 'root': return '#f0f0f0';
+        case 'dataset': return '#e3f2fd';
+        case 'column': return '#e8f5e8';
+        case 'cell': return '#fff3e0';
+        default: return '#ffffff';
+    }
+}
+
+function getNodeBorderColor(type) {
+    switch(type) {
+        case 'root': return '#999';
+        case 'dataset': return '#1976d2';
+        case 'column': return '#388e3c';
+        case 'cell': return '#f57c00';
+        default: return '#333';
+    }
+}
+
+function selectNode(nodeData) {
+    const infoDiv = document.getElementById('node-info');
+    infoDiv.innerHTML = `
+        <div class="space-y-2">
+            <div class="font-semibold">${nodeData.name}</div>
+            <div class="text-xs text-gray-500">Type: ${nodeData.type}</div>
+            ${nodeData.details ? `<div class="text-xs text-gray-500">${nodeData.details}</div>` : ''}
+            ${nodeData.value ? `<div class="text-xs text-blue-600">"${nodeData.value}"</div>` : ''}
+        </div>
+    `;
+}
+
+function fitTree() {
+    const bbox = g.node().getBBox();
+    const fullWidth = width + margin.left + margin.right;
+    const fullHeight = height + margin.top + margin.bottom;
+    const scale = Math.min(fullWidth / bbox.width, fullHeight / bbox.height) * 0.8;
+    const translateX = (fullWidth - bbox.width * scale) / 2 - bbox.x * scale + margin.left;
+    const translateY = (fullHeight - bbox.height * scale) / 2 - bbox.y * scale + margin.top;
+    
+    svg.transition()
+        .duration(750)
+        .call(zoom.transform, d3.zoomIdentity.translate(translateX, translateY).scale(scale));
+}
+
+function resetTree() {
+    expandedNodes.clear();
+    
+    // Reset zoom to initial position
+    svg.transition()
+        .duration(500)
+        .call(zoom.transform, d3.zoomIdentity.translate(margin.left, margin.top));
+    
+    loadInitialDatasets();
+}
+
+function zoomIn() {
+    svg.transition()
+        .duration(300)
+        .call(zoom.scaleBy, 1.5);
 }
 
 function zoomOut() {
-    const scale = network.getScale();
-    network.moveTo({
-        scale: scale * 0.8
-    });
+    svg.transition()
+        .duration(300)
+        .call(zoom.scaleBy, 1 / 1.5);
 }
-
-function fitToScreen() {
-    network.fit({
-        animation: {
-            duration: 500,
-            easingFunction: "easeInOutQuad"
-        }
-    });
-}
-
-function resetView() {
-    if (currentView === 'table') {
-        loadTableView();
-    }
-}
-
-function saveChanges() {
-    // Collect all node and edge data
-    const graphData = {
-        nodes: nodes.get(),
-        edges: edges.get()
-    };
-    
-    // Save via HTMX
-    htmx.ajax('POST', '/graph-editor/save-graph/', 'body', {
-        values: JSON.stringify(graphData)
-    });
-}
-
-// vis.js manipulation callbacks
-function createNodeDialog(nodeData, callback) {
-    // Show creation modal or use HTMX to get creation form
-    const newLabel = prompt("Enter node label:", "New Node");
-    if (newLabel) {
-        nodeData.label = newLabel;
-        nodeData.color = '#69b3a2';
-        
-        // Save to server via HTMX
-        htmx.ajax('POST', '/graph-editor/create-node/', 'body', {
-            values: nodeData
-        });
-        
-        callback(nodeData);
-    } else {
-        callback(null); // Cancel creation
-    }
-}
-
-function createEdgeDialog(edgeData, callback) {
-    const relationship = prompt("Enter relationship type:", "references");
-    if (relationship) {
-        edgeData.label = relationship;
-        
-        // Save to server via HTMX
-        htmx.ajax('POST', '/graph-editor/create-edge/', 'body', {
-            values: edgeData
-        });
-        
-        callback(edgeData);
-    } else {
-        callback(null); // Cancel creation
-    }
-}
-
-function deleteNodeDialog(nodeData, callback) {
-    if (confirm(`Delete node(s)? This will also delete connected edges.`)) {
-        // Delete from server via HTMX
-        htmx.ajax('DELETE', '/graph-editor/delete-nodes/', 'body', {
-            values: JSON.stringify(nodeData)
-        });
-        
-        callback(nodeData);
-    } else {
-        callback(null); // Cancel deletion
-    }
-}
-
-function deleteEdgeDialog(edgeData, callback) {
-    if (confirm(`Delete relationship(s)?`)) {
-        // Delete from server via HTMX
-        htmx.ajax('DELETE', '/graph-editor/delete-edges/', 'body', {
-            values: JSON.stringify(edgeData)
-        });
-        
-        callback(edgeData);
-    } else {
-        callback(null); // Cancel deletion
-    }
-}
-
-function drillDownToColumns(tableId) {
-    // Switch to column view for specific table
-    console.log('Drilling down to columns for table:', tableId);
-    // TODO: Implement column drill-down
-}
-
-// Hide context menu when clicking elsewhere
-document.addEventListener('click', function() {
-    document.getElementById('context-menu').style.display = 'none';
-});
-
-// Enhanced functions for HTMX integration
-function exportGraph() { 
-    const graphData = {
-        nodes: nodes.get(),
-        edges: edges.get(),
-        viewType: currentView
-    };
-    
-    // Download as JSON
-    const blob = new Blob([JSON.stringify(graphData, null, 2)], {type: 'application/json'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `semantic-graph-${currentView}-view.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-}
-
-function createConnection() { 
-    if (selectedNode) {
-        network.addEdgeMode();
-    } else {
-        alert('Please select a source node first');
-    }
-}
-
-function bulkEdit() { 
-    const selectedNodes = network.getSelectedNodes();
-    if (selectedNodes.length > 0) {
-        // Load bulk edit form via HTMX
-        htmx.ajax('GET', '/graph-editor/bulk-edit-form/', '#connection-modal', {
-            values: {nodes: selectedNodes.join(',')}
-        });
-        document.getElementById('connection-modal').classList.add('modal-open');
-    } else {
-        alert('Please select multiple nodes for bulk editing');
-    }
-}
-
-function detectPatterns() { 
-    // Trigger pattern detection via HTMX
-    htmx.ajax('POST', '/graph-editor/detect-patterns/', '#properties-panel', {
-        values: {view: currentView}
-    });
-}
-
 </script>
-{% endblock %} 
+{% endblock %}

@@ -1,0 +1,18 @@
+{% for column_info in columns %}
+<div class="border border-base-300 rounded p-3 hover:bg-base-50 cursor-pointer"
+     hx-get="{% url 'metadata:get_column_cells_htmx' column_info.resource.id %}"
+     hx-target="#cells-container"
+     onclick="clearCellConnections()">
+    <div class="font-medium text-sm">{{ column_info.resource.name }}</div>
+    <div class="text-xs text-gray-500">{{ column_info.cell_count }} cells</div>
+    <div class="text-xs text-gray-400 truncate">{{ column_info.resource.uri }}</div>
+</div>
+{% empty %}
+<p class="text-gray-500 text-sm">No columns found</p>
+{% endfor %}
+
+<script>
+function clearCellConnections() {
+    document.getElementById('connections-container').innerHTML = '<p class="text-gray-500 text-sm">Select a cell to see connections</p>';
+}
+</script> 
