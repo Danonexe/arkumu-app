@@ -52,6 +52,8 @@ let svg, g, tree, root, zoom;
 let expandedNodes = new Set();
 let nodeCounter = 0;
 let isLoading = false; // Prevent concurrent requests
+let cellsPerPage = 10; // Number of cells to load at once
+let loadedCellsMap = new Map(); // Map to track loaded cells for each column
 
 const margin = {top: 40, right: 120, bottom: 200, left: 120};
 const width = 1200 - margin.left - margin.right;
@@ -474,10 +476,18 @@ function parseCellsFromTarget(columnNode, targetId) {
     const cellDivs = container.querySelectorAll('[hx-get*="cell"][hx-get*="connections"]');
     console.log('Found cell divs:', cellDivs.length);
     
-    const cells = [];
-    const maxCells = 10;
+    // Store all cell divs for this column to load more later
+    loadedCellsMap.set(columnNode.data.id, {
+        allCellDivs: cellDivs,
+        loadedCount: 0
+    });
     
-    for (let i = 0; i < Math.min(cellDivs.length, maxCells); i++) {
+    const cells = [];
+    
+    // Load initial batch of cells
+    const initialCells = Math.min(cellDivs.length, cellsPerPage);
+    
+    for (let i = 0; i < initialCells; i++) {
         const div = cellDivs[i];
         const url = div.getAttribute('hx-get');
         const cellId = url.match(/cell\/([^/]+)\/connections/)[1];
@@ -494,6 +504,9 @@ function parseCellsFromTarget(columnNode, targetId) {
             value: value
         });
     }
+    
+    // Update loaded count
+    loadedCellsMap.get(columnNode.data.id).loadedCount = initialCells;
     
     // Update D3.js tree structure
     columnNode.data.children = cells;
@@ -598,18 +611,36 @@ function showNodeInfoFromData(nodeData) {
                 </div>
             </div>
         `;
-    } else if (nodeData.type === 'column' && nodeData.children) {
+    } else if (nodeData.type === 'column') {
+        // Get info about all available cells for this column
+        const cellInfo = loadedCellsMap.get(nodeData.id);
+        const totalCells = cellInfo ? cellInfo.allCellDivs.length : (nodeData.children ? nodeData.children.length : 0);
+        const loadedCount = cellInfo ? cellInfo.loadedCount : (nodeData.children ? nodeData.children.length : 0);
+        const hasMoreToLoad = cellInfo && loadedCount < totalCells;
+        
         content += `
-                            <div class="mt-3">
-                <div class="text-sm font-medium text-gray-700 mb-2">Sample Values (${Math.min(nodeData.children.length, 10)}):</div>
-                <div class="space-y-1 max-h-[calc(100vh-300px)] overflow-y-auto">
+            <div class="mt-3">
+                <div class="text-sm font-medium text-gray-700 mb-2">Values (${loadedCount} of ${totalCells}):</div>
+                <div id="cell-values-container" class="space-y-1 max-h-[calc(100vh-300px)] overflow-y-auto" data-column-id="${nodeData.id}">
         `;
         
-        for (let i = 0; i < Math.min(nodeData.children.length, 10); i++) {
-            const cell = nodeData.children[i];
+        if (nodeData.children) {
+            nodeData.children.forEach(cell => {
+                content += `
+                    <div class="text-xs bg-orange-50 px-2 py-1 rounded border-l-2 border-orange-400">
+                        <div class="font-mono text-blue-600">"${cell.value || cell.name}"</div>
+                    </div>
+                `;
+            });
+        }
+        
+        // Add load more button if there are more cells to load
+        if (hasMoreToLoad) {
             content += `
-                <div class="text-xs bg-orange-50 px-2 py-1 rounded border-l-2 border-orange-400">
-                    <div class="font-mono text-blue-600">"${cell.value || cell.name}"</div>
+                <div id="load-more-cells" class="text-center py-2">
+                    <button class="btn btn-xs btn-outline" onclick="loadMoreCells('${nodeData.id}')">
+                        Load More (${loadedCount} of ${totalCells})
+                    </button>
                 </div>
             `;
         }
@@ -622,6 +653,102 @@ function showNodeInfoFromData(nodeData) {
     
     content += `</div>`;
     infoDiv.innerHTML = content;
+    
+    // Add scroll event listener for lazy loading
+    if (nodeData.type === 'column') {
+        const container = document.getElementById('cell-values-container');
+        if (container) {
+            container.addEventListener('scroll', function() {
+                const scrollHeight = container.scrollHeight;
+                const scrollTop = container.scrollTop;
+                const clientHeight = container.clientHeight;
+                
+                // If scrolled near the bottom, load more cells
+                if (scrollHeight - scrollTop - clientHeight < 100) {
+                    const columnId = container.getAttribute('data-column-id');
+                    if (columnId) {
+                        loadMoreCells(columnId);
+                    }
+                }
+            });
+        }
+    }
+}
+
+// Function to load more cells when scrolling or clicking "Load More"
+function loadMoreCells(columnId) {
+    const cellInfo = loadedCellsMap.get(columnId);
+    if (!cellInfo || cellInfo.loadedCount >= cellInfo.allCellDivs.length || isLoading) {
+        return; // No more cells to load or already loading
+    }
+    
+    isLoading = true;
+    
+    // Find the column node in the tree
+    const findColumnNode = (node) => {
+        if (!node) return null;
+        if (node.data.id === columnId) return node;
+        if (node.children) {
+            for (const child of node.children) {
+                const found = findColumnNode(child);
+                if (found) return found;
+            }
+        }
+        return null;
+    };
+    
+    const columnNode = findColumnNode(root);
+    if (!columnNode) {
+        isLoading = false;
+        return;
+    }
+    
+    // Calculate how many more cells to load
+    const startIndex = cellInfo.loadedCount;
+    const endIndex = Math.min(startIndex + cellsPerPage, cellInfo.allCellDivs.length);
+    
+    // Load the next batch of cells
+    const newCells = [];
+    for (let i = startIndex; i < endIndex; i++) {
+        const div = cellInfo.allCellDivs[i];
+        const url = div.getAttribute('hx-get');
+        const cellId = url.match(/cell\/([^/]+)\/connections/)[1];
+        const rowId = div.querySelector('.font-medium').textContent;
+        const valueElement = div.querySelector('.text-gray-600');
+        const value = valueElement ? valueElement.textContent.replace(/"/g, '').trim() : '';
+        
+        newCells.push({
+            id: `cell-${cellId}`,
+            name: value.substring(0, 20) + (value.length > 20 ? '...' : ''),
+            details: rowId.replace('Cell ', ''),
+            type: 'cell',
+            cellId: cellId,
+            value: value
+        });
+    }
+    
+    // Update loaded count
+    cellInfo.loadedCount = endIndex;
+    
+    // Add new cells to the existing ones
+    if (!columnNode.data.children) columnNode.data.children = [];
+    columnNode.data.children = columnNode.data.children.concat(newCells);
+    
+    // Update D3 hierarchy
+    if (!columnNode.children) columnNode.children = [];
+    const newChildNodes = newCells.map(child => {
+        const childNode = d3.hierarchy(child);
+        childNode.parent = columnNode;
+        childNode.depth = columnNode.depth + 1;
+        return childNode;
+    });
+    columnNode.children = columnNode.children.concat(newChildNodes);
+    
+    // Update the UI
+    showNodeInfoFromData(columnNode.data);
+    updateTree();
+    
+    isLoading = false;
 }
 
 function parseNodeInfoFromResponse(nodeData) {
@@ -669,13 +796,19 @@ function parseNodeInfoFromResponse(nodeData) {
         // Parse cells from HTMX response
         const cellDivs = container.querySelectorAll('[hx-get*="cell"][hx-get*="connections"]');
         if (cellDivs.length > 0) {
+            // Store all cell divs for this column to load more later
+            loadedCellsMap.set(nodeData.id, {
+                allCellDivs: cellDivs,
+                loadedCount: Math.min(cellDivs.length, cellsPerPage)
+            });
+            
             content += `
                 <div class="mt-3">
-                    <div class="text-sm font-medium text-gray-700 mb-2">Sample Values (${Math.min(cellDivs.length, 10)}):</div>
-                    <div class="space-y-1 max-h-[calc(100vh-300px)] overflow-y-auto">
+                    <div class="text-sm font-medium text-gray-700 mb-2">Values (${Math.min(cellDivs.length, cellsPerPage)} of ${cellDivs.length}):</div>
+                    <div id="cell-values-container" class="space-y-1 max-h-[calc(100vh-300px)] overflow-y-auto" data-column-id="${nodeData.id}">
             `;
             
-            for (let i = 0; i < Math.min(cellDivs.length, 10); i++) {
+            for (let i = 0; i < Math.min(cellDivs.length, cellsPerPage); i++) {
                 const div = cellDivs[i];
                 const valueElement = div.querySelector('.text-gray-600');
                 const value = valueElement ? valueElement.textContent.replace(/"/g, '').trim() : 'No value';
@@ -686,10 +819,41 @@ function parseNodeInfoFromResponse(nodeData) {
                 `;
             }
             
+            // Add load more button if there are more cells to load
+            if (cellDivs.length > cellsPerPage) {
+                content += `
+                    <div id="load-more-cells" class="text-center py-2">
+                        <button class="btn btn-xs btn-outline" onclick="loadMoreCells('${nodeData.id}')">
+                            Load More (${Math.min(cellDivs.length, cellsPerPage)} of ${cellDivs.length})
+                        </button>
+                    </div>
+                `;
+            }
+            
             content += `
                     </div>
                 </div>
             `;
+            
+            // Add scroll event listener for lazy loading
+            setTimeout(() => {
+                const container = document.getElementById('cell-values-container');
+                if (container) {
+                    container.addEventListener('scroll', function() {
+                        const scrollHeight = container.scrollHeight;
+                        const scrollTop = container.scrollTop;
+                        const clientHeight = container.clientHeight;
+                        
+                        // If scrolled near the bottom, load more cells
+                        if (scrollHeight - scrollTop - clientHeight < 100) {
+                            const columnId = container.getAttribute('data-column-id');
+                            if (columnId) {
+                                loadMoreCells(columnId);
+                            }
+                        }
+                    });
+                }
+            }, 100);
         }
     } else if (nodeData.type === 'cell') {
         content += `
