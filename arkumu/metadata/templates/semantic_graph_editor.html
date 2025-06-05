@@ -32,9 +32,9 @@
         </div>
 
         <!-- Info Panel -->
-        <div class="bg-base-100 shadow rounded-lg p-4">
+        <div class="bg-base-100 shadow rounded-lg p-4 h-full overflow-hidden flex flex-col">
             <h2 class="font-semibold mb-3">Node Info</h2>
-            <div id="node-info" class="space-y-3">
+            <div id="node-info" class="space-y-3 flex-1 overflow-y-auto" hx-swap="innerHTML">
                 <p class="text-gray-500 text-sm">Click a node to see details</p>
             </div>
         </div>
@@ -51,6 +51,7 @@
 let svg, g, tree, root, zoom;
 let expandedNodes = new Set();
 let nodeCounter = 0;
+let isLoading = false; // Prevent concurrent requests
 
 const margin = {top: 40, right: 120, bottom: 200, left: 120};
 const width = 1200 - margin.left - margin.right;
@@ -318,44 +319,81 @@ function toggleNode(d) {
 
 function handleNodeClick(event, d) {
     console.log('Node clicked:', d.data);
-    selectNode(d.data);
+    
+    // Prevent concurrent loading
+    if (isLoading) {
+        console.log('Already loading, ignoring click');
+        return;
+    }
     
     if (d.data.type === 'dataset') {
         if (d.children || d._children) {
-            // Already loaded - just toggle
+            // Already loaded - just toggle D3 tree and update info panel
             toggleNode(d);
+            showNodeInfoFromData(d.data);
         } else {
-            // Load new data
+            // Load new data for both D3 tree and info panel
             expandedNodes.add(d.data.id);
             expandDataset(d);
         }
     } else if (d.data.type === 'column') {
         if (d.children || d._children) {
-            // Already loaded - just toggle
+            // Already loaded - just toggle D3 tree and update info panel
             toggleNode(d);
+            showNodeInfoFromData(d.data);
         } else {
-            // Load new data
+            // Load new data for both D3 tree and info panel
             expandedNodes.add(d.data.id);
             expandColumn(d);
         }
+    } else {
+        // For root, cell, or other node types, just update info panel
+        selectNode(d.data);
     }
 }
 
 function expandDataset(datasetNode) {
     console.log('Expanding dataset:', datasetNode.data);
+    
+    // Set loading state
+    isLoading = true;
+    
+    // Create unique target for this request
+    const targetId = `htmx-target-${datasetNode.data.id}`;
+    const existingTarget = document.getElementById(targetId);
+    if (existingTarget) {
+        existingTarget.remove();
+    }
+    
+    const tempTarget = document.createElement('div');
+    tempTarget.id = targetId;
+    tempTarget.style.display = 'none';
+    document.body.appendChild(tempTarget);
+    
     htmx.ajax('GET', `/metadata/htmx/dataset/${datasetNode.data.datasetId}/columns/`, {
-        target: '#htmx-target',
+        target: `#${targetId}`,
         swap: 'innerHTML'
     }).then(function() {
         console.log('HTMX response received for dataset');
-        parseColumns(datasetNode);
+        parseColumnsFromTarget(datasetNode, targetId);
+        // Clean up
+        tempTarget.remove();
+        isLoading = false;
     }).catch(function(error) {
         console.error('HTMX request failed:', error);
+        tempTarget.remove();
+        isLoading = false;
     });
 }
 
-function parseColumns(datasetNode) {
-    const container = document.getElementById('htmx-target');
+function parseColumnsFromTarget(datasetNode, targetId) {
+    console.log('parseColumnsFromTarget called with:', datasetNode, targetId);
+    const container = document.getElementById(targetId);
+    if (!container) {
+        console.error('Target container not found:', targetId);
+        return;
+    }
+    
     const columnDivs = container.querySelectorAll('[hx-get*="column"][hx-get*="cells"]');
     console.log('Found column divs:', columnDivs.length);
     
@@ -376,7 +414,7 @@ function parseColumns(datasetNode) {
         });
     });
     
-    // Create child hierarchy nodes
+    // Update D3.js tree structure
     datasetNode.data.children = columns;
     datasetNode.children = columns.map(child => {
         const childNode = d3.hierarchy(child);
@@ -385,21 +423,56 @@ function parseColumns(datasetNode) {
         return childNode;
     });
     
+    // Update both D3.js tree and info panel
+    console.log('About to update tree with columns:', columns);
     updateTree();
+    showNodeInfoFromData(datasetNode.data);
 }
 
 function expandColumn(columnNode) {
+    console.log('Expanding column:', columnNode.data);
+    
+    // Set loading state
+    isLoading = true;
+    
+    // Create unique target for this request
+    const targetId = `htmx-target-${columnNode.data.id}`;
+    const existingTarget = document.getElementById(targetId);
+    if (existingTarget) {
+        existingTarget.remove();
+    }
+    
+    const tempTarget = document.createElement('div');
+    tempTarget.id = targetId;
+    tempTarget.style.display = 'none';
+    document.body.appendChild(tempTarget);
+    
     htmx.ajax('GET', `/metadata/htmx/column/${columnNode.data.columnId}/cells/`, {
-        target: '#htmx-target',
+        target: `#${targetId}`,
         swap: 'innerHTML'
     }).then(function() {
-        parseCells(columnNode);
+        console.log('HTMX response received for column');
+        parseCellsFromTarget(columnNode, targetId);
+        // Clean up
+        tempTarget.remove();
+        isLoading = false;
+    }).catch(function(error) {
+        console.error('HTMX request failed:', error);
+        tempTarget.remove();
+        isLoading = false;
     });
 }
 
-function parseCells(columnNode) {
-    const container = document.getElementById('htmx-target');
+function parseCellsFromTarget(columnNode, targetId) {
+    console.log('parseCellsFromTarget called with:', columnNode, targetId);
+    const container = document.getElementById(targetId);
+    if (!container) {
+        console.error('Target container not found:', targetId);
+        return;
+    }
+    
     const cellDivs = container.querySelectorAll('[hx-get*="cell"][hx-get*="connections"]');
+    console.log('Found cell divs:', cellDivs.length);
     
     const cells = [];
     const maxCells = 10;
@@ -422,7 +495,7 @@ function parseCells(columnNode) {
         });
     }
     
-    // Create child hierarchy nodes
+    // Update D3.js tree structure
     columnNode.data.children = cells;
     columnNode.children = cells.map(child => {
         const childNode = d3.hierarchy(child);
@@ -431,7 +504,9 @@ function parseCells(columnNode) {
         return childNode;
     });
     
+    // Update both D3.js tree and info panel
     updateTree();
+    showNodeInfoFromData(columnNode.data);
 }
 
 function getNodeColor(type) {
@@ -455,15 +530,194 @@ function getNodeBorderColor(type) {
 }
 
 function selectNode(nodeData) {
+    if (nodeData.type === 'root') {
+        // Show basic info for root
+        document.getElementById('node-info').innerHTML = `
+            <div class="space-y-3">
+                <div class="font-semibold text-lg">${nodeData.name}</div>
+                <div class="text-xs text-gray-500 uppercase tracking-wide">Type: ${nodeData.type}</div>
+                <div class="text-xs text-gray-400 italic">Expand datasets to explore data</div>
+            </div>
+        `;
+    } else if (nodeData.type === 'cell') {
+        // Show cell info
+        document.getElementById('node-info').innerHTML = `
+            <div class="space-y-3">
+                <div class="font-semibold text-lg">${nodeData.name}</div>
+                <div class="text-xs text-gray-500 uppercase tracking-wide">Type: ${nodeData.type}</div>
+                <div class="text-xs text-gray-500">${nodeData.details}</div>
+                <div class="mt-2">
+                    <div class="text-sm font-medium text-gray-700">Value:</div>
+                    <div class="text-xs bg-blue-50 px-2 py-1 rounded border-l-2 border-blue-400 mt-1">
+                        <div class="font-mono text-blue-600">"${nodeData.value || nodeData.name}"</div>
+                    </div>
+                </div>
+            </div>
+        `;
+    } else {
+        // Default simple info for other node types
+        document.getElementById('node-info').innerHTML = `
+            <div class="space-y-3">
+                <div class="font-semibold text-lg">${nodeData.name}</div>
+                <div class="text-xs text-gray-500 uppercase tracking-wide">Type: ${nodeData.type}</div>
+                <div class="text-xs text-gray-500">${nodeData.details || ''}</div>
+            </div>
+        `;
+    }
+}
+
+function showNodeInfoFromData(nodeData) {
+    // Show node info using already loaded D3.js data
     const infoDiv = document.getElementById('node-info');
-    infoDiv.innerHTML = `
-        <div class="space-y-2">
-            <div class="font-semibold">${nodeData.name}</div>
-            <div class="text-xs text-gray-500">Type: ${nodeData.type}</div>
-            ${nodeData.details ? `<div class="text-xs text-gray-500">${nodeData.details}</div>` : ''}
-            ${nodeData.value ? `<div class="text-xs text-blue-600">"${nodeData.value}"</div>` : ''}
-        </div>
+    
+    let content = `
+        <div class="space-y-3">
+            <div class="font-semibold text-lg">${nodeData.name}</div>
+            <div class="text-xs text-gray-500 uppercase tracking-wide">Type: ${nodeData.type}</div>
+            <div class="text-xs text-gray-500">${nodeData.details}</div>
     `;
+    
+    if (nodeData.type === 'dataset' && nodeData.children) {
+        content += `
+            <div class="mt-3">
+                <div class="text-sm font-medium text-gray-700 mb-2">Columns (${nodeData.children.length}):</div>
+                <div class="space-y-1 max-h-[calc(100vh-300px)] overflow-y-auto">
+        `;
+        
+        // Show ALL columns, not limited
+        nodeData.children.forEach(column => {
+            content += `
+                <div class="text-xs bg-gray-50 px-2 py-1 rounded border-l-2 border-green-400 hover:bg-gray-100 transition-colors">
+                    <div class="font-medium text-gray-800">${column.name}</div>
+                    <div class="text-gray-500">${column.details}</div>
+                </div>
+            `;
+        });
+        
+        content += `
+                </div>
+            </div>
+        `;
+    } else if (nodeData.type === 'column' && nodeData.children) {
+        content += `
+                            <div class="mt-3">
+                <div class="text-sm font-medium text-gray-700 mb-2">Sample Values (${Math.min(nodeData.children.length, 10)}):</div>
+                <div class="space-y-1 max-h-[calc(100vh-300px)] overflow-y-auto">
+        `;
+        
+        for (let i = 0; i < Math.min(nodeData.children.length, 10); i++) {
+            const cell = nodeData.children[i];
+            content += `
+                <div class="text-xs bg-orange-50 px-2 py-1 rounded border-l-2 border-orange-400">
+                    <div class="font-mono text-blue-600">"${cell.value || cell.name}"</div>
+                </div>
+            `;
+        }
+        
+        content += `
+                </div>
+            </div>
+        `;
+    }
+    
+    content += `</div>`;
+    infoDiv.innerHTML = content;
+}
+
+function parseNodeInfoFromResponse(nodeData) {
+    const container = document.getElementById('htmx-target');
+    const infoDiv = document.getElementById('node-info');
+    
+    let content = `
+        <div class="space-y-3">
+            <div class="font-semibold text-lg">${nodeData.name}</div>
+            <div class="text-xs text-gray-500 uppercase tracking-wide">Type: ${nodeData.type}</div>
+    `;
+    
+    if (nodeData.type === 'dataset') {
+        content += `<div class="text-xs text-gray-500">${nodeData.details}</div>`;
+        
+        // Parse columns from HTMX response
+        const columnDivs = container.querySelectorAll('[hx-get*="column"][hx-get*="cells"]');
+        if (columnDivs.length > 0) {
+            content += `
+                <div class="mt-3">
+                    <div class="text-sm font-medium text-gray-700 mb-2">All Columns (${columnDivs.length}):</div>
+                    <div class="space-y-1 max-h-[calc(100vh-300px)] overflow-y-auto border rounded p-2 bg-gray-50">
+            `;
+            
+            // Show ALL columns from HTMX response
+            columnDivs.forEach(div => {
+                const name = div.querySelector('.font-medium')?.textContent || 'Unknown';
+                const details = div.querySelector('.text-gray-500')?.textContent || '';
+                content += `
+                    <div class="text-xs bg-white px-2 py-1 rounded border-l-2 border-green-400 hover:bg-green-50 transition-colors shadow-sm">
+                        <div class="font-medium text-gray-800">${name}</div>
+                        <div class="text-gray-500">${details}</div>
+                    </div>
+                `;
+            });
+            
+            content += `
+                    </div>
+                </div>
+            `;
+        }
+    } else if (nodeData.type === 'column') {
+        content += `<div class="text-xs text-gray-500">${nodeData.details}</div>`;
+        
+        // Parse cells from HTMX response
+        const cellDivs = container.querySelectorAll('[hx-get*="cell"][hx-get*="connections"]');
+        if (cellDivs.length > 0) {
+            content += `
+                <div class="mt-3">
+                    <div class="text-sm font-medium text-gray-700 mb-2">Sample Values (${Math.min(cellDivs.length, 10)}):</div>
+                    <div class="space-y-1 max-h-[calc(100vh-300px)] overflow-y-auto">
+            `;
+            
+            for (let i = 0; i < Math.min(cellDivs.length, 10); i++) {
+                const div = cellDivs[i];
+                const valueElement = div.querySelector('.text-gray-600');
+                const value = valueElement ? valueElement.textContent.replace(/"/g, '').trim() : 'No value';
+                content += `
+                    <div class="text-xs bg-orange-50 px-2 py-1 rounded border-l-2 border-orange-400">
+                        <div class="font-mono text-blue-600">"${value}"</div>
+                    </div>
+                `;
+            }
+            
+            content += `
+                    </div>
+                </div>
+            `;
+        }
+    } else if (nodeData.type === 'cell') {
+        content += `
+            <div class="text-xs text-gray-500">${nodeData.details}</div>
+            <div class="mt-2">
+                <div class="text-sm font-medium text-gray-700">Value:</div>
+                <div class="text-xs bg-blue-50 px-2 py-1 rounded border-l-2 border-blue-400 mt-1">
+                    <div class="font-mono text-blue-600">"${nodeData.value || nodeData.name}"</div>
+                </div>
+            </div>
+        `;
+        
+        // Parse connections from HTMX response if available
+        const connectionDivs = container.querySelectorAll('[data-connection]');
+        if (connectionDivs.length > 0) {
+            content += `
+                <div class="mt-3">
+                    <div class="text-sm font-medium text-gray-700 mb-2">Connections (${connectionDivs.length}):</div>
+                    <div class="space-y-1 max-h-[calc(100vh-300px)] overflow-y-auto">
+                        <div class="text-xs text-gray-400 italic">Connected to other cells</div>
+                    </div>
+                </div>
+            `;
+        }
+    }
+    
+    content += `</div>`;
+    infoDiv.innerHTML = content;
 }
 
 function fitTree() {
