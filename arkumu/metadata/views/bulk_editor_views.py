@@ -1157,4 +1157,151 @@ def service_powered_execution(request):
             'error': f'Pipeline execution error: {str(e)}'
         })
 
+@login_required
+def semantic_graph_editor(request):
+    """Main view for the semantic graph editor interface."""
+    return render(request, 'semantic_graph_editor.html', {
+        'page_title': 'Semantic Graph Editor'
+    })
+
+@login_required
+def graph_table_data(request):
+    """API endpoint for table-level graph data."""
+    if request.method != 'GET':
+        return JsonResponse({'error': 'GET method required'}, status=405)
+    
+    # Check if this is a request for specific node properties (for HTMX)
+    node_id = request.GET.get('node')
+    if node_id:
+        return _handle_node_properties_request(request, node_id)
+    
+    try:
+        # Find all datasets by looking for resources that have hasPart relationships
+        # These represent "tables" in our semantic model
+        dataset_uris = Triple.objects.filter(
+            predicate__uri="http://purl.org/dc/terms/hasPart"
+        ).values_list('subject__uri', flat=True).distinct()
+        
+        # Get basic info about each dataset/table
+        datasets = Resource.objects.filter(
+            uri__in=dataset_uris,
+            resource_type=ResourceType.IRI
+        ).select_related().values('id', 'uri', 'name', 'source')
+        
+        # Build nodes data for D3.js
+        nodes = []
+        for i, dataset in enumerate(datasets):
+            # Count records in this table (number of hasPart relationships)
+            record_count = Triple.objects.filter(
+                subject__uri=dataset['uri'],
+                predicate__uri="http://purl.org/dc/terms/hasPart"
+            ).count()
+            
+            # Determine node color based on source/institution
+            color_map = {
+                'CSV_Import': '#69b3a2',
+                'Manual': '#404080', 
+                'Generated': '#ff6b6b'
+            }
+            source = dataset.get('source', 'Unknown')
+            color = color_map.get(source, '#cccccc')
+            
+            nodes.append({
+                'id': dataset['uri'],
+                'label': dataset['name'] or f"Table {i+1}",
+                'type': 'table',
+                'source': source,
+                'records': record_count,
+                'size': max(15, min(50, record_count / 10)),  # Scale node size by record count
+                'color': color
+            })
+        
+        # Find inter-table connections
+        # Look for triples where the object points to a cell from another table
+        links = []
+        
+        # For now, create sample connections based on naming patterns
+        # TODO: Implement actual cross-table reference detection
+        for i, node1 in enumerate(nodes):
+            for j, node2 in enumerate(nodes):
+                if i != j:
+                    # Check if there might be a relationship based on naming patterns
+                    # This is a simplified heuristic - in reality you'd check actual data
+                    if (node1['label'].lower().replace('_', '') in node2['label'].lower() or
+                        node2['label'].lower().replace('_', '') in node1['label'].lower()):
+                        
+                        # Don't create too many connections - limit to strongest matches
+                        if len([l for l in links if l['source'] == node1['id']]) < 2:
+                            links.append({
+                                'source': node1['id'],
+                                'target': node2['id'],
+                                'type': 'references',
+                                'value': 2,  # Line thickness
+                                'label': 'references'
+                            })
+        
+        graph_data = {
+            'nodes': nodes,
+            'links': links,
+            'metadata': {
+                'total_tables': len(nodes),
+                'total_connections': len(links),
+                'view_type': 'table'
+            }
+        }
+        
+        return JsonResponse(graph_data)
+        
+    except Exception as e:
+        logger.error(f"Error generating table graph data: {e}", exc_info=True)
+        return JsonResponse({
+            'error': f'Error loading graph data: {str(e)}',
+            'nodes': [],
+            'links': []
+        }, status=500)
+
+
+def _handle_node_properties_request(request, node_id):
+    """Handle HTMX request for node properties display."""
+    try:
+        # Try to find the resource by URI first (node_id might be a URI)
+        try:
+            resource = Resource.objects.get(uri=node_id)
+        except Resource.DoesNotExist:
+            # Fallback to ID lookup
+            try:
+                resource = Resource.objects.get(id=node_id)
+            except Resource.DoesNotExist:
+                return render(request, 'partials/node_properties.html', {
+                    'error': f'Node not found: {node_id}'
+                })
+        
+        # Count records if this is a dataset/table
+        record_count = 0
+        if resource.resource_type == ResourceType.IRI:
+            record_count = Triple.objects.filter(
+                subject=resource,
+                predicate__uri="http://purl.org/dc/terms/hasPart"
+            ).count()
+        
+        # Get some related triples for context
+        related_triples = Triple.objects.filter(
+            Q(subject=resource) | Q(object=resource)
+        ).select_related('subject', 'predicate', 'object')[:10]
+        
+        context = {
+            'resource': resource,
+            'record_count': record_count,
+            'related_triples': related_triples,
+            'node_id': node_id
+        }
+        
+        return render(request, 'partials/node_properties.html', context)
+        
+    except Exception as e:
+        logger.error(f"Error loading node properties for {node_id}: {e}", exc_info=True)
+        return render(request, 'partials/node_properties.html', {
+            'error': f'Error loading properties: {str(e)}'
+        })
+
  

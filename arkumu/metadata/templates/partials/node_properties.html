@@ -1,0 +1,102 @@
+{% if error %}
+<div class="alert alert-error">
+    <span>{{ error }}</span>
+</div>
+{% else %}
+<div class="space-y-3">
+    <div>
+        <label class="label label-text-alt">Name</label>
+        <input type="text" class="input input-bordered input-sm w-full" 
+               value="{{ resource.name|default:'Unnamed' }}" readonly>
+    </div>
+    
+    <div>
+        <label class="label label-text-alt">URI</label>
+        <input type="text" class="input input-bordered input-sm w-full" 
+               value="{{ resource.uri|truncatechars:60 }}" readonly
+               title="{{ resource.uri }}">
+    </div>
+    
+    <div>
+        <label class="label label-text-alt">Type</label>
+        <div class="badge badge-outline">{{ resource.get_resource_type_display }}</div>
+    </div>
+    
+    {% if record_count > 0 %}
+    <div>
+        <label class="label label-text-alt">Records</label>
+        <div class="stat-value text-lg">{{ record_count }}</div>
+    </div>
+    {% endif %}
+    
+    {% if resource.source %}
+    <div>
+        <label class="label label-text-alt">Source</label>
+        <div class="badge badge-info">{{ resource.source }}</div>
+    </div>
+    {% endif %}
+    
+    {% if resource.value %}
+    <div>
+        <label class="label label-text-alt">Value</label>
+        <textarea class="textarea textarea-bordered text-xs w-full" rows="3" readonly>{{ resource.value|truncatechars:200 }}</textarea>
+    </div>
+    {% endif %}
+    
+    <div class="divider my-2"></div>
+    
+    <!-- Action Buttons -->
+    <div class="space-y-2">
+        <a href="{% url 'metadata:resource_detail' resource.id %}" 
+           class="btn btn-primary btn-sm w-full" target="_blank">
+            🔍 View Details
+        </a>
+        
+        {% if record_count > 0 %}
+        <button class="btn btn-outline btn-sm w-full" 
+                onclick="exploreDataset('{{ resource.uri }}')">
+            📊 Explore Data
+        </button>
+        {% endif %}
+        
+        <button class="btn btn-outline btn-sm w-full" 
+                onclick="showRelatedTriples('{{ resource.id }}')">
+            🔗 Related Connections
+        </button>
+    </div>
+    
+    {% if related_triples %}
+    <div class="divider my-2"></div>
+    
+    <div>
+        <label class="label label-text-alt">Recent Connections</label>
+        <div class="space-y-1 max-h-32 overflow-y-auto">
+            {% for triple in related_triples %}
+            <div class="text-xs p-2 bg-base-200 rounded">
+                <div class="font-medium">{{ triple.predicate.name|default:triple.predicate.uri|truncatechars:30 }}</div>
+                <div class="opacity-60">
+                    {% if triple.subject == resource %}
+                        → {{ triple.object.name|default:triple.object.uri|truncatechars:25 }}
+                    {% else %}
+                        ← {{ triple.subject.name|default:triple.subject.uri|truncatechars:25 }}
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+function exploreDataset(uri) {
+    // Navigate to data explorer with this dataset
+    window.open(`{% url 'metadata:data_explorer' %}?q=${encodeURIComponent(uri)}&view=triples`, '_blank');
+}
+
+function showRelatedTriples(resourceId) {
+    // Show all triples involving this resource
+    window.open(`{% url 'metadata:data_explorer' %}?subject=${resourceId}&view=triples`, '_blank');
+}
+</script>
+{% endif %} 

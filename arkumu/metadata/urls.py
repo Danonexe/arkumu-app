@@ -50,6 +50,10 @@ urlpatterns = [
     path('bulk-editor/enhanced-validation/', bulk_editor_views.enhanced_validation_preview, name='enhanced_validation_preview'),
     path('bulk-editor/cross-dataset-resolution/', bulk_editor_views.cross_dataset_resolution, name='cross_dataset_resolution'),
     
+    # Semantic Graph Editor
+    path('graph-editor/', bulk_editor_views.semantic_graph_editor, name='semantic_graph_editor'),
+    path('graph-editor/table-data/', bulk_editor_views.graph_table_data, name='graph_table_data'),
+    
     # Data Discovery
     path('data-discovery/', data_discovery_views.DataDiscoveryView.as_view(), name='data_discovery'),
     path('data-discovery/search-resources/', data_discovery_views.search_resources, name='search_resources'),
