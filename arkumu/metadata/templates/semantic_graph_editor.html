@@ -81,7 +81,12 @@ function initializeTree() {
     
     tree = d3.tree()
         .size([height, width])
-        .separation((a, b) => (a.parent == b.parent ? 1 : 2) / a.depth);
+        .nodeSize([60, 200]) // Set minimum spacing between nodes
+        .separation((a, b) => {
+            // Increase separation based on depth and relationship
+            const baseSeparation = a.parent == b.parent ? 1.2 : 2;
+            return baseSeparation;
+        });
     
     root = d3.hierarchy({
         id: 'root',
@@ -147,7 +152,7 @@ function updateTree() {
     
     // Update nodes
     const node = g.selectAll('.node')
-        .data(nodes, d => d.id || (d.id = ++nodeCounter));
+        .data(nodes, d => d.data.id || (d.data.id = `node-${++nodeCounter}`));
     
     const nodeEnter = node.enter().append('g')
         .attr('class', 'node')
@@ -163,30 +168,42 @@ function updateTree() {
             handleNodeClick(event, d);
         });
     
-    // Add rectangles
+    // Add rectangles with dynamic width
     nodeEnter.append('rect')
-        .attr('width', 160)
-        .attr('height', 40)
-        .attr('x', -80)
-        .attr('y', -20)
+        .attr('width', d => Math.max(180, d.data.name.length * 8))
+        .attr('height', 45)
+        .attr('x', d => -Math.max(90, d.data.name.length * 4))
+        .attr('y', -22.5)
         .attr('rx', 5)
         .style('fill', d => getNodeColor(d.data.type))
         .style('stroke', d => getNodeBorderColor(d.data.type))
         .style('stroke-width', 2);
     
-    // Add text
-    nodeEnter.append('text')
-        .attr('dy', '-5')
+    // Add main text with smart truncation
+    const mainText = nodeEnter.append('text')
+        .attr('dy', '-6')
         .attr('text-anchor', 'middle')
         .style('font-size', '12px')
         .style('font-weight', 'bold')
+        .style('pointer-events', 'none')
+        .text(d => {
+            const maxLength = Math.max(20, Math.floor((Math.max(180, d.data.name.length * 8) - 20) / 7));
+            return d.data.name.length > maxLength ? 
+                d.data.name.substring(0, maxLength - 3) + '...' : 
+                d.data.name;
+        });
+    
+    // Add tooltip for truncated text
+    mainText.append('title')
         .text(d => d.data.name);
     
+    // Add details text
     nodeEnter.append('text')
-        .attr('dy', '10')
+        .attr('dy', '12')
         .attr('text-anchor', 'middle')
         .style('font-size', '10px')
         .style('fill', '#666')
+        .style('pointer-events', 'none')
         .text(d => d.data.details || '');
     
     // Transition nodes to their new position
@@ -206,12 +223,18 @@ function updateTree() {
     // Remove exiting nodes
     const nodeExit = node.exit().transition()
         .duration(500)
-        .attr('transform', d => `translate(${root.y0},${root.x0})`)
+        .attr('transform', d => {
+            // Animate to parent's position, not root
+            if (d.parent) {
+                return `translate(${d.parent.y},${d.parent.x})`;
+            }
+            return `translate(${root.y},${root.x})`;
+        })
         .remove();
     
     // Update links
     const link = g.selectAll('.link')
-        .data(links, d => d.id);
+        .data(links, d => d.data.id);
     
     const linkEnter = link.enter().insert('path', 'g')
         .attr('class', 'link')
@@ -219,8 +242,9 @@ function updateTree() {
         .style('stroke', '#666')
         .style('stroke-width', 2)
         .attr('d', d => {
-            const o = {x: root.x0, y: root.y0};
-            return diagonal(o, o);
+            // Start from parent's position
+            const parentPos = d.parent ? {x: d.parent.x0 || d.parent.x, y: d.parent.y0 || d.parent.y} : {x: root.x0, y: root.y0};
+            return diagonal(parentPos, parentPos);
         });
     
     const linkUpdate = linkEnter.merge(link);
@@ -233,12 +257,13 @@ function updateTree() {
     link.exit().transition()
         .duration(500)
         .attr('d', d => {
-            const o = {x: root.x0, y: root.y0};
-            return diagonal(o, o);
+            // Animate to parent's position
+            const parentPos = d.parent ? {x: d.parent.x, y: d.parent.y} : {x: root.x, y: root.y};
+            return diagonal(parentPos, parentPos);
         })
         .remove();
     
-    // Store old positions
+    // Store old positions for smooth transitions
     nodes.forEach(d => {
         d.x0 = d.x;
         d.y0 = d.y;
@@ -276,46 +301,43 @@ function restoreExpandedState(node) {
     }
 }
 
+function toggleNode(d) {
+    if (d.children) {
+        // Collapse
+        expandedNodes.delete(d.data.id);
+        d._children = d.children;
+        d.children = null;
+    } else if (d._children) {
+        // Expand from collapsed state
+        expandedNodes.add(d.data.id);
+        d.children = d._children;
+        d._children = null;
+    }
+    updateTree();
+}
+
 function handleNodeClick(event, d) {
     console.log('Node clicked:', d.data);
     selectNode(d.data);
     
     if (d.data.type === 'dataset') {
-        if (d.children) {
-            // Collapse
-            expandedNodes.delete(d.data.id);
-            d._children = d.children;
-            d.children = null;
-        } else if (d._children) {
-            // Expand from collapsed state
-            expandedNodes.add(d.data.id);
-            d.children = d._children;
-            d._children = null;
+        if (d.children || d._children) {
+            // Already loaded - just toggle
+            toggleNode(d);
         } else {
             // Load new data
             expandedNodes.add(d.data.id);
             expandDataset(d);
-            return;
         }
-        updateTree();
     } else if (d.data.type === 'column') {
-        if (d.children) {
-            // Collapse
-            expandedNodes.delete(d.data.id);
-            d._children = d.children;
-            d.children = null;
-        } else if (d._children) {
-            // Expand from collapsed state
-            expandedNodes.add(d.data.id);
-            d.children = d._children;
-            d._children = null;
+        if (d.children || d._children) {
+            // Already loaded - just toggle
+            toggleNode(d);
         } else {
             // Load new data
             expandedNodes.add(d.data.id);
             expandColumn(d);
-            return;
         }
-        updateTree();
     }
 }
 
