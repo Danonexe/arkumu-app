@@ -12,21 +12,33 @@
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 h-[calc(100vh-200px)]">
-        <!-- Graph Visualization -->
+        <!-- Visualization Panel with Tabs -->
         <div class="lg:col-span-3 bg-base-100 shadow rounded-lg">
             <div class="p-4 border-b">
-                <div class="flex justify-between items-center">
-                    <h2 class="font-semibold">Connection Tree</h2>
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="font-semibold">Dataset Explorer</h2>
                     <div class="flex gap-2">
-                        <button onclick="fitTree()" class="btn btn-xs btn-outline">Fit</button>
-                        <button onclick="resetTree()" class="btn btn-xs btn-outline">Reset</button>
+                        <button onclick="fitView()" class="btn btn-xs btn-outline">Fit</button>
+                        <button onclick="resetView()" class="btn btn-xs btn-outline">Reset</button>
                         <button onclick="zoomIn()" class="btn btn-xs btn-outline">+</button>
                         <button onclick="zoomOut()" class="btn btn-xs btn-outline">-</button>
                     </div>
                 </div>
-                <p class="text-sm text-gray-600 mt-1">Click nodes to expand connections • Drag to pan • Scroll to zoom</p>
+                
+                <!-- Tabs -->
+                <div class="tabs tabs-boxed mb-4">
+                    <a class="tab tab-active" id="tree-tab" onclick="switchToTreeView()">Tree View</a>
+                    <a class="tab" id="graph-tab" onclick="switchToGraphView()">Graph View</a>
+                </div>
+                
+                <div id="tree-instructions" class="text-sm text-gray-600">
+                    Click nodes to expand connections • Drag to pan • Scroll to zoom
+                </div>
+                <div id="graph-instructions" class="text-sm text-gray-600" style="display: none;">
+                    Click nodes to expand connections • Drag nodes to rearrange • Drag to pan • Scroll to zoom
+                </div>
             </div>
-            <div id="tree-container" class="w-full h-full overflow-auto">
+            <div id="visualization-container" class="w-full h-full overflow-auto">
                 <svg id="tree-svg" width="100%" height="100%"></svg>
             </div>
         </div>
@@ -44,27 +56,39 @@
     <div id="htmx-target" style="display: none;"></div>
 </div>
 
+
+
 <script src="https://d3js.org/d3.v7.min.js"></script>
 <script src="https://unpkg.com/htmx.org@1.9.10/dist/htmx.min.js"></script>
 
 <script>
-let svg, g, tree, root, zoom;
+let svg, g, tree, simulation, root, zoom;
 let expandedNodes = new Set();
 let nodeCounter = 0;
 let isLoading = false; // Prevent concurrent requests
 let cellsPerPage = 10; // Number of cells to load at once
 let loadedCellsMap = new Map(); // Map to track loaded cells for each column
 
+// Current view mode
+let currentView = 'tree'; // 'tree' or 'graph'
+
+// Graph data structure for graph view
+let graphData = {
+    nodes: [],
+    links: []
+};
+let nodeMap = new Map(); // Map node IDs to node objects
+
 const margin = {top: 40, right: 120, bottom: 200, left: 120};
 const width = 1200 - margin.left - margin.right;
 const height = 800 - margin.top - margin.bottom;
 
 document.addEventListener('DOMContentLoaded', function() {
-    initializeTree();
+    initializeVisualization();
     loadInitialDatasets();
 });
 
-function initializeTree() {
+function initializeVisualization() {
     svg = d3.select("#tree-svg")
         .attr("width", "100%")
         .attr("height", "100%")
@@ -82,11 +106,15 @@ function initializeTree() {
     g = svg.append("g")
         .attr("transform", `translate(${margin.left},${margin.top})`);
     
+    // Initialize tree layout (default view)
+    initializeTree();
+}
+
+function initializeTree() {
     tree = d3.tree()
         .size([width, height])
-        .nodeSize([200, 80]) // Set minimum spacing between nodes (horizontal, vertical)
+        .nodeSize([200, 80])
         .separation((a, b) => {
-            // Increase separation based on depth and relationship
             const baseSeparation = a.parent == b.parent ? 1.2 : 2;
             return baseSeparation;
         });
@@ -99,9 +127,91 @@ function initializeTree() {
     });
     
     root.x0 = width / 2;
-    root.y0 = 0;
+    root.y0 = height / 2; // Center vertically like the graph
+}
+
+function initializeGraph() {
+    // Simple force simulation (like triple_viewer.html)
+    simulation = d3.forceSimulation()
+        .force("link", d3.forceLink().id(d => d.id).distance(100))
+        .force("charge", d3.forceManyBody().strength(-300))
+        .force("center", d3.forceCenter(width / 2, height / 2))
+        .force("collision", d3.forceCollide().radius(20));
+    
+    // Initialize with root node
+    const rootNode = {
+        id: 'root',
+        name: 'Datasets',
+        type: 'root',
+        x: width / 2,
+        y: height / 2,
+        fx: width / 2, // Fix root node position
+        fy: height / 2
+    };
+    
+    graphData.nodes = [rootNode];
+    nodeMap.set('root', rootNode);
+}
+
+function switchToTreeView() {
+    currentView = 'tree';
+    
+    // Update tab appearance
+    document.getElementById('tree-tab').classList.add('tab-active');
+    document.getElementById('graph-tab').classList.remove('tab-active');
+    
+    // Update instructions
+    document.getElementById('tree-instructions').style.display = 'block';
+    document.getElementById('graph-instructions').style.display = 'none';
+    
+    // Clear and rebuild tree view
+    g.selectAll("*").remove();
+    
+    // Reset zoom transform to identity (centered)
+    svg.transition().duration(500).call(
+        zoom.transform,
+        d3.zoomIdentity.translate(margin.left, margin.top)
+    );
+    
+    // Convert graph data back to tree structure if needed
+    if (graphData.nodes.length > 1) {
+        convertGraphToTree();
+    }
     
     updateTree();
+}
+
+function switchToGraphView() {
+    currentView = 'graph';
+    
+    // Update tab appearance
+    document.getElementById('tree-tab').classList.remove('tab-active');
+    document.getElementById('graph-tab').classList.add('tab-active');
+    
+    // Update instructions
+    document.getElementById('tree-instructions').style.display = 'none';
+    document.getElementById('graph-instructions').style.display = 'block';
+    
+    // Clear and rebuild graph view
+    g.selectAll("*").remove();
+    
+    // Reset zoom transform to identity (centered)
+    svg.transition().duration(500).call(
+        zoom.transform,
+        d3.zoomIdentity.translate(margin.left, margin.top)
+    );
+    
+    // Initialize graph if not already done
+    if (!simulation) {
+        initializeGraph();
+    }
+    
+    // Convert tree data to graph if needed
+    if (root && root.children) {
+        convertTreeToGraph();
+    }
+    
+    updateGraph();
 }
 
 function loadInitialDatasets() {
@@ -118,40 +228,193 @@ function parseDatasets() {
     const datasetDivs = container.querySelectorAll('[hx-get*="dataset"][hx-get*="columns"]');
     console.log('Found dataset divs:', datasetDivs.length);
     
-    root.data.children = [];
-    
-    datasetDivs.forEach(div => {
-        const url = div.getAttribute('hx-get');
-        const datasetId = url.match(/dataset\/([^/]+)\/columns/)[1];
-        const name = div.querySelector('.font-medium').textContent;
-        const columnCount = div.querySelector('.text-gray-500').textContent;
+    if (currentView === 'tree') {
+        // Tree view logic
+        root.data.children = [];
         
-        root.data.children.push({
-            id: `dataset-${datasetId}`,
-            name: name,
-            details: columnCount,
-            type: 'dataset',
-            datasetId: datasetId,
-            children: []
+        datasetDivs.forEach(div => {
+            const url = div.getAttribute('hx-get');
+            const datasetId = url.match(/dataset\/([^/]+)\/columns/)[1];
+            const name = div.querySelector('.font-medium').textContent;
+            const columnCount = div.querySelector('.text-gray-500').textContent;
+            
+            root.data.children.push({
+                id: `dataset-${datasetId}`,
+                name: name,
+                details: columnCount,
+                type: 'dataset',
+                datasetId: datasetId,
+                children: []
+            });
         });
-    });
-    
-    root = d3.hierarchy(root.data);
-    root.x0 = width / 2;
-    root.y0 = 0;
-    
-    // Expand the root node by default to show datasets
-    if (root.children) {
+        
+        root = d3.hierarchy(root.data);
+        root.x0 = width / 2;
+        root.y0 = height / 2;
+        
+        // Expand the root node by default to show datasets
+        if (root.children) {
+            expandedNodes.add('root');
+        }
+        
+        updateTree();
+    } else {
+        // Graph view logic
+        datasetDivs.forEach(div => {
+            const url = div.getAttribute('hx-get');
+            const datasetId = url.match(/dataset\/([^/]+)\/columns/)[1];
+            const name = div.querySelector('.font-medium').textContent;
+            const columnCount = div.querySelector('.text-gray-500').textContent;
+            
+            const nodeId = `dataset-${datasetId}`;
+            
+            // Only add if not already exists
+            if (!nodeMap.has(nodeId)) {
+                const datasetNode = {
+                    id: nodeId,
+                    name: name,
+                    details: columnCount,
+                    type: 'dataset',
+                    datasetId: datasetId,
+                    x: width / 2 + (Math.random() - 0.5) * 200,
+                    y: height / 2 + (Math.random() - 0.5) * 200
+                };
+                
+                graphData.nodes.push(datasetNode);
+                nodeMap.set(nodeId, datasetNode);
+                
+                // Add link from root to dataset
+                graphData.links.push({
+                    source: 'root',
+                    target: nodeId,
+                    type: 'hierarchy'
+                });
+            }
+        });
+        
+        // Expand the root node by default
         expandedNodes.add('root');
+        
+        updateGraph();
     }
+}
+
+function updateGraph() {
+    // Update simulation data
+    simulation.nodes(graphData.nodes);
+    simulation.force("link").links(graphData.links);
     
-    updateTree();
+    // Simple links (like triple_viewer.html)
+    const link = g.selectAll('.link')
+        .data(graphData.links, d => `${d.source.id || d.source}-${d.target.id || d.target}`);
+    
+    const linkEnter = link.enter().insert('line', '.node')
+        .attr('class', 'link')
+        .attr('stroke', '#999')
+        .attr('stroke-opacity', 0.6)
+        .attr('stroke-width', d => Math.sqrt(d.value || 1));
+    
+    link.exit().remove();
+    
+    // Simple nodes (like triple_viewer.html)
+    const node = g.selectAll('.node')
+        .data(graphData.nodes, d => d.id);
+    
+    const nodeEnter = node.enter().append('g')
+        .attr('class', 'node')
+        .style('cursor', 'pointer')
+        .call(d3.drag()
+            .on("start", dragstarted)
+            .on("drag", dragged)
+            .on("end", dragended))
+        .on('click', function(event, d) {
+            event.stopPropagation();
+            handleNodeClick(event, d);
+        });
+    
+    // Simple circles with solid colors
+    nodeEnter.append('circle')
+        .attr('r', d => getSimpleNodeSize(d.type))
+        .attr('fill', d => getSimpleNodeColor(d.type))
+        .attr('stroke', '#fff')
+        .attr('stroke-width', 1.5);
+    
+    // Simple text labels
+    nodeEnter.append('text')
+        .text(d => d.name)
+        .attr('x', 12)
+        .attr('y', 3)
+        .attr('class', 'text-xs')
+        .style('fill', '#374151')
+        .style('pointer-events', 'none');
+    
+    node.exit().remove();
+    
+    // Add zoom controls (like triple_viewer.html)
+    addZoomControls();
+    
+    // Restart simulation
+    simulation.on("tick", ticked);
+    simulation.alpha(0.3).restart();
+}
+
+function ticked() {
+    // Simple straight links (like triple_viewer.html)
+    g.selectAll('.link')
+        .attr('x1', d => d.source.x)
+        .attr('y1', d => d.source.y)
+        .attr('x2', d => d.target.x)
+        .attr('y2', d => d.target.y);
+    
+    // Simple node positioning
+    g.selectAll('.node')
+        .attr('transform', d => `translate(${d.x},${d.y})`);
+}
+
+function dragstarted(event, d) {
+    if (!event.active) simulation.alphaTarget(0.3).restart();
+    d.fx = d.x;
+    d.fy = d.y;
+}
+
+function dragged(event, d) {
+    d.fx = event.x;
+    d.fy = event.y;
+}
+
+function dragended(event, d) {
+    if (!event.active) simulation.alphaTarget(0);
+    if (d.type !== 'root') { // Keep root node fixed
+        d.fx = null;
+        d.fy = null;
+    }
 }
 
 function updateTree() {
     const treeData = tree(root);
     const nodes = treeData.descendants();
     const links = treeData.descendants().slice(1);
+    
+    // Center the tree after layout calculation
+    if (nodes.length > 0) {
+        // Find the bounds of the tree
+        const minX = Math.min(...nodes.map(d => d.x));
+        const maxX = Math.max(...nodes.map(d => d.x));
+        const minY = Math.min(...nodes.map(d => d.y));
+        const maxY = Math.max(...nodes.map(d => d.y));
+        
+        // Calculate offsets to center the tree
+        const treeWidth = maxX - minX;
+        const treeHeight = maxY - minY;
+        const offsetX = (width - treeWidth) / 2 - minX;
+        const offsetY = (height - treeHeight) / 2 - minY;
+        
+        // Apply offsets to all nodes
+        nodes.forEach(d => {
+            d.x += offsetX;
+            d.y += offsetY;
+        });
+    }
     
     // Update nodes
     const node = g.selectAll('.node')
@@ -168,7 +431,7 @@ function updateTree() {
         .style('cursor', 'pointer')
         .on('click', function(event, d) {
             event.stopPropagation();
-            handleNodeClick(event, d);
+            handleTreeNodeClick(event, d);
         });
     
     // Add rectangles with dynamic width
@@ -212,22 +475,14 @@ function updateTree() {
     // Transition nodes to their new position
     const nodeUpdate = nodeEnter.merge(node);
     
-    // Ensure all nodes have click handlers
-    nodeUpdate.style('cursor', 'pointer')
-        .on('click', function(event, d) {
-            event.stopPropagation();
-            handleNodeClick(event, d);
-        });
-    
     nodeUpdate.transition()
         .duration(500)
         .attr('transform', d => `translate(${d.x},${d.y})`);
     
     // Remove exiting nodes
-    const nodeExit = node.exit().transition()
+    node.exit().transition()
         .duration(500)
         .attr('transform', d => {
-            // Animate to parent's position, not root
             if (d.parent) {
                 return `translate(${d.parent.x},${d.parent.y})`;
             }
@@ -245,7 +500,6 @@ function updateTree() {
         .style('stroke', '#666')
         .style('stroke-width', 2)
         .attr('d', d => {
-            // Start from parent's position
             const parentPos = d.parent ? {x: d.parent.x0 || d.parent.x, y: d.parent.y0 || d.parent.y} : {x: root.x0, y: root.y0};
             return diagonal(parentPos, parentPos);
         });
@@ -260,7 +514,6 @@ function updateTree() {
     link.exit().transition()
         .duration(500)
         .attr('d', d => {
-            // Animate to parent's position
             const parentPos = d.parent ? {x: d.parent.x, y: d.parent.y} : {x: root.x, y: root.y};
             return diagonal(parentPos, parentPos);
         })
@@ -280,47 +533,79 @@ function diagonal(s, d) {
               ${d.x} ${d.y}`;
 }
 
-function restoreExpandedState(node) {
-    if (expandedNodes.has(node.data.id)) {
-        // Keep children visible
-        if (node._children) {
-            node.children = node._children;
-            node._children = null;
-        }
+
+
+function toggleNode(nodeData) {
+    if (expandedNodes.has(nodeData.id)) {
+        // Collapse - remove child nodes and links
+        expandedNodes.delete(nodeData.id);
+        
+        // Find and remove child nodes and their links
+        const childNodeIds = [];
+        graphData.links.forEach(link => {
+            if ((link.source.id || link.source) === nodeData.id) {
+                childNodeIds.push(link.target.id || link.target);
+            }
+        });
+        
+        // Remove child nodes
+        graphData.nodes = graphData.nodes.filter(n => !childNodeIds.includes(n.id));
+        
+        // Remove links to/from child nodes
+        graphData.links = graphData.links.filter(link => {
+            const sourceId = link.source.id || link.source;
+            const targetId = link.target.id || link.target;
+            return !childNodeIds.includes(sourceId) && !childNodeIds.includes(targetId);
+        });
+        
+        // Update node map
+        childNodeIds.forEach(id => nodeMap.delete(id));
+        
     } else {
-        // Hide children
-        if (node.children) {
-            node._children = node.children;
-            node.children = null;
-        }
+        // Expand - will be handled by handleNodeClick
+        expandedNodes.add(nodeData.id);
     }
     
-    // Recursively restore state for all children
-    if (node.children) {
-        node.children.forEach(child => restoreExpandedState(child));
-    }
-    if (node._children) {
-        node._children.forEach(child => restoreExpandedState(child));
-    }
-}
-
-function toggleNode(d) {
-    if (d.children) {
-        // Collapse
-        expandedNodes.delete(d.data.id);
-        d._children = d.children;
-        d.children = null;
-    } else if (d._children) {
-        // Expand from collapsed state
-        expandedNodes.add(d.data.id);
-        d.children = d._children;
-        d._children = null;
-    }
-    updateTree();
+    updateGraph();
 }
 
 function handleNodeClick(event, d) {
-    console.log('Node clicked:', d.data);
+    console.log('Graph node clicked:', d);
+    
+    // Prevent concurrent loading
+    if (isLoading) {
+        console.log('Already loading, ignoring click');
+        return;
+    }
+    
+    if (d.type === 'dataset') {
+        if (expandedNodes.has(d.id)) {
+            // Already expanded - toggle to collapse
+            toggleNode(d);
+            showNodeInfoFromData(d);
+        } else {
+            // Load new data for both graph and info panel
+            expandedNodes.add(d.id);
+            expandDataset(d);
+        }
+    } else if (d.type === 'column') {
+        if (expandedNodes.has(d.id)) {
+            // Already expanded - toggle to collapse
+            toggleNode(d);
+            showNodeInfoFromData(d);
+        } else {
+            // Load new data for both graph and info panel
+            expandedNodes.add(d.id);
+            expandColumn(d);
+        }
+    } else {
+        // For root, cell, or other node types, just update info panel
+        selectNode(d);
+    }
+}
+
+function handleTreeNodeClick(event, d) {
+    console.log('Tree node clicked:', d.data);
     
     // Prevent concurrent loading
     if (isLoading) {
@@ -330,23 +615,23 @@ function handleNodeClick(event, d) {
     
     if (d.data.type === 'dataset') {
         if (d.children || d._children) {
-            // Already loaded - just toggle D3 tree and update info panel
-            toggleNode(d);
-            showNodeInfoFromData(d.data);
+            // Already loaded - just toggle tree and update info panel
+            toggleTreeNode(d);
+            showTreeNodeInfo(d.data);
         } else {
-            // Load new data for both D3 tree and info panel
+            // Load new data for both tree and info panel
             expandedNodes.add(d.data.id);
-            expandDataset(d);
+            expandTreeDataset(d);
         }
     } else if (d.data.type === 'column') {
         if (d.children || d._children) {
-            // Already loaded - just toggle D3 tree and update info panel
-            toggleNode(d);
-            showNodeInfoFromData(d.data);
+            // Already loaded - just toggle tree and update info panel
+            toggleTreeNode(d);
+            showTreeNodeInfo(d.data);
         } else {
-            // Load new data for both D3 tree and info panel
+            // Load new data for both tree and info panel
             expandedNodes.add(d.data.id);
-            expandColumn(d);
+            expandTreeColumn(d);
         }
     } else {
         // For root, cell, or other node types, just update info panel
@@ -355,13 +640,13 @@ function handleNodeClick(event, d) {
 }
 
 function expandDataset(datasetNode) {
-    console.log('Expanding dataset:', datasetNode.data);
+    console.log('Expanding dataset:', datasetNode);
     
     // Set loading state
     isLoading = true;
     
     // Create unique target for this request
-    const targetId = `htmx-target-${datasetNode.data.id}`;
+    const targetId = `htmx-target-${datasetNode.id}`;
     const existingTarget = document.getElementById(targetId);
     if (existingTarget) {
         existingTarget.remove();
@@ -372,7 +657,7 @@ function expandDataset(datasetNode) {
     tempTarget.style.display = 'none';
     document.body.appendChild(tempTarget);
     
-    htmx.ajax('GET', `/metadata/htmx/dataset/${datasetNode.data.datasetId}/columns/`, {
+    htmx.ajax('GET', `/metadata/htmx/dataset/${datasetNode.datasetId}/columns/`, {
         target: `#${targetId}`,
         swap: 'innerHTML'
     }).then(function() {
@@ -399,46 +684,52 @@ function parseColumnsFromTarget(datasetNode, targetId) {
     const columnDivs = container.querySelectorAll('[hx-get*="column"][hx-get*="cells"]');
     console.log('Found column divs:', columnDivs.length);
     
-    const columns = [];
     columnDivs.forEach(div => {
         const url = div.getAttribute('hx-get');
         const columnId = url.match(/column\/([^/]+)\/cells/)[1];
         const name = div.querySelector('.font-medium').textContent;
         const cellCount = div.querySelector('.text-gray-500').textContent;
         
-        columns.push({
-            id: `column-${columnId}`,
-            name: name,
-            details: cellCount,
-            type: 'column',
-            columnId: columnId,
-            children: []
-        });
+        const nodeId = `column-${columnId}`;
+        
+        // Only add if not already exists
+        if (!nodeMap.has(nodeId)) {
+            const columnNode = {
+                id: nodeId,
+                name: name,
+                details: cellCount,
+                type: 'column',
+                columnId: columnId,
+                x: datasetNode.x + (Math.random() - 0.5) * 300,
+                y: datasetNode.y + (Math.random() - 0.5) * 300
+            };
+            
+            graphData.nodes.push(columnNode);
+            nodeMap.set(nodeId, columnNode);
+            
+            // Add link from dataset to column
+            graphData.links.push({
+                source: datasetNode.id,
+                target: nodeId,
+                type: 'hierarchy'
+            });
+        }
     });
     
-    // Update D3.js tree structure
-    datasetNode.data.children = columns;
-    datasetNode.children = columns.map(child => {
-        const childNode = d3.hierarchy(child);
-        childNode.parent = datasetNode;
-        childNode.depth = datasetNode.depth + 1;
-        return childNode;
-    });
-    
-    // Update both D3.js tree and info panel
-    console.log('About to update tree with columns:', columns);
-    updateTree();
-    showNodeInfoFromData(datasetNode.data);
+    // Update both graph and info panel
+    console.log('About to update graph with columns');
+    updateGraph();
+    showNodeInfoFromData(datasetNode);
 }
 
 function expandColumn(columnNode) {
-    console.log('Expanding column:', columnNode.data);
+    console.log('Expanding column:', columnNode);
     
     // Set loading state
     isLoading = true;
     
     // Create unique target for this request
-    const targetId = `htmx-target-${columnNode.data.id}`;
+    const targetId = `htmx-target-${columnNode.id}`;
     const existingTarget = document.getElementById(targetId);
     if (existingTarget) {
         existingTarget.remove();
@@ -449,7 +740,7 @@ function expandColumn(columnNode) {
     tempTarget.style.display = 'none';
     document.body.appendChild(tempTarget);
     
-    htmx.ajax('GET', `/metadata/htmx/column/${columnNode.data.columnId}/cells/`, {
+    htmx.ajax('GET', `/metadata/htmx/column/${columnNode.columnId}/cells/`, {
         target: `#${targetId}`,
         swap: 'innerHTML'
     }).then(function() {
@@ -477,12 +768,10 @@ function parseCellsFromTarget(columnNode, targetId) {
     console.log('Found cell divs:', cellDivs.length);
     
     // Store all cell divs for this column to load more later
-    loadedCellsMap.set(columnNode.data.id, {
+    loadedCellsMap.set(columnNode.id, {
         allCellDivs: cellDivs,
         loadedCount: 0
     });
-    
-    const cells = [];
     
     // Load initial batch of cells
     const initialCells = Math.min(cellDivs.length, cellsPerPage);
@@ -495,33 +784,42 @@ function parseCellsFromTarget(columnNode, targetId) {
         const valueElement = div.querySelector('.text-gray-600');
         const value = valueElement ? valueElement.textContent.replace(/"/g, '').trim() : '';
         
-        cells.push({
-            id: `cell-${cellId}`,
-            name: value.substring(0, 20) + (value.length > 20 ? '...' : ''),
-            details: rowId.replace('Cell ', ''),
-            type: 'cell',
-            cellId: cellId,
-            value: value
-        });
+        const nodeId = `cell-${cellId}`;
+        
+        // Only add if not already exists
+        if (!nodeMap.has(nodeId)) {
+            const cellNode = {
+                id: nodeId,
+                name: value.substring(0, 20) + (value.length > 20 ? '...' : ''),
+                details: rowId.replace('Cell ', ''),
+                type: 'cell',
+                cellId: cellId,
+                value: value,
+                x: columnNode.x + (Math.random() - 0.5) * 400,
+                y: columnNode.y + (Math.random() - 0.5) * 400
+            };
+            
+            graphData.nodes.push(cellNode);
+            nodeMap.set(nodeId, cellNode);
+            
+            // Add link from column to cell
+            graphData.links.push({
+                source: columnNode.id,
+                target: nodeId,
+                type: 'hierarchy'
+            });
+        }
     }
     
     // Update loaded count
-    loadedCellsMap.get(columnNode.data.id).loadedCount = initialCells;
+    loadedCellsMap.get(columnNode.id).loadedCount = initialCells;
     
-    // Update D3.js tree structure
-    columnNode.data.children = cells;
-    columnNode.children = cells.map(child => {
-        const childNode = d3.hierarchy(child);
-        childNode.parent = columnNode;
-        childNode.depth = columnNode.depth + 1;
-        return childNode;
-    });
-    
-    // Update both D3.js tree and info panel
-    updateTree();
-    showNodeInfoFromData(columnNode.data);
+    // Update both graph and info panel
+    updateGraph();
+    showNodeInfoFromData(columnNode);
 }
 
+// Original tree view styling functions
 function getNodeColor(type) {
     switch(type) {
         case 'root': return '#f0f0f0';
@@ -542,6 +840,119 @@ function getNodeBorderColor(type) {
     }
 }
 
+// Simple graph view styling functions (like triple_viewer.html)
+function getSimpleNodeColor(type) {
+    const colors = {
+        'root': '#6b7280',        // gray for root
+        'dataset': '#2563eb',     // blue for datasets  
+        'column': '#059669',      // green for columns
+        'cell': '#dc2626',        // red for cells
+        'literal': '#7c3aed'      // purple for literals
+    };
+    return colors[type] || '#6b7280';
+}
+
+function getSimpleNodeSize(type) {
+    const baseSize = { 
+        root: 18, 
+        dataset: 15, 
+        column: 12, 
+        cell: 10, 
+        literal: 6 
+    };
+    return baseSize[type] || 8;
+}
+
+function addZoomControls() {
+    // Add zoom controls (like triple_viewer.html)
+    if (svg.select('.zoom-controls').node()) return; // Already added
+    
+    const zoomControls = svg.append("g")
+        .attr("class", "zoom-controls")
+        .attr("transform", `translate(${width - 60}, 10)`);
+    
+    // Zoom in button
+    const zoomInBtn = zoomControls.append("g")
+        .attr("class", "zoom-btn")
+        .attr("cursor", "pointer")
+        .on("click", function() {
+            svg.transition().duration(300).call(
+                zoom.scaleBy, 1.5
+            );
+        });
+    
+    zoomInBtn.append("rect")
+        .attr("width", 30)
+        .attr("height", 30)
+        .attr("rx", 4)
+        .attr("fill", "#ffffff")
+        .attr("stroke", "#d1d5db")
+        .attr("stroke-width", 1);
+    
+    zoomInBtn.append("text")
+        .attr("x", 15)
+        .attr("y", 20)
+        .attr("text-anchor", "middle")
+        .attr("class", "text-sm font-bold")
+        .attr("fill", "#374151")
+        .text("+");
+    
+    // Zoom out button
+    const zoomOutBtn = zoomControls.append("g")
+        .attr("class", "zoom-btn")
+        .attr("cursor", "pointer")
+        .attr("transform", "translate(0, 35)")
+        .on("click", function() {
+            svg.transition().duration(300).call(
+                zoom.scaleBy, 1 / 1.5
+            );
+        });
+    
+    zoomOutBtn.append("rect")
+        .attr("width", 30)
+        .attr("height", 30)
+        .attr("rx", 4)
+        .attr("fill", "#ffffff")
+        .attr("stroke", "#d1d5db")
+        .attr("stroke-width", 1);
+    
+    zoomOutBtn.append("text")
+        .attr("x", 15)
+        .attr("y", 20)
+        .attr("text-anchor", "middle")
+        .attr("class", "text-sm font-bold")
+        .attr("fill", "#374151")
+        .text("−");
+    
+    // Reset zoom button
+    const resetBtn = zoomControls.append("g")
+        .attr("class", "zoom-btn")
+        .attr("cursor", "pointer")
+        .attr("transform", "translate(0, 70)")
+        .on("click", function() {
+            svg.transition().duration(500).call(
+                zoom.transform,
+                d3.zoomIdentity
+            );
+        });
+    
+    resetBtn.append("rect")
+        .attr("width", 30)
+        .attr("height", 30)
+        .attr("rx", 4)
+        .attr("fill", "#ffffff")
+        .attr("stroke", "#d1d5db")
+        .attr("stroke-width", 1);
+    
+    resetBtn.append("text")
+        .attr("x", 15)
+        .attr("y", 20)
+        .attr("text-anchor", "middle")
+        .attr("class", "text-xs font-bold")
+        .attr("fill", "#374151")
+        .text("⌂");
+}
+
 function selectNode(nodeData) {
     if (nodeData.type === 'root') {
         // Show basic info for root
@@ -549,7 +960,7 @@ function selectNode(nodeData) {
             <div class="space-y-3">
                 <div class="font-semibold text-lg">${nodeData.name}</div>
                 <div class="text-xs text-gray-500 uppercase tracking-wide">Type: ${nodeData.type}</div>
-                <div class="text-xs text-gray-400 italic">Expand datasets to explore data</div>
+                <div class="text-xs text-gray-400 italic">Click datasets to explore connections</div>
             </div>
         `;
     } else if (nodeData.type === 'cell') {
@@ -558,7 +969,7 @@ function selectNode(nodeData) {
             <div class="space-y-3">
                 <div class="font-semibold text-lg">${nodeData.name}</div>
                 <div class="text-xs text-gray-500 uppercase tracking-wide">Type: ${nodeData.type}</div>
-                <div class="text-xs text-gray-500">${nodeData.details}</div>
+                <div class="text-xs text-gray-500">${nodeData.details || ''}</div>
                 <div class="mt-2">
                     <div class="text-sm font-medium text-gray-700">Value:</div>
                     <div class="text-xs bg-blue-50 px-2 py-1 rounded border-l-2 border-blue-400 mt-1">
@@ -580,43 +991,69 @@ function selectNode(nodeData) {
 }
 
 function showNodeInfoFromData(nodeData) {
-    // Show node info using already loaded D3.js data
+    // Show node info using already loaded graph data
     const infoDiv = document.getElementById('node-info');
     
     let content = `
         <div class="space-y-3">
             <div class="font-semibold text-lg">${nodeData.name}</div>
             <div class="text-xs text-gray-500 uppercase tracking-wide">Type: ${nodeData.type}</div>
-            <div class="text-xs text-gray-500">${nodeData.details}</div>
+            <div class="text-xs text-gray-500">${nodeData.details || ''}</div>
     `;
     
-    if (nodeData.type === 'dataset' && nodeData.children) {
-        content += `
-            <div class="mt-3">
-                <div class="text-sm font-medium text-gray-700 mb-2">Columns (${nodeData.children.length}):</div>
-                <div class="space-y-1 max-h-[calc(100vh-300px)] overflow-y-auto">
-        `;
-        
-        // Show ALL columns, not limited
-        nodeData.children.forEach(column => {
-            content += `
-                <div class="text-xs bg-gray-50 px-2 py-1 rounded border-l-2 border-green-400 hover:bg-gray-100 transition-colors">
-                    <div class="font-medium text-gray-800">${column.name}</div>
-                    <div class="text-gray-500">${column.details}</div>
-                </div>
-            `;
+    if (nodeData.type === 'dataset') {
+        // Find child columns
+        const childNodes = [];
+        graphData.links.forEach(link => {
+            if ((link.source.id || link.source) === nodeData.id) {
+                const targetId = link.target.id || link.target;
+                const targetNode = nodeMap.get(targetId);
+                if (targetNode && targetNode.type === 'column') {
+                    childNodes.push(targetNode);
+                }
+            }
         });
         
-        content += `
+        if (childNodes.length > 0) {
+            content += `
+                <div class="mt-3">
+                    <div class="text-sm font-medium text-gray-700 mb-2">Columns (${childNodes.length}):</div>
+                    <div class="space-y-1 max-h-[calc(100vh-300px)] overflow-y-auto">
+            `;
+            
+            // Show ALL columns
+            childNodes.forEach(column => {
+                content += `
+                    <div class="text-xs bg-gray-50 px-2 py-1 rounded border-l-2 border-green-400 hover:bg-gray-100 transition-colors">
+                        <div class="font-medium text-gray-800">${column.name}</div>
+                        <div class="text-gray-500">${column.details}</div>
+                    </div>
+                `;
+            });
+            
+            content += `
+                    </div>
                 </div>
-            </div>
-        `;
+            `;
+        }
     } else if (nodeData.type === 'column') {
         // Get info about all available cells for this column
         const cellInfo = loadedCellsMap.get(nodeData.id);
-        const totalCells = cellInfo ? cellInfo.allCellDivs.length : (nodeData.children ? nodeData.children.length : 0);
-        const loadedCount = cellInfo ? cellInfo.loadedCount : (nodeData.children ? nodeData.children.length : 0);
+        const totalCells = cellInfo ? cellInfo.allCellDivs.length : 0;
+        const loadedCount = cellInfo ? cellInfo.loadedCount : 0;
         const hasMoreToLoad = cellInfo && loadedCount < totalCells;
+        
+        // Find child cells
+        const childNodes = [];
+        graphData.links.forEach(link => {
+            if ((link.source.id || link.source) === nodeData.id) {
+                const targetId = link.target.id || link.target;
+                const targetNode = nodeMap.get(targetId);
+                if (targetNode && targetNode.type === 'cell') {
+                    childNodes.push(targetNode);
+                }
+            }
+        });
         
         content += `
             <div class="mt-3">
@@ -624,15 +1061,13 @@ function showNodeInfoFromData(nodeData) {
                 <div id="cell-values-container" class="space-y-1 max-h-[calc(100vh-300px)] overflow-y-auto" data-column-id="${nodeData.id}">
         `;
         
-        if (nodeData.children) {
-            nodeData.children.forEach(cell => {
-                content += `
-                    <div class="text-xs bg-orange-50 px-2 py-1 rounded border-l-2 border-orange-400">
-                        <div class="font-mono text-blue-600">"${cell.value || cell.name}"</div>
-                    </div>
-                `;
-            });
-        }
+        childNodes.forEach(cell => {
+            content += `
+                <div class="text-xs bg-orange-50 px-2 py-1 rounded border-l-2 border-orange-400">
+                    <div class="font-mono text-blue-600">"${cell.value || cell.name}"</div>
+                </div>
+            `;
+        });
         
         // Add load more button if there are more cells to load
         if (hasMoreToLoad) {
@@ -684,20 +1119,8 @@ function loadMoreCells(columnId) {
     
     isLoading = true;
     
-    // Find the column node in the tree
-    const findColumnNode = (node) => {
-        if (!node) return null;
-        if (node.data.id === columnId) return node;
-        if (node.children) {
-            for (const child of node.children) {
-                const found = findColumnNode(child);
-                if (found) return found;
-            }
-        }
-        return null;
-    };
-    
-    const columnNode = findColumnNode(root);
+    // Find the column node in the graph
+    const columnNode = nodeMap.get(columnId);
     if (!columnNode) {
         isLoading = false;
         return;
@@ -708,7 +1131,6 @@ function loadMoreCells(columnId) {
     const endIndex = Math.min(startIndex + cellsPerPage, cellInfo.allCellDivs.length);
     
     // Load the next batch of cells
-    const newCells = [];
     for (let i = startIndex; i < endIndex; i++) {
         const div = cellInfo.allCellDivs[i];
         const url = div.getAttribute('hx-get');
@@ -717,36 +1139,39 @@ function loadMoreCells(columnId) {
         const valueElement = div.querySelector('.text-gray-600');
         const value = valueElement ? valueElement.textContent.replace(/"/g, '').trim() : '';
         
-        newCells.push({
-            id: `cell-${cellId}`,
-            name: value.substring(0, 20) + (value.length > 20 ? '...' : ''),
-            details: rowId.replace('Cell ', ''),
-            type: 'cell',
-            cellId: cellId,
-            value: value
-        });
+        const nodeId = `cell-${cellId}`;
+        
+        // Only add if not already exists
+        if (!nodeMap.has(nodeId)) {
+            const cellNode = {
+                id: nodeId,
+                name: value.substring(0, 20) + (value.length > 20 ? '...' : ''),
+                details: rowId.replace('Cell ', ''),
+                type: 'cell',
+                cellId: cellId,
+                value: value,
+                x: columnNode.x + (Math.random() - 0.5) * 400,
+                y: columnNode.y + (Math.random() - 0.5) * 400
+            };
+            
+            graphData.nodes.push(cellNode);
+            nodeMap.set(nodeId, cellNode);
+            
+            // Add link from column to cell
+            graphData.links.push({
+                source: columnId,
+                target: nodeId,
+                type: 'hierarchy'
+            });
+        }
     }
     
     // Update loaded count
     cellInfo.loadedCount = endIndex;
     
-    // Add new cells to the existing ones
-    if (!columnNode.data.children) columnNode.data.children = [];
-    columnNode.data.children = columnNode.data.children.concat(newCells);
-    
-    // Update D3 hierarchy
-    if (!columnNode.children) columnNode.children = [];
-    const newChildNodes = newCells.map(child => {
-        const childNode = d3.hierarchy(child);
-        childNode.parent = columnNode;
-        childNode.depth = columnNode.depth + 1;
-        return childNode;
-    });
-    columnNode.children = columnNode.children.concat(newChildNodes);
-    
     // Update the UI
-    showNodeInfoFromData(columnNode.data);
-    updateTree();
+    showNodeInfoFromData(columnNode);
+    updateGraph();
     
     isLoading = false;
 }
@@ -884,7 +1309,7 @@ function parseNodeInfoFromResponse(nodeData) {
     infoDiv.innerHTML = content;
 }
 
-function fitTree() {
+function fitView() {
     const bbox = g.node().getBBox();
     const fullWidth = width + margin.left + margin.right;
     const fullHeight = height + margin.top + margin.bottom;
@@ -897,8 +1322,43 @@ function fitTree() {
         .call(zoom.transform, d3.zoomIdentity.translate(translateX, translateY).scale(scale));
 }
 
-function resetTree() {
+function resetView() {
     expandedNodes.clear();
+    loadedCellsMap.clear();
+    
+    if (currentView === 'tree') {
+        // Reset tree structure
+        root = d3.hierarchy({
+            id: 'root',
+            name: 'Datasets',
+            type: 'root',
+            children: []
+        });
+        root.x0 = width / 2;
+        root.y0 = 0;
+    } else {
+        // Reset graph data
+        graphData.nodes = [];
+        graphData.links = [];
+        nodeMap.clear();
+        
+        // Re-initialize with root node
+        const rootNode = {
+            id: 'root',
+            name: 'Datasets',
+            type: 'root',
+            x: width / 2,
+            y: height / 2,
+            fx: width / 2,
+            fy: height / 2
+        };
+        
+        graphData.nodes = [rootNode];
+        nodeMap.set('root', rootNode);
+    }
+    
+    // Clear visualization
+    g.selectAll("*").remove();
     
     // Reset zoom to initial position
     svg.transition()
@@ -906,6 +1366,317 @@ function resetTree() {
         .call(zoom.transform, d3.zoomIdentity.translate(margin.left, margin.top));
     
     loadInitialDatasets();
+}
+
+// Tree-specific functions
+function toggleTreeNode(d) {
+    if (d.children) {
+        // Collapse
+        expandedNodes.delete(d.data.id);
+        d._children = d.children;
+        d.children = null;
+    } else if (d._children) {
+        // Expand from collapsed state
+        expandedNodes.add(d.data.id);
+        d.children = d._children;
+        d._children = null;
+    }
+    updateTree();
+}
+
+function showTreeNodeInfo(nodeData) {
+    // Similar to showNodeInfoFromData but works with tree structure
+    const infoDiv = document.getElementById('node-info');
+    
+    let content = `
+        <div class="space-y-3">
+            <div class="font-semibold text-lg">${nodeData.name}</div>
+            <div class="text-xs text-gray-500 uppercase tracking-wide">Type: ${nodeData.type}</div>
+            <div class="text-xs text-gray-500">${nodeData.details || ''}</div>
+    `;
+    
+    if (nodeData.type === 'dataset' && nodeData.children) {
+        content += `
+            <div class="mt-3">
+                <div class="text-sm font-medium text-gray-700 mb-2">Columns (${nodeData.children.length}):</div>
+                <div class="space-y-1 max-h-[calc(100vh-300px)] overflow-y-auto">
+        `;
+        
+        nodeData.children.forEach(column => {
+            content += `
+                <div class="text-xs bg-gray-50 px-2 py-1 rounded border-l-2 border-green-400 hover:bg-gray-100 transition-colors">
+                    <div class="font-medium text-gray-800">${column.name}</div>
+                    <div class="text-gray-500">${column.details}</div>
+                </div>
+            `;
+        });
+        
+        content += `
+                </div>
+            </div>
+        `;
+    } else if (nodeData.type === 'column' && nodeData.children) {
+        content += `
+            <div class="mt-3">
+                <div class="text-sm font-medium text-gray-700 mb-2">Values (${nodeData.children.length}):</div>
+                <div class="space-y-1 max-h-[calc(100vh-300px)] overflow-y-auto">
+        `;
+        
+        nodeData.children.forEach(cell => {
+            content += `
+                <div class="text-xs bg-orange-50 px-2 py-1 rounded border-l-2 border-orange-400">
+                    <div class="font-mono text-blue-600">"${cell.value || cell.name}"</div>
+                </div>
+            `;
+        });
+        
+        content += `
+                </div>
+            </div>
+        `;
+    }
+    
+    content += `</div>`;
+    infoDiv.innerHTML = content;
+}
+
+function expandTreeDataset(datasetNode) {
+    console.log('Expanding tree dataset:', datasetNode.data);
+    
+    // Set loading state
+    isLoading = true;
+    
+    // Create unique target for this request
+    const targetId = `htmx-target-${datasetNode.data.id}`;
+    const existingTarget = document.getElementById(targetId);
+    if (existingTarget) {
+        existingTarget.remove();
+    }
+    
+    const tempTarget = document.createElement('div');
+    tempTarget.id = targetId;
+    tempTarget.style.display = 'none';
+    document.body.appendChild(tempTarget);
+    
+    htmx.ajax('GET', `/metadata/htmx/dataset/${datasetNode.data.datasetId}/columns/`, {
+        target: `#${targetId}`,
+        swap: 'innerHTML'
+    }).then(function() {
+        console.log('HTMX response received for tree dataset');
+        parseTreeColumnsFromTarget(datasetNode, targetId);
+        // Clean up
+        tempTarget.remove();
+        isLoading = false;
+    }).catch(function(error) {
+        console.error('HTMX request failed:', error);
+        tempTarget.remove();
+        isLoading = false;
+    });
+}
+
+function parseTreeColumnsFromTarget(datasetNode, targetId) {
+    console.log('parseTreeColumnsFromTarget called with:', datasetNode, targetId);
+    const container = document.getElementById(targetId);
+    if (!container) {
+        console.error('Target container not found:', targetId);
+        return;
+    }
+    
+    const columnDivs = container.querySelectorAll('[hx-get*="column"][hx-get*="cells"]');
+    console.log('Found column divs:', columnDivs.length);
+    
+    const columns = [];
+    columnDivs.forEach(div => {
+        const url = div.getAttribute('hx-get');
+        const columnId = url.match(/column\/([^/]+)\/cells/)[1];
+        const name = div.querySelector('.font-medium').textContent;
+        const cellCount = div.querySelector('.text-gray-500').textContent;
+        
+        columns.push({
+            id: `column-${columnId}`,
+            name: name,
+            details: cellCount,
+            type: 'column',
+            columnId: columnId,
+            children: []
+        });
+    });
+    
+    // Update tree structure
+    datasetNode.data.children = columns;
+    datasetNode.children = columns.map(child => {
+        const childNode = d3.hierarchy(child);
+        childNode.parent = datasetNode;
+        childNode.depth = datasetNode.depth + 1;
+        return childNode;
+    });
+    
+    // Update both tree and info panel
+    console.log('About to update tree with columns:', columns);
+    updateTree();
+    showTreeNodeInfo(datasetNode.data);
+}
+
+function expandTreeColumn(columnNode) {
+    console.log('Expanding tree column:', columnNode.data);
+    
+    // Set loading state
+    isLoading = true;
+    
+    // Create unique target for this request
+    const targetId = `htmx-target-${columnNode.data.id}`;
+    const existingTarget = document.getElementById(targetId);
+    if (existingTarget) {
+        existingTarget.remove();
+    }
+    
+    const tempTarget = document.createElement('div');
+    tempTarget.id = targetId;
+    tempTarget.style.display = 'none';
+    document.body.appendChild(tempTarget);
+    
+    htmx.ajax('GET', `/metadata/htmx/column/${columnNode.data.columnId}/cells/`, {
+        target: `#${targetId}`,
+        swap: 'innerHTML'
+    }).then(function() {
+        console.log('HTMX response received for tree column');
+        parseTreeCellsFromTarget(columnNode, targetId);
+        // Clean up
+        tempTarget.remove();
+        isLoading = false;
+    }).catch(function(error) {
+        console.error('HTMX request failed:', error);
+        tempTarget.remove();
+        isLoading = false;
+    });
+}
+
+function parseTreeCellsFromTarget(columnNode, targetId) {
+    console.log('parseTreeCellsFromTarget called with:', columnNode, targetId);
+    const container = document.getElementById(targetId);
+    if (!container) {
+        console.error('Target container not found:', targetId);
+        return;
+    }
+    
+    const cellDivs = container.querySelectorAll('[hx-get*="cell"][hx-get*="connections"]');
+    console.log('Found cell divs:', cellDivs.length);
+    
+    // Store all cell divs for this column to load more later
+    loadedCellsMap.set(columnNode.data.id, {
+        allCellDivs: cellDivs,
+        loadedCount: 0
+    });
+    
+    const cells = [];
+    
+    // Load initial batch of cells
+    const initialCells = Math.min(cellDivs.length, cellsPerPage);
+    
+    for (let i = 0; i < initialCells; i++) {
+        const div = cellDivs[i];
+        const url = div.getAttribute('hx-get');
+        const cellId = url.match(/cell\/([^/]+)\/connections/)[1];
+        const rowId = div.querySelector('.font-medium').textContent;
+        const valueElement = div.querySelector('.text-gray-600');
+        const value = valueElement ? valueElement.textContent.replace(/"/g, '').trim() : '';
+        
+        cells.push({
+            id: `cell-${cellId}`,
+            name: value.substring(0, 20) + (value.length > 20 ? '...' : ''),
+            details: rowId.replace('Cell ', ''),
+            type: 'cell',
+            cellId: cellId,
+            value: value
+        });
+    }
+    
+    // Update loaded count
+    loadedCellsMap.get(columnNode.data.id).loadedCount = initialCells;
+    
+    // Update tree structure
+    columnNode.data.children = cells;
+    columnNode.children = cells.map(child => {
+        const childNode = d3.hierarchy(child);
+        childNode.parent = columnNode;
+        childNode.depth = columnNode.depth + 1;
+        return childNode;
+    });
+    
+    // Update both tree and info panel
+    updateTree();
+    showTreeNodeInfo(columnNode.data);
+}
+
+// Conversion functions between tree and graph
+function convertTreeToGraph() {
+    // Convert tree data to graph structure when switching to graph view
+    // This is a simplified conversion - you might want to make this more sophisticated
+    if (!root || !root.children) return;
+    
+    const traverse = (node) => {
+        if (node.data.type !== 'root' && !nodeMap.has(node.data.id)) {
+            const graphNode = {
+                id: node.data.id,
+                name: node.data.name,
+                details: node.data.details,
+                type: node.data.type,
+                datasetId: node.data.datasetId,
+                columnId: node.data.columnId,
+                cellId: node.data.cellId,
+                value: node.data.value,
+                x: width / 2 + (Math.random() - 0.5) * 400,
+                y: height / 2 + (Math.random() - 0.5) * 400
+            };
+            
+            graphData.nodes.push(graphNode);
+            nodeMap.set(node.data.id, graphNode);
+            
+            if (node.parent && node.parent.data.id !== 'root') {
+                graphData.links.push({
+                    source: node.parent.data.id,
+                    target: node.data.id,
+                    type: 'hierarchy'
+                });
+            } else if (node.parent && node.parent.data.id === 'root') {
+                graphData.links.push({
+                    source: 'root',
+                    target: node.data.id,
+                    type: 'hierarchy'
+                });
+            }
+        }
+        
+        if (node.children) {
+            node.children.forEach(child => traverse(child));
+        }
+    };
+    
+    traverse(root);
+}
+
+function convertGraphToTree() {
+    // Convert graph data back to tree structure when switching to tree view
+    // This is a simplified conversion
+    root.data.children = [];
+    
+    // Find dataset nodes and add them to root
+    graphData.nodes.forEach(node => {
+        if (node.type === 'dataset') {
+            root.data.children.push({
+                id: node.id,
+                name: node.name,
+                details: node.details,
+                type: node.type,
+                datasetId: node.datasetId,
+                children: []
+            });
+        }
+    });
+    
+    root = d3.hierarchy(root.data);
+    root.x0 = width / 2;
+    root.y0 = 0;
 }
 
 function zoomIn() {
