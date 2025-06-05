@@ -34,7 +34,7 @@ class SmartBulkUpdaterPolars:
                  timestamp_column: Optional[str] = None,
                  institution: str = "DEFAULT",
                  base_uri: str = "http://arkumu.org/data",
-                 link_row_cells: bool = True,
+                 link_row_cells: bool = False,
                  link_topology: str = "row",
                  multi_value_threshold: float = 0.2
                  ):
@@ -190,9 +190,11 @@ class SmartBulkUpdaterPolars:
         # STEP 2: Skip multi-value analysis (disabled)
         logger.debug(f"Step 2: Multi-value analysis skipped (disabled)")
         
-        # STEP 3: Add row identifiers
+        # STEP 3: Add row identifiers (start from 0 consistently)
         logger.debug(f"Step 3: Adding row identifiers")
-        df_with_ids = df_normalized.with_row_index(name='row_id')
+        df_with_ids = df_normalized.with_row_index(name='row_id', offset=0)
+        
+
         
         # STEP 4: Efficient conversion to updates (vectorized)
         logger.debug(f"Step 4: Converting to ResourceUpdate objects")
@@ -209,9 +211,11 @@ class SmartBulkUpdaterPolars:
             safe_row_id = slugify_uri_part(str(row_id_val))
             
             for column_name, value in row_data.items():
-                # Skip internal columns
-                if column_name == 'row_id':
+                # Skip internal columns and None column names
+                if column_name == 'row_id' or column_name is None:
                     continue
+                
+
                     
                 if value is not None and str(value).strip():
                     current_value_str = str(value).strip()
@@ -232,9 +236,13 @@ class SmartBulkUpdaterPolars:
                     except UnicodeEncodeError:
                         logger.warning(f"SBU Polars: Could not encode value to check size for dataset '{dataset_name}', column '{column_name}', row_id '{safe_row_id}'.")
                     
-                    # Create resource update (simplified - no multi-value)
+                    # Create resource update with 1-based row ID in URI
                     safe_column_name = slugify_uri_part(column_name)
-                    cell_uri = mint_uri(self.base_uri, self.institution, "datasets", dataset_name, safe_column_name, safe_row_id)
+                    display_row_id = int(row_id_val) + 1 if str(row_id_val).isdigit() else row_id_val
+                    safe_display_row_id = slugify_uri_part(str(display_row_id))
+                    cell_uri = mint_uri(self.base_uri, self.institution, "datasets", dataset_name, safe_column_name, safe_display_row_id)
+                    
+
                     
                     update = ResourceUpdate(
                         uri=cell_uri,
@@ -382,30 +390,11 @@ class SmartBulkUpdaterPolars:
             batch = updates[i:i + batch_size]
             active_updates = [u for u in batch if u.action in {UpdateStrategy.UPDATE_VALUES}]
             
-            # Process the batch
-            self._execute_batch_with_multi_value_support(active_updates, dataset_name, stats)
+                    # Process the batch
+        self._execute_batch_with_multi_value_support(active_updates, dataset_name, stats)
         
-        # Handle row linking if enabled
-        if self.link_row_cells and row_ids:
-            # For each row_id, ensure row-level resources are created and properly linked
-            for row_id in row_ids:
-                safe_row_id = slugify_uri_part(str(row_id))
-                row_dataset_uri = mint_uri(self.base_uri, self.institution, "datasets", dataset_name, "", safe_row_id)
-                
-                # Create row resource if it doesn't exist
-                row_resource, created = Resource.objects.get_or_create(
-                    uri=row_dataset_uri,
-                    defaults={
-                        "name": f"Row {row_id}",
-                        "resource_type": ResourceType.IRI,
-                        "source": self.institution,
-                        "datatype": "http://www.w3.org/2001/XMLSchema#string"
-                    }
-                )
-                
-                if created:
-                    stats.resources_created += 1
-                    stats.row_links_created += 1
+        # NOTE: Row resources are now created in STEP 2 of _execute_batch_with_multi_value_support
+        # with proper URI patterns, so no additional row linking needed here
         
         logger.info(f"Bulk update execution completed: {stats}")
         return stats
@@ -464,31 +453,90 @@ class SmartBulkUpdaterPolars:
         
         # Bulk create cell resources
         if cell_resources_to_create:
+            # DEBUG: Count resources before and after bulk_create
+            before_count = Resource.objects.filter(uri__contains="/datasets/rowtopologytest/").count()
+            logger.info(f"DEBUG: Resources before bulk_create: {before_count}")
+            
             Resource.objects.bulk_create(
                 cell_resources_to_create,
                 ignore_conflicts=True,
                 batch_size=500
             )
+            
+            after_count = Resource.objects.filter(uri__contains="/datasets/rowtopologytest/").count()
+            logger.info(f"DEBUG: Resources after bulk_create: {after_count} (created {after_count - before_count})")
+            
             stats.resources_created += len({u.uri for u in active_updates})
         
-        # Group updates by row for row creation
+        # Group updates by row for row creation (use 1-based IDs from URIs)
         row_grouping = {}
         for update in active_updates:
-            row_id = self._extract_row_id_from_uri(update.uri)
+            row_id = self._extract_row_id_from_uri(update.uri)  # This returns 1-based ID from URI
             if row_id:
                 if row_id not in row_grouping:
                     row_grouping[row_id] = []
                 row_grouping[row_id].append(update)
         
-        # Create row resources and prepare structural triples
+        # =================== TOPOLOGY IMPLEMENTATION ===================
+        # Creates efficient semantic structure with URI-based row tracking:
+        # 
+        # ALWAYS: Dataset → hasPart → Column → hasPart → Cell[row_in_URI] → rdf:value → Literal
+        # 
+        # TOPOLOGY OPTIONS:
+        # "row": Add Row resources (Dataset → Row → Cell dual hierarchy)  
+        # "first_column": Star pattern (FirstColumnCell → sameRow → OtherCells)
+        # "mesh": Full connectivity (Cell → sameRow → Cell for all pairs)
+        # DEFAULT: Column-only with row info embedded in cell URIs
+        # ================================================================
         structural_triples = []
         value_triples = []
         
-        # Create row resources if needed - only when linking is enabled
-        if self.link_row_cells:
+        # STEP 1: Create Column Resources (Always - for semantic structure)
+        # Extract unique columns from this batch
+        unique_columns = set()
+        for update in active_updates:
+            column_name = self._extract_column_name_from_uri(update.uri)
+            if column_name:
+                unique_columns.add(column_name)
+        
+        column_resources = {}
+        logger.info(f"Creating {len(unique_columns)} column resources for dataset '{dataset_name}'")
+        
+        for column_name in unique_columns:
+            safe_column_name = slugify_uri_part(column_name)
+            column_uri = mint_uri(self.base_uri, self.institution, "datasets", dataset_name, "columns", safe_column_name)
+            
+            column_resource, col_created = Resource.objects.get_or_create(
+                uri=column_uri,
+                defaults={
+                    "resource_type": ResourceType.IRI,
+                    "name": column_name,
+                    "source": self.institution
+                }
+            )
+            
+            if col_created:
+                stats.resources_created += 1
+                
+            column_resources[column_name] = column_resource
+            
+            # Dataset → hasPart → Column
+            structural_triples.append(
+                Triple(subject=dataset_resource, predicate=self.has_part_prop, object=column_resource)
+            )
+        
+        # STEP 2: Topology-specific row resource creation (ONLY if needed)
+        create_row_resources = (self.link_topology == "row" and self.link_row_cells)
+        
+        if create_row_resources:
+            # ROW TOPOLOGY: Create row resources for dual hierarchy
+            logger.info(f"Using 'row' topology - creating row resources")
+            
             for row_id, row_updates in row_grouping.items():
+                # row_id is already 1-based from cell URIs, use directly
                 safe_row_id = slugify_uri_part(str(row_id))
                 row_uri = mint_uri(self.base_uri, self.institution, "datasets", dataset_name, "rows", safe_row_id)
+
                 
                 row_resource, row_created = Resource.objects.get_or_create(
                     uri=row_uri,
@@ -497,23 +545,49 @@ class SmartBulkUpdaterPolars:
                 if row_created:
                     stats.resources_created += 1
                 
-                # Link dataset to row
+                # Dataset → hasPart → Row
                 structural_triples.append(Triple(subject=dataset_resource, predicate=self.has_part_prop, object=row_resource))
         
-        # Process each cell and create value resources and triples
+        elif self.link_topology == "first_column":
+            # FIRST_COLUMN TOPOLOGY: Column hierarchy + star pattern
+            logger.info(f"Using 'first_column' topology - column hierarchy with star pattern")
+            
+        elif self.link_topology == "mesh":
+            # MESH TOPOLOGY: Column hierarchy + full mesh
+            logger.info(f"Using 'mesh' topology - column hierarchy with full mesh")
+            
+        else:
+            # DEFAULT: Column-only hierarchy with URI-based row tracking (MINIMAL)
+            logger.info(f"Using column-only hierarchy with URI-based row tracking (minimal triples)")
+        
+        # STEP 3: Process each cell and create relationships based on topology
+        logger.info(f"DEBUG: Starting STEP 3 - processing {len(uri_to_update_map)} cells")
         for cell_uri, update in uri_to_update_map.items():
             try:
                 cell_resource = Resource.objects.get(uri=cell_uri)
+                logger.info(f"DEBUG: Found cell resource for URI: {cell_uri}")
                 
-                # Link row to cell - only when linking is enabled
-                if self.link_row_cells:
+                # ALWAYS: Link Column → hasPart → Cell (core semantic structure)
+                column_name = self._extract_column_name_from_uri(cell_uri)
+                if column_name and column_name in column_resources:
+                    column_resource = column_resources[column_name]
+                    structural_triples.append(
+                        Triple(subject=column_resource, predicate=self.has_part_prop, object=cell_resource)
+                    )
+                
+                # TOPOLOGY-SPECIFIC: Additional cell relationships (ONLY if row resources exist)
+                if create_row_resources:
+                    # Row → hasPart → Cell (dual hierarchy - only when using row topology)
                     row_id = self._extract_row_id_from_uri(cell_uri)
                     if row_id:
+                        # Row URI should use the same row ID that's in the cell URI (1-based)
                         safe_row_id = slugify_uri_part(str(row_id))
                         row_uri = mint_uri(self.base_uri, self.institution, "datasets", dataset_name, "rows", safe_row_id)
                         try:
                             row_resource = Resource.objects.get(uri=row_uri)
-                            structural_triples.append(Triple(subject=row_resource, predicate=self.has_part_prop, object=cell_resource))
+                            structural_triples.append(
+                                Triple(subject=row_resource, predicate=self.has_part_prop, object=cell_resource)
+                            )
                         except Resource.DoesNotExist:
                             logger.warning(f"Row resource not found: {row_uri}")
                 
@@ -535,20 +609,87 @@ class SmartBulkUpdaterPolars:
                         stats.total_values_created += 1
                         
             except Resource.DoesNotExist:
-                logger.error(f"Cell resource {cell_uri} not found after bulk create. Skipping.")
+                logger.error(f"DEBUG: Cell resource {cell_uri} not found after bulk create. Skipping.")
+                current_count = Resource.objects.filter(uri__contains="/datasets/rowtopologytest/").count()
+                logger.error(f"DEBUG: Current resource count when cell not found: {current_count}")
                 stats.errors += 1
             except Exception as e:
-                logger.error(f"Error processing cell {cell_uri}: {e}", exc_info=True)
+                logger.error(f"DEBUG: Error processing cell {cell_uri}: {e}", exc_info=True)
+                current_count = Resource.objects.filter(uri__contains="/datasets/rowtopologytest/").count()
+                logger.error(f"DEBUG: Current resource count when error occurred: {current_count}")
                 stats.errors += 1
         
-        # Bulk create all triples
-        all_triples = structural_triples + value_triples
+        # STEP 4: Post-processing topology patterns (first_column, mesh)
+        topology_triples = []
+        
+        if self.link_topology == "first_column":
+            # Create same-row property if needed
+            same_row_prop, _ = Resource.objects.get_or_create(
+                uri=mint_uri(self.base_uri, self.institution, "properties", "sameRow"),
+                defaults={"resource_type": ResourceType.PROPERTY, "name": "sameRow", "source": self.institution}
+            )
+            
+            # Group cells by row and link to first column cell (star pattern)
+            for row_id, row_updates in row_grouping.items():
+                if len(row_updates) > 1:
+                    # Find first column cell (alphabetically first column)
+                    first_column_update = min(row_updates, key=lambda u: self._extract_column_name_from_uri(u.uri) or "")
+                    first_cell_uri = first_column_update.uri
+                    
+                    try:
+                        first_cell_resource = Resource.objects.get(uri=first_cell_uri)
+                        
+                        # Link all other cells to first column cell
+                        for update in row_updates:
+                            if update.uri != first_cell_uri:
+                                try:
+                                    other_cell_resource = Resource.objects.get(uri=update.uri)
+                                    topology_triples.append(
+                                        Triple(subject=first_cell_resource, predicate=same_row_prop, object=other_cell_resource)
+                                    )
+                                except Resource.DoesNotExist:
+                                    logger.warning(f"Cell resource not found for first_column topology: {update.uri}")
+                    except Resource.DoesNotExist:
+                        logger.warning(f"First column cell not found: {first_cell_uri}")
+        
+        elif self.link_topology == "mesh":
+            # Create same-row property if needed
+            same_row_prop, _ = Resource.objects.get_or_create(
+                uri=mint_uri(self.base_uri, self.institution, "properties", "sameRow"),
+                defaults={"resource_type": ResourceType.PROPERTY, "name": "sameRow", "source": self.institution}
+            )
+            
+            # Group cells by row and create full mesh (all-to-all connections)
+            for row_id, row_updates in row_grouping.items():
+                if len(row_updates) > 1:
+                    # Get all cell resources for this row
+                    row_cell_resources = []
+                    for update in row_updates:
+                        try:
+                            cell_resource = Resource.objects.get(uri=update.uri)
+                            row_cell_resources.append(cell_resource)
+                        except Resource.DoesNotExist:
+                            logger.warning(f"Cell resource not found for mesh topology: {update.uri}")
+                    
+                    # Create mesh connections (i to j, j to i for all pairs)
+                    for i in range(len(row_cell_resources)):
+                        for j in range(i + 1, len(row_cell_resources)):
+                            # Bidirectional connections for full mesh
+                            topology_triples.append(
+                                Triple(subject=row_cell_resources[i], predicate=same_row_prop, object=row_cell_resources[j])
+                            )
+                            topology_triples.append(
+                                Triple(subject=row_cell_resources[j], predicate=same_row_prop, object=row_cell_resources[i])
+                            )
+        
+        # Bulk create all triples (structural + value + topology)
+        all_triples = structural_triples + value_triples + topology_triples
         if all_triples:
             Triple.objects.bulk_create(all_triples, ignore_conflicts=True)
-            stats.triples_created += len(all_triples)  # Count all triples like the original
-            logger.info(f"Created {len(structural_triples)} structural triples and {len(value_triples)} value triples")
+            stats.triples_created += len(all_triples)
+            logger.info(f"Created {len(structural_triples)} structural, {len(value_triples)} value, {len(topology_triples)} topology triples")
         
-        logger.info(f"Batch processed: {len(batch)} updates, {len({u.uri for u in active_updates})} resources, {len(value_triples)} value triples")
+        logger.info(f"Batch processed: {len(batch)} updates, {len({u.uri for u in active_updates})} resources, topology: {self.link_topology}")
 
     def _extract_row_id_from_uri(self, cell_uri: str) -> Optional[str]:
         """Helper to extract row_id from a standard cell URI."""
@@ -557,6 +698,21 @@ class SmartBulkUpdaterPolars:
             return cell_uri.split('/')[-1]
         except IndexError:
             logger.warning(f"SBU Polars: Could not parse row_id from cell_uri: {cell_uri}")
+            return None
+
+    def _extract_column_name_from_uri(self, cell_uri: str) -> Optional[str]:
+        """Helper to extract column_name from a standard cell URI."""
+        # Standard URI: {base_uri}/{institution}/datasets/{dataset_name}/{column_name}/{row_id}
+        try:
+            parts = cell_uri.split('/')
+            # Find the datasets part and get the column name after it
+            if 'datasets' in parts:
+                datasets_index = parts.index('datasets')
+                if datasets_index + 2 < len(parts):
+                    return parts[datasets_index + 2]  # datasets/{name}/{column_name}/{row_id}
+            return None
+        except (IndexError, ValueError):
+            logger.warning(f"SBU Polars: Could not parse column_name from cell_uri: {cell_uri}")
             return None
 
     def import_csv_with_smart_updates(self,
@@ -683,8 +839,8 @@ class SmartBulkUpdaterPolars:
             row_id_val = row_data.get('id', row_data.get('ID', str(row_num)))
             
             for column_name, value in row_data.items():
-                # Skip internal columns
-                if column_name == 'row_id':
+                # Skip internal columns and None column names
+                if column_name == 'row_id' or column_name is None:
                     continue
                     
                 if value and str(value).strip():

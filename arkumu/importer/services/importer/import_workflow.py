@@ -20,6 +20,155 @@ class ImportWorkflowService:
         self.smart_updater = SmartBulkUpdater()
     
     @staticmethod
+    def import_csv_with_table_services(
+        csv_path: str,
+        dataset_name: Optional[str] = None,
+        institution: str = "DEFAULT",
+        base_uri: str = "http://arkumu.org/data",
+        delimiter: str = ';',
+        has_quoted_fields: bool = False,
+        auto_mapping: bool = True,
+        session_dict: Optional[Dict] = None
+    ) -> Dict[str, Any]:
+        """
+        Import a CSV file using the table-based service architecture.
+        This is the modern approach that works well with the bulk editor services.
+        
+        Args:
+            csv_path: Path to the CSV file
+            dataset_name: Name for the dataset
+            institution: Institution code
+            base_uri: Base URI for generated resources
+            delimiter: CSV column delimiter
+            has_quoted_fields: Whether fields in the CSV are quoted
+            auto_mapping: Whether to automatically apply intelligent mappings
+            session_dict: Session dictionary for service state (can be empty dict)
+            
+        Returns:
+            Dict with import statistics and analysis
+        """
+        logger.info(f"🚀 Starting table-based service import of CSV file: {csv_path}")
+        logger.info(f"   Dataset: {dataset_name}")
+        logger.info(f"   Institution: {institution}")
+        logger.info(f"   Auto-mapping: {auto_mapping}")
+        
+        if not dataset_name:
+            dataset_name = os.path.splitext(os.path.basename(csv_path))[0]
+            logger.info(f"   Auto-detected dataset name: {dataset_name}")
+        
+        if session_dict is None:
+            session_dict = {}
+        
+        try:
+            # Import the service factory
+            from arkumu.metadata.services.metadata_models_mapping import ServiceFactory
+            
+            # Get the enhanced services
+            service_factory = ServiceFactory()
+            table_analysis_service = service_factory.get_table_analysis_service()
+            mapping_config_service = service_factory.get_mapping_configuration_service(session_dict)
+            processing_pipeline = service_factory.get_processing_pipeline_service(session_dict)
+            
+            logger.info(f"🔍 Step 1: Analyzing CSV structure...")
+            
+            # Analyze the CSV file structure
+            analysis = table_analysis_service.analyze_csv(csv_path)
+            
+            logger.info(f"   📊 Analysis complete: {analysis.row_count} rows, {analysis.column_count} columns")
+            logger.info(f"   🎯 Found {len(analysis.suggested_mappings)} mapping suggestions")
+            logger.info(f"   📈 Quality score: {analysis.quality_score}")
+            
+            result = {
+                "dataset_name": dataset_name,
+                "import_approach": "table_based_services",
+                "analysis": {
+                    "row_count": analysis.row_count,
+                    "column_count": analysis.column_count,
+                    "quality_score": analysis.quality_score,
+                    "suggested_mappings": len(analysis.suggested_mappings),
+                    "institutional_prefixes": analysis.institutional_prefixes,
+                    "discovered_patterns": len(analysis.discovered_patterns.get('naming_conventions', [])),
+                    "foreign_key_candidates": len(analysis.foreign_key_candidates)
+                }
+            }
+            
+            # Apply intelligent mappings if requested
+            if auto_mapping and analysis.suggested_mappings:
+                logger.info(f"⚙️ Step 2: Applying intelligent mappings...")
+                
+                # Create mapping rules from analysis
+                mapping_rules = []
+                for mapping in analysis.suggested_mappings:
+                    try:
+                        # Create pattern rule
+                        pattern_rule = mapping_config_service.create_pattern_rule(
+                            name=f"Auto-{mapping['semantic_hint']}",
+                            pattern_type=mapping.get('pattern_type', 'prefix'),
+                            pattern_value=mapping.get('pattern_value', ''),
+                            target_fields=['uri', 'name'],
+                            description=f"Auto-generated from column '{mapping['column_name']}'"
+                        )
+                        
+                        # Create mapping rule
+                        mapping_rule = mapping_config_service.create_mapping_rule(
+                            name=f"{mapping['column_name']} → {mapping['target_type']}",
+                            pattern_rule=pattern_rule,
+                            mapping_type='type_assignment',
+                            target_semantic_type=mapping['target_type'],
+                            priority=int(mapping.get('confidence', 50))
+                        )
+                        
+                        mapping_rules.append(mapping_rule)
+                        
+                    except Exception as e:
+                        logger.warning(f"Could not create mapping for {mapping}: {e}")
+                
+                logger.info(f"   ✅ Created {len(mapping_rules)} intelligent mapping rules")
+                result["intelligent_mappings"] = len(mapping_rules)
+            else:
+                logger.info(f"⏭️ Step 2: Skipping intelligent mappings (auto_mapping={auto_mapping})")
+                result["intelligent_mappings"] = 0
+            
+            logger.info(f"🚀 Step 3: Executing table-based transformation...")
+            
+            # Use ProcessingPipelineService for coordinated execution
+            pipeline_result = processing_pipeline.execute_csv_transformation(
+                csv_path=csv_path,
+                dataset_name=dataset_name,
+                institution=institution,
+                base_uri=base_uri,
+                delimiter=delimiter,
+                has_quoted_fields=has_quoted_fields
+            )
+            
+            result["pipeline_execution"] = pipeline_result
+            
+            logger.info(f"✅ Table-based service import completed successfully!")
+            logger.info(f"📊 Results: analysis quality {analysis.quality_score:.2f}, "
+                       f"{result.get('intelligent_mappings', 0)} auto-mappings applied")
+            
+            return result
+            
+        except ImportError as e:
+            logger.error(f"Service architecture not available: {e}")
+            logger.info(f"🔄 Falling back to traditional cell-based import...")
+            
+            # Fallback to the traditional approach
+            return ImportWorkflowService.import_csv(
+                csv_path=csv_path,
+                dataset_name=dataset_name,
+                institution=institution,
+                base_uri=base_uri,
+                delimiter=delimiter,
+                has_quoted_fields=has_quoted_fields,
+                use_smart_updater=False
+            )
+            
+        except Exception as e:
+            logger.error(f"❌ Error in table-based import {csv_path}: {e}")
+            raise
+    
+    @staticmethod
     def import_csv(
         csv_path: str,
         dataset_name: Optional[str] = None,
@@ -35,7 +184,8 @@ class ImportWorkflowService:
         use_smart_updater: bool = False,
         use_polars: bool = False,
         update_strategy: UpdateStrategy = UpdateStrategy.SKIP_EXISTING,
-        timestamp_column: Optional[str] = None
+        timestamp_column: Optional[str] = None,
+        use_table_services: bool = False
     ) -> Dict[str, Any]:
         """
         Import a single CSV file.
@@ -56,6 +206,7 @@ class ImportWorkflowService:
             use_polars: If True, use Polars version for processing
             update_strategy: Strategy for handling existing data (only used if use_smart_updater=True)
             timestamp_column: Column name for timestamp-based updates (only used if use_smart_updater=True)
+            use_table_services: If True, use the modern table-based service architecture
             
         Returns:
             Dict with import statistics
@@ -66,14 +217,28 @@ class ImportWorkflowService:
         logger.info(f"   Link row cells: {link_row_cells}")
         logger.info(f"   Link to first column: {link_to_first_column}")
         logger.info(f"   Use smart updater: {use_smart_updater}")
+        logger.info(f"   Use table services: {use_table_services}")
         
         if not dataset_name:
             dataset_name = os.path.splitext(os.path.basename(csv_path))[0]
             logger.info(f"   Auto-detected dataset name: {dataset_name}")
         
         try:
-            # Route to appropriate importer based on flags
-            if use_smart_updater:
+            # Route to table-based services if requested
+            if use_table_services:
+                logger.info(f"📋 Using modern table-based service architecture")
+                return ImportWorkflowService.import_csv_with_table_services(
+                    csv_path=csv_path,
+                    dataset_name=dataset_name,
+                    institution=institution,
+                    base_uri=base_uri,
+                    delimiter=delimiter,
+                    has_quoted_fields=has_quoted_fields,
+                    auto_mapping=True
+                )
+            
+            # Route to appropriate importer based on flags  
+            elif use_smart_updater:
                 logger.info(f"📋 Using smart bulk updater for existing data handling")
                 return ImportWorkflowService.import_csv_with_smart_updates(
                     csv_path=csv_path,
@@ -88,8 +253,8 @@ class ImportWorkflowService:
                     use_polars=use_polars
                 )
             else:
-                # Default: Use fast bulk import
-                logger.info(f"📋 Using fast bulk import (default)")
+                # Default: Use fast bulk import (cell-based - legacy)
+                logger.info(f"📋 Using legacy cell-based bulk import")
                 stats = ImportWorkflowService._process_csv_import(
                     csv_path,
                     dataset_name,
