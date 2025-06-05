@@ -52,9 +52,9 @@ let svg, g, tree, root, zoom;
 let expandedNodes = new Set();
 let nodeCounter = 0;
 
-const margin = {top: 40, right: 200, bottom: 40, left: 120};
-const width = 1000 - margin.left - margin.right;
-const height = 600 - margin.top - margin.bottom;
+const margin = {top: 40, right: 120, bottom: 200, left: 120};
+const width = 1200 - margin.left - margin.right;
+const height = 800 - margin.top - margin.bottom;
 
 document.addEventListener('DOMContentLoaded', function() {
     initializeTree();
@@ -80,8 +80,8 @@ function initializeTree() {
         .attr("transform", `translate(${margin.left},${margin.top})`);
     
     tree = d3.tree()
-        .size([height, width])
-        .nodeSize([60, 200]) // Set minimum spacing between nodes
+        .size([width, height])
+        .nodeSize([200, 80]) // Set minimum spacing between nodes (horizontal, vertical)
         .separation((a, b) => {
             // Increase separation based on depth and relationship
             const baseSeparation = a.parent == b.parent ? 1.2 : 2;
@@ -95,7 +95,7 @@ function initializeTree() {
         children: []
     });
     
-    root.x0 = height / 2;
+    root.x0 = width / 2;
     root.y0 = 0;
     
     updateTree();
@@ -134,7 +134,7 @@ function parseDatasets() {
     });
     
     root = d3.hierarchy(root.data);
-    root.x0 = height / 2;
+    root.x0 = width / 2;
     root.y0 = 0;
     
     // Expand the root node by default to show datasets
@@ -158,9 +158,9 @@ function updateTree() {
         .attr('class', 'node')
         .attr('transform', d => {
             if (d.parent) {
-                return `translate(${d.parent.y0 || 0},${d.parent.x0 || 0})`;
+                return `translate(${d.parent.x0 || 0},${d.parent.y0 || 0})`;
             }
-            return `translate(${root.y0},${root.x0})`;
+            return `translate(${root.x0},${root.y0})`;
         })
         .style('cursor', 'pointer')
         .on('click', function(event, d) {
@@ -218,7 +218,7 @@ function updateTree() {
     
     nodeUpdate.transition()
         .duration(500)
-        .attr('transform', d => `translate(${d.y},${d.x})`);
+        .attr('transform', d => `translate(${d.x},${d.y})`);
     
     // Remove exiting nodes
     const nodeExit = node.exit().transition()
@@ -226,9 +226,9 @@ function updateTree() {
         .attr('transform', d => {
             // Animate to parent's position, not root
             if (d.parent) {
-                return `translate(${d.parent.y},${d.parent.x})`;
+                return `translate(${d.parent.x},${d.parent.y})`;
             }
-            return `translate(${root.y},${root.x})`;
+            return `translate(${root.x},${root.y})`;
         })
         .remove();
     
@@ -271,10 +271,10 @@ function updateTree() {
 }
 
 function diagonal(s, d) {
-    return `M ${s.y} ${s.x}
-            C ${(s.y + d.y) / 2} ${s.x},
-              ${(s.y + d.y) / 2} ${d.x},
-              ${d.y} ${d.x}`;
+    return `M ${s.x} ${s.y}
+            C ${s.x} ${(s.y + d.y) / 2},
+              ${d.x} ${(s.y + d.y) / 2},
+              ${d.x} ${d.y}`;
 }
 
 function restoreExpandedState(node) {
