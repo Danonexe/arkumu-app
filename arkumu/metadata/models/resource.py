@@ -76,10 +76,14 @@ class Resource(UUIDModel):
         ]
         
         # Add indexes for common queries
+        
         indexes = [
             models.Index(fields=['name'], name='name_idx'),
             models.Index(fields=['value'], name='value_idx'),
             models.Index(fields=['source', 'name'], name='source_name_idx'),
+            models.Index(fields=['source', 'uri']),
+            models.Index(fields=['source', 'resource_type']),
+            models.Index(fields=['uri'], name='uri_pattern_idx', opclasses=['varchar_pattern_ops']),
         ]
 
     def __str__(self):
