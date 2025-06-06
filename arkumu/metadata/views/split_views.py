@@ -7,6 +7,7 @@ import logging
 from collections import defaultdict
 from datetime import datetime
 import traceback
+import json
 
 from arkumu.metadata.models.resource import Resource, ResourceType
 from arkumu.metadata.models.triples import Triple
@@ -336,10 +337,20 @@ def load_source_data(request):
         print(f"LOAD SOURCE: Built graph with {len(comprehensive_graph['nodes'])} nodes, {len(comprehensive_graph['links'])} links")
         
         # Prepare data for templates
+        # JSON serialize the graph data to ensure Python booleans become JavaScript booleans
+        graph_data_json = {
+            'nodes': json.dumps(comprehensive_graph['nodes']),
+            'links': json.dumps(comprehensive_graph['links']),
+            'source': comprehensive_graph.get('source'),
+            'dataset_count': comprehensive_graph.get('dataset_count'),
+            'total_nodes': comprehensive_graph.get('total_nodes'),
+            'total_links': comprehensive_graph.get('total_links'),
+        }
+        
         cached_data = {
             'source': source,
             'datasets': datasets_data,
-            'graph_data': comprehensive_graph
+            'graph_data': graph_data_json
         }
         
         # Use OOB swaps to update both table and graph
@@ -404,11 +415,19 @@ def get_graph_data(request):
     
     try:
         if dataset:
-            graph_data = _build_single_dataset_graph_data_optimized(source, dataset)
+            graph_data_raw = _build_single_dataset_graph_data_optimized(source, dataset)
+            # JSON serialize the graph data to ensure Python booleans become JavaScript booleans
+            graph_data = {
+                'nodes': json.dumps(graph_data_raw['nodes']),
+                'links': json.dumps(graph_data_raw['links']),
+                'dataset_name': graph_data_raw.get('dataset_name'),
+                'row_count': graph_data_raw.get('row_count'),
+                'column_count': graph_data_raw.get('column_count'),
+            }
         else:
             graph_data = {
-                'nodes': [],
-                'links': [],
+                'nodes': json.dumps([]),
+                'links': json.dumps([]),
                 'message': 'Select a dataset to view its graph'
             }
         
@@ -417,7 +436,7 @@ def get_graph_data(request):
         logger.error(f"Error generating graph data: {e}")
         return render(request, 'partials/graph_visualization.html', {
             'error': str(e),
-            'graph_data': {'nodes': [], 'links': []}
+            'graph_data': {'nodes': json.dumps([]), 'links': json.dumps([])}
         })
 
 
@@ -612,11 +631,22 @@ def highlight_cell_in_graph(request):
             row = row_index
         
         # Build graph data with cell highlighting
-        graph_data = _build_graph_with_highlight(
+        graph_data_raw = _build_graph_with_highlight(
             source, dataset, 
             highlight_column=column,
             highlight_row=row
         )
+        
+        # JSON serialize the graph data to ensure Python booleans become JavaScript booleans
+        graph_data = {
+            'nodes': json.dumps(graph_data_raw['nodes']),
+            'links': json.dumps(graph_data_raw['links']),
+            'dataset_name': graph_data_raw.get('dataset_name'),
+            'row_count': graph_data_raw.get('row_count'),
+            'column_count': graph_data_raw.get('column_count'),
+            'highlighted_column': graph_data_raw.get('highlighted_column'),
+            'highlighted_row': graph_data_raw.get('highlighted_row'),
+        }
         
         # Return just the graph visualization partial
         return render(request, 'partials/graph_visualization.html', {

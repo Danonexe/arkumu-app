@@ -71,8 +71,8 @@
             
             try {
                 // Prepare the data
-                const nodesData = {{ graph_data.nodes|safe }};
-                const linksData = {{ graph_data.links|safe }};
+                const nodesData = JSON.parse('{{ graph_data.nodes|escapejs }}');
+                const linksData = JSON.parse('{{ graph_data.links|escapejs }}');
                 
                 console.log('Raw nodes data:', nodesData);
                 console.log('Raw links data:', linksData);
