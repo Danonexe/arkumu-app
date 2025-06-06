@@ -1,14 +1,23 @@
 <!-- Enhanced Dataset Card for {{ dataset.name }} -->
-<div class="card dataset-card cursor-pointer transition-all duration-300 hover:scale-[1.02] border border-base-300" 
+<div class="card dataset-card transition-all duration-300 hover:scale-[1.02] border border-base-300"
      data-dataset="{{ dataset.name }}"
-     hx-get="/metadata/split-view/graph-data/?source={{ dataset.source|urlencode }}&dataset={{ dataset.name|urlencode }}"
+
+     {% if not dataset.preview %}
+     {# This is a placeholder card. Load the full card with preview when it becomes visible. #}
+     hx-get="{% url 'metadata:split_dataset_card' %}?source={{ dataset.source|urlencode }}&dataset_name={{ dataset.name|urlencode }}"
+     hx-trigger="intersect once"
+     hx-swap="outerHTML"
+     {% else %}
+     {# This is a fully-loaded card. A click loads the graph. #}
+     hx-get="{% url 'metadata:split_graph_data' %}?source={{ dataset.source|urlencode }}&dataset={{ dataset.name|urlencode }}"
      hx-trigger="click"
      hx-target="#graph-container"
      hx-swap="innerHTML"
-     hx-indicator="#graph-loading-{{ dataset.name }}">
-    
+     hx-indicator="#graph-loading-{{ dataset.name }}"
+     {% endif %}
+>
     <!-- Dataset Header -->
-    <div class="dataset-header relative">
+    <div class="dataset-header relative {% if not dataset.preview %}animate-pulse{% endif %}">
         <div class="dataset-content">
             <div class="flex items-center justify-between">
                 <div class="flex items-center gap-3">
@@ -30,6 +39,8 @@
                         <div class="badge badge-sm bg-primary-content/20 border-primary-content/30 text-primary-content">
                             {{ dataset.preview.showing_rows }} of {{ dataset.preview.total_rows|default:"?" }} rows
                         </div>
+                    {% else %}
+                        <div class="badge badge-sm badge-ghost">Loading...</div>
                     {% endif %}
                     <div class="badge badge-sm bg-primary-content/20 border-primary-content/30 text-primary-content">
                         {{ dataset.cell_count|default:0 }} cells
@@ -149,7 +160,7 @@
                         </div>
                     </div>
                     <p class="text-sm font-medium text-base-content/60">No Preview Available</p>
-                    <p class="text-xs text-base-content/40">Click to load table and graph</p>
+                    <p class="text-xs text-base-content/40">This card will load the data preview automatically.</p>
                 </div>
             </div>
         {% endif %}

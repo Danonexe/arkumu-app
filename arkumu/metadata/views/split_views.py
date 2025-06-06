@@ -1,6 +1,6 @@
 from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.decorators import login_required
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponseBadRequest
 from django.db.models import Q, Count
 from django.core.paginator import Paginator
 from django.core.cache import cache
@@ -8,6 +8,7 @@ import json
 import logging
 from hashlib import md5
 import re
+from collections import Counter
 
 from arkumu.metadata.models.resource import Resource, ResourceType
 from arkumu.metadata.models.triples import Triple
@@ -252,6 +253,35 @@ def load_source_data(request):
     return render(request, 'partials/source_data.html', cached_data)
 
 
+@login_required
+def get_dataset_card(request):
+    """HTMX endpoint to get a single, fully-rendered dataset card with its preview."""
+    source = request.GET.get('source', '')
+    dataset_name = request.GET.get('dataset_name', '')
+
+    if not source or not dataset_name:
+        return HttpResponseBadRequest("Missing source or dataset_name")
+
+    logger.info(f"Rendering single card for {dataset_name} in {source}")
+    
+    # We need to get the cell count again, or pass it in. For now, let's look it up.
+    cell_count = Resource.objects.filter(
+        source=source,
+        uri__contains=f"/datasets/{dataset_name}/",
+        uri__regex=r'/datasets/[^/]+/[^/]+/[^/]+$',
+        resource_type=ResourceType.IRI
+    ).count()
+
+    dataset = {
+        'name': dataset_name,
+        'source': source,
+        'cell_count': cell_count,
+        'preview': _get_dataset_preview(source, dataset_name, max_rows=5)
+    }
+
+    return render(request, 'partials/dataset_card.html', {'dataset': dataset})
+
+
 @login_required  
 def get_graph_data(request):
     """Generate graph data for visualization"""
@@ -440,85 +470,52 @@ def _get_cell_value(cell_resource):
 
 
 def _get_all_datasets_for_source(source):
-    """Get all datasets for a given source using Django ORM"""
-    logger.info(f"STEP 3.1: Finding datasets for source '{source}'")
+    """Get all datasets for a given source using Django ORM, without generating previews."""
+    logger.info(f"STEP 3.A: Finding datasets for source '{source}' (no previews)")
     
     try:
-        # Find all cell resources for this source and extract unique dataset names
-        # Cell URI pattern: http://arkumu.org/data/{source}/datasets/{dataset_name}/{column_name}/{row_id}
-        logger.info(f"STEP 3.1.1: Searching for cell resources with source '{source}' and pattern '/datasets/*'")
-        cell_resources = Resource.objects.filter(
+        # Find all cell resources for this source to determine datasets and cell counts
+        cell_uris = Resource.objects.filter(
             source=source,
-            uri__contains="/datasets/",
+            uri__contains='/datasets/',
             uri__regex=r'/datasets/[^/]+/[^/]+/[^/]+$',  # Cell pattern
             resource_type=ResourceType.IRI
-        )
-        
-        cell_count = cell_resources.count()
-        logger.info(f"STEP 3.1.2: Found {cell_count} cell resources")
-        
-        if cell_count == 0:
-            logger.warning(f"STEP 3.1.3: No cell resources found for source '{source}'")
-            # Let's check what resources we actually have for this source
-            all_source_resources = Resource.objects.filter(uri__startswith=source)
-            logger.warning(f"STEP 3.1.3.1: Total resources for source: {all_source_resources.count()}")
-            for i, res in enumerate(all_source_resources[:10]):  # Log first 10
-                logger.debug(f"STEP 3.1.3.1.{i+1}: Resource URI: {res.uri}, Type: {res.resource_type}")
-            return []
-        
-        # Extract unique dataset names from cell URIs
-        logger.info(f"STEP 3.1.4: Extracting dataset names from {cell_count} cell URIs")
-        dataset_names = set()
-        
-        for cell in cell_resources:  # Process all cells to find all datasets
+        ).values('uri')
+
+        logger.info(f"STEP 3.A.1: Found {cell_uris.count()} total cells to analyze for dataset names")
+
+        # Use a Counter to efficiently group by dataset name
+        dataset_counts = Counter()
+        for cell in cell_uris:
+            uri = cell['uri']
             try:
-                # Parse URI: {source}/datasets/{dataset_name}/{column_name}/{row_id}
-                uri_parts = cell.uri.split('/')
-                if 'datasets' in uri_parts:
-                    datasets_index = uri_parts.index('datasets')
-                    if datasets_index + 1 < len(uri_parts):
-                        dataset_name = uri_parts[datasets_index + 1]
-                        dataset_names.add(dataset_name)
-            except (IndexError, ValueError) as e:
-                logger.debug(f"STEP 3.1.4.X: Could not parse cell URI: {cell.uri} - {e}")
+                # Fast URI parsing
+                dataset_name = uri.split('/datasets/')[1].split('/')[0]
+                dataset_counts[dataset_name] += 1
+            except IndexError:
                 continue
         
-        logger.info(f"STEP 3.1.5: Found {len(dataset_names)} unique datasets: {sorted(list(dataset_names))}")
-        
-        # Build dataset info for each unique dataset
+        logger.info(f"STEP 3.A.2: Extracted {len(dataset_counts)} unique datasets")
+
+        # Build the final list of dataset dicts
         datasets = []
-        for i, dataset_name in enumerate(sorted(dataset_names)):
-            logger.info(f"STEP 3.2.{i+1}: Processing dataset '{dataset_name}'")
-            
-            # Count cells for this specific dataset
-            dataset_cell_count = Resource.objects.filter(
-                source=source,
-                uri__contains=f"/datasets/{dataset_name}/",
-                uri__regex=r'/datasets/[^/]+/[^/]+/[^/]+$',  # Cell pattern
-                resource_type=ResourceType.IRI
-            ).count()
-            logger.info(f"STEP 3.2.{i+1}.1: Found {dataset_cell_count} cells for dataset '{dataset_name}'")
-            
-            # Get preview data for this dataset
-            logger.info(f"STEP 3.2.{i+1}.2: Getting preview for dataset '{dataset_name}'")
-            preview = _get_dataset_preview(source, dataset_name)
-            logger.info(f"STEP 3.2.{i+1}.3: Preview result for '{dataset_name}': {preview is not None}")
-            if preview:
-                logger.info(f"STEP 3.2.{i+1}.3.1: Preview has {len(preview.get('data', []))} rows and {len(preview.get('colHeaders', []))} columns")
-            
+        for dataset_name, cell_count in dataset_counts.items():
             datasets.append({
                 'name': dataset_name,
                 'source': source,
-                'cell_count': dataset_cell_count,
-                'preview': preview
+                'cell_count': cell_count,
+                'preview': None  # IMPORTANT: No preview is generated here
             })
         
-        logger.info(f"STEP 3.3: Returning {len(datasets)} datasets with total cells: {sum(d['cell_count'] for d in datasets)}")
+        # Sort datasets by name for consistent order
+        datasets.sort(key=lambda x: x['name'])
+        
+        logger.info(f"STEP 3.A.3: Returning {len(datasets)} datasets without previews.")
         return datasets
     except Exception as e:
-        logger.error(f"STEP 3.ERROR: Error getting datasets for source {source}: {e}")
+        logger.error(f"STEP 3.A.ERROR: Error getting datasets for source {source}: {e}")
         import traceback
-        logger.error(f"STEP 3.ERROR.1: Traceback: {traceback.format_exc()}")
+        logger.error(f"STEP 3.A.ERROR.1: Traceback: {traceback.format_exc()}")
         return []
 
 

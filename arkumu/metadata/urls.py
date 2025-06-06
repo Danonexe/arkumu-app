@@ -73,6 +73,7 @@ urlpatterns = [
     # Split Table/Graph View
     path('split-view/', split_views.split_table_graph_view, name='split_table_graph'),
     path('split-view/load-source-data/', split_views.load_source_data, name='load_source_data'),
+    path('split-view/dataset-card/', split_views.get_dataset_card, name='split_dataset_card'),
     path('split-view/table-data/', split_views.get_table_data, name='split_table_data'),
     path('split-view/dataset-preview/', split_views.get_dataset_preview, name='split_dataset_preview'),
     path('split-view/load-more-rows/', split_views.load_more_dataset_rows, name='load_more_dataset_rows'),
