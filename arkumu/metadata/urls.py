@@ -77,4 +77,6 @@ urlpatterns = [
     path('split-view/load-more-rows/', split_views.load_more_dataset_rows, name='load_more_dataset_rows'),
     path('split-view/graph-data/', split_views.get_graph_data, name='split_graph_data'),
     path('split-view/debug-database/', split_views.debug_database, name='debug_database'),
+    path('split-view/highlight-column/', split_views.highlight_column_in_graph, name='highlight_column'),
+    path('split-view/highlight-cell/', split_views.highlight_cell_in_graph, name='highlight_cell'),
     ]

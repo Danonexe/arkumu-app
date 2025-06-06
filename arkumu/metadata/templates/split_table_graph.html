@@ -3,7 +3,11 @@
 
 {% block title %}Split Table/Graph View{% endblock %}
 
-
+{% block extrahead %}
+<!-- vis.js for network visualization -->
+<script src="https://unpkg.com/vis-network@9.1.2/dist/vis-network.min.js"></script>
+<link href="https://unpkg.com/vis-network@9.1.2/dist/dist/vis-network.min.css" rel="stylesheet" type="text/css" />
+{% endblock %}
 
 {% block content %}
 <div class="min-h-screen bg-base-200 p-0 m-0 w-full">
@@ -53,9 +57,8 @@
                         class="select select-bordered select-primary w-64"
                         hx-get="/metadata/split-view/load-source-data/"
                         hx-trigger="change{% if selected_source %} load delay:10ms{% endif %}"
-                        hx-target="body"
                         hx-swap="none"
-                        hx-indicator="#loading-indicator">
+                        hx-indicator=".loading-indicator">
                     <option value="">Select a data source...</option>
                     {% for source in sources %}
                         <option value="{{ source.name }}" {% if source.name == selected_source %}selected{% endif %}>
@@ -65,11 +68,9 @@
                 </select>
             </div>
             
-            <div id="loading-indicator" class="htmx-indicator">
-                <div class="flex items-center gap-2">
-                    <span class="loading loading-spinner loading-sm text-primary"></span>
-                    <span class="text-sm">Loading...</span>
-                </div>
+            <div class="loading-indicator htmx-indicator flex items-center gap-2">
+                <span class="loading loading-spinner loading-sm text-primary"></span>
+                <span class="text-sm">Loading...</span>
             </div>
             
             <div class="stats shadow">
@@ -81,56 +82,71 @@
         </div>
     </div>
     
-    <!-- Split Content Area using DaisyUI Grid -->
+    <!-- Split Content Area with Fixed Graph Panel -->
     <div class="container mx-auto max-w-none p-4">
-        <div id="split-content" class="grid grid-cols-1 lg:grid-cols-2 gap-4 h-[calc(100vh-280px)]">
-            <!-- Table Panel (Left) -->
-            <div class="card bg-base-100 shadow-xl">
-                <div class="card-header">
+        <div id="split-content" class="relative grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <!-- Table Panel (Left) - Scrollable -->
+            <div class="card bg-base-100 shadow-xl h-[calc(100vh-220px)] overflow-y-auto">
+                <div class="card-header sticky top-0 z-10 bg-base-100">
                     <div class="flex items-center gap-2 p-4 border-b border-base-300">
                         <svg class="w-5 h-5 text-primary" fill="currentColor" viewBox="0 0 20 20">
                             <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/>
                         </svg>
-                        <h3 class="card-title text-lg">Data Table</h3>
+                        <h3 class="card-title text-lg">Data Tables</h3>
                     </div>
                 </div>
-                <div class="card-body p-0 overflow-hidden">
-                    <div id="table-content" class="h-full overflow-auto">
-                        <div class="hero h-full">
-                            <div class="hero-content text-center">
-                                <div class="max-w-md">
-                                    <svg class="w-16 h-16 mx-auto mb-4 text-base-content/30" fill="currentColor" viewBox="0 0 20 20">
-                                        <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/>
-                                    </svg>
-                                    <p class="text-base-content/50">Select a data source to view table</p>
-                                </div>
+                <div class="card-body p-4 overflow-y-auto" id="table-content">
+                    <!-- Initial empty state -->
+                    <div class="hero h-40">
+                        <div class="hero-content text-center">
+                            <div class="max-w-md">
+                                <svg class="w-16 h-16 mx-auto mb-4 text-base-content/30" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/>
+                                </svg>
+                                <p class="text-base-content/50">Select a data source to view tables</p>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
             
-            <!-- Graph Panel (Right) -->
-            <div class="card bg-base-100 shadow-xl">
-                <div class="card-header">
-                    <div class="flex items-center gap-2 p-4 border-b border-base-300">
-                        <svg class="w-5 h-5 text-secondary" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"/>
-                        </svg>
-                        <h3 class="card-title text-lg">Visualization</h3>
-                    </div>
-                </div>
-                <div class="card-body p-4 overflow-hidden">
-                    <div id="graph-content" class="h-full max-h-[500px] overflow-hidden">
-                        <div class="hero h-full">
-                            <div class="hero-content text-center">
-                                <div class="max-w-md">
-                                    <svg class="w-16 h-16 mx-auto mb-4 text-base-content/30" fill="currentColor" viewBox="0 0 20 20">
-                                        <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"/>
-                                    </svg>
-                                    <p class="text-base-content/50">Select a data source to view graph</p>
-                                </div>
+            <!-- Graph Panel (Right) - Fixed -->
+            <div class="lg:sticky lg:top-4 h-[calc(100vh-220px)]">
+                <div class="card rounded-box bg-base-100 shadow-lg h-full overflow-hidden">
+                    <div class="card-body p-4 flex flex-col h-full">
+                        <div class="card-title flex gap-2 items-center">
+                            <div class="flex-1">
+                                <h2 class="text-lg font-medium">
+                                    <span class="text-primary">Graph</span> Visualization
+                                </h2>
+                                <p class="text-xs text-base-content/70">Semantic connections between datasets</p>
                             </div>
+                        </div>
+                        <div class="divider my-0"></div>
+                        
+                        <!-- Loading indicator for graph updates -->
+                        <div id="graph-loading-indicator" class="htmx-indicator flex justify-center items-center py-4">
+                            <div class="loading loading-spinner loading-md text-primary"></div>
+                            <span class="ml-2">Updating graph...</span>
+                        </div>
+                        
+                        <!-- Graph Container -->
+                        <div id="graph-container" class="flex-1 overflow-hidden">
+                            {% if graph_data %}
+                                {% include 'partials/graph_visualization.html' with graph_data=graph_data %}
+                            {% else %}
+                                <div class="flex h-full flex-col items-center justify-center text-center">
+                                    <div class="max-w-md">
+                                        <svg class="w-16 h-16 mx-auto text-base-content/30 mb-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M9 6H20M9 12H20M9 18H20M5 6V6.01M5 12V12.01M5 18V18.01" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                        </svg>
+                                        <h3 class="text-lg font-medium">No Graph Data</h3>
+                                        <p class="text-sm text-base-content/70 mt-2">
+                                            Select a dataset from the table to view its graph visualization.
+                                        </p>
+                                    </div>
+                                </div>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
@@ -159,134 +175,18 @@
 {% block inline_javascript %}
 {{ block.super }}
 <script>
-class SplitTableGraphView {
-    constructor() {
-        this.selectedSource = '';
-        this.initializeEventListeners();
-    }
-    
-    initializeEventListeners() {
-        // HTMX event handlers for loading states
-        document.addEventListener('htmx:beforeRequest', (e) => {
-            if (e.detail.target && e.detail.target.id === 'split-content') {
-                this.showLoadingState();
+// Minimal JavaScript just for vis.js graph resizing
+document.addEventListener('htmx:afterSwap', function(event) {
+    // If the graph container was updated
+    if (event.detail.target && event.detail.target.id === 'graph-container') {
+        setTimeout(function() {
+            const graphContainer = document.getElementById('graph-vis');
+            if (graphContainer && graphContainer.__vis_network__) {
+                graphContainer.__vis_network__.redraw();
+                graphContainer.__vis_network__.fit();
             }
-        });
-        
-        document.addEventListener('htmx:afterRequest', (e) => {
-            if (e.detail.target && e.detail.target.id === 'split-content') {
-                this.hideLoadingState();
-                this.enhanceTables();
-                this.enhanceGraphs();
-            }
-        });
-        
-        document.addEventListener('htmx:responseError', (e) => {
-            this.hideLoadingState();
-            this.showStatusMessage('Error loading data. Please try again.', 'error');
-        });
+        }, 100);
     }
-    
-    showLoadingState() {
-        const tableContent = document.getElementById('table-content');
-        const graphContent = document.getElementById('graph-content');
-        
-        if (tableContent) {
-            tableContent.classList.add('loading-shimmer');
-        }
-        if (graphContent) {
-            graphContent.classList.add('loading-shimmer');
-        }
-    }
-    
-    hideLoadingState() {
-        const tableContent = document.getElementById('table-content');
-        const graphContent = document.getElementById('graph-content');
-        
-        if (tableContent) {
-            tableContent.classList.remove('loading-shimmer');
-        }
-        if (graphContent) {
-            graphContent.classList.remove('loading-shimmer');
-        }
-    }
-    
-    enhanceTables() {
-        // Add any enhancements to native HTML tables loaded via HTMX
-        const tables = document.querySelectorAll('.data-table');
-        tables.forEach(table => {
-            table.addEventListener('click', (e) => {
-                const cell = e.target.closest('td');
-                if (cell) {
-                    this.handleCellClick(cell, table);
-                }
-            });
-        });
-    }
-    
-    enhanceGraphs() {
-        // Ensure graphs fit within the DaisyUI card container
-        const graphContainer = document.getElementById('graph-content');
-        if (graphContainer) {
-            const graphs = graphContainer.querySelectorAll('canvas, svg, .chart');
-            graphs.forEach(graph => {
-                graph.style.maxHeight = '450px';
-                graph.style.maxWidth = '100%';
-                graph.style.height = 'auto';
-            });
-        }
-    }
-    
-    handleCellClick(cell, table) {
-        // Remove previous selections
-        table.querySelectorAll('.bg-primary').forEach(c => {
-            c.classList.remove('bg-primary', 'text-primary-content');
-        });
-        
-        // Add DaisyUI selection styling
-        cell.classList.add('bg-primary', 'text-primary-content');
-        
-        console.log('Cell clicked:', {
-            row: cell.parentNode.rowIndex,
-            column: cell.cellIndex,
-            value: cell.textContent.trim()
-        });
-    }
-    
-    showStatusMessage(message, type = 'success') {
-        const toast = document.getElementById('status-toast');
-        const messageEl = document.getElementById('status-message');
-        const alert = toast.querySelector('.alert');
-        
-        if (!toast || !messageEl || !alert) return;
-        
-        messageEl.textContent = message;
-        
-        // Reset alert classes and apply DaisyUI alert variants
-        alert.className = 'alert shadow-lg';
-        
-        if (type === 'error') {
-            alert.classList.add('alert-error');
-        } else if (type === 'warning') {
-            alert.classList.add('alert-warning');
-        } else if (type === 'info') {
-            alert.classList.add('alert-info');
-        } else {
-            alert.classList.add('alert-success');
-        }
-        
-        // Show with DaisyUI animation
-        toast.style.display = 'block';
-        setTimeout(() => {
-            toast.style.display = 'none';
-        }, 4000);
-    }
-}
-
-// Initialize the application
-let splitTableGraph;
-document.addEventListener('DOMContentLoaded', () => {
-    splitTableGraph = new SplitTableGraphView();
 });
 </script>
 {% endblock %} 

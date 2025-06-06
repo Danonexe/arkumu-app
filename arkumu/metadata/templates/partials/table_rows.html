@@ -1,8 +1,21 @@
+{% load metadata_tags %}
+
 {% for row in data %}
-<tr class="hover:bg-base-300">
+<tr class="hover:bg-base-200/50 transition-colors">
     {% for cell in row %}
-    <td class="text-xs max-w-32 truncate" title="{{ cell }}">
-        {% if cell %}{{ cell }}{% else %}<span class="text-gray-400">-</span>{% endif %}
+    <td class="p-2 border border-base-300 text-xs min-w-[120px] whitespace-nowrap overflow-hidden text-ellipsis cursor-pointer hover:bg-primary-50"
+        {% if source and dataset %}
+        hx-get="/metadata/split-view/highlight-cell/?source={{ source|urlencode }}&dataset={{ dataset|urlencode }}&column={{ forloop.counter0 }}&row={{ forloop.parentloop.counter0 }}"
+        hx-target="#graph-container"
+        hx-swap="innerHTML"
+        hx-indicator=".loading-indicator"
+        {% endif %}
+        title="{{ cell }}">
+        {% if cell %}
+            <span class="font-mono">{{ cell }}</span>
+        {% else %}
+            <span class="text-base-content/40 italic">empty</span>
+        {% endif %}
     </td>
     {% endfor %}
 </tr>

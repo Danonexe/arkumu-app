@@ -1,10 +1,30 @@
-<!-- Empty State -->
-<div class="flex items-center justify-center h-96 text-base-content/60">
-    <div class="text-center">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto mb-4 text-base-content/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z" />
-        </svg>
-        <p>Select a source to view all datasets and their connections.</p>
-        <p class="text-sm mt-2 text-base-content/40">Data will load automatically with Redis caching for fast performance.</p>
+<!-- Empty state with OOB swaps -->
+<div id="table-content" hx-swap-oob="innerHTML">
+    <div class="hero h-full">
+        <div class="hero-content text-center">
+            <div class="max-w-md">
+                <svg class="w-16 h-16 mx-auto mb-4 text-base-content/30" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/>
+                </svg>
+                <p class="text-base-content/50">Please select a data source from the dropdown above</p>
+            </div>
+        </div>
     </div>
-</div> 
+</div>
+
+<div id="graph-container" hx-swap-oob="innerHTML">
+    <div class="flex h-full flex-col items-center justify-center text-center">
+        <div class="max-w-md">
+            <svg class="w-16 h-16 mx-auto text-base-content/30 mb-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M9 6H20M9 12H20M9 18H20M5 6V6.01M5 12V12.01M5 18V18.01" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <h3 class="text-lg font-medium">No Data Selected</h3>
+            <p class="text-sm text-base-content/70 mt-2">
+                Select a source first, then a dataset to view its graph.
+            </p>
+        </div>
+    </div>
+</div>
+
+<!-- Empty primary content -->
+<div></div> 

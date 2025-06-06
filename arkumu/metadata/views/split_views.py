@@ -131,8 +131,13 @@ def _get_dataset_preview_optimized(source, dataset_name, max_rows=5, offset=0):
     paginated_row_ids = sorted_row_ids[offset:offset + max_rows]
     if not paginated_row_ids:
         return {
-            'colHeaders': sorted_columns, 'data': [], 'showing_rows': 0, 
-            'total_rows': total_rows, 'offset': offset, 'has_more': False
+            'colHeaders': sorted_columns, 
+            'data': [], 
+            'showing_rows': 0, 
+            'total_rows': total_rows, 
+            'offset': offset, 
+            'has_more': False,
+            'rowIds': []
         }
 
     # Step 4: Build a regex to fetch only the cells for the required rows.
@@ -182,7 +187,8 @@ def _get_dataset_preview_optimized(source, dataset_name, max_rows=5, offset=0):
         'showing_rows': len(table_data),
         'total_rows': total_rows,
         'offset': offset,
-        'has_more': offset + len(table_data) < total_rows
+        'has_more': offset + len(table_data) < total_rows,
+        'rowIds': paginated_row_ids  # Include the row IDs for template access
     }
 
 
@@ -309,7 +315,10 @@ def load_source_data(request):
     source = request.GET.get('source', '')
     
     if not source:
-        return render(request, 'partials/empty_state.html')
+        empty_response = render(request, 'partials/empty_state.html')
+        empty_response['HX-Trigger'] = 'sourceDataLoaded'
+        empty_response['Content-Type'] = 'text/html'
+        return empty_response
     
     # Use optimized dataset fetching
     datasets_data = _get_all_datasets_for_source_optimized(source)
@@ -323,7 +332,7 @@ def load_source_data(request):
             'type': 'dataset',
             'cell_count': dataset.get('cell_count', 0)
         })
-    
+        
     # Don't generate previews here - load them on demand
     cached_data = {
         'source': source,
@@ -332,7 +341,11 @@ def load_source_data(request):
         'graph_edges': []
     }
     
-    return render(request, 'partials/source_data.html', cached_data)
+    # Use OOB swaps with an empty primary response
+    response = render(request, 'partials/source_data.html', cached_data)
+    response['HX-Trigger'] = 'sourceDataLoaded'
+    response['Content-Type'] = 'text/html'
+    return response
 
 
 @login_required
@@ -353,14 +366,22 @@ def get_dataset_card(request):
         Q(uri__contains='/columns/') | Q(uri__contains='/rows/')
     ).count()
 
+    # Get preview data with row IDs
+    preview_data = _get_dataset_preview_optimized(source, dataset_name, max_rows=5)
+
     dataset = {
         'name': dataset_name,
         'source': source,
         'cell_count': cell_count,
-        'preview': _get_dataset_preview_optimized(source, dataset_name, max_rows=5)
+        'preview': preview_data
     }
 
-    return render(request, 'partials/dataset_card.html', {'dataset': dataset})
+    return render(request, 'partials/dataset_card.html', {
+        'dataset': dataset,
+        'colHeaders': preview_data['colHeaders'],
+        'rowIds': preview_data.get('rowIds', []),
+        'source': source
+    })
 
 
 @login_required
@@ -409,7 +430,12 @@ def load_more_dataset_rows(request):
             return render(request, 'partials/table_rows.html', {'data': []})
         
         return render(request, 'partials/table_rows.html', {
-            'data': preview_data['data']
+            'data': preview_data['data'],
+            'colHeaders': preview_data['colHeaders'],
+            'rowIds': preview_data.get('rowIds', []),
+            'source': source,
+            'dataset': dataset,
+            'preview': preview_data  # Include full preview data for completeness
         })
         
     except Exception as e:
@@ -436,4 +462,279 @@ def debug_database(request):
         'cache_cleared': True
     }
     
-    return JsonResponse(debug_info, indent=2) 
+    return JsonResponse(debug_info, indent=2)
+
+
+@login_required
+def highlight_column_in_graph(request):
+    """
+    HTMX endpoint to update the graph visualization with a highlighted column.
+    This allows synchronization between table and graph views.
+    """
+    source = request.GET.get('source')
+    dataset = request.GET.get('dataset')
+    column_index = request.GET.get('column')
+    
+    if not all([source, dataset, column_index]):
+        return JsonResponse({'error': 'Missing required parameters'}, status=400)
+    
+    try:
+        # Convert to integer if it's passed as a string index
+        column_index = int(column_index) if column_index and column_index.isdigit() else column_index
+        
+        # Get preview data to find actual column name
+        preview_data = _get_dataset_preview_optimized(source, dataset)
+        
+        # Map index to actual column name if needed
+        if isinstance(column_index, int) and preview_data['colHeaders']:
+            if column_index < len(preview_data['colHeaders']):
+                column = preview_data['colHeaders'][column_index]
+            else:
+                column = f"column_{column_index}"
+        else:
+            column = column_index
+        
+        # Build graph data with column highlighting
+        graph_data = _build_graph_with_highlight(source, dataset, highlight_column=column)
+        
+        # Return just the graph visualization partial
+        return render(request, 'partials/graph_visualization.html', {
+            'graph_data': graph_data,
+            'highlighted_column': column
+        })
+    except Exception as e:
+        logger.error(f"Error highlighting column in graph: {e}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@login_required
+def highlight_cell_in_graph(request):
+    """
+    HTMX endpoint to update the graph visualization with a highlighted cell,
+    which highlights both its row and column.
+    """
+    source = request.GET.get('source')
+    dataset = request.GET.get('dataset')
+    column_index = request.GET.get('column')
+    row_index = request.GET.get('row')
+    
+    if not all([source, dataset, column_index, row_index]):
+        return JsonResponse({'error': 'Missing required parameters'}, status=400)
+    
+    try:
+        # Convert to integers if they're passed as string indices
+        column_index = int(column_index) if column_index.isdigit() else column_index
+        row_index = int(row_index) if row_index.isdigit() else row_index
+        
+        # Get preview data to find actual column and row IDs
+        preview_data = _get_dataset_preview_optimized(source, dataset)
+        
+        # Map indices to actual column and row names if needed
+        if isinstance(column_index, int) and preview_data['colHeaders']:
+            if column_index < len(preview_data['colHeaders']):
+                column = preview_data['colHeaders'][column_index]
+            else:
+                column = f"column_{column_index}"
+        else:
+            column = column_index
+            
+        if isinstance(row_index, int) and preview_data.get('rowIds'):
+            if row_index < len(preview_data['rowIds']):
+                row = preview_data['rowIds'][row_index]
+            else:
+                row = f"row_{row_index}"
+        else:
+            row = row_index
+        
+        # Build graph data with cell highlighting
+        graph_data = _build_graph_with_highlight(
+            source, dataset, 
+            highlight_column=column,
+            highlight_row=row
+        )
+        
+        # Return just the graph visualization partial
+        return render(request, 'partials/graph_visualization.html', {
+            'graph_data': graph_data,
+            'highlighted_column': column,
+            'highlighted_row': row
+        })
+    except Exception as e:
+        logger.error(f"Error highlighting cell in graph: {e}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+def _build_graph_with_highlight(source, dataset_name, highlight_column=None, highlight_row=None):
+    """
+    Build graph data with highlighting for specific columns or rows.
+    This extends the _build_single_dataset_graph_data_optimized function.
+    """
+    try:
+        # Step 1: Get all cell URIs to understand dataset structure for sampling.
+        all_cell_uris = Resource.objects.filter(
+            source=source,
+            uri__contains=f'/datasets/{dataset_name}/',
+            resource_type=ResourceType.IRI
+        ).exclude(
+            Q(uri__contains='/columns/') | Q(uri__contains='/rows/')
+        ).values_list('uri', flat=True)
+
+        rows = defaultdict(list)
+        columns = set()
+        for uri in all_cell_uris:
+            parts = uri.split('/')
+            if len(parts) >= 3:
+                column_name = parts[-2]
+                row_id = parts[-1]
+                columns.add(column_name)
+                rows[row_id].append(column_name)
+        
+        if not rows:
+            return {'nodes': [], 'links': [], 'dataset_name': dataset_name}
+
+        # Step 2: Determine rows to sample
+        # If highlighting a specific row, make sure it's included
+        import random
+        all_row_ids = list(rows.keys())
+        
+        # For highlighting a specific row, make sure it's included
+        if highlight_row and highlight_row in all_row_ids:
+            # Always include the highlighted row and sample the rest
+            remaining_rows = [r for r in all_row_ids if r != highlight_row]
+            sample_size = min(len(remaining_rows), 9)  # 9 + 1 highlighted = 10 max
+            if sample_size > 0:
+                sampled_row_ids = random.sample(remaining_rows, sample_size)
+                sampled_row_ids.append(highlight_row)
+            else:
+                sampled_row_ids = [highlight_row]
+        else:
+            # Regular sampling if no row highlight
+            sample_size = min(len(all_row_ids), 10)
+            sampled_row_ids = random.sample(all_row_ids, sample_size)
+        
+        # Step 3: Fetch data only for the sampled rows.
+        row_id_pattern = '|'.join(sampled_row_ids)
+        uri_regex = f'/({row_id_pattern})$'
+        
+        cells_for_graph = Resource.objects.filter(
+            source=source,
+            uri__contains=f'/datasets/{dataset_name}/',
+            resource_type=ResourceType.IRI,
+            uri__regex=uri_regex
+        ).prefetch_related(
+            Prefetch(
+                'subject_triples',
+                queryset=Triple.objects.filter(
+                    predicate__uri='http://www.w3.org/1999/02/22-rdf-syntax-ns#value'
+                ).select_related('object'),
+                to_attr='value_triples'
+            )
+        )
+        
+        # Step 4: Process sampled cells to get their values.
+        cell_values = {}  # (row_id, column_name) -> value
+        for cell in cells_for_graph:
+            uri_parts = cell.uri.split('/')
+            if len(uri_parts) >= 3:
+                column_name = uri_parts[-2]
+                row_id = uri_parts[-1]
+                value = ""
+                if hasattr(cell, 'value_triples') and cell.value_triples:
+                    value = cell.value_triples[0].object.value or ""
+                cell_values[(row_id, column_name)] = value
+        
+        # Step 5: Build visualization nodes and links with highlighting.
+        nodes = []
+        links = []
+        
+        # Dataset node
+        nodes.append({
+            'id': f'dataset_{dataset_name}', 
+            'label': dataset_name, 
+            'type': 'dataset',
+            'color': '#2563eb', 
+            'shape': 'diamond'
+        })
+        
+        # Column nodes with highlighting for the specified column
+        for column in sorted(columns):
+            is_highlighted = column == highlight_column
+            nodes.append({
+                'id': f'column_{column}', 
+                'label': column, 
+                'type': 'column',
+                # Highlight the selected column with a brighter color
+                'color': '#ff5733' if is_highlighted else '#059669',
+                'shape': 'box',
+                'highlighted': is_highlighted
+            })
+            links.append({
+                'from': f'dataset_{dataset_name}', 
+                'to': f'column_{column}', 
+                'label': 'hasColumn'
+            })
+        
+        # Row and Cell nodes with highlighting
+        for row_id in sampled_row_ids:
+            is_highlighted_row = row_id == highlight_row
+            nodes.append({
+                'id': f'row_{row_id}', 
+                'label': f'Row {row_id}', 
+                'type': 'row',
+                # Highlight the selected row with a brighter color
+                'color': '#ff5733' if is_highlighted_row else '#dc2626',
+                'shape': 'ellipse',
+                'highlighted': is_highlighted_row
+            })
+            links.append({
+                'from': f'dataset_{dataset_name}', 
+                'to': f'row_{row_id}', 
+                'label': 'hasRow'
+            })
+            
+            for column in rows[row_id]:
+                cell_id = f'cell_{row_id}_{column}'
+                cell_value = cell_values.get((row_id, column), "")
+                
+                # Determine if this cell should be highlighted (both row and column match)
+                is_highlighted_cell = (column == highlight_column) or (row_id == highlight_row)
+                is_doubly_highlighted = (column == highlight_column) and (row_id == highlight_row)
+                
+                nodes.append({
+                    'id': cell_id,
+                    'label': str(cell_value)[:20] + ('...' if len(str(cell_value)) > 20 else ''),
+                    'type': 'cell', 
+                    # Different colors for different highlight states
+                    'color': '#ff3366' if is_doubly_highlighted else 
+                             '#ff9966' if is_highlighted_cell else '#7c3aed',
+                    'shape': 'dot',
+                    'highlighted': is_highlighted_cell,
+                    'value': cell_value
+                })
+                
+                links.append({
+                    'from': f'row_{row_id}', 
+                    'to': cell_id, 
+                    'label': column
+                })
+                links.append({
+                    'from': f'column_{column}', 
+                    'to': cell_id, 
+                    'label': 'contains'
+                })
+        
+        return {
+            'nodes': nodes, 
+            'links': links, 
+            'dataset_name': dataset_name,
+            'row_count': len(all_row_ids), 
+            'column_count': len(columns),
+            'highlighted_column': highlight_column,
+            'highlighted_row': highlight_row
+        }
+        
+    except Exception as e:
+        logger.error(f"Error building graph with highlights: {e}")
+        return {
+            'nodes': [], 'links': [], 'dataset_name': dataset_name
+        } 
