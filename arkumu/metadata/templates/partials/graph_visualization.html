@@ -1,0 +1,218 @@
+<!-- Graph Visualization with DaisyUI Components -->
+<div class="w-full h-full relative" id="graph-content">
+    {% if error %}
+        <!-- Error State -->
+        <div class="hero h-full">
+            <div class="hero-content text-center">
+                <div class="max-w-md">
+                    <div class="text-6xl mb-4">⚠️</div>
+                    <h1 class="text-2xl font-bold text-error">Graph Error</h1>
+                    <p class="py-2 text-error/70">{{ error }}</p>
+                    <button class="btn btn-outline btn-error" onclick="location.reload()">Retry</button>
+                </div>
+            </div>
+        </div>
+
+    {% elif graph_data.nodes %}
+        <!-- Graph with data -->
+        <div class="relative w-full h-full">
+            <!-- Graph stats header -->
+            <div class="absolute top-2 left-2 z-10">
+                <div class="stats shadow bg-base-100/90 backdrop-blur">
+                    <div class="stat">
+                        <div class="stat-title">{{ graph_data.dataset_name|default:"Graph" }}</div>
+                        <div class="stat-value text-lg">{{ graph_data.nodes|length }} nodes</div>
+                        <div class="stat-desc">{{ graph_data.links|length }} connections</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Graph controls -->
+            <div class="absolute top-2 right-2 z-10">
+                <div class="join">
+                    <button class="btn btn-sm join-item" 
+                            hx-post="/metadata/split-view/refresh-graph/" 
+                            hx-target="#graph-container"
+                            hx-swap="innerHTML">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    {% if nodes %}
+        <!-- Render nodes as DaisyUI cards -->
+        {% for node in nodes %}
+        <div class="card card-compact bg-base-100 shadow-md border border-primary absolute cursor-pointer transition-all duration-200 hover:scale-105 hover:shadow-lg"
+             style="left: {{ node.x }}px; top: {{ node.y }}px; width: 120px;"
+             data-node-id="{{ node.id }}"
+             data-node-type="{{ node.type }}"
+             data-dataset="{{ node.label }}"
+             hx-post="/metadata/split-view/select-node/"
+             hx-vals='{"node_id": "{{ node.id }}", "node_type": "{{ node.type }}", "dataset": "{{ node.label }}"}'
+             hx-trigger="click"
+             hx-target="#node-details"
+             hx-swap="innerHTML">
+            
+            <div class="card-body p-3 text-center">
+                <h3 class="card-title text-sm justify-center">{{ node.label }}</h3>
+                <div class="flex flex-col gap-1 items-center">
+                    <div class="badge badge-primary badge-sm">{{ node.type }}</div>
+                    {% if node.cell_count %}
+                    <div class="badge badge-info badge-xs">{{ node.cell_count }} cells</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+        
+        <!-- Render edges as SVG lines -->
+        {% if edges %}
+        <svg class="absolute inset-0 w-full h-full pointer-events-none" style="z-index: 1;">
+            {% for edge in edges %}
+            <line x1="{{ edge.from_x }}" y1="{{ edge.from_y }}" 
+                  x2="{{ edge.to_x }}" y2="{{ edge.to_y }}"
+                  stroke="hsl(var(--bc))" stroke-width="2" stroke-opacity="0.3" />
+            {% if edge.label %}
+            <!-- Calculate midpoint position in template -->
+            <text x="{{ edge.mid_x }}" 
+                  y="{{ edge.mid_y }}" 
+                  class="fill-base-content text-xs" 
+                  text-anchor="middle">{{ edge.label }}</text>
+            {% endif %}
+            {% endfor %}
+        </svg>
+        {% endif %}
+        
+    {% else %}
+        <div class="hero h-full">
+            <div class="hero-content text-center">
+                <div class="max-w-md">
+                    <div class="text-6xl mb-4">📊</div>
+                    <h1 class="text-2xl font-bold text-base-content/60">No Graph Data</h1>
+                    <p class="py-2 text-base-content/40">Select a source to view the relationship graph</p>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+    
+    <!-- Node details panel using DaisyUI card -->
+    <div class="card bg-base-100 shadow-lg border absolute top-4 left-4 w-64" id="node-details">
+        <div class="card-body p-4">
+            <div class="flex items-center gap-2 text-base-content/60">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span class="text-sm">Click on a node to see details</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Graph Controls using DaisyUI -->
+<div class="card bg-base-100 shadow-lg border absolute bottom-4 right-4">
+    <div class="card-body p-4">
+        <h4 class="card-title text-sm mb-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
+            </svg>
+            Graph Controls
+        </h4>
+        
+        <div class="flex flex-col gap-2">
+            <button class="btn btn-outline btn-sm" 
+                    hx-post="/metadata/split-view/refresh-graph/"
+                    hx-vals='{"source": "{{ source }}"}'
+                    hx-target="#graph-container"
+                    hx-swap="innerHTML"
+                    hx-indicator=".htmx-indicator">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Refresh
+            </button>
+            
+            <button class="btn btn-accent btn-sm" 
+                    hx-post="/metadata/split-view/toggle-layout/"
+                    hx-vals='{"source": "{{ source }}"}'
+                    hx-target="#graph-container"
+                    hx-swap="innerHTML"
+                    hx-indicator=".htmx-indicator">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                </svg>
+                Layout
+            </button>
+        </div>
+        
+        <!-- Stats using DaisyUI stats -->
+        <div class="stats stats-vertical shadow-inner bg-base-200 mt-3">
+            <div class="stat py-2 px-3">
+                <div class="stat-title text-xs">Nodes</div>
+                <div class="stat-value text-sm">{{ nodes|length }}</div>
+            </div>
+            <div class="stat py-2 px-3">
+                <div class="stat-title text-xs">Edges</div>
+                <div class="stat-value text-sm">{{ edges|length|default:0 }}</div>
+            </div>
+        </div>
+        
+        <!-- Loading indicator -->
+        <div class="htmx-indicator flex items-center justify-center mt-2">
+            <span class="loading loading-spinner loading-sm"></span>
+            <span class="ml-2 text-xs">Loading...</span>
+        </div>
+    </div>
+</div>
+
+<script>
+// Enhanced HTMX interactions with DaisyUI
+document.addEventListener('htmx:afterRequest', function(evt) {
+    if (evt.detail.target && evt.detail.target.id === 'node-details') {
+        // Remove previous highlights
+        document.querySelectorAll('.card').forEach(card => {
+            card.classList.remove('ring-2', 'ring-primary', 'ring-accent');
+        });
+        
+        // Highlight selected node
+        const nodeId = evt.detail.requestConfig.parameters.node_id;
+        const selectedNode = document.querySelector(`[data-node-id="${nodeId}"]`);
+        if (selectedNode) {
+            selectedNode.classList.add('ring-2', 'ring-primary');
+            
+            // Highlight corresponding dataset in table
+            const dataset = selectedNode.dataset.dataset;
+            if (dataset) {
+                highlightDatasetInTable(dataset);
+            }
+        }
+    }
+});
+
+// Add loading states for better UX
+document.addEventListener('htmx:beforeRequest', function(evt) {
+    const trigger = evt.detail.elt;
+    if (trigger.classList.contains('btn')) {
+        trigger.classList.add('loading');
+    }
+});
+
+document.addEventListener('htmx:afterRequest', function(evt) {
+    const trigger = evt.detail.elt;
+    if (trigger && trigger.classList.contains('btn')) {
+        trigger.classList.remove('loading');
+    }
+});
+
+function highlightDatasetInTable(datasetName) {
+    const tables = document.querySelectorAll('#tables-container .card');
+    tables.forEach(table => {
+        table.classList.remove('ring-2', 'ring-accent');
+        const title = table.querySelector('.card-title');
+        if (title && title.textContent.trim() === datasetName) {
+            table.classList.add('ring-2', 'ring-accent');
+            table.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            
+            // Auto-remove highlight
+            setTimeout(() => {
+                table.classList.remove('ring-2', 'ring-accent');
+            }, 3000);
+        }
+    });
+}
+</script> 

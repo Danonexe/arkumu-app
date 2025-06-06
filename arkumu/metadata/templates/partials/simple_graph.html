@@ -1,0 +1,27 @@
+<!-- Simple Graph Visualization -->
+<div class="graph-container w-full h-full relative p-4" id="graph-container"
+     hx-get="/metadata/split-view/graph-data/"
+     hx-trigger="load"
+     hx-swap="innerHTML"
+     hx-indicator="#graph-loading">
+    
+    <div id="graph-loading" class="flex items-center justify-center h-full text-base-content/60">
+        <div class="text-center">
+            <span class="loading loading-spinner loading-md mb-2"></span>
+            <p class="text-sm">Loading graph...</p>
+        </div>
+    </div>
+    
+    <!-- Graph content will be rendered here by JavaScript -->
+    <div id="graph-content" style="display: none;"></div>
+    
+    <!-- Connection Instructions -->
+    <div class="absolute bottom-4 right-4 bg-white p-3 rounded-lg shadow-md border">
+        <h4 class="font-semibold text-sm mb-2">Graph Controls</h4>
+        <div class="flex flex-col gap-2">
+            <button id="fit-graph" class="btn btn-sm btn-outline">Fit to View</button>
+            <button id="toggle-physics" class="btn btn-sm btn-accent">Toggle Physics</button>
+            <button id="toggle-connection-mode" class="btn btn-sm btn-accent">Enable Connections</button>
+        </div>
+    </div>
+</div> 

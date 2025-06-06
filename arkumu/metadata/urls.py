@@ -1,5 +1,5 @@
 from django.urls import path
-from arkumu.metadata.views import dashboard_views, resource_views, triple_views, graph_views, bulk_editor_views, data_discovery_views, data_explorer_views
+from arkumu.metadata.views import dashboard_views, resource_views, triple_views, graph_views, bulk_editor_views, data_discovery_views, data_explorer_views, split_views
 
 app_name = 'metadata'
 
@@ -17,7 +17,7 @@ urlpatterns = [
     path('resources/<uuid:resource_id>/graph/', resource_views.resource_graph, name='resource_graph'),
     
     # Graph visualization
-    path('triple-viewer/', graph_views.triple_viewer_view, name='triple_viewer'),
+    path('dataset-viewer/', graph_views.dataset_viewer_view, name='dataset_viewer'),
     path('tree/data/', graph_views.tree_data_view, name='tree_data'),
     path('tree/bucket/<str:bucket_name>/', graph_views.tree_bucket_content_view, name='tree_bucket_content'),
     path('tree/bucket/<str:bucket_name>/more/', graph_views.tree_bucket_more_view, name='tree_bucket_more'),
@@ -31,7 +31,7 @@ urlpatterns = [
     path('graph/data/', graph_views.graph_data_view, name='graph_data'),
     
     # Bulk editor - Core functionality
-    path('bulk-editor/', bulk_editor_views.bulk_triple_editor, name='bulk_triple_editor'),
+
     path('bulk-editor/list-s3-csv/', bulk_editor_views.list_s3_csv_files, name='list_s3_csv_files'),
     path('bulk-editor/auto-analyze/', bulk_editor_views.auto_analyze_csv, name='auto_analyze_csv'),
     path('bulk-editor/find-matching/', bulk_editor_views.find_matching_resources, name='find_matching_resources'),
@@ -58,7 +58,7 @@ urlpatterns = [
     path('graph-connections/', bulk_editor_views.graph_connections_view, name='graph_connections'),
     path('htmx/datasets/', bulk_editor_views.get_datasets_htmx, name='get_datasets_htmx'),
     path('htmx/dataset/<uuid:dataset_id>/columns/', bulk_editor_views.get_dataset_columns_htmx, name='get_dataset_columns_htmx'),
-    path('htmx/column/<uuid:column_id>/cells/', bulk_editor_views.get_column_cells_htmx, name='get_column_cells_htmx'),
+    path('htmx/column/<str:column_id>/cells/', bulk_editor_views.get_column_cells_htmx, name='get_column_cells_htmx'),
     path('htmx/cell/<uuid:cell_id>/connections/', bulk_editor_views.get_cell_connections_htmx, name='get_cell_connections_htmx'),
     
     # Data Discovery
@@ -69,4 +69,17 @@ urlpatterns = [
     path('data-discovery/unlink-file/', data_discovery_views.unlink_file, name='unlink_file'),
     path('data-discovery/auto-link-all/', data_discovery_views.auto_link_all, name='auto_link_all'),
     path('data-discovery/rescan-s3/', data_discovery_views.rescan_s3_files, name='rescan_s3_files'),
+    
+    # Split Table/Graph View
+    path('split-view/', split_views.split_table_graph_view, name='split_table_graph'),
+    path('split-view/load-source-data/', split_views.load_source_data, name='load_source_data'),
+    path('split-view/table-data/', split_views.get_table_data, name='split_table_data'),
+    path('split-view/dataset-preview/', split_views.get_dataset_preview, name='split_dataset_preview'),
+    path('split-view/all-previews/', split_views.get_all_dataset_previews, name='split_all_previews'),
+    path('split-view/graph-data/', split_views.get_graph_data, name='split_graph_data'),
+    path('split-view/create-connection/', split_views.create_connection, name='split_create_connection'),
+    path('split-view/select-node/', split_views.select_node, name='split_select_node'),
+    path('split-view/refresh-graph/', split_views.refresh_graph, name='split_refresh_graph'),
+    path('split-view/toggle-layout/', split_views.toggle_layout, name='split_toggle_layout'),
+    path('split-view/debug-database/', split_views.debug_database, name='debug_database'),
     ]

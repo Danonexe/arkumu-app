@@ -205,7 +205,7 @@ def full_graph_view(request):
             'links': []
         }
     
-    return render(request, 'triple_viewer.html', {
+    return render(request, 'dataset_viewer.html', {
         'graph_data_json': json.dumps({
             'tree_data': tree_data,
             'graph_data': graph_data
@@ -592,9 +592,9 @@ def tree_cell_details_view(request, cell_id):
         })
 
 @login_required
-def triple_viewer_view(request):
+def dataset_viewer_view(request):
     """Display a hierarchical tree + graph view for exploring RDF data structure."""
-    return render(request, 'triple_viewer.html')
+    return render(request, 'dataset_viewer.html')
 
 @login_required
 def tree_data_view(request):

@@ -1,0 +1,80 @@
+<!-- Node Details Panel with DaisyUI -->
+{% if error %}
+    <div class="alert alert-error">
+        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span>{{ error }}</span>
+    </div>
+{% else %}
+    <div class="flex items-center gap-2 mb-3">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <h5 class="font-semibold text-sm">Node Details</h5>
+    </div>
+    
+    <div class="space-y-3">
+        <!-- Node ID -->
+        <div class="form-control">
+            <label class="label py-1">
+                <span class="label-text text-xs font-medium">ID</span>
+            </label>
+            <div class="text-sm text-base-content/70 font-mono bg-base-200 px-2 py-1 rounded">
+                {{ node_id }}
+            </div>
+        </div>
+        
+        <!-- Node Type -->
+        <div class="form-control">
+            <label class="label py-1">
+                <span class="label-text text-xs font-medium">Type</span>
+            </label>
+            <div class="badge badge-primary badge-md">{{ node_type }}</div>
+        </div>
+        
+        <!-- Dataset -->
+        {% if dataset %}
+        <div class="form-control">
+            <label class="label py-1">
+                <span class="label-text text-xs font-medium">Dataset</span>
+            </label>
+            <div class="text-sm text-base-content/80 bg-base-200 px-2 py-1 rounded">
+                {{ dataset }}
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Actions -->
+        <div class="card-actions justify-center pt-2">
+            <button class="btn btn-outline btn-xs" 
+                    hx-get="/metadata/split-view/node-relationships/"
+                    hx-vals='{"node_id": "{{ node_id }}"}'
+                    hx-target="#node-relationships"
+                    hx-swap="innerHTML"
+                    hx-indicator=".relationship-loading">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                </svg>
+                Relationships
+            </button>
+        </div>
+    </div>
+    
+    <!-- Relationships section -->
+    <div class="divider divider-start text-xs my-3">Connections</div>
+    <div id="node-relationships" class="text-xs">
+        <div class="flex items-center justify-center gap-2 text-base-content/50 py-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+            </svg>
+            <span>Click button to view relationships</span>
+        </div>
+        
+        <!-- Loading indicator for relationships -->
+        <div class="relationship-loading htmx-indicator flex items-center justify-center gap-2 py-2">
+            <span class="loading loading-spinner loading-sm"></span>
+            <span>Loading relationships...</span>
+        </div>
+    </div>
+{% endif %} 

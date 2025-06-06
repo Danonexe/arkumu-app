@@ -20,17 +20,7 @@ from arkumu.metadata.services.metadata_models_mapping import ServiceFactory
 # Set up logger
 logger = logging.getLogger(__name__)
 
-@login_required
-def bulk_triple_editor(request):
-    """Main view for the bulk triple editor interface."""
-    mapping_rules = request.session.get('mapping_rules', [])
-    return render(request, 'bulk_triple_editor.html', {
-        'mapping_rules': mapping_rules
-    })
 
-
-
- 
 
 @login_required
 def find_matching_resources(request):
@@ -1159,9 +1149,9 @@ def service_powered_execution(request):
 
 @login_required
 def semantic_graph_editor(request):
-    """Main view for the semantic graph editor interface."""
-    return render(request, 'semantic_graph_editor.html', {
-        'page_title': 'Semantic Graph Editor'
+    """Dataset table explorer with interactive table view and relationship connections"""
+    return render(request, 'dataset_table_explorer.html', {
+        'page_title': 'Dataset Table Explorer'
     })
 
 @login_required
@@ -1709,11 +1699,20 @@ def get_datasets_htmx(request):
     # Get connection counts for each dataset
     datasets_with_counts = []
     for dataset in dataset_resources:
-        # Count columns connected via hasPart
-        column_count = Triple.objects.filter(
+        # Count ONLY columns connected via hasPart (not rows or other objects)
+        hasPart_triples = Triple.objects.filter(
             subject=dataset,
             predicate__uri="http://purl.org/dc/terms/hasPart"
-        ).count()
+        ).select_related('object')
+        
+        # Filter to only count column resources (exclude rows)
+        column_count = 0
+        for triple in hasPart_triples:
+            obj = triple.object
+            # Only count objects that have '/columns/' in their URI (actual columns)
+            # Exclude rows which have '/rows/' in their URI
+            if '/columns/' in obj.uri:
+                column_count += 1
         
         datasets_with_counts.append({
             'resource': dataset,
@@ -1726,33 +1725,69 @@ def get_datasets_htmx(request):
 
 @login_required  
 def get_dataset_columns_htmx(request, dataset_id):
-    """Get columns for a specific dataset via hasPart relationships."""
+    """Get columns for a specific dataset by analyzing cell URIs."""
     from arkumu.metadata.models.triples import Triple
+    from collections import defaultdict
     
     try:
         dataset = Resource.objects.get(id=dataset_id)
+        logger.info(f"DEBUG: Processing dataset: {dataset.name} - {dataset.uri}")
         
-        # Get columns via hasPart triples
+        # Get all hasPart triples from dataset (these point to cells directly)
         hasPart_triples = Triple.objects.filter(
             subject=dataset,
             predicate__uri="http://purl.org/dc/terms/hasPart"
         ).select_related('object')
         
-        columns_with_counts = []
+        logger.info(f"DEBUG: Found {hasPart_triples.count()} hasPart triples from dataset")
+        
+        # Group cells by column name extracted from URI
+        # URI pattern: .../datasets/{dataset_name}/{column_name}/{row_id}
+        column_groups = defaultdict(list)
+        
         for triple in hasPart_triples:
-            column = triple.object
-            # Only include actual column resources (not rows)
-            if '/columns/' in column.uri:
-                # Count cells connected to this column
-                cell_count = Triple.objects.filter(
-                    subject=column,
-                    predicate__uri="http://purl.org/dc/terms/hasPart"
-                ).count()
-                
-                columns_with_counts.append({
-                    'resource': column,
-                    'cell_count': cell_count
-                })
+            cell = triple.object
+            cell_uri = cell.uri
+            
+            # Extract column name from URI
+            try:
+                uri_parts = cell_uri.split('/')
+                if len(uri_parts) >= 2:
+                    # Get the second-to-last part as column name, last part as row_id
+                    column_name = uri_parts[-2]
+                    row_id = uri_parts[-1]
+                    
+                    # Skip if this looks like a column resource URI or row resource URI
+                    if column_name in ['columns', 'rows']:
+                        continue
+                        
+                    column_groups[column_name].append({
+                        'cell_resource': cell,
+                        'row_id': row_id
+                    })
+            except (IndexError, AttributeError):
+                logger.warning(f"Could not parse column name from URI: {cell_uri}")
+                continue
+        
+        logger.info(f"DEBUG: Extracted {len(column_groups)} columns from cell URIs")
+        
+        # Create column info for template
+        columns_with_counts = []
+        for column_name, cells in column_groups.items():
+            # Create a virtual column resource for the template
+            virtual_column = {
+                'resource': type('obj', (object,), {
+                    'id': f'virtual-column-{column_name}',
+                    'name': column_name,
+                    'uri': f'virtual://{dataset.uri}/columns/{column_name}'
+                })(),
+                'cell_count': len(cells)
+            }
+            columns_with_counts.append(virtual_column)
+            
+            logger.info(f"DEBUG: Column '{column_name}' has {len(cells)} cells")
+        
+        logger.info(f"DEBUG: Final columns_with_counts: {len(columns_with_counts)} columns")
         
         return render(request, 'partials/columns_list.html', {
             'columns': columns_with_counts,
@@ -1760,6 +1795,7 @@ def get_dataset_columns_htmx(request, dataset_id):
         })
         
     except Resource.DoesNotExist:
+        logger.error(f"DEBUG: Dataset not found with ID: {dataset_id}")
         return HttpResponse('<p class="text-red-500">Dataset not found</p>')
 
 @login_required
@@ -1767,6 +1803,69 @@ def get_column_cells_htmx(request, column_id):
     """Get cells for a specific column via hasPart relationships."""
     from arkumu.metadata.models.triples import Triple
     
+    # Check if this is a virtual column ID
+    if column_id.startswith('virtual-column-'):
+        # Extract column name from virtual ID
+        column_name = column_id.replace('virtual-column-', '')
+        
+        # We need to find the dataset to get its cells
+        # For now, we'll search for cells that have this column name in their URI
+        from arkumu.metadata.models.resources import Resource, ResourceType
+        
+        # Find all cells that match this column pattern
+        # Look for resources that have the column name in their URI
+        all_cells = Resource.objects.filter(
+            uri__contains=f'/{column_name}/',
+            resource_type=ResourceType.IRI
+        ).exclude(
+            uri__contains='/columns/'
+        ).exclude(
+            uri__contains='/rows/'
+        )
+        
+        # Filter to only actual cell resources (those with row pattern)
+        cell_resources = []
+        for cell in all_cells:
+            uri_parts = cell.uri.split('/')
+            if len(uri_parts) >= 2:
+                # Check if second-to-last part matches column name
+                if uri_parts[-2] == column_name:
+                    cell_resources.append(cell)
+        
+        cells_with_values = []
+        for cell in cell_resources:
+            # Get the literal value via rdf:value
+            value_triple = Triple.objects.filter(
+                subject=cell,
+                predicate__uri="http://www.w3.org/1999/02/22-rdf-syntax-ns#value"
+            ).select_related('object').first()
+            
+            literal_value = None
+            if value_triple and value_triple.object:
+                literal_value = value_triple.object.value
+                
+            cells_with_values.append({
+                'resource': cell,
+                'literal_value': literal_value,
+                'row_id': cell.uri.split('/')[-1] if cell.uri else 'unknown'
+            })
+        
+        # Sort by row_id for better display
+        cells_with_values.sort(key=lambda x: x['row_id'])
+        
+        # Create a virtual column object for the template
+        virtual_column = type('obj', (object,), {
+            'id': column_id,
+            'name': column_name,
+            'uri': f'virtual://columns/{column_name}'
+        })()
+        
+        return render(request, 'partials/cells_list.html', {
+            'cells': cells_with_values,
+            'column': virtual_column
+        })
+    
+    # Handle regular UUID column IDs
     try:
         column = Resource.objects.get(id=column_id)
         
