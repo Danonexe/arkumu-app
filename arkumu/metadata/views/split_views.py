@@ -857,11 +857,11 @@ def toggle_layout(request):
 
 def _build_comprehensive_source_graph(source, datasets_data):
     """
-    Build a comprehensive graph with ALL datasets and their columns for a source.
-    This loads everything upfront so column clicks can just focus existing nodes.
+    Build a lightweight graph with ONLY source, datasets, and columns.
+    No individual cells or rows - just the structure needed for column highlighting.
     """
-    logger.info(f"COMPREHENSIVE GRAPH: Starting for source={source} with {len(datasets_data)} datasets")
-    print(f"COMPREHENSIVE GRAPH: Starting for source={source} with {len(datasets_data)} datasets")
+    logger.info(f"COMPREHENSIVE GRAPH: Starting lightweight graph for source={source} with {len(datasets_data)} datasets")
+    print(f"COMPREHENSIVE GRAPH: Starting lightweight graph for source={source} with {len(datasets_data)} datasets")
     
     try:
         nodes = []
@@ -872,18 +872,19 @@ def _build_comprehensive_source_graph(source, datasets_data):
             'id': f'source_{source}',
             'label': source,
             'type': 'source',
-            'color': {
-                'background': '#1e40af',
-                'border': '#1e3a8a',
-                'highlight': {'background': '#3b82f6', 'border': '#1e40af'}
-            },
+            'color': '#1e40af',
             'shape': 'star',
-            'size': 35,
-            'font': {'size': 16, 'color': '#ffffff', 'bold': True}
+            'size': 35
         })
         
-        # Get all datasets and their columns
-        for dataset_info in datasets_data:
+        # Limit datasets to prevent graph explosion
+        limited_datasets = datasets_data[:20]  # Max 20 datasets
+        if len(datasets_data) > 20:
+            logger.info(f"COMPREHENSIVE GRAPH: Limited datasets from {len(datasets_data)} to 20")
+            print(f"COMPREHENSIVE GRAPH: Limited datasets from {len(datasets_data)} to 20")
+        
+        # Process each dataset
+        for dataset_info in limited_datasets:
             dataset_name = dataset_info['name']
             
             # Dataset node
@@ -892,15 +893,10 @@ def _build_comprehensive_source_graph(source, datasets_data):
                 'id': dataset_id,
                 'label': dataset_name,
                 'type': 'dataset',
-                'color': {
-                    'background': '#2563eb',
-                    'border': '#1d4ed8',
-                    'highlight': {'background': '#3b82f6', 'border': '#2563eb'}
-                },
+                'color': '#2563eb',
                 'shape': 'diamond',
                 'size': 28,
-                'cell_count': dataset_info.get('cell_count', 0),
-                'font': {'size': 14, 'color': '#ffffff', 'bold': True}
+                'cell_count': dataset_info.get('cell_count', 0)
             })
             
             # Link source to dataset
@@ -908,51 +904,49 @@ def _build_comprehensive_source_graph(source, datasets_data):
                 'from': f'source_{source}',
                 'to': dataset_id,
                 'label': 'contains',
-                'color': {'color': '#1e40af', 'opacity': 0.8},
-                'width': 3
+                'color': '#1e40af'
             })
             
-            # Get column information for this dataset
+            # Get ONLY column names (no cells or rows)
             logger.info(f"COMPREHENSIVE GRAPH: Getting columns for dataset {dataset_name}")
-            print(f"COMPREHENSIVE GRAPH: Getting columns for dataset {dataset_name}")
             
-            # Query for column information by looking at cell URIs
+            # Query for column information by looking at unique column names from cell URIs
+            # Use DISTINCT and LIMIT to get only unique column names efficiently
             cell_uris = Resource.objects.filter(
                 source=source,
                 uri__contains=f'/datasets/{dataset_name}/',
                 resource_type=ResourceType.IRI
             ).exclude(
                 Q(uri__contains='/columns/') | Q(uri__contains='/rows/')
-            ).values_list('uri', flat=True)[:100]  # Limit for performance
+            ).values_list('uri', flat=True)[:50]  # Only sample 50 cells to extract column names
             
-            # Extract unique column names from cell URIs
+            # Extract unique column names
             columns = set()
             for uri in cell_uris:
                 parts = uri.split('/')
                 if len(parts) >= 3:
                     column_name = parts[-2]  # Second to last part is column name
                     columns.add(column_name)
+                    
+                # Limit columns per dataset to prevent explosion
+                if len(columns) >= 20:  # Max 20 columns per dataset
+                    break
             
             logger.info(f"COMPREHENSIVE GRAPH: Found {len(columns)} columns for {dataset_name}")
             print(f"COMPREHENSIVE GRAPH: Found {len(columns)} columns for {dataset_name}")
             
-            # Add column nodes
+            # Add column nodes (using unique IDs per dataset)
             for column_name in sorted(columns):
-                column_id = f'column_{dataset_name}_{column_name}'
+                column_id = f'column_{dataset_name}_{column_name}'  # Unique ID per dataset
                 nodes.append({
                     'id': column_id,
                     'label': column_name,
                     'type': 'column',
-                    'color': {
-                        'background': '#059669',
-                        'border': '#047857',
-                        'highlight': {'background': '#10b981', 'border': '#059669'}
-                    },
+                    'color': '#059669',
                     'shape': 'box',
-                    'size': 22,
+                    'size': 20,
                     'dataset': dataset_name,
-                    'column': column_name,
-                    'font': {'size': 12, 'color': '#ffffff'}
+                    'column': column_name
                 })
                 
                 # Link dataset to column
@@ -960,27 +954,26 @@ def _build_comprehensive_source_graph(source, datasets_data):
                     'from': dataset_id,
                     'to': column_id,
                     'label': 'hasColumn',
-                    'color': {'color': '#2563eb', 'opacity': 0.6},
-                    'width': 2
+                    'color': '#2563eb'
                 })
         
         result = {
             'nodes': nodes,
             'links': links,
             'source': source,
-            'dataset_count': len(datasets_data),
+            'dataset_count': len(limited_datasets),
             'total_nodes': len(nodes),
             'total_links': len(links)
         }
         
-        logger.info(f"COMPREHENSIVE GRAPH: Completed with {len(nodes)} nodes, {len(links)} links")
-        print(f"COMPREHENSIVE GRAPH: Completed with {len(nodes)} nodes, {len(links)} links")
+        logger.info(f"COMPREHENSIVE GRAPH: Completed lightweight graph with {len(nodes)} nodes, {len(links)} links")
+        print(f"COMPREHENSIVE GRAPH: Completed lightweight graph with {len(nodes)} nodes, {len(links)} links")
         
         return result
         
     except Exception as e:
-        logger.error(f"COMPREHENSIVE GRAPH: Error building graph: {e}", exc_info=True)
-        print(f"COMPREHENSIVE GRAPH: Error building graph: {e}")
+        logger.error(f"COMPREHENSIVE GRAPH: Error building lightweight graph: {e}", exc_info=True)
+        print(f"COMPREHENSIVE GRAPH: Error building lightweight graph: {e}")
         return {
             'nodes': [],
             'links': [],
