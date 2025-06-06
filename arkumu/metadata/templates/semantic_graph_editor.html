@@ -350,9 +350,6 @@ function updateGraph() {
     
     node.exit().remove();
     
-    // Add zoom controls (like triple_viewer.html)
-    addZoomControls();
-    
     // Restart simulation
     simulation.on("tick", ticked);
     simulation.alpha(0.3).restart();
@@ -863,95 +860,7 @@ function getSimpleNodeSize(type) {
     return baseSize[type] || 8;
 }
 
-function addZoomControls() {
-    // Add zoom controls (like triple_viewer.html)
-    if (svg.select('.zoom-controls').node()) return; // Already added
-    
-    const zoomControls = svg.append("g")
-        .attr("class", "zoom-controls")
-        .attr("transform", `translate(${width - 60}, 10)`);
-    
-    // Zoom in button
-    const zoomInBtn = zoomControls.append("g")
-        .attr("class", "zoom-btn")
-        .attr("cursor", "pointer")
-        .on("click", function() {
-            svg.transition().duration(300).call(
-                zoom.scaleBy, 1.5
-            );
-        });
-    
-    zoomInBtn.append("rect")
-        .attr("width", 30)
-        .attr("height", 30)
-        .attr("rx", 4)
-        .attr("fill", "#ffffff")
-        .attr("stroke", "#d1d5db")
-        .attr("stroke-width", 1);
-    
-    zoomInBtn.append("text")
-        .attr("x", 15)
-        .attr("y", 20)
-        .attr("text-anchor", "middle")
-        .attr("class", "text-sm font-bold")
-        .attr("fill", "#374151")
-        .text("+");
-    
-    // Zoom out button
-    const zoomOutBtn = zoomControls.append("g")
-        .attr("class", "zoom-btn")
-        .attr("cursor", "pointer")
-        .attr("transform", "translate(0, 35)")
-        .on("click", function() {
-            svg.transition().duration(300).call(
-                zoom.scaleBy, 1 / 1.5
-            );
-        });
-    
-    zoomOutBtn.append("rect")
-        .attr("width", 30)
-        .attr("height", 30)
-        .attr("rx", 4)
-        .attr("fill", "#ffffff")
-        .attr("stroke", "#d1d5db")
-        .attr("stroke-width", 1);
-    
-    zoomOutBtn.append("text")
-        .attr("x", 15)
-        .attr("y", 20)
-        .attr("text-anchor", "middle")
-        .attr("class", "text-sm font-bold")
-        .attr("fill", "#374151")
-        .text("−");
-    
-    // Reset zoom button
-    const resetBtn = zoomControls.append("g")
-        .attr("class", "zoom-btn")
-        .attr("cursor", "pointer")
-        .attr("transform", "translate(0, 70)")
-        .on("click", function() {
-            svg.transition().duration(500).call(
-                zoom.transform,
-                d3.zoomIdentity
-            );
-        });
-    
-    resetBtn.append("rect")
-        .attr("width", 30)
-        .attr("height", 30)
-        .attr("rx", 4)
-        .attr("fill", "#ffffff")
-        .attr("stroke", "#d1d5db")
-        .attr("stroke-width", 1);
-    
-    resetBtn.append("text")
-        .attr("x", 15)
-        .attr("y", 20)
-        .attr("text-anchor", "middle")
-        .attr("class", "text-xs font-bold")
-        .attr("fill", "#374151")
-        .text("⌂");
-}
+
 
 function selectNode(nodeData) {
     if (nodeData.type === 'root') {
