@@ -1,5 +1,6 @@
 <!--
 This template uses HTMX's Out-of-Band swap feature to load datasets.
+Now also loads comprehensive graph with all columns.
 -->
 
 <!-- Table content area -->
@@ -25,19 +26,39 @@ This template uses HTMX's Out-of-Band swap feature to load datasets.
     {% endif %}
 </div>
 
-<!-- Graph container empty state -->
+<!-- Graph container with comprehensive graph -->
 <div id="graph-container" hx-swap-oob="innerHTML">
-    <div class="flex h-full flex-col items-center justify-center text-center">
-        <div class="max-w-md">
-            <svg class="w-16 h-16 mx-auto text-base-content/30 mb-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M9 6H20M9 12H20M9 18H20M5 6V6.01M5 12V12.01M5 18V18.01" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-            <h3 class="text-lg font-medium">Select a Dataset</h3>
-            <p class="text-sm text-base-content/70 mt-2">
-                Click a dataset from the table to view its graph visualization.
-            </p>
-        </div>
+    <!-- Debug info -->
+    <div class="bg-yellow-100 p-2 text-xs">
+        <h4 class="font-bold">Template Debug:</h4>
+        <ul>
+            <li>graph_data exists: {{ graph_data|yesno:"Yes,No" }}</li>
+            <li>graph_data.nodes exists: {{ graph_data.nodes|yesno:"Yes,No" }}</li>
+            <li>nodes count: {{ graph_data.nodes|length|default:"N/A" }}</li>
+            <li>source: {{ source|default:"N/A" }}</li>
+        </ul>
     </div>
+    
+    {% if graph_data and graph_data.nodes %}
+        {% include 'partials/graph_visualization.html' with graph_data=graph_data source=source layout="force" %}
+    {% else %}
+        <div class="flex h-full flex-col items-center justify-center text-center">
+            <div class="max-w-md">
+                <svg class="w-16 h-16 mx-auto text-base-content/30 mb-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M9 6H20M9 12H20M9 18H20M5 6V6.01M5 12V12.01M5 18V18.01" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <h3 class="text-lg font-medium">Loading Graph...</h3>
+                <p class="text-sm text-base-content/70 mt-2">
+                    Graph visualization will appear here when source data is loaded.
+                </p>
+                {% if error %}
+                    <div class="alert alert-error mt-4">
+                        <span>{{ error }}</span>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
 </div>
 
 <!-- We need an empty primary content so the response doesn't replace anything directly -->

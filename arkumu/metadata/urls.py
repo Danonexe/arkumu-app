@@ -79,4 +79,6 @@ urlpatterns = [
     path('split-view/debug-database/', split_views.debug_database, name='debug_database'),
     path('split-view/highlight-column/', split_views.highlight_column_in_graph, name='highlight_column'),
     path('split-view/highlight-cell/', split_views.highlight_cell_in_graph, name='highlight_cell'),
+    path('split-view/refresh-graph/', split_views.refresh_graph, name='refresh_graph'),
+    path('split-view/toggle-layout/', split_views.toggle_layout, name='toggle_layout'),
     ]

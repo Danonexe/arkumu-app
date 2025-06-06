@@ -10,6 +10,28 @@
         </div>
     </div>
     {% else %}
+    <!-- Debug Info - Only visible during development -->
+    {% if graph_data.debug_info or highlighted_column %}
+    <div class="bg-base-300 p-2 text-xs rounded-lg mb-2">
+        <h4 class="font-bold">Debug Info:</h4>
+        <ul class="list-disc pl-4">
+            {% if graph_data.debug_info %}
+                <li>Source: {{ graph_data.debug_info.source }}</li>
+                <li>Dataset: {{ graph_data.debug_info.dataset }}</li>
+                <li>Column Index: {{ graph_data.debug_info.column_index }}</li>
+                <li>Column Name: {{ graph_data.debug_info.column_name }}</li>
+                <li>Timestamp: {{ graph_data.debug_info.timestamp }}</li>
+            {% endif %}
+            {% if highlighted_column %}
+                <li>Highlighted Column: {{ highlighted_column }}</li>
+            {% endif %}
+            <li>Nodes Count: {{ graph_data.nodes|length }}</li>
+            <li>Links Count: {{ graph_data.links|length }}</li>
+            <li>Layout: {{ layout|default:"force" }}</li>
+        </ul>
+    </div>
+    {% endif %}
+    
     <div class="flex flex-row h-full gap-4">
         <!-- Graph visualization -->
         <div class="flex-1 h-full relative" id="graph-vis-container">
@@ -26,131 +48,342 @@
     </div>
     
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
+        // Remove DOMContentLoaded since HTMX loads content dynamically
+        console.log('Graph visualization script starting...');
+        console.log('Graph data nodes:', {{ graph_data.nodes|length }});
+        console.log('Graph data links:', {{ graph_data.links|length }});
+        
+        // Function to initialize the graph
+        function initializeGraph() {
+            console.log('Initializing graph...');
+            
             // Create the network visualization
             const container = document.getElementById('graph-vis');
             const nodeDetailsContent = document.getElementById('node-details-content');
             
-            // Prepare the data
-            const nodes = new vis.DataSet({{ graph_data.nodes|safe }});
-            const edges = new vis.DataSet({{ graph_data.links|safe }});
+            console.log('Container found:', container);
+            console.log('Node details found:', nodeDetailsContent);
             
-            // Create the network
-            const data = {
-                nodes: nodes,
-                edges: edges
-            };
+            if (!container) {
+                console.error('Graph container not found!');
+                return;
+            }
             
-            // Configuration options
-            const options = {
-                nodes: {
-                    shape: 'dot',
-                    size: 16,
-                    font: {
-                        size: 12,
-                        face: 'Roboto, system-ui, sans-serif'
+            try {
+                // Prepare the data
+                const nodesData = {{ graph_data.nodes|safe }};
+                const linksData = {{ graph_data.links|safe }};
+                
+                console.log('Raw nodes data:', nodesData);
+                console.log('Raw links data:', linksData);
+                
+                const nodes = new vis.DataSet(nodesData);
+                const edges = new vis.DataSet(linksData);
+                
+                console.log('Vis.js DataSets created - nodes:', nodes.length, 'edges:', edges.length);
+                
+                // Create the network
+                const data = {
+                    nodes: nodes,
+                    edges: edges
+                };
+                
+                // Configuration options
+                const options = {
+                    nodes: {
+                        shape: 'dot',
+                        size: 20,
+                        font: {
+                            size: 14,
+                            color: '#333333',
+                            face: 'Inter, system-ui, sans-serif',
+                            strokeWidth: 2,
+                            strokeColor: '#ffffff'
+                        },
+                        borderWidth: 3,
+                        shadow: {
+                            enabled: true,
+                            color: 'rgba(0,0,0,0.2)',
+                            size: 8,
+                            x: 2,
+                            y: 2
+                        },
+                        chosen: {
+                            node: function(values, id, selected, hovering) {
+                                values.size = 25;
+                                values.borderWidth = 4;
+                            }
+                        }
                     },
-                    borderWidth: 2,
-                    shadow: true
-                },
-                edges: {
-                    width: 1.5,
-                    shadow: true,
-                    smooth: {
-                        type: 'continuous'
+                    edges: {
+                        width: 2,
+                        shadow: {
+                            enabled: true,
+                            color: 'rgba(0,0,0,0.1)',
+                            size: 4,
+                            x: 1,
+                            y: 1
+                        },
+                        smooth: {
+                            enabled: true,
+                            type: 'dynamic',
+                            roundness: 0.5
+                        },
+                        font: {
+                            size: 11,
+                            color: '#666666',
+                            face: 'Inter, system-ui, sans-serif',
+                            strokeWidth: 1,
+                            strokeColor: '#ffffff',
+                            align: 'horizontal'
+                        },
+                        arrows: {
+                            to: {
+                                enabled: true,
+                                scaleFactor: 0.8,
+                                type: 'arrow'
+                            }
+                        },
+                        color: {
+                            color: '#848484',
+                            highlight: '#2563eb',
+                            hover: '#2563eb',
+                            inherit: false,
+                            opacity: 0.8
+                        }
                     },
-                    font: {
-                        size: 10,
-                        face: 'Roboto, system-ui, sans-serif',
-                        align: 'middle'
+                    physics: {
+                        enabled: true,
+                        stabilization: {
+                            enabled: true,
+                            iterations: 100,
+                            updateInterval: 25
+                        },
+                        barnesHut: {
+                            gravitationalConstant: -3000,
+                            centralGravity: 0.3,
+                            springLength: 120,
+                            springConstant: 0.04,
+                            damping: 0.15,
+                            avoidOverlap: 0.2
+                        },
+                        maxVelocity: 25,
+                        minVelocity: 0.75,
+                        timestep: 0.5
+                    },
+                    {% if layout == 'hierarchical' %}
+                    layout: {
+                        hierarchical: {
+                            enabled: true,
+                            direction: 'UD',
+                            sortMethod: 'directed',
+                            levelSeparation: 200,
+                            nodeSpacing: 150,
+                            treeSpacing: 200,
+                            blockShifting: true,
+                            edgeMinimization: true,
+                            parentCentralization: true
+                        }
+                    },
+                    physics: {
+                        enabled: false
+                    },
+                    {% endif %}
+                    interaction: {
+                        hover: true,
+                        hoverConnectedEdges: true,
+                        selectConnectedEdges: false,
+                        tooltipDelay: 300,
+                        navigationButtons: true,
+                        keyboard: {
+                            enabled: true,
+                            speed: {x: 10, y: 10, zoom: 0.02},
+                            bindToWindow: false
+                        },
+                        zoomView: true,
+                        dragView: true,
+                        dragNodes: true,
+                        multiselect: false
+                    },
+                    configure: {
+                        enabled: false
                     }
-                },
-                physics: {
-                    stabilization: true,
-                    barnesHut: {
-                        gravitationalConstant: -2000,
-                        centralGravity: 0.1,
-                        springLength: 150,
-                        springConstant: 0.04,
-                        damping: 0.09
-                    }
-                },
-                interaction: {
-                    hover: true,
-                    tooltipDelay: 200,
-                    navigationButtons: true,
-                    keyboard: true
-                }
-            };
-            
-            // Initialize the network
-            const network = new vis.Network(container, data, options);
-            
-            // Store a reference to the network on the container for external access
-            container.__vis_network__ = network;
-            
-            // Handle click events to show node details
-            network.on("click", function(params) {
-                if (params.nodes.length > 0) {
-                    const nodeId = params.nodes[0];
-                    const node = nodes.get(nodeId);
-                    
-                    // Update details panel
-                    let detailsHTML = `
-                        <div class="space-y-2">
-                            <div class="flex items-center gap-2">
-                                <div class="w-3 h-3 rounded-full" style="background-color: ${node.color}"></div>
-                                <span class="font-medium">${node.label}</span>
-                            </div>
-                            <div class="p-2 bg-base-100 rounded border border-base-300">
-                                <p><span class="font-semibold">Type:</span> ${node.type}</p>
-                    `;
-                    
-                    // Add different details based on node type
-                    if (node.type === 'dataset') {
-                        detailsHTML += `
-                            <p><span class="font-semibold">Rows:</span> ${node.row_count || 'Unknown'}</p>
-                            <p><span class="font-semibold">Columns:</span> ${node.column_count || 'Unknown'}</p>
+                };
+                
+                console.log('Creating vis.js network...');
+                
+                // Initialize the network
+                const network = new vis.Network(container, data, options);
+                
+                console.log('Vis.js network created successfully!');
+                
+                // Store a reference to the network on the container for external access
+                container.__vis_network__ = network;
+                
+                // Handle click events to show node details
+                network.on("click", function(params) {
+                    if (params.nodes.length > 0) {
+                        const nodeId = params.nodes[0];
+                        const node = nodes.get(nodeId);
+                        
+                        // Update details panel
+                        let detailsHTML = `
+                            <div class="space-y-2">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-3 h-3 rounded-full" style="background-color: ${node.color}"></div>
+                                    <span class="font-medium">${node.label}</span>
+                                </div>
+                                <div class="p-2 bg-base-100 rounded border border-base-300">
+                                    <p><span class="font-semibold">Type:</span> ${node.type}</p>
                         `;
-                    } else if (node.type === 'cell') {
+                        
+                        // Add different details based on node type
+                        if (node.type === 'dataset') {
+                            detailsHTML += `
+                                <p><span class="font-semibold">Rows:</span> ${node.row_count || 'Unknown'}</p>
+                                <p><span class="font-semibold">Columns:</span> ${node.column_count || 'Unknown'}</p>
+                            `;
+                        } else if (node.type === 'cell') {
+                            detailsHTML += `
+                                <p><span class="font-semibold">Value:</span> ${node.value || ''}</p>
+                            `;
+                        }
+                        
                         detailsHTML += `
-                            <p><span class="font-semibold">Value:</span> ${node.value || ''}</p>
+                                </div>
+                                <div class="text-xs text-base-content/60 mt-2">
+                                    Node ID: ${nodeId}
+                                </div>
+                            </div>
                         `;
+                        
+                        nodeDetailsContent.innerHTML = detailsHTML;
+                    } else {
+                        // No node selected
+                        nodeDetailsContent.innerHTML = '<p class="text-base-content/60">Click on a node to see details</p>';
                     }
+                });
+                
+                // Highlight specific nodes if requested
+                {% if highlighted_column %}
+                const highlightedColumnId = 'column_{{ highlighted_column }}';
+                console.log("Highlighting column node:", highlightedColumnId);
+                
+                // Find the node in the dataset to verify it exists
+                const columnNode = nodes.get(highlightedColumnId);
+                if (columnNode) {
+                    console.log("Found column node to highlight:", columnNode);
                     
-                    detailsHTML += `
-                            </div>
-                            <div class="text-xs text-base-content/60 mt-2">
-                                Node ID: ${nodeId}
-                            </div>
-                        </div>
-                    `;
+                    // Select the node
+                    network.selectNodes([highlightedColumnId]);
                     
-                    nodeDetailsContent.innerHTML = detailsHTML;
+                    // Focus on the node with animation
+                    network.focus(highlightedColumnId, {
+                        scale: 1.2,
+                        animation: {
+                            duration: 1000,
+                            easingFunction: 'easeInOutQuad'
+                        }
+                    });
+                    
+                    // Add a border to make it more visible
+                    nodes.update({
+                        id: highlightedColumnId,
+                        borderWidth: 3,
+                        borderWidthSelected: 5,
+                        color: {
+                            border: '#ff0000',
+                            background: '#ff5733',
+                            highlight: {
+                                border: '#ff0000',
+                                background: '#ff5733'
+                            }
+                        }
+                    });
+                    
+                    // Also highlight connected cells
+                    const connectedEdges = network.getConnectedEdges(highlightedColumnId);
+                    const connectedNodes = network.getConnectedNodes(highlightedColumnId);
+                    
+                    console.log("Connected edges:", connectedEdges);
+                    console.log("Connected nodes:", connectedNodes);
+                    
+                    // Update the color of connected nodes
+                    connectedNodes.forEach(nodeId => {
+                        const node = nodes.get(nodeId);
+                        if (node && node.type === 'cell') {
+                            nodes.update({
+                                id: nodeId,
+                                color: {
+                                    border: '#ff9966',
+                                    background: '#ff9966',
+                                }
+                            });
+                        }
+                    });
                 } else {
-                    // No node selected
-                    nodeDetailsContent.innerHTML = '<p class="text-base-content/60">Click on a node to see details</p>';
+                    console.error("Could not find column node:", highlightedColumnId);
+                    console.log("Available nodes:", nodes.getIds());
                 }
-            });
+                {% endif %}
+                
+                {% if highlighted_row %}
+                const highlightedRowId = 'row_{{ highlighted_row }}';
+                network.selectNodes([highlightedRowId], true); // true for append selection
+                {% endif %}
+            } catch (error) {
+                console.error('Error creating network:', error);
+            }
+        }
+        
+        // Check if vis.js is available
+        if (typeof vis !== 'undefined') {
+            console.log('Vis.js is available, initializing graph...');
+            initializeGraph();
+        } else {
+            console.log('Vis.js not available, attempting to load...');
             
-            // Highlight specific nodes if requested
-            {% if highlighted_column %}
-            const highlightedColumnId = 'column_{{ highlighted_column }}';
-            network.selectNodes([highlightedColumnId]);
-            network.focus(highlightedColumnId, {
-                scale: 1.2,
-                animation: {
-                    duration: 1000,
-                    easingFunction: 'easeInOutQuad'
-                }
-            });
-            {% endif %}
-            
-            {% if highlighted_row %}
-            const highlightedRowId = 'row_{{ highlighted_row }}';
-            network.selectNodes([highlightedRowId], true); // true for append selection
-            {% endif %}
-        });
+            // Check if vis.js script is already in the page
+            const existingScript = document.querySelector('script[src*="vis-network"]');
+            if (existingScript) {
+                console.log('Vis.js script found, waiting for it to load...');
+                // Wait for the script to load
+                let attempts = 0;
+                const checkVis = setInterval(function() {
+                    attempts++;
+                    if (typeof vis !== 'undefined') {
+                        console.log('Vis.js loaded after', attempts, 'attempts');
+                        clearInterval(checkVis);
+                        initializeGraph();
+                    } else if (attempts > 50) { // 5 seconds timeout
+                        console.error('Vis.js failed to load after 5 seconds');
+                        clearInterval(checkVis);
+                        // Show error message in the graph container
+                        const container = document.getElementById('graph-vis');
+                        if (container) {
+                            container.innerHTML = '<div class="alert alert-error p-4"><h3>Graph Library Loading Error</h3><p>Failed to load vis.js library. Please refresh the page.</p></div>';
+                        }
+                    }
+                }, 100);
+            } else {
+                console.log('Vis.js script not found, loading dynamically...');
+                // Dynamically load vis.js
+                const script = document.createElement('script');
+                script.src = 'https://unpkg.com/vis-network@9.1.2/dist/vis-network.min.js';
+                script.onload = function() {
+                    console.log('Vis.js loaded dynamically');
+                    initializeGraph();
+                };
+                script.onerror = function() {
+                    console.error('Failed to load vis.js dynamically');
+                    const container = document.getElementById('graph-vis');
+                    if (container) {
+                        container.innerHTML = '<div class="alert alert-error p-4"><h3>Graph Library Loading Error</h3><p>Failed to load vis.js library. Please check your internet connection.</p></div>';
+                    }
+                };
+                document.head.appendChild(script);
+            }
+        }
     </script>
     {% endif %}
 </div>

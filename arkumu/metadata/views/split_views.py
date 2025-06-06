@@ -1,10 +1,12 @@
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
-from django.http import JsonResponse, HttpResponseBadRequest
+from django.http import JsonResponse, HttpResponseBadRequest, HttpResponse
 from django.db.models import Q, Count, Prefetch
 from django.core.cache import cache
 import logging
 from collections import defaultdict
+from datetime import datetime
+import traceback
 
 from arkumu.metadata.models.resource import Resource, ResourceType
 from arkumu.metadata.models.triples import Triple
@@ -311,41 +313,48 @@ def _build_single_dataset_graph_data_optimized(source, dataset_name):
 
 @login_required
 def load_source_data(request):
-    """HTMX endpoint to load source data."""
+    """HTMX endpoint to load source data with comprehensive graph."""
     source = request.GET.get('source', '')
+    
+    logger.info(f"LOAD SOURCE: Loading comprehensive data for source={source}")
+    print(f"LOAD SOURCE: Loading comprehensive data for source={source}")
     
     if not source:
         empty_response = render(request, 'partials/empty_state.html')
         empty_response['HX-Trigger'] = 'sourceDataLoaded'
-        empty_response['Content-Type'] = 'text/html'
         return empty_response
     
-    # Use optimized dataset fetching
-    datasets_data = _get_all_datasets_for_source_optimized(source)
-    
-    # Build simple graph nodes
-    graph_nodes = []
-    for dataset in datasets_data:
-        graph_nodes.append({
-            'id': f"dataset_{dataset['name']}",
-            'label': dataset['name'],
-            'type': 'dataset',
-            'cell_count': dataset.get('cell_count', 0)
-        })
+    try:
+        # Get all datasets for this source
+        datasets_data = _get_all_datasets_for_source_optimized(source)
+        logger.info(f"LOAD SOURCE: Found {len(datasets_data)} datasets")
+        print(f"LOAD SOURCE: Found {len(datasets_data)} datasets")
         
-    # Don't generate previews here - load them on demand
-    cached_data = {
-        'source': source,
-        'datasets': datasets_data,
-        'graph_nodes': graph_nodes,
-        'graph_edges': []
-    }
-    
-    # Use OOB swaps with an empty primary response
-    response = render(request, 'partials/source_data.html', cached_data)
-    response['HX-Trigger'] = 'sourceDataLoaded'
-    response['Content-Type'] = 'text/html'
-    return response
+        # Build comprehensive graph with ALL datasets and columns
+        comprehensive_graph = _build_comprehensive_source_graph(source, datasets_data)
+        logger.info(f"LOAD SOURCE: Built graph with {len(comprehensive_graph['nodes'])} nodes, {len(comprehensive_graph['links'])} links")
+        print(f"LOAD SOURCE: Built graph with {len(comprehensive_graph['nodes'])} nodes, {len(comprehensive_graph['links'])} links")
+        
+        # Prepare data for templates
+        cached_data = {
+            'source': source,
+            'datasets': datasets_data,
+            'graph_data': comprehensive_graph
+        }
+        
+        # Use OOB swaps to update both table and graph
+        response = render(request, 'partials/source_data.html', cached_data)
+        response['HX-Trigger'] = 'sourceDataLoaded'
+        return response
+        
+    except Exception as e:
+        logger.error(f"LOAD SOURCE: Error loading source data: {e}", exc_info=True)
+        print(f"LOAD SOURCE: Error loading source data: {e}")
+        
+        error_response = render(request, 'partials/empty_state.html', {
+            'error': f"Error loading source data: {str(e)}"
+        })
+        return error_response
 
 
 @login_required
@@ -468,43 +477,99 @@ def debug_database(request):
 @login_required
 def highlight_column_in_graph(request):
     """
-    HTMX endpoint to update the graph visualization with a highlighted column.
-    This allows synchronization between table and graph views.
+    Simple HTMX endpoint to focus a column in the already-loaded comprehensive graph.
+    No need to rebuild the graph - just focus the existing node.
     """
     source = request.GET.get('source')
-    dataset = request.GET.get('dataset')
-    column_index = request.GET.get('column')
+    dataset = request.GET.get('dataset') 
+    column_name = request.GET.get('column_name')  # Use actual column name instead of index
     
-    if not all([source, dataset, column_index]):
-        return JsonResponse({'error': 'Missing required parameters'}, status=400)
+    logger.info(f"COLUMN FOCUS: Request for source={source}, dataset={dataset}, column={column_name}")
+    print(f"COLUMN FOCUS: Request for source={source}, dataset={dataset}, column={column_name}")
+    
+    if not all([source, dataset, column_name]):
+        error_msg = f"Missing parameters: source={source}, dataset={dataset}, column={column_name}"
+        logger.error(f"COLUMN FOCUS ERROR: {error_msg}")
+        print(f"COLUMN FOCUS ERROR: {error_msg}")
+        
+        # Return a simple JavaScript command to show the error
+        return HttpResponse(f"""
+        <script>
+            console.error('Column focus error: {error_msg}');
+            alert('Error: {error_msg}');
+        </script>
+        """)
     
     try:
-        # Convert to integer if it's passed as a string index
-        column_index = int(column_index) if column_index and column_index.isdigit() else column_index
+        # Build the column ID based on our comprehensive graph structure
+        column_id = f'column_{dataset}_{column_name}'
         
-        # Get preview data to find actual column name
-        preview_data = _get_dataset_preview_optimized(source, dataset)
+        logger.info(f"COLUMN FOCUS: Focusing on column_id={column_id}")
+        print(f"COLUMN FOCUS: Focusing on column_id={column_id}")
         
-        # Map index to actual column name if needed
-        if isinstance(column_index, int) and preview_data['colHeaders']:
-            if column_index < len(preview_data['colHeaders']):
-                column = preview_data['colHeaders'][column_index]
-            else:
-                column = f"column_{column_index}"
-        else:
-            column = column_index
+        # Return a JavaScript command to focus the node in the existing graph
+        focus_script = f"""
+        <script>
+            console.log('Focusing on column: {column_id}');
+            
+            // Get the existing network
+            const graphContainer = document.getElementById('graph-vis');
+            if (graphContainer && graphContainer.__vis_network__) {{
+                const network = graphContainer.__vis_network__;
+                
+                // Try to focus on the column node
+                try {{
+                    network.selectNodes(['{column_id}']);
+                    network.focus('{column_id}', {{
+                        scale: 1.5,
+                        animation: {{
+                            duration: 1000,
+                            easingFunction: 'easeInOutQuad'
+                        }}
+                    }});
+                    
+                    console.log('Successfully focused on column: {column_id}');
+                    
+                    // Update node details
+                    const nodeDetailsContent = document.getElementById('node-details-content');
+                    if (nodeDetailsContent) {{
+                        nodeDetailsContent.innerHTML = `
+                            <div class="space-y-2">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                                    <span class="font-medium">{column_name}</span>
+                                </div>
+                                <div class="p-2 bg-base-100 rounded border border-base-300">
+                                    <p><span class="font-semibold">Type:</span> Column</p>
+                                    <p><span class="font-semibold">Dataset:</span> {dataset}</p>
+                                    <p><span class="font-semibold">Source:</span> {source}</p>
+                                </div>
+                            </div>
+                        `;
+                    }}
+                    
+                }} catch (error) {{
+                    console.error('Error focusing on node:', error);
+                    console.log('Available node IDs:', network.body.data.nodes.getIds());
+                }}
+            }} else {{
+                console.error('Graph network not found');
+            }}
+        </script>
+        """
         
-        # Build graph data with column highlighting
-        graph_data = _build_graph_with_highlight(source, dataset, highlight_column=column)
+        return HttpResponse(focus_script)
         
-        # Return just the graph visualization partial
-        return render(request, 'partials/graph_visualization.html', {
-            'graph_data': graph_data,
-            'highlighted_column': column
-        })
     except Exception as e:
-        logger.error(f"Error highlighting column in graph: {e}")
-        return JsonResponse({'error': str(e)}, status=500)
+        logger.error(f"COLUMN FOCUS: Error focusing column: {e}", exc_info=True)
+        print(f"COLUMN FOCUS: Error focusing column: {e}")
+        
+        return HttpResponse(f"""
+        <script>
+            console.error('Column focus exception: {str(e)}');
+            alert('Error focusing column: {str(e)}');
+        </script>
+        """)
 
 
 @login_required
@@ -569,6 +634,7 @@ def _build_graph_with_highlight(source, dataset_name, highlight_column=None, hig
     Build graph data with highlighting for specific columns or rows.
     This extends the _build_single_dataset_graph_data_optimized function.
     """
+    logger.info(f"BUILD GRAPH: Starting for {source}/{dataset_name} with highlight_column={highlight_column}")
     try:
         # Step 1: Get all cell URIs to understand dataset structure for sampling.
         all_cell_uris = Resource.objects.filter(
@@ -659,6 +725,9 @@ def _build_graph_with_highlight(source, dataset_name, highlight_column=None, hig
         # Column nodes with highlighting for the specified column
         for column in sorted(columns):
             is_highlighted = column == highlight_column
+            if is_highlighted:
+                logger.info(f"BUILD GRAPH: Highlighting column {column}")
+                
             nodes.append({
                 'id': f'column_{column}', 
                 'label': column, 
@@ -673,6 +742,8 @@ def _build_graph_with_highlight(source, dataset_name, highlight_column=None, hig
                 'to': f'column_{column}', 
                 'label': 'hasColumn'
             })
+        
+        logger.info(f"BUILD GRAPH: Added {len(nodes)-1} column nodes, highlighted: {highlight_column}")
         
         # Row and Cell nodes with highlighting
         for row_id in sampled_row_ids:
@@ -723,7 +794,7 @@ def _build_graph_with_highlight(source, dataset_name, highlight_column=None, hig
                     'label': 'contains'
                 })
         
-        return {
+        result = {
             'nodes': nodes, 
             'links': links, 
             'dataset_name': dataset_name,
@@ -733,8 +804,194 @@ def _build_graph_with_highlight(source, dataset_name, highlight_column=None, hig
             'highlighted_row': highlight_row
         }
         
+        logger.info(f"BUILD GRAPH: Completed for {source}/{dataset_name} with {len(nodes)} nodes, {len(links)} links")
+        return result
+        
     except Exception as e:
-        logger.error(f"Error building graph with highlights: {e}")
+        logger.error(f"BUILD GRAPH: Error for {source}/{dataset_name}: {e}", exc_info=True)
         return {
             'nodes': [], 'links': [], 'dataset_name': dataset_name
+        }
+
+
+@login_required
+def refresh_graph(request):
+    """Refresh the graph data for a dataset."""
+    source = request.POST.get('source', '')
+    dataset = request.POST.get('dataset', '')
+    
+    if not source or not dataset:
+        return JsonResponse({'error': 'Missing source or dataset parameters'}, status=400)
+    
+    try:
+        # Build graph data with the same function used for highlight
+        graph_data = _build_graph_with_highlight(source, dataset)
+        
+        return render(request, 'partials/graph_visualization.html', {
+            'graph_data': graph_data
+        })
+    except Exception as e:
+        logger.error(f"Error refreshing graph: {e}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@login_required
+def toggle_layout(request):
+    """Toggle between different graph layout options."""
+    source = request.POST.get('source', '')
+    dataset = request.POST.get('dataset', '')
+    
+    if not source or not dataset:
+        return JsonResponse({'error': 'Missing source or dataset parameters'}, status=400)
+    
+    try:
+        # Get the current layout type from the request or default to 'hierarchical'
+        layout_type = request.POST.get('layout', 'hierarchical')
+        
+        # Build graph data
+        graph_data = _build_graph_with_highlight(source, dataset)
+        
+        # Add layout information to the graph data
+        graph_data['layout'] = 'force' if layout_type == 'hierarchical' else 'hierarchical'
+        
+        return render(request, 'partials/graph_visualization.html', {
+            'graph_data': graph_data,
+            'layout': graph_data['layout']
+        })
+    except Exception as e:
+        logger.error(f"Error toggling layout: {e}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+def _build_comprehensive_source_graph(source, datasets_data):
+    """
+    Build a comprehensive graph with ALL datasets and their columns for a source.
+    This loads everything upfront so column clicks can just focus existing nodes.
+    """
+    logger.info(f"COMPREHENSIVE GRAPH: Starting for source={source} with {len(datasets_data)} datasets")
+    print(f"COMPREHENSIVE GRAPH: Starting for source={source} with {len(datasets_data)} datasets")
+    
+    try:
+        nodes = []
+        links = []
+        
+        # Source node (root)
+        nodes.append({
+            'id': f'source_{source}',
+            'label': source,
+            'type': 'source',
+            'color': {
+                'background': '#1e40af',
+                'border': '#1e3a8a',
+                'highlight': {'background': '#3b82f6', 'border': '#1e40af'}
+            },
+            'shape': 'star',
+            'size': 35,
+            'font': {'size': 16, 'color': '#ffffff', 'bold': True}
+        })
+        
+        # Get all datasets and their columns
+        for dataset_info in datasets_data:
+            dataset_name = dataset_info['name']
+            
+            # Dataset node
+            dataset_id = f'dataset_{dataset_name}'
+            nodes.append({
+                'id': dataset_id,
+                'label': dataset_name,
+                'type': 'dataset',
+                'color': {
+                    'background': '#2563eb',
+                    'border': '#1d4ed8',
+                    'highlight': {'background': '#3b82f6', 'border': '#2563eb'}
+                },
+                'shape': 'diamond',
+                'size': 28,
+                'cell_count': dataset_info.get('cell_count', 0),
+                'font': {'size': 14, 'color': '#ffffff', 'bold': True}
+            })
+            
+            # Link source to dataset
+            links.append({
+                'from': f'source_{source}',
+                'to': dataset_id,
+                'label': 'contains',
+                'color': {'color': '#1e40af', 'opacity': 0.8},
+                'width': 3
+            })
+            
+            # Get column information for this dataset
+            logger.info(f"COMPREHENSIVE GRAPH: Getting columns for dataset {dataset_name}")
+            print(f"COMPREHENSIVE GRAPH: Getting columns for dataset {dataset_name}")
+            
+            # Query for column information by looking at cell URIs
+            cell_uris = Resource.objects.filter(
+                source=source,
+                uri__contains=f'/datasets/{dataset_name}/',
+                resource_type=ResourceType.IRI
+            ).exclude(
+                Q(uri__contains='/columns/') | Q(uri__contains='/rows/')
+            ).values_list('uri', flat=True)[:100]  # Limit for performance
+            
+            # Extract unique column names from cell URIs
+            columns = set()
+            for uri in cell_uris:
+                parts = uri.split('/')
+                if len(parts) >= 3:
+                    column_name = parts[-2]  # Second to last part is column name
+                    columns.add(column_name)
+            
+            logger.info(f"COMPREHENSIVE GRAPH: Found {len(columns)} columns for {dataset_name}")
+            print(f"COMPREHENSIVE GRAPH: Found {len(columns)} columns for {dataset_name}")
+            
+            # Add column nodes
+            for column_name in sorted(columns):
+                column_id = f'column_{dataset_name}_{column_name}'
+                nodes.append({
+                    'id': column_id,
+                    'label': column_name,
+                    'type': 'column',
+                    'color': {
+                        'background': '#059669',
+                        'border': '#047857',
+                        'highlight': {'background': '#10b981', 'border': '#059669'}
+                    },
+                    'shape': 'box',
+                    'size': 22,
+                    'dataset': dataset_name,
+                    'column': column_name,
+                    'font': {'size': 12, 'color': '#ffffff'}
+                })
+                
+                # Link dataset to column
+                links.append({
+                    'from': dataset_id,
+                    'to': column_id,
+                    'label': 'hasColumn',
+                    'color': {'color': '#2563eb', 'opacity': 0.6},
+                    'width': 2
+                })
+        
+        result = {
+            'nodes': nodes,
+            'links': links,
+            'source': source,
+            'dataset_count': len(datasets_data),
+            'total_nodes': len(nodes),
+            'total_links': len(links)
+        }
+        
+        logger.info(f"COMPREHENSIVE GRAPH: Completed with {len(nodes)} nodes, {len(links)} links")
+        print(f"COMPREHENSIVE GRAPH: Completed with {len(nodes)} nodes, {len(links)} links")
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"COMPREHENSIVE GRAPH: Error building graph: {e}", exc_info=True)
+        print(f"COMPREHENSIVE GRAPH: Error building graph: {e}")
+        return {
+            'nodes': [],
+            'links': [],
+            'source': source,
+            'error': str(e)
         } 

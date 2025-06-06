@@ -10,12 +10,7 @@
      hx-trigger="intersect once"
      hx-swap="outerHTML"
      {% else %}
-     {# This is a fully-loaded card. A click loads the graph. #}
-     hx-get="{% url 'metadata:split_graph_data' %}?source={{ dataset.source|urlencode }}&dataset={{ dataset.name|urlencode }}"
-     hx-trigger="click"
-     hx-target="#graph-container"
-     hx-swap="innerHTML"
-     hx-indicator="#graph-loading-{{ dataset.name }}"
+     {# This is a fully-loaded card. No need to click to load graph - it's already loaded! #}
      {% endif %}
 >
     <!-- Dataset Header -->
@@ -75,18 +70,32 @@
                         <thead class="bg-base-200">
                             <tr>
                                 {% for header in dataset.preview.colHeaders %}
-                                <th class="p-2 border border-base-300 font-medium cursor-pointer hover:bg-primary-100 min-w-[120px] whitespace-nowrap"
-                                    hx-get="/metadata/split-view/highlight-column/?source={{ dataset.source|urlencode }}&dataset={{ dataset.name|urlencode }}&column={{ forloop.counter0 }}"
-                                    hx-target="#graph-container"
-                                    hx-swap="innerHTML"
-                                    hx-indicator=".loading-indicator"
-                                    _="on click add .bg-primary-100 to me
-                                      add .text-primary to me
-                                      add .font-bold to me
-                                      then remove .bg-primary-100 from .column-header where id != my.id
-                                      remove .text-primary from .column-header where id != my.id
-                                      remove .font-bold from .column-header where id != my.id"
-                                    class="column-header" id="column-{{ forloop.counter0 }}">
+                                <th class="p-2 border border-base-300 font-medium cursor-pointer hover:bg-primary-100 min-w-[120px] whitespace-nowrap column-header"
+                                    id="column-{{ forloop.counter0 }}-{{ dataset.name }}"
+                                    _="on click 
+                                        log 'Column clicked:' 
+                                        log 'Header:' '{{ header }}'
+                                        log 'Dataset:' '{{ dataset.name }}' 
+                                        log 'Source:' '{{ dataset.source }}'
+                                        
+                                        -- Add visual highlight to this column
+                                        add .bg-primary to me
+                                        add .text-primary-content to me
+                                        add .font-bold to me
+                                        
+                                        -- Remove highlight from other columns in this table
+                                        remove .bg-primary from .column-header in closest .table-container
+                                        remove .text-primary-content from .column-header in closest .table-container  
+                                        remove .font-bold from .column-header in closest .table-container
+                                        
+                                        -- Add highlight back to this column
+                                        add .bg-primary to me
+                                        add .text-primary-content to me
+                                        add .font-bold to me
+                                        
+                                        -- Focus the column in the graph using hyperscript
+                                        fetch '/metadata/split-view/highlight-column/?source={{ dataset.source|urlencode }}&dataset={{ dataset.name|urlencode }}&column_name={{ header|urlencode }}'
+                                            then put the result into the body">
                                     {{ header }}
                                 </th>
                                 {% endfor %}
