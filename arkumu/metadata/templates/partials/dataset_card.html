@@ -102,19 +102,30 @@
                     </table>
                 </div>
                 
-                <!-- Enhanced Load More Section -->
+                <!-- Enhanced Load More Section 
+                     This uses HTMX for lazy loading with _hyperscript to update the button state.
+                     No external JavaScript is needed - everything is contained here:
+                     1. HTMX loads more rows when clicked
+                     2. _hyperscript updates the counter after loading
+                     3. The button removes itself when all rows are loaded
+                -->
                 {% if dataset.preview.has_more %}
-                <div class="border-t border-base-300 bg-base-50 p-3">
+                <div class="border-t border-base-300 bg-base-50 p-3" id="load-more-container-{{ dataset.name }}">
                     <button class="btn btn-sm btn-ghost btn-outline w-full gap-2 hover:btn-primary"
-                            hx-get="/metadata/split-view/load-more-rows/?source={{ dataset.source|urlencode }}&dataset={{ dataset.name|urlencode }}&offset={{ dataset.preview.showing_rows }}&limit=20"
+                            hx-get="/metadata/split-view/load-more-rows/?source={{ dataset.source|urlencode }}&dataset={{ dataset.name|urlencode }}&offset={{ dataset.preview.showing_rows }}&limit=10"
                             hx-target="#table-body-{{ dataset.name }}"
                             hx-swap="beforeend"
                             hx-indicator="#load-more-indicator-{{ dataset.name }}"
-                            onclick="this.style.display='none'">
+                            _="on htmx:afterRequest
+                                set newOffset to {{ dataset.preview.showing_rows|add:'10' }}
+                                set my.dataset.offset to newOffset
+                                set my.dataset.moreText to 'Load 10 more rows'
+                                set span in me to `<span class='badge badge-sm ml-1'>${newOffset} of {{ dataset.preview.total_rows }}</span>`
+                                if newOffset >= {{ dataset.preview.total_rows }} remove me end">
                         <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                             <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/>
                         </svg>
-                        Load {{ dataset.preview.total_rows|add:"-5"|default:"more" }} more rows
+                        Load 10 more rows <span class="badge badge-sm ml-1">{{ dataset.preview.showing_rows }} of {{ dataset.preview.total_rows }}</span>
                     </button>
                     <div id="load-more-indicator-{{ dataset.name }}" class="htmx-indicator flex items-center justify-center py-3">
                         <div class="flex items-center gap-2">
