@@ -16,41 +16,35 @@ logger = logging.getLogger(__name__)
 def split_table_graph_view(request):
     """Split view showing all datasets from a source with table previews and graph visualization."""
     
-    # OPTIMIZATION: Use database aggregation instead of Python processing
-    sources_with_datasets = Resource.objects.filter(
-        uri__contains='/datasets/',
-        resource_type=ResourceType.IRI
-    ).exclude(
-        uri__contains='/columns/'
-    ).exclude(
-        uri__contains='/rows/'
-    ).values('source').annotate(
-        resource_count=Count('id')
-    ).order_by('source')
+    # Get all distinct sources first
+    sources = Resource.objects.values_list('source', flat=True).distinct().order_by('source')
     
-    # Get dataset counts per source efficiently
+    # Simplified and more accurate dataset counting
     sources_info = []
-    for source_data in sources_with_datasets:
-        source = source_data['source']
-        
-        # Count unique datasets using database aggregation
+    for source in sources:
+        if not source:  # Skip empty sources
+            continue
+            
+        # Count datasets by looking for URIs that match the exact dataset pattern
+        # Datasets have the pattern: source/datasets/dataset_name
+        # And don't have additional path components like /column_name/row_id
         dataset_count = Resource.objects.filter(
             source=source,
-            uri__contains='/datasets/',
+            uri__contains=f"{source}/datasets/",
             resource_type=ResourceType.IRI
-        ).exclude(
-            uri__contains='/columns/'
-        ).exclude(
-            uri__contains='/rows/'
-        ).extra(
-            select={'dataset_name': "SUBSTRING(uri FROM '.*/datasets/([^/]+)/.*')"}
-        ).values('dataset_name').distinct().count()
+        ).filter(
+            # This regex ensures we only match the exact dataset URI pattern
+            # Looking for URIs that end after the dataset name without more components
+            uri__regex=r'/datasets/[^/]+$'
+        ).count()
         
-        sources_info.append({
-            'name': source,
-            'dataset_count': dataset_count,
-            'display_name': f"{source} ({dataset_count} dataset{'s' if dataset_count != 1 else ''})"
-        })
+        # Only include sources that actually have datasets
+        if dataset_count > 0:
+            sources_info.append({
+                'name': source,
+                'dataset_count': dataset_count,
+                'display_name': f"{source} ({dataset_count} dataset{'s' if dataset_count != 1 else ''})"
+            })
     
     context = {
         'sources': sources_info,
