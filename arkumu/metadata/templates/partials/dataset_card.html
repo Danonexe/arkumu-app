@@ -72,6 +72,10 @@
                                 {% for header in dataset.preview.colHeaders %}
                                 <th class="p-2 border border-base-300 font-medium cursor-pointer hover:bg-primary-100 min-w-[120px] whitespace-nowrap column-header"
                                     id="column-{{ forloop.counter0 }}-{{ dataset.name }}"
+                                    hx-get="/metadata/split-view/highlight-column/?source={{ dataset.source|urlencode }}&dataset={{ dataset.name|urlencode }}&column_name={{ header|urlencode }}"
+                                    hx-target="#graph-container"
+                                    hx-swap="innerHTML"
+                                    hx-indicator="#graph-loading-indicator"
                                     _="on click 
                                         log 'Column clicked:' 
                                         log 'Header:' '{{ header }}'
@@ -91,11 +95,7 @@
                                         -- Add highlight back to this column
                                         add .bg-primary to me
                                         add .text-primary-content to me
-                                        add .font-bold to me
-                                        
-                                        -- Focus the column in the graph using hyperscript
-                                        fetch '/metadata/split-view/highlight-column/?source={{ dataset.source|urlencode }}&dataset={{ dataset.name|urlencode }}&column_name={{ header|urlencode }}'
-                                            then put the result into the body">
+                                        add .font-bold to me">
                                     {{ header }}
                                 </th>
                                 {% endfor %}

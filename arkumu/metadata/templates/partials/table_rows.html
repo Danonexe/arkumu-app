@@ -18,7 +18,7 @@
             -- Focus the column this cell belongs to (if we found the header)
             if columnHeader then
                 fetch `/metadata/split-view/highlight-column/?source={{ source|urlencode }}&dataset={{ dataset|urlencode }}&column_name=${encodeURIComponent(columnHeader)}`
-                    then put the result into the body
+                    then put the result into #graph-container
             end"
         {% endif %}
         title="{{ cell }}">

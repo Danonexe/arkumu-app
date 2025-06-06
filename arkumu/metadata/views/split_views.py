@@ -496,12 +496,11 @@ def debug_database(request):
 @login_required
 def highlight_column_in_graph(request):
     """
-    Simple HTMX endpoint to focus a column in the already-loaded comprehensive graph.
-    No need to rebuild the graph - just focus the existing node.
+    HTMX endpoint to return updated graph visualization with highlighted column.
     """
     source = request.GET.get('source')
     dataset = request.GET.get('dataset') 
-    column_name = request.GET.get('column_name')  # Use actual column name instead of index
+    column_name = request.GET.get('column_name')
     
     logger.info(f"COLUMN FOCUS: Request for source={source}, dataset={dataset}, column={column_name}")
     print(f"COLUMN FOCUS: Request for source={source}, dataset={dataset}, column={column_name}")
@@ -511,84 +510,47 @@ def highlight_column_in_graph(request):
         logger.error(f"COLUMN FOCUS ERROR: {error_msg}")
         print(f"COLUMN FOCUS ERROR: {error_msg}")
         
-        # Return a simple JavaScript command to show the error
-        return HttpResponse(f"""
-        <script>
-            console.error('Column focus error: {error_msg}');
-            alert('Error: {error_msg}');
-        </script>
-        """)
+        return render(request, 'partials/graph_visualization.html', {
+            'error': error_msg,
+            'graph_data': {'nodes': json.dumps([]), 'links': json.dumps([])}
+        })
     
     try:
-        # Build the column ID based on our comprehensive graph structure
-        column_id = f'column_{dataset}_{column_name}'
+        # Get all datasets for the source to build comprehensive graph
+        datasets_data = _get_all_datasets_for_source_optimized(source)
         
-        logger.info(f"COLUMN FOCUS: Focusing on column_id={column_id}")
-        print(f"COLUMN FOCUS: Focusing on column_id={column_id}")
+        # Build comprehensive graph with highlighted column
+        comprehensive_graph = _build_comprehensive_source_graph(source, datasets_data)
         
-        # Return a JavaScript command to focus the node in the existing graph
-        focus_script = f"""
-        <script>
-            console.log('Focusing on column: {column_id}');
-            
-            // Get the existing network
-            const graphContainer = document.getElementById('graph-vis');
-            if (graphContainer && graphContainer.__vis_network__) {{
-                const network = graphContainer.__vis_network__;
-                
-                // Try to focus on the column node
-                try {{
-                    network.selectNodes(['{column_id}']);
-                    network.focus('{column_id}', {{
-                        scale: 1.5,
-                        animation: {{
-                            duration: 1000,
-                            easingFunction: 'easeInOutQuad'
-                        }}
-                    }});
-                    
-                    console.log('Successfully focused on column: {column_id}');
-                    
-                    // Update node details
-                    const nodeDetailsContent = document.getElementById('node-details-content');
-                    if (nodeDetailsContent) {{
-                        nodeDetailsContent.innerHTML = `
-                            <div class="space-y-2">
-                                <div class="flex items-center gap-2">
-                                    <div class="w-3 h-3 rounded-full bg-green-500"></div>
-                                    <span class="font-medium">{column_name}</span>
-                                </div>
-                                <div class="p-2 bg-base-100 rounded border border-base-300">
-                                    <p><span class="font-semibold">Type:</span> Column</p>
-                                    <p><span class="font-semibold">Dataset:</span> {dataset}</p>
-                                    <p><span class="font-semibold">Source:</span> {source}</p>
-                                </div>
-                            </div>
-                        `;
-                    }}
-                    
-                }} catch (error) {{
-                    console.error('Error focusing on node:', error);
-                    console.log('Available node IDs:', network.body.data.nodes.getIds());
-                }}
-            }} else {{
-                console.error('Graph network not found');
-            }}
-        </script>
-        """
+        # JSON serialize the graph data
+        graph_data_json = {
+            'nodes': json.dumps(comprehensive_graph['nodes']),
+            'links': json.dumps(comprehensive_graph['links']),
+            'source': comprehensive_graph.get('source'),
+            'dataset_count': comprehensive_graph.get('dataset_count'),
+            'total_nodes': comprehensive_graph.get('total_nodes'),
+            'total_links': comprehensive_graph.get('total_links'),
+        }
         
-        return HttpResponse(focus_script)
+        logger.info(f"COLUMN FOCUS: Built graph with {len(comprehensive_graph['nodes'])} nodes, highlighting column {column_name}")
+        print(f"COLUMN FOCUS: Built graph with {len(comprehensive_graph['nodes'])} nodes, highlighting column {column_name}")
+        
+        # Return graph visualization with highlighted column
+        return render(request, 'partials/graph_visualization.html', {
+            'graph_data': graph_data_json,
+            'highlighted_column': f'{dataset}_{column_name}',  # This will become 'column_{dataset}_{column_name}' in template
+            'source': source,
+            'layout': 'force'
+        })
         
     except Exception as e:
         logger.error(f"COLUMN FOCUS: Error focusing column: {e}", exc_info=True)
         print(f"COLUMN FOCUS: Error focusing column: {e}")
         
-        return HttpResponse(f"""
-        <script>
-            console.error('Column focus exception: {str(e)}');
-            alert('Error focusing column: {str(e)}');
-        </script>
-        """)
+        return render(request, 'partials/graph_visualization.html', {
+            'error': f"Error focusing column: {str(e)}",
+            'graph_data': {'nodes': json.dumps([]), 'links': json.dumps([])}
+        })
 
 
 @login_required
