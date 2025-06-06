@@ -74,7 +74,7 @@ def split_table_graph_view(request):
                     datasets_index = uri_parts.index('datasets')
                     if datasets_index + 1 < len(uri_parts):
                         dataset_name = uri_parts[datasets_index + 1]
-                        dataset_names.add(dataset_name)
+                dataset_names.add(dataset_name)
             except (IndexError, ValueError):
                 continue
         
@@ -119,24 +119,46 @@ def get_table_data(request):
 
 @login_required
 def get_dataset_preview(request):
-    """Get a 5-row preview of a specific dataset."""
-    source = request.GET.get('source', '')
-    dataset_name = request.GET.get('dataset', '')
+    """Get preview of dataset data for table view"""
+    source = request.GET.get('source')
+    dataset = request.GET.get('dataset')
     
-    if not source or not dataset_name:
-        return JsonResponse({'error': 'Source and dataset required'}, status=400)
+    if not source or not dataset:
+        return JsonResponse({'error': 'Missing source or dataset parameter'}, status=400)
     
-    # Check cache first
-    cache_key = f"dataset_preview:{md5(f'{source}:{dataset_name}'.encode()).hexdigest()}"
-    preview_data = cache.get(cache_key)
+    table_data = _reconstruct_table_from_graph(source)
     
-    if preview_data is None:
-        # Get preview data for this specific dataset
-        preview_data = _get_dataset_preview(source, dataset_name, max_rows=5)
-        # Cache for 10 minutes
-        cache.set(cache_key, preview_data, 600)
+    return JsonResponse({
+        'config': table_data
+    })
+
+
+@login_required
+def load_more_dataset_rows(request):
+    """Load more rows for a dataset with pagination"""
+    source = request.GET.get('source')
+    dataset = request.GET.get('dataset')
+    offset = int(request.GET.get('offset', 0))
+    limit = int(request.GET.get('limit', 20))
     
-    return JsonResponse(preview_data)
+    if not source or not dataset:
+        return render(request, 'partials/table_rows.html', {'data': []})
+    
+    logger.info(f"Loading more rows for {source}/{dataset} - offset: {offset}, limit: {limit}")
+    
+    try:
+        preview_data = _get_dataset_preview(source, dataset, max_rows=limit, offset=offset)
+        
+        if not preview_data:
+            return render(request, 'partials/table_rows.html', {'data': []})
+        
+        return render(request, 'partials/table_rows.html', {
+            'data': preview_data['data']
+        })
+        
+    except Exception as e:
+        logger.error(f"Error loading more rows: {e}")
+        return render(request, 'partials/table_rows.html', {'data': []})
 
 
 @login_required
@@ -213,7 +235,7 @@ def load_source_data(request):
             dataset_name = dataset['name']
             logger.info(f"STEP 5.{i+1}: Getting preview for dataset '{dataset_name}'")
             preview_data = _get_dataset_preview(source, dataset_name, max_rows=5)
-            logger.info(f"STEP 5.{i+1}.1: Preview data for '{dataset_name}': {len(preview_data.get('data', []))} rows, {len(preview_data.get('columns', []))} columns")
+            logger.info(f"STEP 5.{i+1}.1: Preview data for '{dataset_name}': {len(preview_data.get('data', []))} rows, {len(preview_data.get('colHeaders', []))} columns")
             dataset['preview'] = preview_data
         
         cached_data = {
@@ -500,61 +522,81 @@ def _get_all_datasets_for_source(source):
         return []
 
 
-def _get_dataset_preview(source, dataset_name, max_rows=5):
-    """Get preview data for a dataset using Django ORM"""
-    logger.info(f"STEP 5.X: Getting preview for dataset '{dataset_name}' from source '{source}'")
+def _get_dataset_preview(source, dataset_name, max_rows=5, offset=0):
+    """Get preview data for a dataset using Django ORM with efficient pagination"""
+    logger.info(f"STEP 5.X: Getting preview for dataset '{dataset_name}' from source '{source}' (max_rows={max_rows}, offset={offset})")
     
     try:
-        # Get cell resources for this dataset
-        # Cell URI pattern: http://arkumu.org/data/{source}/datasets/{dataset_name}/{column_name}/{row_id}
-        logger.info(f"STEP 5.X.1: Searching for cells with source '{source}' and dataset '{dataset_name}'")
+        # First, get a limited set of row IDs to minimize data fetching
+        logger.info(f"STEP 5.X.1: Finding row IDs for dataset '{dataset_name}' with pagination")
         
-        cell_resources = Resource.objects.filter(
+        # Get unique row IDs from cell URIs efficiently
+        cell_uris = Resource.objects.filter(
             source=source,
             uri__contains=f"/datasets/{dataset_name}/",
             uri__regex=r'/datasets/[^/]+/[^/]+/[^/]+$',  # Cell pattern
             resource_type=ResourceType.IRI
-        )
+        ).values_list('uri', flat=True)[:1000]  # Limit initial URI fetch
         
-        cell_count = cell_resources.count()
-        logger.info(f"STEP 5.X.2: Found {cell_count} cell resources for dataset '{dataset_name}'")
+        # Extract row IDs from URIs
+        row_ids = set()
+        for uri in cell_uris:
+            try:
+                row_id = uri.split('/')[-1]
+                row_ids.add(row_id)
+            except:
+                continue
         
-        if not cell_resources.exists():
-            logger.warning(f"STEP 5.X.3: No cell resources found for dataset '{dataset_name}'")
+        # Sort and paginate row IDs
+        sorted_row_ids = sorted(list(row_ids))
+        paginated_row_ids = sorted_row_ids[offset:offset + max_rows]
+        
+        logger.info(f"STEP 5.X.2: Found {len(row_ids)} total rows, showing {len(paginated_row_ids)} rows (offset={offset})")
+        
+        if not paginated_row_ids:
+            logger.warning(f"STEP 5.X.3: No rows found for dataset '{dataset_name}' at offset {offset}")
             return None
         
-        # Log some example cell URIs
-        for i, cell in enumerate(cell_resources[:5]):
-            logger.debug(f"STEP 5.X.3.{i+1}: Example cell URI: {cell.uri}")
+        # Get only cells for the specific rows we want to display
+        row_specific_cells = []
+        for row_id in paginated_row_ids:
+            cells = Resource.objects.filter(
+                source=source,
+                uri__contains=f"/datasets/{dataset_name}/",
+                uri__endswith=f"/{row_id}",
+                resource_type=ResourceType.IRI
+            )
+            row_specific_cells.extend(cells)
+        
+        logger.info(f"STEP 5.X.4: Found {len(row_specific_cells)} cells for {len(paginated_row_ids)} rows")
         
         # Get the rdf:value property
-        logger.info(f"STEP 5.X.4: Looking for rdf:value property")
+        logger.info(f"STEP 5.X.5: Looking for rdf:value property")
         rdf_value_prop = Resource.objects.filter(
             uri="http://www.w3.org/1999/02/22-rdf-syntax-ns#value",
             resource_type=ResourceType.PROPERTY
         ).first()
         
         if not rdf_value_prop:
-            logger.warning(f"STEP 5.X.5: rdf:value property not found")
+            logger.warning(f"STEP 5.X.6: rdf:value property not found")
             return None
         else:
-            logger.info(f"STEP 5.X.5: Found rdf:value property: {rdf_value_prop.uri}")
+            logger.info(f"STEP 5.X.6: Found rdf:value property: {rdf_value_prop.uri}")
         
-        # Get cell values through rdf:value triples
-        logger.info(f"STEP 5.X.6: Querying triples for cell values")
+        # Get cell values through rdf:value triples - only for our limited cell set
+        logger.info(f"STEP 5.X.7: Querying triples for cell values (limited set)")
         cell_data = {}
         value_triples = Triple.objects.filter(
-            subject__in=cell_resources,
+            subject__in=row_specific_cells,
             predicate=rdf_value_prop
         ).select_related('subject', 'object')
         
         triple_count = value_triples.count()
-        logger.info(f"STEP 5.X.7: Found {triple_count} value triples for dataset '{dataset_name}'")
+        logger.info(f"STEP 5.X.8: Found {triple_count} value triples for {len(paginated_row_ids)} rows")
         
         columns = set()
-        rows = set()
         
-        for i, triple in enumerate(value_triples):
+        for triple in value_triples:
             cell_uri = triple.subject.uri
             cell_value = triple.object.value if triple.object else ""
             
@@ -565,31 +607,24 @@ def _get_dataset_preview(source, dataset_name, max_rows=5):
                 row_id = uri_parts[-1]
                 
                 columns.add(column_name)
-                rows.add(row_id)
                 
                 if row_id not in cell_data:
                     cell_data[row_id] = {}
                 cell_data[row_id][column_name] = cell_value
-                
-                if i < 5:  # Log first 5 for debugging
-                    logger.debug(f"STEP 5.X.7.{i+1}: Cell [{row_id}][{column_name}] = '{cell_value}' from {cell_uri}")
         
-        logger.info(f"STEP 5.X.8: Extracted {len(columns)} columns and {len(rows)} rows from dataset '{dataset_name}'")
-        logger.info(f"STEP 5.X.8.1: Columns: {sorted(list(columns))}")
-        logger.info(f"STEP 5.X.8.2: Rows: {sorted(list(rows))}")
+        logger.info(f"STEP 5.X.9: Extracted {len(columns)} columns for dataset '{dataset_name}'")
         
         if not cell_data:
-            logger.warning(f"STEP 5.X.9: No cell data extracted for dataset '{dataset_name}'")
+            logger.warning(f"STEP 5.X.10: No cell data extracted for dataset '{dataset_name}'")
             return None
         
-        # Sort columns and rows
+        # Sort columns and use our paginated rows
         sorted_columns = sorted(list(columns))
-        sorted_rows = sorted(list(rows))[:max_rows]  # Limit rows for preview
-        logger.info(f"STEP 5.X.10: Building preview with {len(sorted_columns)} columns and {len(sorted_rows)} rows (limited to {max_rows})")
+        logger.info(f"STEP 5.X.11: Building preview with {len(sorted_columns)} columns and {len(paginated_row_ids)} rows")
         
-        # Build table data
+        # Build table data in the order of our paginated row IDs
         table_data = []
-        for row_id in sorted_rows:
+        for row_id in paginated_row_ids:
             row_data = []
             for column in sorted_columns:
                 cell_value = cell_data.get(row_id, {}).get(column, "")
@@ -599,10 +634,13 @@ def _get_dataset_preview(source, dataset_name, max_rows=5):
         result = {
             'colHeaders': sorted_columns,
             'data': table_data,
-            'showing_rows': len(sorted_rows)
+            'showing_rows': len(table_data),
+            'total_rows': len(row_ids),
+            'offset': offset,
+            'has_more': offset + len(table_data) < len(row_ids)
         }
         
-        logger.info(f"STEP 5.X.11: Successfully built preview for dataset '{dataset_name}': {len(sorted_columns)} cols, {len(table_data)} rows")
+        logger.info(f"STEP 5.X.12: Successfully built preview for dataset '{dataset_name}': {len(sorted_columns)} cols, {len(table_data)} rows, total: {len(row_ids)}")
         return result
         
     except Exception as e:
@@ -1073,7 +1111,7 @@ def create_connection(request):
         
     except Exception as e:
         logger.error(f"Error creating connection: {e}")
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': str(e)}, status=500) 
 
 
 @login_required

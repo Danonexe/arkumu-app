@@ -1,5 +1,5 @@
-<!-- Dataset Card for {{ dataset.name }} -->
-<div class="card bg-base-200 shadow-md cursor-pointer hover:shadow-lg transition-all duration-200" 
+<!-- Enhanced Dataset Card for {{ dataset.name }} -->
+<div class="card dataset-card cursor-pointer transition-all duration-300 hover:scale-[1.02] border border-base-300" 
      data-dataset="{{ dataset.name }}"
      hx-get="/metadata/split-view/graph-data/?source={{ dataset.source|urlencode }}&dataset={{ dataset.name|urlencode }}"
      hx-trigger="click"
@@ -7,67 +7,181 @@
      hx-swap="innerHTML"
      hx-indicator="#graph-loading-{{ dataset.name }}">
     
-    <div class="card-body p-4">
-        <div class="flex items-center justify-between mb-2">
-            <h3 class="card-title text-lg">{{ dataset.name }}</h3>
-            <div class="flex gap-2">
-                <div class="badge badge-info">{{ dataset.cell_count|default:0 }} cells</div>
-                {% if dataset.preview %}
-                    <div class="badge badge-success">{{ dataset.preview.showing_rows }} rows</div>
-                {% else %}
-                    <div class="badge badge-warning">Click to view</div>
-                {% endif %}
+    <!-- Dataset Header -->
+    <div class="dataset-header relative">
+        <div class="dataset-content">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="avatar placeholder">
+                        <div class="bg-primary-content text-primary rounded-full w-10">
+                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-bold text-primary-content">{{ dataset.name }}</h3>
+                        <p class="text-xs text-primary-content/70">{{ dataset.source }}</p>
+                    </div>
+                </div>
+                
+                <div class="flex flex-col gap-1 items-end">
+                    {% if dataset.preview %}
+                        <div class="badge badge-sm bg-primary-content/20 border-primary-content/30 text-primary-content">
+                            {{ dataset.preview.showing_rows }} of {{ dataset.preview.total_rows|default:"?" }} rows
+                        </div>
+                    {% endif %}
+                    <div class="badge badge-sm bg-primary-content/20 border-primary-content/30 text-primary-content">
+                        {{ dataset.cell_count|default:0 }} cells
+                    </div>
+                </div>
             </div>
         </div>
-        
+    </div>
+    
+    <!-- Card Body -->
+    <div class="card-body p-4 bg-base-100">
         <!-- Loading indicator for this specific dataset -->
-        <div id="graph-loading-{{ dataset.name }}" class="htmx-indicator flex items-center justify-center py-2">
-            <span class="loading loading-spinner loading-sm mr-2"></span>
-            <span class="text-sm">Loading graph...</span>
+        <div id="graph-loading-{{ dataset.name }}" class="htmx-indicator">
+            <div class="flex items-center justify-center py-4">
+                <div class="flex items-center gap-3">
+                    <span class="loading loading-spinner loading-md text-primary"></span>
+                    <div>
+                        <p class="font-medium">Loading graph visualization...</p>
+                        <p class="text-xs text-base-content/60">Processing {{ dataset.cell_count|default:0 }} cells</p>
+                    </div>
+                </div>
+            </div>
         </div>
         
         {% if dataset.preview and dataset.preview.data %}
-        <div class="table-container">
-            <table class="table table-sm table-zebra w-full">
-                <thead>
-                    <tr>
-                        {% for header in dataset.preview.colHeaders %}
-                        <th class="text-xs">{{ header }}</th>
-                        {% endfor %}
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for row in dataset.preview.data %}
-                    <tr class="hover:bg-base-300">
-                        {% for cell in row %}
-                        <td class="text-xs max-w-32 truncate" title="{{ cell }}">
-                            {% if cell %}{{ cell }}{% else %}<span class="text-gray-400">-</span>{% endif %}
-                        </td>
-                        {% endfor %}
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% else %}
-        <div class="flex items-center justify-center h-24 text-base-content/60">
-            <div class="text-center">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mx-auto mb-2 text-base-content/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z" />
-                </svg>
-                <p class="text-sm">Click to load table and graph</p>
+            <!-- Enhanced Table Container -->
+            <div class="table-container rounded-lg border border-base-300 overflow-hidden bg-base-100" id="table-{{ dataset.name }}">
+                <div class="overflow-x-auto">
+                    <table class="table table-sm w-full">
+                        <thead class="bg-base-200">
+                            <tr>
+                                {% for header in dataset.preview.colHeaders %}
+                                <th class="text-xs font-semibold text-base-content/80 min-w-24">
+                                    <div class="flex items-center gap-1">
+                                        <svg class="w-3 h-3 text-base-content/40" fill="currentColor" viewBox="0 0 20 20">
+                                            <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4z"/>
+                                        </svg>
+                                        {{ header }}
+                                    </div>
+                                </th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody id="table-body-{{ dataset.name }}" class="divide-y divide-base-300">
+                            {% for row in dataset.preview.data %}
+                            <tr class="hover:bg-base-200/50 transition-colors">
+                                {% for cell in row %}
+                                <td class="text-xs max-w-32 truncate py-2" title="{{ cell }}">
+                                    {% if cell %}
+                                        <span class="font-mono">{{ cell }}</span>
+                                    {% else %}
+                                        <span class="text-base-content/40 italic">empty</span>
+                                    {% endif %}
+                                </td>
+                                {% endfor %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Enhanced Load More Section -->
+                {% if dataset.preview.has_more %}
+                <div class="border-t border-base-300 bg-base-50 p-3">
+                    <button class="btn btn-sm btn-ghost btn-outline w-full gap-2 hover:btn-primary"
+                            hx-get="/metadata/split-view/load-more-rows/?source={{ dataset.source|urlencode }}&dataset={{ dataset.name|urlencode }}&offset={{ dataset.preview.showing_rows }}&limit=20"
+                            hx-target="#table-body-{{ dataset.name }}"
+                            hx-swap="beforeend"
+                            hx-indicator="#load-more-indicator-{{ dataset.name }}"
+                            onclick="this.style.display='none'">
+                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/>
+                        </svg>
+                        Load {{ dataset.preview.total_rows|add:"-5"|default:"more" }} more rows
+                    </button>
+                    <div id="load-more-indicator-{{ dataset.name }}" class="htmx-indicator flex items-center justify-center py-3">
+                        <div class="flex items-center gap-2">
+                            <span class="loading loading-spinner loading-sm text-primary"></span>
+                            <span class="text-sm font-medium">Loading additional rows...</span>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
             </div>
-        </div>
+            
+            <!-- Table Stats -->
+            <div class="mt-3">
+                <div class="stats stats-horizontal shadow-sm border border-base-300 bg-base-100 w-full">
+                    <div class="stat py-2 px-3">
+                        <div class="stat-title text-xs">Rows</div>
+                        <div class="stat-value text-sm">{{ dataset.preview.showing_rows }}</div>
+                        <div class="stat-desc text-xs">of {{ dataset.preview.total_rows|default:"?" }}</div>
+                    </div>
+                    <div class="stat py-2 px-3">
+                        <div class="stat-title text-xs">Columns</div>
+                        <div class="stat-value text-sm">{{ dataset.preview.colHeaders|length }}</div>
+                        <div class="stat-desc text-xs">attributes</div>
+                    </div>
+                    <div class="stat py-2 px-3">
+                        <div class="stat-title text-xs">Cells</div>
+                        <div class="stat-value text-sm">{{ dataset.cell_count|default:0 }}</div>
+                        <div class="stat-desc text-xs">total</div>
+                    </div>
+                </div>
+            </div>
+            
+        {% else %}
+            <!-- Enhanced Empty State -->
+            <div class="flex items-center justify-center h-32 border-2 border-dashed border-base-300 rounded-lg bg-base-50">
+                <div class="text-center">
+                    <div class="relative mb-3">
+                        <svg class="w-12 h-12 mx-auto text-base-content/30" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/>
+                        </svg>
+                        <div class="absolute -top-1 -right-1">
+                            <div class="badge badge-warning badge-xs">!</div>
+                        </div>
+                    </div>
+                    <p class="text-sm font-medium text-base-content/60">No Preview Available</p>
+                    <p class="text-xs text-base-content/40">Click to load table and graph</p>
+                </div>
+            </div>
         {% endif %}
         
-        <!-- Visual indicator that this card is clickable -->
-        <div class="mt-2 text-center">
-            <div class="badge badge-ghost badge-sm">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                </svg>
-                Click to view graph
+        <!-- Enhanced Action Footer -->
+        <div class="mt-4 pt-3 border-t border-base-300">
+            <div class="flex items-center justify-between">
+                <div class="flex gap-2">
+                    <div class="badge badge-ghost badge-sm gap-1">
+                        <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                            <path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                        </svg>
+                        View Graph
+                    </div>
+                    {% if dataset.preview %}
+                        <div class="badge badge-success badge-sm gap-1">
+                            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            Data Loaded
+                        </div>
+                    {% endif %}
+                </div>
+                
+                <div class="text-xs text-base-content/40 flex items-center gap-1">
+                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/>
+                        <path d="M10 2a8 8 0 018 8 8 8 0 01-8 8 8 8 0 01-8-8 8 8 0 018-8zm0 2a6 6 0 00-6 6 6 6 0 006 6 6 6 0 006-6 6 6 0 00-6-6z"/>
+                    </svg>
+                    Click to explore
+                </div>
             </div>
         </div>
     </div>

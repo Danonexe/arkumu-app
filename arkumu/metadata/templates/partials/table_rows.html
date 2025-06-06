@@ -1,0 +1,9 @@
+{% for row in data %}
+<tr class="hover:bg-base-300">
+    {% for cell in row %}
+    <td class="text-xs max-w-32 truncate" title="{{ cell }}">
+        {% if cell %}{{ cell }}{% else %}<span class="text-gray-400">-</span>{% endif %}
+    </td>
+    {% endfor %}
+</tr>
+{% endfor %} 
