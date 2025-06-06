@@ -1,0 +1,119 @@
+<!-- Directory Import Status Poller -->
+<div hx-get="{% url 'importer:task_status' task_id=task_id %}" 
+     hx-trigger="{% if should_poll %}every 2s{% else %}none{% endif %}" 
+     hx-swap="outerHTML"
+     id="directory-import-feedback-{{ task_id }}"
+     class="w-full">
+
+    {% if task_info.status == 'processing' or task_info.status == 'pending' %}
+        <!-- Processing State -->
+        <div class="alert alert-info">
+            <div class="flex items-center space-x-3">
+                <div class="loading loading-spinner loading-sm"></div>
+                <div class="flex-1">
+                    <div class="font-semibold">Directory Import in Progress</div>
+                    <div class="text-sm">{{ task_info.message|default:"Processing CSV files..." }}</div>
+                    
+                    <!-- Progress Bar -->
+                    {% if task_info.progress %}
+                        <div class="mt-2">
+                            <div class="flex justify-between text-xs mb-1">
+                                <span>Progress</span>
+                                <span>{{ task_info.progress }}%</span>
+                            </div>
+                            <progress class="progress progress-primary w-full" value="{{ task_info.progress }}" max="100"></progress>
+                        </div>
+                    {% endif %}
+                    
+                    <!-- File counts if available -->
+                    {% if task_info.details %}
+                        <div class="text-xs mt-1 space-x-4">
+                            {% if task_info.details.csv_files_found %}
+                                <span>📁 Found: {{ task_info.details.csv_files_found }} files</span>
+                            {% endif %}
+                            {% if task_info.details.files_processed %}
+                                <span>✅ Processed: {{ task_info.details.files_processed }}</span>
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+    {% elif task_info.status == 'completed' %}
+        <!-- Success State -->
+        <div class="alert alert-success">
+            <div class="flex items-center space-x-3">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-success flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                </svg>
+                <div class="flex-1">
+                    <div class="font-semibold">Directory Import Complete!</div>
+                    <div class="text-sm">{{ task_info.message|default:"All CSV files have been successfully imported." }}</div>
+                    
+                    <!-- Aggregate Statistics -->
+                    {% if task_info.details %}
+                        <div class="mt-2 grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                            {% if task_info.details.files_processed %}
+                                <div class="bg-base-200 p-2 rounded">
+                                    <div class="font-semibold">{{ task_info.details.files_processed }}</div>
+                                    <div>Files Processed</div>
+                                </div>
+                            {% endif %}
+                            {% if task_info.details.resources_created %}
+                                <div class="bg-base-200 p-2 rounded">
+                                    <div class="font-semibold">{{ task_info.details.resources_created|floatformat:0 }}</div>
+                                    <div>Resources Created</div>
+                                </div>
+                            {% endif %}
+                            {% if task_info.details.triples_created %}
+                                <div class="bg-base-200 p-2 rounded">
+                                    <div class="font-semibold">{{ task_info.details.triples_created|floatformat:0 }}</div>
+                                    <div>Triples Created</div>
+                                </div>
+                            {% endif %}
+                            {% if task_info.details.errors %}
+                                <div class="bg-error/10 p-2 rounded">
+                                    <div class="font-semibold text-error">{{ task_info.details.errors }}</div>
+                                    <div>Errors</div>
+                                </div>
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+    {% elif task_info.status == 'failed' %}
+        <!-- Error State -->
+        <div class="alert alert-error">
+            <div class="flex items-center space-x-3">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-error flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                </svg>
+                <div class="flex-1">
+                    <div class="font-semibold">Directory Import Failed</div>
+                    <div class="text-sm">{{ task_info.message|default:"An error occurred during directory import." }}</div>
+                    
+                    {% if task_info.error_type %}
+                        <div class="text-xs mt-1 opacity-75">
+                            Error Type: {{ task_info.error_type }}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+    {% else %}
+        <!-- Initializing State -->
+        <div class="alert alert-info">
+            <div class="flex items-center space-x-3">
+                <div class="loading loading-spinner loading-xs"></div>
+                <div>
+                    <div class="font-semibold">Initializing Directory Import</div>
+                    <div class="text-sm">Setting up directory import task...</div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+</div> 

@@ -8,7 +8,7 @@ from django.core.cache import cache
 
 from arkumu.storage.services.bucket_service import BucketService
 from arkumu.importer.services.importer.smart_bulk_updater import UpdateStrategy
-from arkumu.importer.tasks.import_metadata import run_csv_import_workflow
+from arkumu.importer.tasks.import_metadata import run_csv_import_workflow, run_csv_directory_import_workflow
 from arkumu.importer.models import IngestSession
 
 logger = logging.getLogger(__name__)
@@ -308,4 +308,110 @@ def clear_ingest_sessions(request):
         
         return JsonResponse({
             'error': error_message
-        }, status=500) 
+        }, status=500)
+
+
+@login_required
+def start_directory_import(request):
+    """
+    Start a directory import for all CSV files in an S3 folder using the directory import Huey task
+    """
+    if request.method == "POST":
+        organization_slug = request.POST.get('organization')
+        s3_folder_path = request.POST.get('s3_folder_path')
+        folder_name = request.POST.get('folder_name')
+
+        if not organization_slug or not s3_folder_path:
+            return HttpResponse(
+                '<div class="alert alert-error"><span>Missing required fields: organization or folder path</span></div>',
+                status=400
+            )
+
+        # Clean up folder path (remove trailing slash if present)
+        s3_folder_path = s3_folder_path.rstrip('/')
+        
+        # Use folder name as base dataset name, fallback to folder path
+        dataset_name = folder_name or s3_folder_path.split('/')[-1] or 'directory_import'
+        
+        # Instantiate bucket service
+        bucket_service = BucketService()
+        
+        # Get bucket name for organization
+        s3_bucket_name = bucket_service.get_organization_bucket(organization_slug)
+        
+        logger.info(
+            f"Preparing to enqueue directory import of S3 folder {s3_bucket_name}/{s3_folder_path} "
+            f"as dataset '{dataset_name}' for organization {organization_slug}"
+        )
+
+        User = get_user_model()
+        user_instance = User.objects.get(pk=request.user.pk) if request.user.is_authenticated else None
+
+        # Create an IngestSession record to track this directory import
+        import uuid
+        polling_task_id = str(uuid.uuid4())
+        
+        ingest_session = IngestSession.objects.create(
+            user=user_instance,
+            dataset_name=dataset_name,
+            organization=organization_slug,
+            s3_bucket=s3_bucket_name,
+            s3_object_key=s3_folder_path,  # Store folder path in s3_object_key field
+            status='pending',
+            delimiter=';',
+            has_quoted_fields=True,
+            base_uri="http://arkumu.org/data",
+            task_id=polling_task_id,
+        )
+        
+        # Enqueue the directory import Huey task
+        task_instance = run_csv_directory_import_workflow(
+            s3_bucket_name=s3_bucket_name,
+            s3_folder_prefix=s3_folder_path,
+            dataset_name=dataset_name,
+            institution=organization_slug,
+            base_uri="http://arkumu.org/data",
+            delimiter=';',
+            has_quoted_fields=True,
+            link_row_cells=True,
+            link_to_first_column=False,
+            use_smart_updater=False,  # Default to false for faster processing
+            use_polars=True,  # Enable for better performance
+            update_strategy=UpdateStrategy.UPDATE_VALUES,
+            relationship_config_json=None,  # No relationship config by default
+            file_columns=None,  # No specific file columns
+            timestamp_column=None,  # No timestamp column
+            task_id_for_cache=polling_task_id,
+            upload_session_id=ingest_session.id
+        )
+        
+        # Update the ingest session with the Huey task ID
+        ingest_session.huey_task_id = str(task_instance.id)
+        ingest_session.save()
+        
+        # Store initial status for the HTMX poller
+        cache_key = f"task_status_{polling_task_id}"
+        initial_task_info = {
+            "status": "pending", 
+            "message": f"Directory import for '{folder_name or s3_folder_path}' has been queued. Discovering CSV files...",
+            "progress": 0
+        }
+        cache.set(cache_key, initial_task_info, timeout=3600)
+
+        logger.info(
+            f"Enqueued directory import task. Polling ID: {polling_task_id}, "
+            f"Huey Task ID: {task_instance.id} for S3 folder '{s3_bucket_name}/{s3_folder_path}'"
+        )
+        
+        # Return the directory-specific poller template for HTMX
+        return render(request, 'importer/partials/directory_import_status_poller.html', {
+            'task_id': polling_task_id,
+            'task_info': initial_task_info,
+            'should_poll': True,
+            'import_type': 'directory'  # To distinguish from single file imports
+        })
+
+    return HttpResponse(
+        '<div class="alert alert-error"><span>Invalid request method</span></div>',
+        status=405
+    ) 
