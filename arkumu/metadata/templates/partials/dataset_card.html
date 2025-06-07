@@ -44,11 +44,77 @@
                     </div>
                 </div>
             </div>
+            
+            <!-- Column Names Display - Right below dataset name -->
+            {% if dataset.preview.colHeaders %}
+            <div class="alert alert-success p-1">
+                <div class="flex flex-wrap gap-1">
+                    {% for column in dataset.preview.colHeaders %}
+                    <div class="badge badge-success badge-xs cursor-pointer hover:badge-accent"
+                          data-column-name="{{ column }}"
+                          _="on click 
+                              log 'Column badge clicked:', '{{ column }}'
+                              
+                              -- Reset all column highlights first
+                              remove .badge-accent from .badge in me.parentElement
+                              add .badge-success to .badge in me.parentElement
+                              
+                              -- Highlight this column badge
+                              remove .badge-success from me
+                              add .badge-accent to me
+                              log 'Badge highlight updated for:', '{{ column }}'
+                              
+                              -- Find and highlight the table column
+                              set columnIndex to {{ forloop.counter0 }}
+                              set tableColumnId to 'column-' + columnIndex + '-{{ dataset.name }}'
+                              log 'Looking for table column with ID:', tableColumnId
+                              
+                              get #{tableColumnId}
+                              set tableColumn to it
+                              log 'Found table column element:', tableColumn
+                              
+                              if tableColumn exists
+                                  log 'Table column found, highlighting it'
+                                  
+                                  -- Find the table container
+                                  set tableContainer to closest .table-container to tableColumn
+                                  log 'Table container:', tableContainer
+                                  
+                                  -- Reset all table column highlights first
+                                  remove .bg-primary from .column-header in tableContainer
+                                  remove .text-primary-content from .column-header in tableContainer  
+                                  remove .font-bold from .column-header in tableContainer
+                                  log 'Reset other column highlights'
+                                  
+                                  -- Highlight the table column
+                                  add .bg-primary to tableColumn
+                                  add .text-primary-content to tableColumn
+                                  add .font-bold to tableColumn
+                                  log 'Added highlighting classes to column'
+                                  
+                                  -- Scroll the table column into view
+                                  js(tableColumn)
+                                      console.log('Scrolling column into view:', tableColumn);
+                                      tableColumn.scrollIntoView({behavior: 'smooth', block: 'nearest', inline: 'center'});
+                                  end
+                              else
+                                  log 'ERROR: Table column not found with ID:', tableColumnId
+                              end
+                              
+                              -- Also trigger graph highlighting
+                              log 'Triggering graph highlight for:', '{{ column }}'
+                              trigger highlightColumn(columnName: '{{ column }}') on body">
+                        {{ column }}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
         </div>
     </div>
     
     <!-- Card Body -->
-    <div class="card-body p-4 bg-base-100">
+    <div class="card-body pt-2 px-4 pb-4 bg-base-100">
         <!-- Loading indicator for this specific dataset -->
         <div id="graph-loading-{{ dataset.name }}" class="htmx-indicator">
             <div class="flex items-center justify-center py-4">
@@ -143,6 +209,7 @@
                 </div>
                 {% endif %}
             </div>
+
             
             <!-- Table Stats -->
             <div class="mt-3">
