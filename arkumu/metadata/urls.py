@@ -1,5 +1,5 @@
 from django.urls import path
-from arkumu.metadata.views import dashboard_views, resource_views, triple_views, graph_views, bulk_editor_views, data_discovery_views, data_explorer_views, split_views
+from arkumu.metadata.views import dashboard_views, resource_views, triple_views, graph_views, bulk_editor_views, data_discovery_views, data_explorer_views, split_views, direct_data_views
 
 app_name = 'metadata'
 
@@ -70,7 +70,7 @@ urlpatterns = [
     path('data-discovery/auto-link-all/', data_discovery_views.auto_link_all, name='auto_link_all'),
     path('data-discovery/rescan-s3/', data_discovery_views.rescan_s3_files, name='rescan_s3_files'),
     
-    # Split Table/Graph View
+    # Split Table/Graph View (Database-based)
     path('split-view/', split_views.split_table_graph_view, name='split_table_graph'),
     path('split-view/load-source-data/', split_views.load_source_data, name='load_source_data'),
     path('split-view/dataset-card/', split_views.get_dataset_card, name='split_dataset_card'),
@@ -82,4 +82,12 @@ urlpatterns = [
     path('split-view/refresh-graph/', split_views.refresh_graph, name='refresh_graph'),
     path('split-view/toggle-layout/', split_views.toggle_layout, name='toggle_layout'),
     path('split-view/analyze-relationships/', split_views.analyze_dataset_relationships, name='analyze_dataset_relationships'),
+    
+    # Direct Data Analysis (File-based, faster)
+    path('direct-analysis/', direct_data_views.direct_split_table_graph_view, name='direct_split_table_graph'),
+    path('direct-analysis/load-source-data/', direct_data_views.direct_load_source_data, name='direct_load_source_data'),
+    path('direct-analysis/dataset-card/', direct_data_views.direct_get_dataset_card, name='direct_dataset_card'),
+    path('direct-analysis/load-more-rows/', direct_data_views.direct_load_more_dataset_rows, name='direct_load_more_dataset_rows'),
+    path('direct-analysis/analyze-relationships/', direct_data_views.direct_analyze_dataset_relationships, name='direct_analyze_dataset_relationships'),
+    path('direct-analysis/import-preview/', direct_data_views.direct_get_import_preview, name='direct_import_preview'),
     ]

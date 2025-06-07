@@ -1,0 +1,720 @@
+"""
+S3 Direct Data Analysis Service
+
+Efficiently analyzes data source files in S3 buckets using Polars
+without importing them into the database first. Provides fast table previews,
+column analysis, and relationship discovery directly from S3 files.
+
+This approach is more memory-efficient and faster than reconstructing
+data from the database after import. Integrates with the existing BucketService
+architecture following the same pattern as the archivist dashboard.
+"""
+
+import logging
+import polars as pl
+import io
+from typing import Dict, List, Any, Optional, Tuple, Union
+from dataclasses import dataclass, field
+from datetime import datetime
+import tempfile
+import os
+
+from arkumu.storage.services.bucket_service import BucketService
+from arkumu.importer.services.importer.smart_bulk_updater import SmartBulkUpdater
+from arkumu.metadata.services.relationship_discovery import RelationshipDiscoveryService
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class S3DataSourceInfo:
+    """Information about a data source file in S3."""
+    bucket_name: str
+    object_key: str
+    name: str  # File name without extension
+    format: str  # 'csv', 'excel', 'parquet', etc.
+    size_bytes: Optional[int] = None
+    modified_date: Optional[datetime] = None
+    sheet_names: Optional[List[str]] = None  # For Excel files
+
+
+@dataclass
+class S3TablePreview:
+    """Preview data for a table/dataset from S3."""
+    column_headers: List[str]
+    data_rows: List[List[Any]]
+    total_rows: int
+    showing_rows: int
+    offset: int
+    has_more: bool
+    column_types: Dict[str, str]
+    sample_size: int
+    multi_value_columns: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+
+
+@dataclass
+class S3DatasetAnalysis:
+    """Complete analysis of a dataset from S3."""
+    source_info: S3DataSourceInfo
+    row_count: int
+    column_count: int
+    column_types: Dict[str, str]
+    preview: S3TablePreview
+    multi_value_analysis: Dict[str, Dict[str, Any]]
+    data_quality_metrics: Dict[str, Any]
+    suggested_import_strategy: str
+    relationship_analysis: Optional[Dict[str, Any]] = None
+
+
+class S3DirectDataAnalyzer:
+    """
+    Service for directly analyzing S3 data files using Polars.
+    
+    Provides efficient table previews, column analysis, and relationship
+    discovery without importing data into the database first.
+    Integrates with the existing BucketService architecture.
+    """
+    
+    def __init__(self, 
+                 default_preview_rows: int = 50,
+                 sample_size_for_analysis: int = 1000):
+        """
+        Initialize the S3 direct data analyzer.
+        
+        Args:
+            default_preview_rows: Default number of rows to show in previews
+            sample_size_for_analysis: Sample size for column type inference and analysis
+        """
+        self.default_preview_rows = default_preview_rows
+        self.sample_size_for_analysis = sample_size_for_analysis
+        
+        # Initialize services for S3 access and analysis
+        self.bucket_service = BucketService()
+        self.bulk_updater = SmartBulkUpdater()
+        self.relationship_service = RelationshipDiscoveryService()
+    
+    def discover_s3_data_sources(self, organization_id: str) -> List[S3DataSourceInfo]:
+        """
+        Discover all available data source files in an organization's S3 bucket.
+        
+        Args:
+            organization_id: Organization ID to determine the S3 bucket
+            
+        Returns:
+            List of S3DataSourceInfo objects for discovered files
+        """
+        sources = []
+        
+        supported_extensions = {
+            '.csv': 'csv',
+            '.xlsx': 'excel', 
+            '.xls': 'excel',
+            '.parquet': 'parquet',
+            '.json': 'json',
+            '.jsonl': 'jsonl'
+        }
+        
+        try:
+            # Get the bucket name for this organization
+            bucket_name = self.bucket_service.get_organization_bucket(organization_id)
+            logger.info(f"Discovering data sources in bucket: {bucket_name}")
+            
+            # Use the existing organization browsing infrastructure
+            # Get all files through the same method as the archivist dashboard
+            s3_objects = self._get_all_files_in_organization(organization_id)
+            
+            for s3_obj in s3_objects:
+                # Handle the format returned by BucketService.list_bucket_contents
+                logger.info(f"Processing S3 object: {s3_obj}")
+                
+                if s3_obj.get('type') != 'file':
+                    logger.info(f"Skipping non-file item: {s3_obj.get('name', 'unknown')} (type: {s3_obj.get('type')})")
+                    continue  # Skip folders
+                    
+                object_key = s3_obj['path']  # BucketService uses 'path' instead of 'Key'
+                file_name = s3_obj['name']   # BucketService provides 'name' directly
+                name, ext = os.path.splitext(file_name)
+                
+                logger.info(f"File analysis: name='{name}', ext='{ext}', size={s3_obj.get('size', 0)}")
+                
+                if ext.lower() in supported_extensions and s3_obj.get('size', 0) > 0:
+                    try:
+                        source_info = S3DataSourceInfo(
+                            bucket_name=bucket_name,
+                            object_key=object_key,
+                            name=name,
+                            format=supported_extensions[ext.lower()],
+                            size_bytes=s3_obj.get('size'),  # BucketService uses 'size'
+                            modified_date=s3_obj.get('last_modified')  # BucketService uses 'last_modified'
+                        )
+                        
+                        # For Excel files, get sheet names (this requires downloading metadata)
+                        if source_info.format == 'excel':
+                            try:
+                                sheet_names = self._get_excel_sheet_names(bucket_name, object_key)
+                                source_info.sheet_names = sheet_names
+                            except Exception as e:
+                                logger.warning(f"Could not read Excel sheet names from {object_key}: {e}")
+                        
+                        sources.append(source_info)
+                        logger.info(f"Added source: {source_info.name} (format: {source_info.format})")
+                        
+                    except Exception as e:
+                        logger.warning(f"Could not analyze S3 object {object_key}: {e}")
+                else:
+                    logger.info(f"Skipping file: {file_name} (ext: {ext}, size: {s3_obj.get('size', 0)}, supported: {ext.lower() in supported_extensions})")
+        
+        except Exception as e:
+            logger.error(f"Error discovering S3 data sources for organization {organization_id}: {e}")
+        
+        logger.info(f"Total sources found: {len(sources)}")
+        return sorted(sources, key=lambda x: x.name)
+    
+    def _get_all_files_in_organization(self, organization_id: str) -> List[Dict[str, Any]]:
+        """
+        Get all files for an organization using the same logic as the archivist dashboard.
+        This leverages the existing file browsing infrastructure.
+        
+        Args:
+            organization_id: Organization ID
+            
+        Returns:
+            List of file objects with standardized format
+        """
+        try:
+            # Use the existing organization browsing method from BucketService
+            # This follows the same pattern as the archivist dashboard
+            org_data = self.bucket_service.get_root_level_items(organization_id)
+            
+            all_files = []
+            
+            # Get files from root level
+            root_files = org_data.get('files', [])
+            for file_info in root_files:
+                # Convert to the format expected by the rest of the method
+                all_files.append({
+                    'name': file_info['name'],
+                    'path': file_info['path'], 
+                    'type': 'file',
+                    'size': file_info['size'],
+                    'last_modified': file_info.get('last_modified')
+                })
+            
+            # For folders, we need to browse them too
+            # This is where we leverage the existing infrastructure
+            folders = org_data.get('folders', [])
+            for folder_info in folders:
+                folder_path = folder_info['path']
+                logger.info(f"Scanning folder: {folder_path}")
+                
+                # Get the bucket name for this organization
+                bucket_name = self.bucket_service.get_organization_bucket(organization_id)
+                
+                # Get files from this folder
+                folder_contents = self.bucket_service.list_bucket_contents(bucket_name, folder_path)
+                for item in folder_contents:
+                    if item.get('type') == 'file':
+                        all_files.append(item)
+            
+            logger.info(f"Found {len(all_files)} total files for organization {organization_id}")
+            return all_files
+            
+        except Exception as e:
+            logger.error(f"Error getting files for organization {organization_id}: {e}")
+            return []
+    
+    def get_dataset_names_from_s3_source(self, source_info: S3DataSourceInfo) -> List[str]:
+        """
+        Get dataset names from an S3 source file.
+        For single-sheet files: returns [source_name]
+        For multi-sheet Excel: returns sheet names
+        
+        Args:
+            source_info: Information about the S3 data source
+            
+        Returns:
+            List of dataset names available in this source
+        """
+        if source_info.format == 'excel' and source_info.sheet_names:
+            return source_info.sheet_names
+        else:
+            return [source_info.name]
+    
+    def _get_excel_sheet_names(self, bucket_name: str, object_key: str) -> List[str]:
+        """Get sheet names from an Excel file in S3."""
+        # Download a small portion or use a temporary file to read Excel metadata
+        with tempfile.NamedTemporaryFile(suffix='.xlsx') as temp_file:
+            self.bucket_service.base_s3_service.s3_client.download_file(
+                bucket_name, object_key, temp_file.name
+            )
+            
+            # Use openpyxl or xlrd to read sheet names without loading data
+            try:
+                import openpyxl
+                workbook = openpyxl.load_workbook(temp_file.name, read_only=True)
+                return workbook.sheetnames
+            except ImportError:
+                # Fallback to pandas/polars if openpyxl not available
+                df_dict = pl.read_excel(temp_file.name, sheet_name=None)
+                return list(df_dict.keys()) if isinstance(df_dict, dict) else [object_key]
+    
+    def _read_s3_source_lazy(self, 
+                           source_info: S3DataSourceInfo, 
+                           dataset_name: Optional[str] = None,
+                           max_rows_for_schema: Optional[int] = None) -> pl.LazyFrame:
+        """
+        Create a lazy frame for reading S3 data efficiently.
+        
+        Args:
+            source_info: Information about the S3 data source
+            dataset_name: For Excel files, the sheet name to read
+            max_rows_for_schema: Limit rows read for schema inference
+            
+        Returns:
+            Polars LazyFrame for efficient data processing
+        """
+        # Download file to temporary location for processing
+        with tempfile.NamedTemporaryFile(suffix=f'.{source_info.format}', delete=False) as temp_file:
+            temp_file_path = temp_file.name
+            
+        try:
+            # Download the file from S3
+            self.bucket_service.base_s3_service.s3_client.download_file(
+                source_info.bucket_name, 
+                source_info.object_key, 
+                temp_file_path
+            )
+            
+            if source_info.format == 'csv':
+                # Use semicolon delimiter as default (following import_metadata.py pattern)
+                # For large files, limit schema inference to improve performance
+                n_rows = max_rows_for_schema if max_rows_for_schema else self.sample_size_for_analysis
+                return pl.scan_csv(
+                    temp_file_path, 
+                    separator=';',  # Use semicolon as default like import_metadata.py
+                    infer_schema_length=n_rows,
+                    ignore_errors=True  # Handle malformed rows gracefully
+                )
+            
+            elif source_info.format == 'parquet':
+                return pl.scan_parquet(temp_file_path)
+            
+            elif source_info.format == 'excel':
+                # Excel requires eager reading, but we can still optimize
+                sheet_name = dataset_name if dataset_name else 0
+                df = pl.read_excel(temp_file_path, sheet_name=sheet_name)
+                return df.lazy()
+            
+            elif source_info.format in ['json', 'jsonl']:
+                return pl.scan_ndjson(temp_file_path)
+            
+            else:
+                raise ValueError(f"Unsupported file format: {source_info.format}")
+                
+        except Exception as e:
+            # Clean up temp file on error
+            try:
+                os.unlink(temp_file_path)
+            except:
+                pass
+            raise e
+        finally:
+            # Clean up temp file after use
+            try:
+                os.unlink(temp_file_path)
+            except:
+                pass
+    
+    def _read_s3_source_eager_sample(self, 
+                                   source_info: S3DataSourceInfo, 
+                                   dataset_name: Optional[str] = None,
+                                   n_rows: Optional[int] = None) -> pl.DataFrame:
+        """
+        Read a sample from S3 source as eager DataFrame for analysis.
+        
+        Args:
+            source_info: Information about the S3 data source
+            dataset_name: For Excel files, the sheet name to read
+            n_rows: Number of rows to read (for sampling)
+            
+        Returns:
+            Polars DataFrame with sample data
+        """
+        with tempfile.NamedTemporaryFile(suffix=f'.{source_info.format}', delete=False) as temp_file:
+            temp_file_path = temp_file.name
+            
+        try:
+            self.bucket_service.base_s3_service.s3_client.download_file(
+                source_info.bucket_name, 
+                source_info.object_key, 
+                temp_file_path
+            )
+            
+            if source_info.format == 'csv':
+                return pl.read_csv(
+                    temp_file_path, 
+                    separator=';',  # Use semicolon as default like import_metadata.py
+                    n_rows=n_rows,
+                    ignore_errors=True  # Handle malformed rows gracefully
+                )
+            
+            elif source_info.format == 'parquet':
+                df = pl.read_parquet(temp_file_path)
+                return df.head(n_rows) if n_rows else df
+            
+            elif source_info.format == 'excel':
+                sheet_name = dataset_name if dataset_name else 0
+                df = pl.read_excel(temp_file_path, sheet_name=sheet_name)
+                return df.head(n_rows) if n_rows else df
+            
+            elif source_info.format in ['json', 'jsonl']:
+                df = pl.read_ndjson(temp_file_path)
+                return df.head(n_rows) if n_rows else df
+            
+            else:
+                raise ValueError(f"Unsupported file format: {source_info.format}")
+                
+        finally:
+            # Clean up temp file
+            try:
+                os.unlink(temp_file_path)
+            except:
+                pass
+    
+    def get_s3_table_preview(self, 
+                           source_info: S3DataSourceInfo,
+                           dataset_name: Optional[str] = None,
+                           offset: int = 0,
+                           limit: Optional[int] = None) -> S3TablePreview:
+        """
+        Get a preview of table data from S3 without loading the entire dataset.
+        
+        Args:
+            source_info: Information about the S3 data source
+            dataset_name: For multi-dataset sources (Excel sheets)
+            offset: Number of rows to skip
+            limit: Maximum number of rows to return
+            
+        Returns:
+            S3TablePreview with requested data slice
+        """
+        if limit is None:
+            limit = self.default_preview_rows
+        
+        try:
+            # For previews, use eager reading to avoid temp file issues
+            # Read a reasonable sample to get schema and row count
+            sample_df = self._read_s3_source_eager_sample(source_info, dataset_name, n_rows=limit + offset + 100)
+            
+            # Get total row count and schema from the sample
+            total_rows = len(sample_df)
+            column_headers = list(sample_df.columns)
+            column_types = {col: str(dtype) for col, dtype in sample_df.schema.items()}
+            
+            # Apply offset and limit to the sample we already read
+            preview_df = sample_df.slice(offset, limit)
+            
+            # Convert to list of lists for template compatibility (avoiding pandas dependency)
+            data_rows = preview_df.fill_null("").rows()
+            
+            # Analyze multi-value columns using the sample we already have
+            # Take a smaller subset for analysis if needed
+            analysis_sample_df = sample_df.head(self.sample_size_for_analysis)
+            sample_data = analysis_sample_df.to_dicts()
+            multi_value_analysis = self.bulk_updater.analyze_dataset_multi_values(sample_data)
+            
+            return S3TablePreview(
+                column_headers=column_headers,
+                data_rows=data_rows,
+                total_rows=total_rows,
+                showing_rows=len(data_rows),
+                offset=offset,
+                has_more=(offset + len(data_rows)) < total_rows,
+                column_types=column_types,
+                sample_size=len(sample_data),
+                multi_value_columns=multi_value_analysis
+            )
+            
+        except Exception as e:
+            logger.error(f"Error getting S3 table preview for {source_info.object_key}: {e}")
+            raise
+    
+    def analyze_s3_dataset_completely(self, 
+                                    source_info: S3DataSourceInfo,
+                                    dataset_name: Optional[str] = None,
+                                    include_relationships: bool = True) -> S3DatasetAnalysis:
+        """
+        Perform complete analysis of a dataset from S3 including relationships.
+        
+        Args:
+            source_info: Information about the S3 data source
+            dataset_name: For multi-dataset sources
+            include_relationships: Whether to analyze relationships (expensive)
+            
+        Returns:
+            Complete S3DatasetAnalysis
+        """
+        try:
+            # Get basic statistics efficiently
+            lazy_df = self._read_s3_source_lazy(source_info, dataset_name)
+            total_rows = lazy_df.select(pl.count()).collect().item()
+            schema = lazy_df.schema
+            column_count = len(schema)
+            column_types = {col: str(dtype) for col, dtype in schema.items()}
+            
+            # Get preview data
+            preview = self.get_s3_table_preview(source_info, dataset_name)
+            
+            # Get sample for detailed analysis
+            sample_df = self._read_s3_source_eager_sample(
+                source_info, dataset_name, n_rows=self.sample_size_for_analysis
+            )
+            sample_data = sample_df.to_dicts()
+            
+            # Multi-value analysis
+            multi_value_analysis = self.bulk_updater.analyze_dataset_multi_values(sample_data)
+            
+            # Data quality metrics
+            quality_metrics = self._calculate_data_quality_metrics(sample_df)
+            
+            # Import strategy suggestion
+            suggested_strategy = self._suggest_import_strategy(
+                total_rows, multi_value_analysis, quality_metrics
+            )
+            
+            # Relationship analysis (optional, expensive)
+            relationship_analysis = None
+            if include_relationships and total_rows <= 10000:  # Only for reasonably sized datasets
+                try:
+                    # Convert to format expected by relationship service
+                    temp_files = self._create_temp_csv_for_analysis(sample_data, dataset_name or source_info.name)
+                    relationship_analysis = self.relationship_service.compare_datasets_relationships(temp_files)
+                    
+                    # Clean up temp files
+                    for temp_file in temp_files:
+                        try:
+                            os.unlink(temp_file)
+                        except:
+                            pass
+                            
+                except Exception as e:
+                    logger.warning(f"Could not analyze relationships for {dataset_name}: {e}")
+            
+            return S3DatasetAnalysis(
+                source_info=source_info,
+                row_count=total_rows,
+                column_count=column_count,
+                column_types=column_types,
+                preview=preview,
+                multi_value_analysis=multi_value_analysis,
+                data_quality_metrics=quality_metrics,
+                suggested_import_strategy=suggested_strategy,
+                relationship_analysis=relationship_analysis
+            )
+            
+        except Exception as e:
+            logger.error(f"Error analyzing S3 dataset {dataset_name}: {e}")
+            raise
+    
+    def _calculate_data_quality_metrics(self, df: pl.DataFrame) -> Dict[str, Any]:
+        """Calculate data quality metrics for a dataset."""
+        metrics = {
+            'total_cells': df.shape[0] * df.shape[1],
+            'empty_cells': 0,
+            'null_cells': 0,
+            'duplicate_rows': 0,
+            'columns_with_all_nulls': [],
+            'columns_with_mixed_types': [],
+            'completeness_percentage': 0.0
+        }
+        
+        try:
+            # Calculate null counts per column
+            null_counts = df.null_count()
+            total_rows = df.shape[0]
+            
+            for column in df.columns:
+                null_count = null_counts[column][0]
+                metrics['null_cells'] += null_count
+                
+                if null_count == total_rows:
+                    metrics['columns_with_all_nulls'].append(column)
+            
+            # Calculate completeness
+            if metrics['total_cells'] > 0:
+                metrics['completeness_percentage'] = (
+                    (metrics['total_cells'] - metrics['null_cells']) / metrics['total_cells'] * 100
+                )
+            
+            # Count duplicate rows
+            metrics['duplicate_rows'] = total_rows - df.unique().shape[0]
+            
+        except Exception as e:
+            logger.warning(f"Error calculating data quality metrics: {e}")
+        
+        return metrics
+    
+    def _suggest_import_strategy(self, 
+                               total_rows: int,
+                               multi_value_analysis: Dict[str, Any],
+                               quality_metrics: Dict[str, Any]) -> str:
+        """Suggest an import strategy based on analysis."""
+        
+        # Check for multi-value columns
+        has_multi_value = any(
+            analysis.get('is_multi_value', False) 
+            for analysis in multi_value_analysis.values()
+        )
+        
+        # Check data quality
+        completeness = quality_metrics.get('completeness_percentage', 100)
+        
+        if total_rows > 100000:
+            return "BATCH_IMPORT"  # Large dataset, use batch processing
+        elif has_multi_value:
+            return "MULTI_VALUE_PROCESSING"  # Handle multi-value columns specially
+        elif completeness < 80:
+            return "QUALITY_CHECK_FIRST"  # Poor quality, recommend checking first
+        elif total_rows < 1000:
+            return "DIRECT_IMPORT"  # Small dataset, direct import
+        else:
+            return "STANDARD_IMPORT"  # Normal processing
+    
+    def _create_temp_csv_for_analysis(self, 
+                                    sample_data: List[Dict[str, Any]], 
+                                    dataset_name: str) -> List[str]:
+        """Create temporary CSV files for relationship analysis."""
+        temp_files = []
+        
+        try:
+            # Create temporary file
+            temp_fd, temp_path = tempfile.mkstemp(suffix='.csv', prefix=f'{dataset_name}_')
+            
+            with os.fdopen(temp_fd, 'w', newline='', encoding='utf-8') as temp_file:
+                if sample_data:
+                    import csv
+                    writer = csv.DictWriter(temp_file, fieldnames=sample_data[0].keys())
+                    writer.writeheader()
+                    writer.writerows(sample_data)
+            
+            temp_files.append(temp_path)
+            
+        except Exception as e:
+            logger.error(f"Error creating temp CSV for analysis: {e}")
+        
+        return temp_files
+    
+    def get_s3_source_summary(self, organization_id: str, source_name: str) -> Dict[str, Any]:
+        """
+        Get a summary of all datasets in an S3 source.
+        
+        Args:
+            organization_id: Organization ID for S3 bucket access
+            source_name: Name of the source to analyze
+            
+        Returns:
+            Summary information about the source and its datasets
+        """
+        sources = self.discover_s3_data_sources(organization_id)
+        source_info = next((s for s in sources if s.name == source_name), None)
+        
+        if not source_info:
+            raise ValueError(f"Source '{source_name}' not found in organization {organization_id}")
+        
+        # For single files (CSV, Excel, etc.), the dataset name is often just the source name
+        # For Excel files, we might have multiple sheets, so we get those
+        dataset_names = self.get_dataset_names_from_s3_source(source_info)
+        datasets_summary = []
+        
+        # Handle single-file sources (CSV, JSON, etc.)
+        if len(dataset_names) == 1 and dataset_names[0] == source_info.name:
+            # This is a single dataset file
+            try:
+                preview = self.get_s3_table_preview(source_info, dataset_names[0], limit=5)
+                datasets_summary.append({
+                    'name': dataset_names[0],
+                    'row_count': preview.total_rows,
+                    'column_count': len(preview.column_headers),
+                    'columns': preview.column_headers,
+                    'sample_data': preview.data_rows,
+                    'multi_value_columns': list(preview.multi_value_columns.keys())
+                })
+            except Exception as e:
+                logger.error(f"Could not analyze single dataset {dataset_names[0]}: {e}")
+                datasets_summary.append({
+                    'name': dataset_names[0],
+                    'error': str(e)
+                })
+        else:
+            # This is a multi-dataset source (e.g., Excel with multiple sheets)
+            for dataset_name in dataset_names:
+                try:
+                    preview = self.get_s3_table_preview(source_info, dataset_name, limit=5)
+                    datasets_summary.append({
+                        'name': dataset_name,
+                        'row_count': preview.total_rows,
+                        'column_count': len(preview.column_headers),
+                        'columns': preview.column_headers,
+                        'sample_data': preview.data_rows,
+                        'multi_value_columns': list(preview.multi_value_columns.keys())
+                    })
+                except Exception as e:
+                    logger.warning(f"Could not analyze dataset {dataset_name}: {e}")
+                    datasets_summary.append({
+                        'name': dataset_name,
+                        'error': str(e)
+                    })
+        
+        return {
+            'source_info': source_info,
+            'datasets': datasets_summary,
+            'total_datasets': len(dataset_names)
+        }
+
+    def get_s3_import_preview(self, 
+                            organization_id: str,
+                            source_name: str, 
+                            dataset_name: str) -> Dict[str, Any]:
+        """
+        Get a preview of what would happen if we imported this S3 dataset.
+        Uses SmartBulkUpdater's analysis capabilities.
+        
+        Args:
+            organization_id: Organization ID for S3 bucket access
+            source_name: Name of the source file
+            dataset_name: Name of the dataset within the source
+            
+        Returns:
+            Import preview with change analysis
+        """
+        # Find the source
+        sources = self.discover_s3_data_sources(organization_id)
+        source_info = next((s for s in sources if s.name == source_name), None)
+        
+        if not source_info:
+            raise ValueError(f"Source '{source_name}' not found in organization {organization_id}")
+        
+        # Get sample data for import analysis
+        sample_preview = self.get_s3_table_preview(source_info, dataset_name, limit=1000)
+        
+        # Convert to format expected by SmartBulkUpdater
+        csv_data = []
+        for i, row in enumerate(sample_preview.data_rows):
+            row_dict = {col: val for col, val in zip(sample_preview.column_headers, row)}
+            row_dict['id'] = i  # Add row ID
+            csv_data.append(row_dict)
+        
+        # Analyze what would change
+        changes_analysis = self.bulk_updater.analyze_dataset_changes(dataset_name, csv_data)
+        
+        return {
+            'dataset_name': dataset_name,
+            'import_preview': changes_analysis,
+            'sample_size': len(csv_data),
+            'total_rows': sample_preview.total_rows,
+            's3_info': {
+                'bucket': source_info.bucket_name,
+                'object_key': source_info.object_key,
+                'size_bytes': source_info.size_bytes
+            }
+        } 

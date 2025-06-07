@@ -12,7 +12,6 @@ import json
 from arkumu.metadata.models.resource import Resource, ResourceType
 from arkumu.metadata.models.triples import Triple
 from arkumu.metadata.services.relationship_discovery import RelationshipDiscoveryService
-from arkumu.metadata.services.metadata_models_mapping.table_analysis import TableAnalysisService
 
 logger = logging.getLogger(__name__)
 
@@ -995,8 +994,7 @@ def analyze_dataset_relationships(request):
     
     try:
         # Initialize services
-        table_analysis_service = TableAnalysisService()
-        relationship_service = RelationshipDiscoveryService(table_analysis_service)
+        relationship_service = RelationshipDiscoveryService(None)
         
         # Create a temporary CSV file for analysis
         # For now, we'll create a simple dataset from our Resource data

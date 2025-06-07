@@ -128,9 +128,10 @@
             <div class="form-control">
                 <select name="source" 
                         class="select select-bordered select-primary w-64"
-                        hx-get="/metadata/split-view/load-source-data/"
+                        hx-get="{% if is_direct_mode %}/metadata/direct-analysis/load-source-data/{% else %}/metadata/split-view/load-source-data/{% endif %}"
                         hx-trigger="change{% if selected_source %} load delay:10ms{% endif %}"
                         hx-swap="none"
+                        {% if is_direct_mode and organization_id %}hx-vals='{"organization": "{{ organization_id }}"}'{% endif %}
                         hx-indicator=".loading-indicator">
                     <option value="">Select a data source...</option>
                     {% for source in sources %}
@@ -146,14 +147,73 @@
                 <span class="text-sm">Loading...</span>
             </div>
             
-            <div class="stats shadow">
+                            <div class="stats shadow">
                 <div class="stat">
-                    <div class="stat-title text-xs">Status</div>
-                    <div class="stat-value text-sm text-success">Ready</div>
+                    <div class="stat-title text-xs">{% if is_direct_mode %}Direct Mode{% else %}Database Mode{% endif %}</div>
+                    <div class="stat-value text-sm {% if is_direct_mode %}text-info{% else %}text-success{% endif %}">
+                        {% if is_direct_mode %}File-based{% else %}DB-based{% endif %}
+                    </div>
                 </div>
             </div>
         </div>
     </div>
+    
+    <!-- Organization Help/Error Section -->
+    {% if error and show_organization_help %}
+    <div class="container mx-auto max-w-none p-4">
+        <div class="alert alert-warning shadow-lg">
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current flex-shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.464 0L4.732 15.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+                <div>
+                    <h3 class="font-bold">Organization Parameter Required</h3>
+                    <div class="text-sm">
+                        <p class="mb-2">To use Direct S3 Data Analysis, you need to specify an organization parameter in the URL.</p>
+                        <p class="mb-3">Available organizations you can try:</p>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3">
+                            <a href="?organization=rsh" class="btn btn-sm btn-outline">
+                                <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z"/>
+                                </svg>
+                                RSH (Robert Schumann)
+                            </a>
+                            <a href="?organization=khm" class="btn btn-sm btn-outline">
+                                <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z"/>
+                                </svg>
+                                KHM (Köln)
+                            </a>
+                            <a href="?organization=fuk" class="btn btn-sm btn-outline">
+                                <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z"/>
+                                </svg>
+                                FUK (Folkwang)
+                            </a>
+                        </div>
+                        <div class="text-xs opacity-75">
+                            <strong>URL Format:</strong> <code>/metadata/direct-analysis/?organization=YOUR_ORG</code>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% elif error %}
+    <div class="container mx-auto max-w-none p-4">
+        <div class="alert alert-error shadow-lg">
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current flex-shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div>
+                    <h3 class="font-bold">Error Loading Data</h3>
+                    <div class="text-sm">{{ error }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
     
     <!-- Split Content Area with Fixed Graph Panel -->
     <div class="container mx-auto max-w-none p-4">

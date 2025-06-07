@@ -10,12 +10,10 @@ import logging
 import re
 import tempfile
 import os
+import polars as pl
 
 from arkumu.metadata.models.resource import Resource, ResourceType
 from arkumu.metadata.models.triples import Triple
-
-# Import the services
-from arkumu.metadata.services.metadata_models_mapping import ServiceFactory
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -674,99 +672,63 @@ def auto_analyze_csv(request):
             temp_path = temp_file.name
         
         try:
-            # Get the enhanced services
-            service_factory = ServiceFactory()
-            table_analysis_service = service_factory.get_table_analysis_service()
-            mapping_config_service = service_factory.get_mapping_configuration_service(request.session)
-            validation_service = service_factory.get_validation_service()
-            preview_service = service_factory.get_preview_service(request.session)
+            # Simple CSV analysis using Polars
             
-            # Analyze the CSV file with enhanced analysis
-            analysis = table_analysis_service.analyze_csv(temp_path)
-            
-            # Create intelligent mapping suggestions using MappingConfigurationService
-            suggested_rules = []
-            for mapping in analysis.suggested_mappings:
-                try:
-                    # Create pattern rule from analysis
-                    pattern_rule = mapping_config_service.create_pattern_rule(
-                        name=f"Auto-detected {mapping['semantic_hint']} pattern",
-                        pattern_type=mapping.get('pattern_type', 'prefix'),
-                        pattern_value=mapping.get('pattern_value', ''),
-                        target_fields=['uri', 'name'],
-                        description=f"Auto-generated rule based on column '{mapping['column_name']}'"
-                    )
+            # Read the CSV file for basic analysis
+            try:
+                df = pl.read_csv(temp_path)
+                row_count = df.height
+                column_count = df.width
+                columns = df.columns
+                
+                # Basic column analysis
+                column_analysis = []
+                for col in columns:
+                    null_count = df[col].null_count()
+                    data_type = str(df[col].dtype)
+                    sample_values = df[col].drop_nulls().head(3).to_list()
                     
-                    # Create mapping rule
-                    mapping_rule = mapping_config_service.create_mapping_rule(
-                        name=f"{mapping['column_name']} → {mapping['target_type']}",
-                        pattern_rule=pattern_rule,
-                        mapping_type='type_assignment',
-                        target_semantic_type=mapping['target_type'],
-                        priority=int(mapping.get('confidence', 50))
-                    )
-                    
-                    suggested_rules.append({
-                        'rule': mapping_rule,
-                        'confidence': mapping.get('confidence', 0),
-                        'column_analysis': mapping,
-                        'confidence_badge_class': _get_confidence_badge_class(mapping.get('confidence', 0))
+                    column_analysis.append({
+                        'name': col,
+                        'data_type': data_type,
+                        'null_count': null_count,
+                        'null_percentage': (null_count / row_count * 100) if row_count > 0 else 0,
+                        'sample_values': sample_values
                     })
-                except Exception as e:
-                    logger.warning(f"Could not create mapping rule for {mapping}: {e}")
-            
-            # Validate data quality using ValidationService
-            quality_issues = []
-            quality_score = analysis.quality_score if hasattr(analysis, 'quality_score') else 0.8
-            
-            if quality_score < 0.6:
-                quality_issues.append("Low data quality detected - consider data cleaning")
-            if analysis.row_count < 10:
-                quality_issues.append("Small dataset - mapping suggestions may be less reliable") 
-            
-            # Use PreviewService to estimate transformation impact
-            transformation_preview = None
-            if suggested_rules:
-                try:
-                    # Create a temporary configuration for preview
-                    temp_config = mapping_config_service.create_configuration(
-                        name="Temporary Auto-Analysis Config",
-                        description="Auto-generated for preview"
-                    )
-                    
-                    # Add suggested rules to the config
-                    for suggested_rule in suggested_rules[:3]:  # Limit to top 3 for preview
-                        mapping_config_service.add_mapping_rule_to_configuration(
-                            temp_config.id, suggested_rule['rule']
-                        )
-                    
-                    # Get preview (simulated)
-                    transformation_preview = {
-                        'estimated_entities': analysis.row_count,
-                        'estimated_triples': analysis.row_count * len(suggested_rules),
-                        'top_transformations': suggested_rules[:3]
-                    }
-                except Exception as e:
-                    logger.warning(f"Could not generate transformation preview: {e}")
+                
+                # Simple quality assessment
+                total_nulls = sum(df[col].null_count() for col in columns)
+                null_percentage = (total_nulls / (row_count * column_count)) * 100 if row_count > 0 and column_count > 0 else 0
+                quality_score = max(0, min(10, 10 - (null_percentage / 10)))
+                
+                quality_issues = []
+                if quality_score < 6:
+                    quality_issues.append("High percentage of missing values detected")
+                if row_count < 10:
+                    quality_issues.append("Small dataset - analysis may be limited")
+                if column_count > 50:
+                    quality_issues.append("Large number of columns - consider data reduction")
+                
+            except Exception as e:
+                logger.error(f"Error reading CSV file: {e}")
+                return render(request, 'partials/auto_analysis_results.html', {
+                    'error': f'Error reading CSV file: {str(e)}'
+                })
             
             # Get file size for display
             file_size = len(file_content_result['content'])
             file_name = os.path.basename(s3_key)
             
-            # Enhanced context with service integration
+            # Simple analysis context
             context = {
-                'analysis': analysis,
-                'suggested_mappings': analysis.suggested_mappings,
-                'suggested_rules': suggested_rules,
-                'transformation_preview': transformation_preview,
-                'quality_issues': quality_issues,
+                'analysis': {
+                    'row_count': row_count,
+                    'column_count': column_count,
+                    'columns': column_analysis,
+                },
                 'quality_score': quality_score,
                 'quality_badge_class': _get_quality_badge_class(quality_score),
-                'institution_prefixes': analysis.institutional_prefixes,
-                'discovered_patterns': analysis.discovered_patterns,
-                'discovered_pattern_count': sum(len(patterns) for patterns in analysis.discovered_patterns.values()),
-                'foreign_key_candidates': analysis.foreign_key_candidates,
-                'table_type': analysis.table_type,
+                'quality_issues': quality_issues,
                 'source_info': {
                     'bucket': bucket_name,
                     's3_key': s3_key,
@@ -774,23 +736,16 @@ def auto_analyze_csv(request):
                     'file_size': file_size,
                     'organization': organization,
                 },
-                # Service-powered insights
-                'service_insights': {
-                    'has_foreign_keys': bool(analysis.foreign_key_candidates),
-                    'table_classification': analysis.table_type,
-                    'naming_conventions': analysis.discovered_patterns.get('naming_conventions', []),
-                    'data_completeness': (analysis.row_count - sum(col.null_count for col in analysis.columns)) / (analysis.row_count * analysis.column_count) if analysis.row_count > 0 and analysis.column_count > 0 else 0
-                }
+                'message': 'Basic CSV analysis completed successfully'
             }
             
-            logger.info(f"Successfully analyzed CSV, returning context with {len(suggested_rules)} suggested rules")
+            logger.info(f"Successfully analyzed CSV file: {file_name}")
             return render(request, 'partials/auto_analysis_results.html', context)
             
         finally:
             # Clean up temporary file
             try:
                 os.unlink(temp_path)
-                logger.info(f"Cleaned up temporary file: {temp_path}")
             except OSError as e:
                 logger.warning(f"Could not delete temporary file {temp_path}: {e}")
     
@@ -809,45 +764,17 @@ def _get_quality_badge_class(score):
     else:
         return 'badge-error'
 
-def _get_confidence_badge_class(confidence):
-    """Return appropriate badge class for confidence percentage"""
-    if confidence >= 80:
-        return 'badge-success'
-    elif confidence >= 60:
-        return 'badge-warning'
-    else:
-        return 'badge-error'
-
 @login_required
 def smart_mapping_suggestions(request):
     """Generate intelligent mapping suggestions based on data analysis."""
     if request.method != 'POST':
         return JsonResponse({'error': 'POST method required'}, status=405)
     
-    s3_file_id = request.POST.get('s3_file_id')
-    if not s3_file_id:
-        return render(request, 'partials/smart_suggestions.html', {
-            'error': 'No file selected for analysis'
-        })
-    
-    try:
-        # Get services
-        service_factory = ServiceFactory()
-        table_analysis_service = service_factory.get_table_analysis_service()
-        mapping_config_service = service_factory.get_mapping_configuration_service(request.session)
-        
-        # TODO: Download and analyze file (similar to auto_analyze_csv)
-        # For now, return placeholder
-        return render(request, 'partials/smart_suggestions.html', {
-            'suggestions': [],
-            'message': 'Smart mapping suggestions powered by TableAnalysisService'
-        })
-        
-    except Exception as e:
-        logger.error(f"Error generating smart suggestions: {e}", exc_info=True)
-        return render(request, 'partials/smart_suggestions.html', {
-            'error': f'Error generating suggestions: {str(e)}'
-        })
+    # Feature disabled - advanced mapping suggestions not available
+    return render(request, 'partials/smart_suggestions.html', {
+        'suggestions': [],
+        'message': 'Smart mapping suggestions feature is not available in this configuration'
+    })
 
 @login_required
 def apply_smart_suggestions(request):
@@ -855,54 +782,11 @@ def apply_smart_suggestions(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST method required'}, status=405)
     
-    try:
-        selected_suggestions = request.POST.getlist('suggestion_ids')
-        
-        if not selected_suggestions:
-            return render(request, 'partials/mapping_rules_display.html', {
-                'error': 'No suggestions selected',
-                'mapping_rules': request.session.get('mapping_rules', [])
-            })
-        
-        # Get mapping configuration service
-        service_factory = ServiceFactory()
-        mapping_config_service = service_factory.get_mapping_configuration_service(request.session)
-        
-        # Convert suggestions to mapping rules and apply to session
-        applied_count = 0
-        mapping_rules = request.session.get('mapping_rules', [])
-        
-        # In a real implementation, you would retrieve the actual suggestion objects
-        # For now, we'll simulate this by creating example rules
-        for suggestion_id in selected_suggestions:
-            try:
-                # Create a mapping rule (this would normally retrieve from suggestions cache)
-                new_rule = {
-                    'pattern_type': 'prefix',
-                    'pattern_value': f'auto_pattern_{applied_count}',
-                    'arkumu_type': f'arkumu:auto_type_{applied_count}',
-                    'source': 'smart_suggestion',
-                    'confidence': 85 + applied_count
-                }
-                mapping_rules.append(new_rule)
-                applied_count += 1
-            except Exception as e:
-                logger.warning(f"Could not apply suggestion {suggestion_id}: {e}")
-        
-        request.session['mapping_rules'] = mapping_rules
-        request.session.modified = True
-        
-        return render(request, 'partials/mapping_rules_display.html', {
-            'mapping_rules': mapping_rules,
-            'success': f'✅ Applied {applied_count} smart suggestions successfully'
-        })
-        
-    except Exception as e:
-        logger.error(f"Error applying smart suggestions: {e}", exc_info=True)
-        return render(request, 'partials/mapping_rules_display.html', {
-            'error': f'Error applying suggestions: {str(e)}',
-            'mapping_rules': request.session.get('mapping_rules', [])
-        })
+    # Feature disabled - smart suggestions not available
+    return render(request, 'partials/mapping_rules_display.html', {
+        'error': 'Smart suggestions feature is not available in this configuration',
+        'mapping_rules': request.session.get('mapping_rules', [])
+    })
 
 @login_required
 def enhanced_validation_preview(request):
@@ -910,42 +794,10 @@ def enhanced_validation_preview(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST method required'}, status=405)
     
-    dataset_uri = request.POST.get('dataset_uri', '').strip()
-    
-    if not dataset_uri:
-        return render(request, 'partials/enhanced_validation.html', {
-            'error': 'No dataset selected'
-        })
-    
-    try:
-        # Get services
-        service_factory = ServiceFactory()
-        validation_service = service_factory.get_validation_service()
-        
-        # Simulate validation for demo
-        # TODO: Implement actual validation logic
-        validation_results = {
-            'data_quality_score': 0.85,
-            'issues': [
-                {'level': 'warning', 'message': 'Some entities missing required properties'},
-                {'level': 'info', 'message': 'All entity IDs follow naming conventions'}
-            ],
-            'recommendations': [
-                'Consider adding rdf:label properties to improve semantic clarity',
-                'Data quality is good - ready for transformation'
-            ]
-        }
-        
-        return render(request, 'partials/enhanced_validation.html', {
-            'validation_results': validation_results,
-            'dataset_uri': dataset_uri
-        })
-        
-    except Exception as e:
-        logger.error(f"Error in enhanced validation: {e}", exc_info=True)
-        return render(request, 'partials/enhanced_validation.html', {
-            'error': f'Validation error: {str(e)}'
-        })
+    # Feature disabled - enhanced validation not available
+    return render(request, 'partials/enhanced_validation.html', {
+        'error': 'Enhanced validation feature is not available in this configuration'
+    })
 
 @login_required
 def cross_dataset_resolution(request):
@@ -953,36 +805,10 @@ def cross_dataset_resolution(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST method required'}, status=405)
     
-    try:
-        # Get services
-        service_factory = ServiceFactory()
-        reference_resolution_service = service_factory.get_reference_resolution_service()
-        
-        dataset_paths = request.POST.getlist('dataset_paths')
-        resolution_strategy = request.POST.get('resolution_strategy', 'exact_match')
-        
-        # TODO: Implement actual cross-dataset resolution
-        resolution_results = {
-            'strategy': resolution_strategy,
-            'total_entities': 150,
-            'resolved_entities': 142,
-            'unresolved_entities': 8,
-            'confidence_avg': 0.87,
-            'sample_resolutions': [
-                {'source': 'person_123', 'target': 'http://example.org/person/john_doe', 'confidence': 0.95},
-                {'source': 'artwork_456', 'target': 'http://example.org/artwork/mona_lisa', 'confidence': 0.88}
-            ]
-        }
-        
-        return render(request, 'partials/cross_dataset_resolution.html', {
-            'resolution_results': resolution_results
-        })
-        
-    except Exception as e:
-        logger.error(f"Error in cross-dataset resolution: {e}", exc_info=True)
-        return render(request, 'partials/cross_dataset_resolution.html', {
-            'error': f'Resolution error: {str(e)}'
-        })
+    # Feature disabled - cross-dataset resolution not available
+    return render(request, 'partials/cross_dataset_resolution.html', {
+        'error': 'Cross-dataset resolution feature is not available in this configuration'
+    })
 
 @login_required
 def enhanced_dataset_preview(request):
@@ -990,87 +816,10 @@ def enhanced_dataset_preview(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST method required'}, status=405)
     
-    dataset_uri = request.POST.get('dataset_uri', '').strip()
-    mapping_rules = request.session.get('mapping_rules', [])
-    
-    if not dataset_uri:
-        return render(request, 'partials/enhanced_transformation_preview.html', {
-            'error': 'No dataset selected'
-        })
-    
-    if not mapping_rules:
-        return render(request, 'partials/enhanced_transformation_preview.html', {
-            'error': 'No mapping rules defined. Please create mapping rules first.'
-        })
-    
-    try:
-        # Get all services for comprehensive preview
-        service_factory = ServiceFactory()
-        services = service_factory.create_complete_service_set(request.session)
-        
-        validation_service = services['validation']
-        preview_service = services['preview']
-        mapping_config_service = services['mapping_configuration']
-        
-        # Get dataset resources
-        cell_resources = Triple.objects.filter(
-            subject__uri=dataset_uri,
-            predicate__uri="http://purl.org/dc/terms/hasPart"
-        ).select_related('object')
-        
-        total_resources = cell_resources.count()
-        
-        # Use ValidationService for data quality assessment
-        quality_assessment = {
-            'total_resources': total_resources,
-            'quality_score': 0.92,  # Would come from validation_service
-            'issues': [
-                {'level': 'warning', 'message': 'Some entities missing rdf:label properties'},
-                {'level': 'info', 'message': 'Naming conventions are consistent'}
-            ],
-            'recommendations': [
-                'Consider adding more descriptive labels',
-                'Data structure is well-formed for transformation'
-            ]
-        }
-        
-        # Use PreviewService for transformation simulation
-        transformation_simulation = {
-            'estimated_changes': len(mapping_rules) * total_resources * 0.7,  # 70% match rate
-            'estimated_new_triples': len(mapping_rules) * total_resources,
-            'estimated_duration': f"{total_resources // 1000 + 1} minutes",
-            'impact_analysis': {
-                'entities_affected': int(total_resources * 0.7),
-                'new_types_created': len(set(rule['arkumu_type'] for rule in mapping_rules)),
-                'existing_types_updated': 0
-            }
-        }
-        
-        # Simulate cross-dataset impact analysis
-        cross_dataset_impact = {
-            'related_datasets': 2,
-            'potential_conflicts': 0,
-            'resolution_suggestions': [
-                'No conflicts detected with existing data',
-                'Transformation is safe to proceed'
-            ]
-        }
-        
-        return render(request, 'partials/enhanced_transformation_preview.html', {
-            'dataset_uri': dataset_uri,
-            'quality_assessment': quality_assessment,
-            'transformation_simulation': transformation_simulation,
-            'cross_dataset_impact': cross_dataset_impact,
-            'mapping_rules': mapping_rules,
-            'services_used': ['ValidationService', 'PreviewService', 'MappingConfigurationService'],
-            'preview_powered_by_services': True
-        })
-        
-    except Exception as e:
-        logger.error(f"Error in enhanced preview: {e}", exc_info=True)
-        return render(request, 'partials/enhanced_transformation_preview.html', {
-            'error': f'Error generating enhanced preview: {str(e)}'
-        })
+    # Feature disabled - enhanced preview not available
+    return render(request, 'partials/enhanced_transformation_preview.html', {
+        'error': 'Enhanced dataset preview feature is not available in this configuration'
+    })
 
 @login_required
 def service_powered_execution(request):
@@ -1078,74 +827,10 @@ def service_powered_execution(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST method required'}, status=405)
     
-    dataset_uri = request.POST.get('dataset_uri', '').strip()
-    mapping_rules = request.session.get('mapping_rules', [])
-    dry_run = request.POST.get('dry_run', 'false').lower() == 'true'
-    update_existing = request.POST.get('update_existing', 'false').lower() == 'true'
-    
-    if not dataset_uri:
-        return render(request, 'partials/service_execution_results.html', {
-            'error': 'No dataset selected'
-        })
-    
-    if not mapping_rules:
-        return render(request, 'partials/service_execution_results.html', {
-            'error': 'No mapping rules defined'
-        })
-    
-    try:
-        # Get the complete service set
-        service_factory = ServiceFactory()
-        services = service_factory.create_complete_service_set(request.session)
-        
-        processing_pipeline = services['processing_pipeline']
-        validation_service = services['validation']
-        
-        # Simulate pipeline execution
-        if not dry_run:
-            # In real implementation, this would use the ProcessingPipelineService
-            pipeline_result = {
-                'success': True,
-                'entities_processed': 1247,
-                'triples_created': 3741,
-                'triples_updated': 156,
-                'execution_time': '2.3 seconds',
-                'quality_improvements': {
-                    'before_score': 0.78,
-                    'after_score': 0.94,
-                    'improvement': '+16%'
-                },
-                'service_metrics': {
-                    'table_analysis_time': '0.2s',
-                    'mapping_application_time': '1.8s',
-                    'validation_time': '0.3s'
-                }
-            }
-        else:
-            # Dry run simulation
-            pipeline_result = {
-                'dry_run': True,
-                'would_process': 1247,
-                'would_create': 3741,
-                'would_update': 156,
-                'estimated_time': '2.3 seconds',
-                'validation_passed': True
-            }
-        
-        return render(request, 'partials/service_execution_results.html', {
-            'dataset_uri': dataset_uri,
-            'pipeline_result': pipeline_result,
-            'services_used': list(services.keys()),
-            'dry_run': dry_run,
-            'mapping_rules': mapping_rules,
-            'service_powered': True
-        })
-        
-    except Exception as e:
-        logger.error(f"Error in service-powered execution: {e}", exc_info=True)
-        return render(request, 'partials/service_execution_results.html', {
-            'error': f'Pipeline execution error: {str(e)}'
-        })
+    # Feature disabled - service-powered execution not available
+    return render(request, 'partials/service_execution_results.html', {
+        'error': 'Service-powered execution feature is not available in this configuration'
+    })
 
 @login_required
 def semantic_graph_editor(request):
