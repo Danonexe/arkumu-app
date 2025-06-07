@@ -10,27 +10,7 @@
         </div>
     </div>
     {% else %}
-    <!-- Debug Info - Only visible during development -->
-    {% if graph_data.debug_info or highlighted_column %}
-    <div class="bg-base-300 p-2 text-xs rounded-lg mb-2">
-        <h4 class="font-bold">Debug Info:</h4>
-        <ul class="list-disc pl-4">
-            {% if graph_data.debug_info %}
-                <li>Source: {{ graph_data.debug_info.source }}</li>
-                <li>Dataset: {{ graph_data.debug_info.dataset }}</li>
-                <li>Column Index: {{ graph_data.debug_info.column_index }}</li>
-                <li>Column Name: {{ graph_data.debug_info.column_name }}</li>
-                <li>Timestamp: {{ graph_data.debug_info.timestamp }}</li>
-            {% endif %}
-            {% if highlighted_column %}
-                <li>Highlighted Column: {{ highlighted_column }}</li>
-            {% endif %}
-            <li>Nodes Count: {{ graph_data.nodes|length }}</li>
-            <li>Links Count: {{ graph_data.links|length }}</li>
-            <li>Layout: {{ layout|default:"force" }}</li>
-        </ul>
-    </div>
-    {% endif %}
+
     
     <div class="flex flex-row h-full gap-4">
         <!-- Graph visualization -->

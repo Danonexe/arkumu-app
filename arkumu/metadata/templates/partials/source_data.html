@@ -28,16 +28,7 @@ Now also loads comprehensive graph with all columns.
 
 <!-- Graph container with comprehensive graph -->
 <div id="graph-container" hx-swap-oob="innerHTML">
-    <!-- Debug info -->
-    <div class="bg-yellow-100 p-2 text-xs">
-        <h4 class="font-bold">Template Debug:</h4>
-        <ul>
-            <li>graph_data exists: {{ graph_data|yesno:"Yes,No" }}</li>
-            <li>graph_data.nodes exists: {{ graph_data.nodes|yesno:"Yes,No" }}</li>
-            <li>nodes count: {{ graph_data.nodes|length|default:"N/A" }}</li>
-            <li>source: {{ source|default:"N/A" }}</li>
-        </ul>
-    </div>
+
     
     {% if graph_data and graph_data.nodes %}
         {% include 'partials/graph_visualization.html' with graph_data=graph_data source=source layout="force" %}
