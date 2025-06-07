@@ -72,27 +72,21 @@
                                 {% for header in dataset.preview.colHeaders %}
                                 <th class="p-2 border border-base-300 font-medium cursor-pointer hover:bg-primary-100 min-w-[120px] whitespace-nowrap column-header"
                                     id="column-{{ forloop.counter0 }}-{{ dataset.name }}"
+                                    data-column-name="{{ header }}"
                                     _="on click 
                                         log 'Column clicked:', '{{ header }}'
-                                        log 'Dataset:', '{{ dataset.name }}' 
-                                        log 'Source:', '{{ dataset.source }}'
                                         
-                                        -- Add visual highlight to this column
-                                        add .bg-primary to me
-                                        add .text-primary-content to me
-                                        add .font-bold to me
-                                        
-                                        -- Remove highlight from other columns in this table
+                                        -- Reset all column highlights first
                                         remove .bg-primary from .column-header in closest .table-container
                                         remove .text-primary-content from .column-header in closest .table-container  
                                         remove .font-bold from .column-header in closest .table-container
                                         
-                                        -- Add highlight back to this column
+                                        -- Highlight this column
                                         add .bg-primary to me
                                         add .text-primary-content to me
                                         add .font-bold to me
                                         
-                                        -- Trigger custom event to highlight column in graph
+                                        -- Trigger event for graph highlighting
                                         trigger highlightColumn(columnName: '{{ header }}') on body">
                                     {{ header }}
                                 </th>
@@ -121,9 +115,7 @@
                             hx-indicator="#load-more-indicator-{{ dataset.name }}"
                             _="on htmx:afterRequest
                                 set newOffset to {{ dataset.preview.showing_rows|add:'10' }}
-                                set my.dataset.offset to newOffset
-                                set my.dataset.moreText to 'Load 10 more rows'
-                                set span in me to `<span class='badge badge-sm ml-1'>${newOffset} of {{ dataset.preview.total_rows }}</span>`
+                                put `${newOffset} of {{ dataset.preview.total_rows }}` into first .badge in me
                                 if newOffset >= {{ dataset.preview.total_rows }} remove me end">
                         <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                             <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/>

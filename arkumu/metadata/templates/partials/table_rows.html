@@ -7,13 +7,13 @@
         data-column-index="{{ forloop.counter0 }}"
         {% if source and dataset %}
         _="on click 
-            log 'Cell clicked in column index:' '{{ forloop.counter0 }}'
-            log 'Dataset:' '{{ dataset }}'
-            log 'Source:' '{{ source }}'
+            log 'Cell clicked in column index:', '{{ forloop.counter0 }}'
+            log 'Dataset:', '{{ dataset }}'
+            log 'Source:', '{{ source }}'
             
             -- Get the column header from the table header
-            set columnHeader to the innerText of the element with id `column-{{ forloop.counter0 }}-{{ dataset }}`
-            log 'Column name:' columnHeader
+            set columnHeader to the innerText of #column-{{ forloop.counter0 }}-{{ dataset }}
+            log 'Column name:', columnHeader
             
             -- Focus the column this cell belongs to (if we found the header)
             if columnHeader then

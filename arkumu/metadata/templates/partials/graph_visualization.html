@@ -161,6 +161,10 @@
                     if (statusEl) statusEl.textContent = 'Yes';
                     if (nodeCountEl) nodeCountEl.textContent = this.nodes.length;
                     
+                    // Announce readiness to the global event system
+                    console.log('Triggering graphReady event');
+                    document.body.dispatchEvent(new CustomEvent('graphReady'));
+                    
                     return true;
                     
                 } catch (error) {
@@ -189,11 +193,15 @@
             // Highlight a specific column
             highlightColumn: function(columnName) {
                 if (!this.network || !this.nodes) {
-                    console.error('Graph not initialized');
+                    console.error('Graph not initialized - network or nodes missing');
                     return false;
                 }
                 
-                console.log('Highlighting column:', columnName);
+                console.log('=== HIGHLIGHTING COLUMN ===');
+                console.log('Column name:', columnName);
+                console.log('Network ready:', !!this.network);
+                console.log('Nodes ready:', !!this.nodes);
+                console.log('Total nodes:', this.nodes.length);
                 
                 // Reset first
                 this.resetHighlights();
@@ -208,7 +216,13 @@
                 
                 if (matchingColumnNodes.length === 0) {
                     console.error('No column nodes found for:', columnName);
-                    console.log('Available column nodes:', allNodes.filter(n => n.type === 'column').map(n => n.column));
+                    console.log('Available column nodes:', allNodes.filter(n => n.type === 'column').map(n => ({
+                        id: n.id,
+                        column: n.column,
+                        label: n.label,
+                        type: n.type
+                    })));
+                    console.log('All node types:', [...new Set(allNodes.map(n => n.type))]);
                     return false;
                 }
                 
@@ -252,8 +266,13 @@
                         scale: 1.2,
                         animation: { duration: 1000, easingFunction: 'easeInOutQuad' }
                     });
+                    
+                    console.log(`✅ Successfully highlighted ${highlightedNodeIds.length} nodes for column '${columnName}'`);
+                } else {
+                    console.warn(`⚠️ No nodes were highlighted for column '${columnName}'`);
                 }
                 
+                console.log('=== END HIGHLIGHTING ===');
                 return true;
             },
             
@@ -419,12 +438,37 @@
             
             <button class="btn btn-accent btn-sm" 
                     _="on click
-                        log 'Test highlight button clicked'
-                        trigger highlightColumn(columnName: 'test')">
+                        log 'Test highlight button clicked - simulating column click on body'
+                        trigger highlightColumn(columnName: 'test') on body">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
                 </svg>
                 Test Highlight
+            </button>
+            
+            <button class="btn btn-info btn-sm" 
+                    _="on click
+                        log 'Debug info requested'
+                        if window.GraphAPI
+                          log 'GraphAPI exists:', true
+                          log 'GraphAPI.isReady():', window.GraphAPI.isReady()
+                          if window.GraphAPI.nodes
+                            log 'Total nodes:', window.GraphAPI.nodes.length
+                            js
+                              var columnNodes = window.GraphAPI.nodes.get().filter(n => n.type === 'column');
+                              console.log('Column nodes:', columnNodes.length);
+                              console.log('Available columns:', columnNodes.map(n => n.column));
+                            end
+                          else
+                            log 'No nodes available'
+                          end
+                        else
+                          log 'GraphAPI not found'
+                        end">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Debug Info
             </button>
         </div>
         

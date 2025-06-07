@@ -22,37 +22,71 @@
            log 'Column highlighted:', detail.columnName
            
          on datasetSelected(detail) from anywhere
-           log 'Dataset selected:', detail.datasetName
+           log 'Dataset selected:', detail.datasetName">
            
-         -- CRITICAL: Global column highlighting listener
-         on highlightColumn(columnName) from anywhere
-           log 'Received global highlight request for column:', columnName
+    <!-- Add a global event listener specifically for body events -->
+    <div id="global-event-handler" style="display: none;"
+         _="on highlightColumn(columnName) from body
+           log 'GLOBAL: Received highlight request for column:', columnName
            
-           -- Check if graph API is ready
-           if window.GraphAPI and window.GraphAPI.isReady()
-             log 'Graph API is ready, highlighting column:', columnName
-             call window.GraphAPI.highlightColumn(columnName)
-           else
-             log 'Graph API not ready, trying fallback...'
-             
-             -- Try to call after a short delay
-             wait 500ms
-             if window.GraphAPI and window.GraphAPI.isReady()
-               log 'Graph API ready after delay, highlighting:', columnName  
+           -- Store the column name for debugging
+           set @data-last-column to columnName
+           
+           -- Check if graph API is ready with better timing
+           if window.GraphAPI
+             log 'GraphAPI exists, checking if ready...'
+             if window.GraphAPI.isReady()
+               log 'Graph API is ready, highlighting column:', columnName
                call window.GraphAPI.highlightColumn(columnName)
+               
+               -- Show success feedback
+               trigger showToast(message: `Column '${columnName}' highlighted in graph`, type: 'success')
              else
-               log 'ERROR: Graph API still not ready after delay'
+               log 'Graph API not ready, trying with delays...'
+               
+               -- Try multiple times with increasing delays
+               call retryHighlight(columnName, 1)
              end
+           else
+             log 'ERROR: GraphAPI not found at all'
+             trigger showToast(message: 'Graph not initialized yet. Please wait and try again.', type: 'warning')
            end
            
-         -- Reset highlights listener
+         -- Reset highlights listener  
          on resetGraphHighlights from anywhere
            log 'Resetting graph highlights'
            if window.GraphAPI and window.GraphAPI.resetHighlights
              call window.GraphAPI.resetHighlights()
            else
              log 'Graph API not available for reset'
-           end">
+           end
+           
+         -- Toast notification handler
+         on showToast(message, type) from anywhere
+           log 'Showing toast:', message, 'type:', type
+           set #status-message's textContent to message
+           
+           -- Set appropriate styling based on type
+           if type === 'success'
+             add .alert-success to first .alert in #status-toast
+             remove .alert-warning from first .alert in #status-toast
+             remove .alert-error from first .alert in #status-toast
+           else if type === 'warning'  
+             add .alert-warning to first .alert in #status-toast
+             remove .alert-success from first .alert in #status-toast
+             remove .alert-error from first .alert in #status-toast
+           else if type === 'error'
+             add .alert-error to first .alert in #status-toast
+             remove .alert-success from first .alert in #status-toast
+             remove .alert-warning from first .alert in #status-toast
+           end
+           
+           -- Show toast
+           show #status-toast
+           wait 3s
+           hide #status-toast">
+    </div>
+
     <!-- Hero Section -->
     <div class="hero bg-gradient-to-r from-primary to-secondary text-primary-content py-6">
         <div class="hero-content text-center w-full max-w-none">
@@ -240,7 +274,37 @@ document.addEventListener('htmx:afterSwap', function(event) {
     }
 });
 
-// Simplified HTMX logging
+// Enhanced retry mechanism for column highlighting
+window.retryHighlight = function(columnName, attempt) {
+    const maxAttempts = 5;
+    const delay = attempt * 500; // Increasing delay: 500ms, 1s, 1.5s, 2s, 2.5s
+    
+    console.log(`Retry attempt ${attempt} for column '${columnName}' after ${delay}ms`);
+    
+    setTimeout(function() {
+        if (window.GraphAPI && window.GraphAPI.isReady()) {
+            console.log(`Success on attempt ${attempt}: highlighting column '${columnName}'`);
+            window.GraphAPI.highlightColumn(columnName);
+            
+            // Trigger success toast
+            document.body.dispatchEvent(new CustomEvent('showToast', {
+                detail: { message: `Column '${columnName}' highlighted in graph (attempt ${attempt})`, type: 'success' }
+            }));
+        } else if (attempt < maxAttempts) {
+            console.log(`Attempt ${attempt} failed, trying again...`);
+            window.retryHighlight(columnName, attempt + 1);
+        } else {
+            console.error(`Failed to highlight column '${columnName}' after ${maxAttempts} attempts`);
+            
+            // Trigger error toast
+            document.body.dispatchEvent(new CustomEvent('showToast', {
+                detail: { message: `Failed to highlight column '${columnName}' - graph may not be ready`, type: 'error' }
+            }));
+        }
+    }, delay);
+};
+
+// Simplified HTMX logging  
 document.addEventListener('htmx:beforeRequest', function(event) {
     const url = event.detail.requestConfig ? event.detail.requestConfig.path : 'unknown';
     const target = event.detail.target ? event.detail.target.id : 'unknown';
