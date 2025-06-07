@@ -223,106 +223,109 @@
                 }
             },
             
-            // Reset all nodes to original state
+            // Reset all nodes to original state (optimized with batch update)
             resetHighlights: function() {
                 if (!this.nodes) return;
                 
                 const allNodes = this.nodes.get();
+                const nodesToUpdate = [];
+                
                 allNodes.forEach(node => {
                     const originalColor = this.originalNodeColors.get(node.id);
                     if (originalColor) {
-                        this.nodes.update({
+                        nodesToUpdate.push({
                             id: node.id,
                             color: originalColor,
-                            borderWidth: node.type === 'column' ? 3 : 2
+                            borderWidth: node.type === 'column' ? 2 : (node.type === 'dataset' ? 3 : 1)
                         });
                     }
                 });
+                
+                // Single batch update instead of multiple individual updates
+                if (nodesToUpdate.length > 0) {
+                    this.nodes.update(nodesToUpdate);
+                }
             },
             
-            // Highlight a specific column
+            // Highlight a specific column (optimized for performance)
             highlightColumn: function(columnName) {
                 if (!this.network || !this.nodes) {
                     console.error('Graph not initialized - network or nodes missing');
                     return false;
                 }
                 
-                console.log('=== HIGHLIGHTING COLUMN ===');
-                console.log('Column name:', columnName);
-                console.log('Network ready:', !!this.network);
-                console.log('Nodes ready:', !!this.nodes);
-                console.log('Total nodes:', this.nodes.length);
+                const startTime = performance.now();
+                console.log('=== HIGHLIGHTING COLUMN ===', columnName);
                 
-                // Reset first
+                // Reset first (now uses batch update)
                 this.resetHighlights();
                 
-                // Find ALL column nodes that match this column name (across datasets)
+                // Get all nodes once
                 const allNodes = this.nodes.get();
-                const matchingColumnNodes = allNodes.filter(node => 
-                    node.type === 'column' && node.column === columnName
-                );
                 
-                console.log('Found matching column nodes:', matchingColumnNodes);
+                // Find matching column nodes efficiently
+                const matchingColumnNodes = [];
+                const allConnectedCellIds = new Set();
+                
+                // Single pass to find columns and collect connected cell IDs
+                for (const node of allNodes) {
+                    if (node.type === 'column' && node.column === columnName) {
+                        matchingColumnNodes.push(node);
+                        // Get connected nodes for this column
+                        const connectedIds = this.network.getConnectedNodes(node.id);
+                        connectedIds.forEach(id => allConnectedCellIds.add(id));
+                    }
+                }
                 
                 if (matchingColumnNodes.length === 0) {
-                    console.error('No column nodes found for:', columnName);
-                    console.log('Available column nodes:', allNodes.filter(n => n.type === 'column').map(n => ({
-                        id: n.id,
-                        column: n.column,
-                        label: n.label,
-                        type: n.type
-                    })));
-                    console.log('All node types:', [...new Set(allNodes.map(n => n.type))]);
+                    console.warn(`No column nodes found for: ${columnName}`);
                     return false;
                 }
                 
-                // Highlight all matching column nodes and their connected cells
+                // Prepare batch updates
+                const nodesToUpdate = [];
                 const highlightedNodeIds = [];
                 
+                // Add column node updates
                 matchingColumnNodes.forEach(columnNode => {
-                    const columnId = columnNode.id;
-                    console.log('Highlighting column node:', columnId);
-                    
-                    // Add to selection
-                    highlightedNodeIds.push(columnId);
-                    
-                    // Update colors
-                    this.nodes.update({
-                        id: columnId,
+                    highlightedNodeIds.push(columnNode.id);
+                    nodesToUpdate.push({
+                        id: columnNode.id,
                         borderWidth: 5,
                         color: '#ff5733'
                     });
-                    
-                    // Highlight connected cells if any
-                    const connectedNodes = this.network.getConnectedNodes(columnId);
-                    connectedNodes.forEach(nodeId => {
-                        const node = this.nodes.get(nodeId);
-                        if (node && node.type === 'cell') {
-                            this.nodes.update({
-                                id: nodeId,
-                                color: '#ff9966',
-                                borderWidth: 3
-                            });
-                        }
-                    });
                 });
                 
-                // Select all highlighted nodes
+                // Add connected cell updates in one pass
+                allConnectedCellIds.forEach(nodeId => {
+                    const node = allNodes.find(n => n.id === nodeId);
+                    if (node && node.type === 'cell') {
+                        nodesToUpdate.push({
+                            id: nodeId,
+                            color: '#ff9966',
+                            borderWidth: 3
+                        });
+                    }
+                });
+                
+                // Single batch update for all changes
+                if (nodesToUpdate.length > 0) {
+                    this.nodes.update(nodesToUpdate);
+                }
+                
+                // Select and focus with reduced animation time
                 if (highlightedNodeIds.length > 0) {
                     this.network.selectNodes(highlightedNodeIds);
                     
-                    // Focus on the first matching node
+                    // Faster focus animation
                     this.network.focus(highlightedNodeIds[0], {
                         scale: 1.2,
-                        animation: { duration: 1000, easingFunction: 'easeInOutQuad' }
+                        animation: { duration: 400, easingFunction: 'easeInOutQuad' }
                     });
-                    
-                    console.log(`✅ Successfully highlighted ${highlightedNodeIds.length} nodes for column '${columnName}'`);
-                } else {
-                    console.warn(`⚠️ No nodes were highlighted for column '${columnName}'`);
                 }
                 
-                console.log('=== END HIGHLIGHTING ===');
+                const endTime = performance.now();
+                console.log(`✅ Highlighted ${highlightedNodeIds.length} nodes in ${(endTime - startTime).toFixed(2)}ms`);
                 return true;
             },
             
