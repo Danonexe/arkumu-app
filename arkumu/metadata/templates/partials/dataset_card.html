@@ -114,9 +114,21 @@
                             hx-swap="beforeend"
                             hx-indicator="#load-more-indicator-{{ dataset.name }}"
                             _="on htmx:afterRequest
-                                set newOffset to {{ dataset.preview.showing_rows|add:'10' }}
-                                put `${newOffset} of {{ dataset.preview.total_rows }}` into first .badge in me
-                                if newOffset >= {{ dataset.preview.total_rows }} remove me end">
+                                -- Get current count from the badge text
+                                get first .badge in me then get its textContent
+                                set badgeText to it
+                                -- Extract the current number before 'of'
+                                js(badgeText)
+                                  var currentCount = parseInt(badgeText.split(' of ')[0]);
+                                  var newOffset = currentCount + 10;
+                                  var totalRows = {{ dataset.preview.total_rows }};
+                                  var newText = newOffset + ' of ' + totalRows;
+                                  console.log('Load more: ' + currentCount + ' -> ' + newOffset);
+                                  return {newOffset: newOffset, newText: newText, totalRows: totalRows};
+                                end
+                                set newOffset to the result.newOffset
+                                put the result.newText into first .badge in me
+                                if newOffset >= the result.totalRows remove me end">
                         <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                             <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/>
                         </svg>

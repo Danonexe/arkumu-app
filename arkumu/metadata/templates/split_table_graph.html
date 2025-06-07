@@ -15,22 +15,18 @@
          log 'Split table graph view loaded'
          
          -- Set up global event handlers for graph coordination
-         on graphReady from anywhere
+         on graphReady from body
            log 'Graph is ready for interactions'
            
-         on columnHighlighted(detail) from anywhere
+         on columnHighlighted(detail) from body
            log 'Column highlighted:', detail.columnName
            
-         on datasetSelected(detail) from anywhere
-           log 'Dataset selected:', detail.datasetName">
+         on datasetSelected(detail) from body
+           log 'Dataset selected:', detail.datasetName
            
-    <!-- Add a global event listener specifically for body events -->
-    <div id="global-event-handler" style="display: none;"
-         _="on highlightColumn(columnName) from body
+         -- Handle column highlighting at document level
+         on highlightColumn(columnName) from body
            log 'GLOBAL: Received highlight request for column:', columnName
-           
-           -- Store the column name for debugging
-           set @data-last-column to columnName
            
            -- Check if graph API is ready with better timing
            if window.GraphAPI
@@ -40,7 +36,7 @@
                call window.GraphAPI.highlightColumn(columnName)
                
                -- Show success feedback
-               trigger showToast(message: `Column '${columnName}' highlighted in graph`, type: 'success')
+               trigger showToast(message: `Column '${columnName}' highlighted in graph`, type: 'success') on body
              else
                log 'Graph API not ready, trying with delays...'
                
@@ -49,11 +45,11 @@
              end
            else
              log 'ERROR: GraphAPI not found at all'
-             trigger showToast(message: 'Graph not initialized yet. Please wait and try again.', type: 'warning')
+             trigger showToast(message: 'Graph not initialized yet. Please wait and try again.', type: 'warning') on body
            end
            
          -- Reset highlights listener  
-         on resetGraphHighlights from anywhere
+         on resetGraphHighlights from body
            log 'Resetting graph highlights'
            if window.GraphAPI and window.GraphAPI.resetHighlights
              call window.GraphAPI.resetHighlights()
@@ -62,7 +58,7 @@
            end
            
          -- Toast notification handler
-         on showToast(message, type) from anywhere
+         on showToast(message, type) from body
            log 'Showing toast:', message, 'type:', type
            set #status-message's textContent to message
            
@@ -85,7 +81,8 @@
            show #status-toast
            wait 3s
            hide #status-toast">
-    </div>
+           
+
 
     <!-- Hero Section -->
     <div class="hero bg-gradient-to-r from-primary to-secondary text-primary-content py-6">
