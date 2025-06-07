@@ -15,10 +15,9 @@
             set columnHeader to the innerText of #column-{{ forloop.counter0 }}-{{ dataset }}
             log 'Column name:', columnHeader
             
-            -- Focus the column this cell belongs to (if we found the header)
+            -- Focus the column this cell belongs to using the existing highlighting system
             if columnHeader then
-                fetch `/metadata/split-view/highlight-column/?source={{ source|urlencode }}&dataset={{ dataset|urlencode }}&column_name=${encodeURIComponent(columnHeader)}`
-                    then put the result into #graph-container
+                trigger highlightColumn(columnName: columnHeader) on body
             end"
         {% endif %}
         title="{{ cell }}">
