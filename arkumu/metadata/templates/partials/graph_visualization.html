@@ -79,39 +79,79 @@
                     const nodesData = JSON.parse('{{ graph_data.nodes|escapejs }}');
                     const linksData = JSON.parse('{{ graph_data.links|escapejs }}');
                     
-                    // Store original colors
+                    // Enhance nodes with better visual properties based on type
                     nodesData.forEach(node => {
+                        // Store original colors
                         this.originalNodeColors.set(node.id, node.color);
+                        
+                        // Set size and shape based on node type
+                        if (node.type === 'dataset') {
+                            node.size = 35;
+                            node.shape = 'diamond';
+                            node.font = { size: 14, color: '#ffffff' };
+                        } else if (node.type === 'column') {
+                            node.size = 25;
+                            node.shape = 'box';
+                            node.font = { size: 11, color: '#333333' };
+                        } else if (node.type === 'cell') {
+                            node.size = 15;
+                            node.shape = 'dot';
+                            node.font = { size: 9, color: '#666666' };
+                        } else {
+                            node.size = 20;
+                            node.shape = 'dot';
+                        }
+                        
+                        // Add better visual spacing
+                        node.margin = { top: 5, right: 10, bottom: 5, left: 10 };
                     });
                     
                     this.nodes = new vis.DataSet(nodesData);
                     this.edges = new vis.DataSet(linksData);
                     
-                    // Network configuration
+                    // Network configuration with improved spacing and layout
                     const options = {
                         nodes: {
                             shape: 'dot',
-                            size: 20,
+                            size: 25,
                             font: {
-                                size: 14,
+                                size: 12,
                                 color: '#333333',
                                 face: 'Inter, system-ui, sans-serif',
                                 strokeWidth: 2,
                                 strokeColor: '#ffffff'
                             },
-                            borderWidth: 3,
-                            shadow: { enabled: true, color: 'rgba(0,0,0,0.2)', size: 8, x: 2, y: 2 }
+                            borderWidth: 2,
+                            shadow: { enabled: true, color: 'rgba(0,0,0,0.2)', size: 6, x: 2, y: 2 },
+                            margin: 10
                         },
                         edges: {
-                            width: 2,
-                            shadow: { enabled: true, color: 'rgba(0,0,0,0.1)', size: 4, x: 1, y: 1 },
-                            smooth: { enabled: true, type: 'dynamic', roundness: 0.5 },
-                            arrows: { to: { enabled: true, scaleFactor: 0.8, type: 'arrow' } },
-                            color: { color: '#848484', highlight: '#2563eb', hover: '#2563eb' }
+                            width: 1.5,
+                            shadow: { enabled: true, color: 'rgba(0,0,0,0.1)', size: 3, x: 1, y: 1 },
+                            smooth: { enabled: true, type: 'continuous', roundness: 0.3 },
+                            arrows: { to: { enabled: true, scaleFactor: 0.6, type: 'arrow' } },
+                            color: { color: '#848484', highlight: '#2563eb', hover: '#2563eb' },
+                            length: 200
                         },
                         physics: {
                             enabled: true,
-                            stabilization: { enabled: true, iterations: 100, updateInterval: 25 }
+                            stabilization: { 
+                                enabled: true, 
+                                iterations: 200, 
+                                updateInterval: 25,
+                                onlyDynamicEdges: false,
+                                fit: true
+                            },
+                            forceAtlas2Based: {
+                                gravitationalConstant: -50,
+                                centralGravity: 0.01,
+                                springLength: 200,
+                                springConstant: 0.08,
+                                damping: 0.4,
+                                avoidOverlap: 1
+                            },
+                            maxVelocity: 50,
+                            minVelocity: 0.75
                         },
                         {% if layout == 'hierarchical' %}
                         layout: {
@@ -131,16 +171,26 @@
                     // Create network
                     this.network = new vis.Network(container, { nodes: this.nodes, edges: this.edges }, options);
                     
-                    // Disable physics after stabilization for static layout
+                    // Better stabilization handling
                     this.network.on('stabilizationIterationsDone', () => {
                         console.log('Graph stabilization complete - disabling physics');
                         this.network.setOptions({ physics: { enabled: false } });
+                        // Fit the network to view after stabilization
+                        setTimeout(() => {
+                            this.network.fit({
+                                animation: { duration: 1000, easingFunction: 'easeInOutQuad' }
+                            });
+                        }, 100);
                     });
                     
-                    // Timeout fallback
+                    // Extended timeout fallback for complex graphs
                     setTimeout(() => {
+                        console.log('Physics timeout - forcing stabilization');
                         this.network.setOptions({ physics: { enabled: false } });
-                    }, 3000);
+                        this.network.fit({
+                            animation: { duration: 1000, easingFunction: 'easeInOutQuad' }
+                        });
+                    }, 6000);
                     
                     // Node click handler
                     this.network.on("click", (params) => {
@@ -434,6 +484,23 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
                 Reset Highlights
+            </button>
+            
+            <button class="btn btn-primary btn-sm" 
+                    _="on click
+                        log 'Fit to view button clicked'
+                        add .loading to me
+                        if window.GraphAPI and window.GraphAPI.network
+                            call window.GraphAPI.network.fit({
+                                animation: { duration: 1000, easingFunction: 'easeInOutQuad' }
+                            })
+                        end
+                        wait 200ms
+                        remove .loading from me">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                </svg>
+                Fit to View
             </button>
             
             <button class="btn btn-accent btn-sm" 
