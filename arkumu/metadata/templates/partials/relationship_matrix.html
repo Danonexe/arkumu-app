@@ -1,0 +1,279 @@
+{% load relationship_tags %}
+<!-- Relationship Discovery Matrix -->
+<div class="relationship-matrix-container" id="relationship-matrix-{{ dataset_name|slugify }}">
+    <div class="flex justify-between items-center mb-4">
+        <div>
+            <h3 class="text-lg font-semibold">Column Relationships</h3>
+            <p class="text-sm text-base-content/70">Hover over cells to see relationship details</p>
+        </div>
+        <div class="stats stats-horizontal shadow-sm">
+            <div class="stat py-2 px-3">
+                <div class="stat-title text-xs">Total Relations</div>
+                <div class="stat-value text-sm">{{ analysis.relationships|length }}</div>
+            </div>
+            <div class="stat py-2 px-3">
+                <div class="stat-title text-xs">Avg Confidence</div>
+                <div class="stat-value text-sm">{{ analysis.quality_metrics.average_confidence|floatformat:1 }}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Legend -->
+    <div class="mb-4 p-3 bg-base-200 rounded-lg">
+        <div class="text-sm font-medium mb-2">Relationship Types:</div>
+        <div class="flex flex-wrap gap-2">
+            <div class="badge badge-primary badge-sm">
+                <span class="w-2 h-2 bg-blue-500 rounded-full inline-block mr-1"></span>
+                Semantic Similar
+            </div>
+            <div class="badge badge-secondary badge-sm">
+                <span class="w-2 h-2 bg-green-500 rounded-full inline-block mr-1"></span>
+                Value Overlap
+            </div>
+            <div class="badge badge-accent badge-sm">
+                <span class="w-2 h-2 bg-yellow-500 rounded-full inline-block mr-1"></span>
+                Pattern Match
+            </div>
+            <div class="badge badge-error badge-sm">
+                <span class="w-2 h-2 bg-red-500 rounded-full inline-block mr-1"></span>
+                Foreign Key
+            </div>
+        </div>
+    </div>
+
+    <!-- Matrix Container -->
+    <div class="overflow-auto max-h-96 border border-base-300 rounded-lg">
+        <table class="table table-compact w-full">
+            <thead class="sticky top-0 bg-base-100">
+                <tr>
+                    <th class="bg-base-200 border-r border-base-300 p-2 text-xs font-medium">Column</th>
+                    {% for col in columns %}
+                    <th class="bg-base-200 border-r border-base-300 p-1 text-xs font-medium min-w-8 max-w-16 transform -rotate-45 origin-bottom-left">
+                        <div class="truncate" title="{{ col }}">{{ col|truncatechars:8 }}</div>
+                    </th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row_col in columns %}
+                <tr class="hover:bg-base-50">
+                    <td class="bg-base-200 border-r border-base-300 p-2 text-xs font-medium sticky left-0 z-10">
+                        <div class="truncate max-w-32" title="{{ row_col }}">{{ row_col }}</div>
+                    </td>
+                    {% for col_col in columns %}
+                    <td class="border-r border-base-300 p-0 text-center relative">
+                        {% if row_col != col_col %}
+                            {% with matrix_key=row_col|add:"-"|add:col_col %}
+                                {% if matrix_key in relationship_matrix and relationship_matrix.matrix_key > 0 %}
+                                    <div class="relationship-cell w-8 h-8 flex items-center justify-center cursor-pointer relative"
+                                         data-source="{{ row_col }}"
+                                         data-target="{{ col_col }}"
+                                         data-confidence="{{ relationship_matrix.matrix_key }}"
+                                         data-relationships="{{ matrix_key|lookup:relationship_details|default:'{}' }}"
+                                         style="background-color: {{ relationship_matrix.matrix_key|confidence_to_color }};">
+                                        <span class="text-xs font-bold text-white">
+                                            {{ relationship_matrix.matrix_key|floatformat:1 }}
+                                        </span>
+                                        
+                                        <!-- Tooltip -->
+                                        <div class="relationship-tooltip absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 p-2 bg-base-100 border border-base-300 rounded shadow-lg z-50 min-w-48 hidden">
+                                            <div class="text-xs">
+                                                <div class="font-semibold">{{ row_col }} → {{ col_col }}</div>
+                                                <div class="text-base-content/70 mt-1">
+                                                    Confidence: {{ relationship_matrix.matrix_key|floatformat:2 }}
+                                                </div>
+                                                {% for rel in relationships %}
+                                                    {% if rel.source_column == row_col and rel.target_column == col_col %}
+                                                    <div class="mt-1 p-1 bg-base-200 rounded text-xs">
+                                                        <div class="font-medium">{{ rel.relationship_type|title }}</div>
+                                                        {% if rel.suggested_predicate %}
+                                                        <div class="text-base-content/60">{{ rel.suggested_predicate }}</div>
+                                                        {% endif %}
+                                                        {% if rel.evidence %}
+                                                        <div class="text-base-content/60 mt-1">
+                                                            {% for key, value in rel.evidence.items %}
+                                                                {% if key == "common_values_count" %}
+                                                                    {{ value }} common values
+                                                                {% elif key == "jaccard_similarity" %}
+                                                                    Similarity: {{ value|floatformat:2 }}
+                                                                {% endif %}
+                                                            {% endfor %}
+                                                        </div>
+                                                        {% endif %}
+                                                    </div>
+                                                    {% endif %}
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% else %}
+                                    <div class="w-8 h-8 bg-base-100"></div>
+                                {% endif %}
+                            {% endwith %}
+                        {% else %}
+                            <div class="w-8 h-8 bg-base-300 flex items-center justify-center">
+                                <span class="text-xs font-bold">•</span>
+                            </div>
+                        {% endif %}
+                    </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Semantic Clusters -->
+    {% if analysis.semantic_clusters %}
+    <div class="mt-6">
+        <h4 class="text-md font-semibold mb-3">Semantic Clusters</h4>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {% for cluster in analysis.semantic_clusters %}
+            <div class="card card-compact bg-base-200 shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title text-sm">Cluster {{ forloop.counter }}</h5>
+                    <div class="flex flex-wrap gap-1">
+                        {% for column in cluster %}
+                        <span class="badge badge-primary badge-sm">{{ column }}</span>
+                        {% endfor %}
+                    </div>
+                    <div class="card-actions justify-end mt-2">
+                        <button class="btn btn-xs btn-outline"
+                                onclick="highlightCluster({{ cluster|safe }})">
+                            Highlight in Graph
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Relationship Actions -->
+    <div class="mt-6 flex justify-between items-center">
+        <div class="stats stats-horizontal shadow-sm">
+            <div class="stat py-2 px-3">
+                <div class="stat-title text-xs">High Confidence</div>
+                <div class="stat-value text-sm text-success">
+                    {{ analysis.relationships|length|high_confidence_count }}
+                </div>
+            </div>
+            <div class="stat py-2 px-3">
+                <div class="stat-title text-xs">Quality Score</div>
+                <div class="stat-value text-sm">
+                    {{ analysis.quality_metrics.coverage|floatformat:1 }}
+                </div>
+            </div>
+        </div>
+        
+        <div class="flex gap-2">
+            <button class="btn btn-sm btn-primary"
+                    onclick="showRelationshipDetails('{{ dataset_name|slugify }}')">
+                View All Details
+            </button>
+            <button class="btn btn-sm btn-secondary"
+                    onclick="exportRelationships('{{ dataset_name|slugify }}')">
+                Export Analysis
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+// Relationship matrix interactions
+document.addEventListener('DOMContentLoaded', function() {
+    // Add hover effects for relationship cells
+    const relationshipCells = document.querySelectorAll('.relationship-cell');
+    
+    relationshipCells.forEach(cell => {
+        const tooltip = cell.querySelector('.relationship-tooltip');
+        
+        cell.addEventListener('mouseenter', function() {
+            if (tooltip) {
+                tooltip.classList.remove('hidden');
+            }
+        });
+        
+        cell.addEventListener('mouseleave', function() {
+            if (tooltip) {
+                tooltip.classList.add('hidden');
+            }
+        });
+        
+        // Click to highlight in graph
+        cell.addEventListener('click', function() {
+            const source = this.dataset.source;
+            const target = this.dataset.target;
+            const confidence = this.dataset.confidence;
+            
+            // Trigger graph highlighting
+            if (window.GraphAPI && window.GraphAPI.highlightRelationship) {
+                window.GraphAPI.highlightRelationship(source, target, confidence);
+            }
+            
+            // Show toast notification
+            document.body.dispatchEvent(new CustomEvent('showToast', {
+                detail: { 
+                    message: `Highlighted relationship: ${source} → ${target}`, 
+                    type: 'success' 
+                }
+            }));
+        });
+    });
+});
+
+// Helper functions
+function highlightCluster(clusterColumns) {
+    console.log('Highlighting cluster:', clusterColumns);
+    
+    if (window.GraphAPI && window.GraphAPI.highlightCluster) {
+        window.GraphAPI.highlightCluster(clusterColumns);
+    }
+    
+    document.body.dispatchEvent(new CustomEvent('showToast', {
+        detail: { 
+            message: `Highlighted cluster with ${clusterColumns.length} columns`, 
+            type: 'success' 
+        }
+    }));
+}
+
+function showRelationshipDetails(datasetName) {
+    // TODO: Open modal with detailed relationship information
+    console.log('Show relationship details for:', datasetName);
+}
+
+function exportRelationships(datasetName) {
+    // TODO: Export relationship analysis as JSON/CSV
+    console.log('Export relationships for:', datasetName);
+}
+</script>
+
+<style>
+.relationship-cell {
+    transition: all 0.2s ease;
+}
+
+.relationship-cell:hover {
+    transform: scale(1.1);
+    z-index: 10;
+}
+
+.relationship-tooltip {
+    transition: opacity 0.2s ease;
+}
+
+/* Color scale for confidence levels */
+.confidence-0 { background-color: #f3f4f6; }
+.confidence-1 { background-color: #dbeafe; }
+.confidence-2 { background-color: #bfdbfe; }
+.confidence-3 { background-color: #93c5fd; }
+.confidence-4 { background-color: #60a5fa; }
+.confidence-5 { background-color: #3b82f6; }
+.confidence-6 { background-color: #2563eb; }
+.confidence-7 { background-color: #1d4ed8; }
+.confidence-8 { background-color: #1e40af; }
+.confidence-9 { background-color: #1e3a8a; }
+.confidence-10 { background-color: #172554; }
+</style>

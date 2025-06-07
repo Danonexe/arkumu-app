@@ -11,6 +11,8 @@ import json
 
 from arkumu.metadata.models.resource import Resource, ResourceType
 from arkumu.metadata.models.triples import Triple
+from arkumu.metadata.services.relationship_discovery import RelationshipDiscoveryService
+from arkumu.metadata.services.metadata_models_mapping.table_analysis import TableAnalysisService
 
 logger = logging.getLogger(__name__)
 
@@ -979,4 +981,171 @@ def _build_comprehensive_source_graph(source, datasets_data):
             'links': [],
             'source': source,
             'error': str(e)
-        } 
+        }
+
+
+@login_required  
+def analyze_dataset_relationships(request):
+    """Analyze relationships within a dataset and return relationship matrix."""
+    source = request.GET.get('source', '')
+    dataset_name = request.GET.get('dataset_name', '')
+    
+    if not source or not dataset_name:
+        return HttpResponseBadRequest("Missing source or dataset_name")
+    
+    try:
+        # Initialize services
+        table_analysis_service = TableAnalysisService()
+        relationship_service = RelationshipDiscoveryService(table_analysis_service)
+        
+        # Create a temporary CSV file for analysis
+        # For now, we'll create a simple dataset from our Resource data
+        temp_analysis = _create_temp_dataset_analysis(source, dataset_name)
+        
+        if not temp_analysis:
+            return render(request, 'partials/relationship_matrix.html', {
+                'error': 'Could not analyze dataset relationships',
+                'dataset_name': dataset_name
+            })
+        
+        # Prepare context for template
+        context = {
+            'dataset_name': dataset_name,
+            'source': source,
+            'analysis': temp_analysis,
+            'columns': temp_analysis.get('columns', []),
+            'relationships': temp_analysis.get('relationships', []),
+            'relationship_matrix': temp_analysis.get('relationship_matrix', {}),
+            'relationship_details': temp_analysis.get('relationship_details', {})
+        }
+        
+        return render(request, 'partials/relationship_matrix.html', context)
+        
+    except Exception as e:
+        logger.error(f"Error analyzing dataset relationships: {e}", exc_info=True)
+        return render(request, 'partials/relationship_matrix.html', {
+            'error': f"Error analyzing relationships: {str(e)}",
+            'dataset_name': dataset_name
+        })
+
+
+def _create_temp_dataset_analysis(source, dataset_name):
+    """Create a temporary analysis of dataset relationships based on existing data."""
+    try:
+        # Get preview data to understand column structure
+        preview_data = _get_dataset_preview_optimized(source, dataset_name, max_rows=100)
+        
+        if not preview_data or not preview_data.get('colHeaders'):
+            return None
+        
+        columns = preview_data['colHeaders']
+        
+        # Create mock relationships based on column name similarity and patterns
+        relationships = []
+        relationship_matrix = {}
+        relationship_details = {}
+        
+        # Initialize matrix with zeros
+        for col1 in columns:
+            for col2 in columns:
+                relationship_matrix[f"{col1}-{col2}"] = 0.0
+        
+        # Simple semantic similarity analysis
+        semantic_groups = {
+            'identifier': ['id', 'key', 'uuid', 'code', 'ref'],
+            'person': ['person', 'author', 'creator', 'artist', 'name'],
+            'place': ['place', 'location', 'city', 'country', 'site'],
+            'time': ['date', 'time', 'year', 'created', 'modified'],
+            'description': ['title', 'description', 'text', 'label', 'note']
+        }
+        
+        # Find semantically related columns
+        column_semantics = {}
+        for col in columns:
+            col_lower = col.lower()
+            for semantic_type, keywords in semantic_groups.items():
+                for keyword in keywords:
+                    if keyword in col_lower:
+                        if col not in column_semantics:
+                            column_semantics[col] = []
+                        column_semantics[col].append(semantic_type)
+        
+        # Create relationships
+        for i, col1 in enumerate(columns):
+            for j, col2 in enumerate(columns):
+                if i != j:
+                    confidence = 0.0
+                    relationship_type = None
+                    evidence = {}
+                    
+                    # Check semantic similarity
+                    if col1 in column_semantics and col2 in column_semantics:
+                        common_semantics = set(column_semantics[col1]) & set(column_semantics[col2])
+                        if common_semantics:
+                            confidence = len(common_semantics) / max(len(column_semantics[col1]), len(column_semantics[col2]))
+                            relationship_type = 'semantic_similar'
+                            evidence = {'common_semantics': list(common_semantics)}
+                    
+                    # Check name similarity (simple character overlap)
+                    if confidence == 0:
+                        col1_lower = col1.lower()
+                        col2_lower = col2.lower()
+                        
+                        # Simple substring matching
+                        if col1_lower in col2_lower or col2_lower in col1_lower:
+                            confidence = 0.7
+                            relationship_type = 'pattern_match'
+                            evidence = {'name_similarity': 'substring_match'}
+                        elif len(set(col1_lower) & set(col2_lower)) / len(set(col1_lower) | set(col2_lower)) > 0.5:
+                            confidence = 0.4
+                            relationship_type = 'pattern_match'
+                            evidence = {'name_similarity': 'character_overlap'}
+                    
+                    if confidence > 0.1:  # Only include relationships with some confidence
+                        relationship = {
+                            'source_column': col1,
+                            'target_column': col2,
+                            'relationship_type': relationship_type,
+                            'confidence': confidence,
+                            'evidence': evidence,
+                            'suggested_predicate': 'dcterms:relation',
+                            'bidirectional': True
+                        }
+                        relationships.append(relationship)
+                        relationship_matrix[f"{col1}-{col2}"] = confidence
+                        relationship_details[f"{col1}-{col2}"] = relationship
+        
+        # Calculate quality metrics
+        total_possible = len(columns) * (len(columns) - 1) / 2
+        high_confidence = len([r for r in relationships if r['confidence'] > 0.7])
+        avg_confidence = sum(r['confidence'] for r in relationships) / len(relationships) if relationships else 0
+        
+        quality_metrics = {
+            'coverage': len(relationships) / total_possible if total_possible > 0 else 0,
+            'average_confidence': avg_confidence,
+            'high_confidence_ratio': high_confidence / len(relationships) if relationships else 0,
+            'total_relationships': len(relationships)
+        }
+        
+        # Find semantic clusters (simple grouping by semantic type)
+        semantic_clusters = []
+        for semantic_type in semantic_groups.keys():
+            cluster_columns = [col for col, semantics in column_semantics.items() if semantic_type in semantics]
+            if len(cluster_columns) > 1:
+                semantic_clusters.append(cluster_columns)
+        
+        return {
+            'dataset_name': dataset_name,
+            'column_count': len(columns),
+            'row_count': preview_data.get('total_rows', 0),
+            'columns': columns,
+            'relationships': relationships,
+            'relationship_matrix': relationship_matrix,
+            'relationship_details': relationship_details,
+            'semantic_clusters': semantic_clusters,
+            'quality_metrics': quality_metrics
+        }
+        
+    except Exception as e:
+        logger.error(f"Error creating temp analysis: {e}")
+        return None 

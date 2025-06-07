@@ -1,4 +1,5 @@
 {% load metadata_tags %}
+{% load relationship_tags %}
 
 <!-- Enhanced Dataset Card for {{ dataset.name }} -->
 <div class="card dataset-card transition-all duration-300 hover:scale-[1.02] border border-base-300"
@@ -232,6 +233,11 @@
                 </div>
             </div>
             
+            <!-- Relationship Analysis Container -->
+            <div id="relationship-analysis-{{ dataset.name|slugify }}" class="mt-4">
+                <!-- Relationship analysis will be loaded here via HTMX -->
+            </div>
+            
         {% else %}
             <!-- Enhanced Empty State -->
             <div class="flex items-center justify-center h-32 border-2 border-dashed border-base-300 rounded-lg bg-base-50">
@@ -262,6 +268,13 @@
                         View Graph
                     </div>
                     {% if dataset.preview %}
+                        <button class="btn btn-xs btn-primary"
+                                hx-get="{% url 'metadata:analyze_dataset_relationships' %}?source={{ dataset.source|urlencode }}&dataset_name={{ dataset.name|urlencode }}"
+                                hx-target="#relationship-analysis-{{ dataset.name|slugify }}"
+                                hx-swap="innerHTML"
+                                onclick="this.classList.add('loading')">
+                            🔗 Analyze Relations
+                        </button>
                         <div class="badge badge-success badge-sm gap-1">
                             <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                                 <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
