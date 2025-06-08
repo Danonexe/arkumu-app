@@ -6,13 +6,17 @@
     <td class="p-2 border border-base-300 text-xs min-w-[120px] whitespace-nowrap overflow-hidden text-ellipsis cursor-pointer hover:bg-primary-50"
         data-column-index="{{ forloop.counter0 }}"
         {% if source and dataset %}
+        data-dataset-name="{{ dataset }}"
+        data-source-name="{{ source }}"
         _="on click 
             log 'Cell clicked in column index:', '{{ forloop.counter0 }}'
-            log 'Dataset:', '{{ dataset }}'
-            log 'Source:', '{{ source }}'
+            log 'Dataset:', @data-dataset-name
+            log 'Source:', @data-source-name
             
             -- Get the column header from the table header
-            set columnHeader to the innerText of #column-{{ forloop.counter0 }}-{{ dataset }}
+            set datasetName to @data-dataset-name
+            set columnHeaderId to 'column-{{ forloop.counter0 }}-' + datasetName
+            set columnHeader to the innerText of #{columnHeaderId}
             log 'Column name:', columnHeader
             
             -- Focus the column this cell belongs to using the existing highlighting system
@@ -20,7 +24,7 @@
                 trigger highlightColumn(columnName: columnHeader) on body
             end"
         {% endif %}
-        title="{{ cell }}">
+        title="{{ cell|escape }}">
         {% if cell %}
             <span class="font-mono">{{ cell }}</span>
         {% else %}

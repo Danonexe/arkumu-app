@@ -55,8 +55,10 @@
                     {% for column in dataset.preview.colHeaders %}
                     <div class="badge badge-success badge-xs cursor-pointer hover:badge-accent"
                           data-column-name="{{ column }}"
+                          data-dataset-name="{{ dataset.name }}"
+                          data-column-index="{{ forloop.counter0 }}"
                           _="on click 
-                              log 'Column badge clicked:', '{{ column }}'
+                              log 'Column badge clicked:', @data-column-name
                               
                               -- Reset all column highlights first
                               remove .badge-accent from .badge in me.parentElement
@@ -65,11 +67,12 @@
                               -- Highlight this column badge
                               remove .badge-success from me
                               add .badge-accent to me
-                              log 'Badge highlight updated for:', '{{ column }}'
+                              log 'Badge highlight updated for:', @data-column-name
                               
                               -- Find and highlight the table column
-                              set columnIndex to {{ forloop.counter0 }}
-                              set tableColumnId to 'column-' + columnIndex + '-{{ dataset.name }}'
+                              set columnIndex to @data-column-index
+                              set datasetName to @data-dataset-name
+                              set tableColumnId to 'column-' + columnIndex + '-' + datasetName
                               log 'Looking for table column with ID:', tableColumnId
                               
                               get #{tableColumnId}
@@ -105,8 +108,9 @@
                               end
                               
                               -- Also trigger graph highlighting
-                              log 'Triggering graph highlight for:', '{{ column }}'
-                              trigger highlightColumn(columnName: '{{ column }}') on body">
+                              set columnName to @data-column-name
+                              log 'Triggering graph highlight for:', columnName
+                              trigger highlightColumn(columnName: columnName) on body">
                         {{ column }}
                     </div>
                     {% endfor %}
@@ -143,7 +147,7 @@
                                     id="column-{{ forloop.counter0 }}-{{ dataset.name }}"
                                     data-column-name="{{ header }}"
                                     _="on click 
-                                        log 'Column clicked:', '{{ header }}'
+                                        log 'Column clicked:', @data-column-name
                                         
                                         -- Reset all column highlights first
                                         remove .bg-primary from .column-header in closest .table-container
@@ -156,7 +160,8 @@
                                         add .font-bold to me
                                         
                                         -- Trigger event for graph highlighting
-                                        trigger highlightColumn(columnName: '{{ header }}') on body">
+                                        set columnName to @data-column-name
+                                        trigger highlightColumn(columnName: columnName) on body">
                                     {{ header }}
                                 </th>
                                 {% endfor %}
