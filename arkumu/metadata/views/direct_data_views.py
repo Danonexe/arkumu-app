@@ -46,20 +46,36 @@ def direct_split_table_graph_view(request):
     try:
         organization_id = get_organization_id_from_request(request)
         
-        # If no organization is provided, show helpful instructions
+        # Discover available organizations from S3 buckets (like archivist dashboard)
+        analyzer = S3DirectDataAnalyzer()
+        available_organizations = _discover_available_organizations(analyzer)
+        
+        # If no organization is provided, show helpful instructions with available orgs
         if not organization_id or organization_id == 'default-org':
             context = {
                 'sources': [],
                 'selected_source': '',
                 'is_direct_mode': True,
+                'organizations': available_organizations,
                 'error': 'Organization parameter required. Please add ?organization=YOUR_ORG_ID to the URL (e.g., ?organization=rsh)',
                 'show_organization_help': True
             }
-            return render(request, 'split_table_graph.html', context)
+            return render(request, 'direct_split_table_graph.html', context)
         
-        analyzer = S3DirectDataAnalyzer()
+        # Check if the selected organization actually exists in S3
+        org_exists = any(org['id'] == organization_id for org in available_organizations)
+        if not org_exists:
+            context = {
+                'sources': [],
+                'selected_source': '',
+                'is_direct_mode': True,
+                'organizations': available_organizations,
+                'organization_id': organization_id,
+                'error': f'Organization "{organization_id}" not found in S3. Available organizations: {", ".join([org["id"] for org in available_organizations])}'
+            }
+            return render(request, 'direct_split_table_graph.html', context)
         
-        # Discover available data sources from S3
+        # Discover available data sources from S3 for this organization
         sources = analyzer.discover_s3_data_sources(organization_id)
         
         # Format sources for dropdown
@@ -79,20 +95,24 @@ def direct_split_table_graph_view(request):
             'sources': sources_info,
             'selected_source': request.GET.get('source', ''),
             'is_direct_mode': True,  # Flag to indicate we're using direct mode
+            'organizations': available_organizations,
             'organization_id': organization_id,  # Include organization in context
         }
         
-        return render(request, 'split_table_graph.html', context)
+        return render(request, 'direct_split_table_graph.html', context)
         
     except Exception as e:
         logger.error(f"Error in direct_split_table_graph_view: {e}")
+        analyzer = S3DirectDataAnalyzer()
+        available_organizations = _discover_available_organizations(analyzer)
         context = {
             'sources': [],
             'selected_source': '',
             'error': f"Error loading data sources: {str(e)}",
-            'is_direct_mode': True
+            'is_direct_mode': True,
+            'organizations': available_organizations,
         }
-        return render(request, 'split_table_graph.html', context)
+        return render(request, 'direct_split_table_graph.html', context)
 
 
 @login_required
@@ -175,6 +195,105 @@ def direct_load_source_data(request):
             'error': f"Error loading source data: {str(e)}"
         })
         return error_response
+
+
+@login_required
+def direct_load_all_datasets(request):
+    """
+    HTMX endpoint to load all available datasets from S3 for the dataset browser.
+    Provides lazy loading of dataset cards for browsing.
+    """
+    organization_id = get_organization_id_from_request(request)
+    
+    logger.info(f"DIRECT LOAD ALL DATASETS: Loading all datasets for org={organization_id}")
+    
+    if not organization_id or organization_id == 'default-org':
+        return render(request, 'partials/datasets_grid.html', {
+            'error': "Organization parameter required. Please add ?organization=YOUR_ORG to the URL.",
+            'datasets': []
+        })
+    
+    try:
+        analyzer = S3DirectDataAnalyzer()
+        
+        # Discover all data sources from S3
+        sources = analyzer.discover_s3_data_sources(organization_id)
+        logger.info(f"DIRECT LOAD ALL DATASETS: Found {len(sources)} sources")
+        
+        # Build datasets information from all sources
+        all_datasets = []
+        
+        for source in sources:
+            try:
+                # Get dataset names for this source
+                dataset_names = analyzer.get_dataset_names_from_s3_source(source)
+                logger.info(f"DIRECT LOAD ALL DATASETS: Source {source.name} has {len(dataset_names)} datasets")
+                
+                for dataset_name in dataset_names:
+                    try:
+                        # Get basic preview for each dataset (limited for performance)
+                        preview = analyzer.get_s3_table_preview(source, dataset_name, limit=3)
+                        
+                        dataset_info = {
+                            'name': dataset_name,
+                            'source_name': source.name,
+                            'source_display_name': f"{source.name} ({source.format})",
+                            'row_count': preview.total_rows,
+                            'column_count': len(preview.column_headers),
+                            'cell_count': preview.total_rows * len(preview.column_headers),
+                            'preview': {
+                                'colHeaders': preview.column_headers[:5],  # Show first 5 columns
+                                'data': preview.data_rows,
+                                'showing_rows': preview.showing_rows,
+                                'total_rows': preview.total_rows,
+                                'has_more': preview.has_more,
+                                'offset': 0
+                            },
+                            'file_info': {
+                                'format': source.format,
+                                'size_mb': round(source.size_bytes / (1024 * 1024), 2) if source.size_bytes else 0,
+                                'modified_date': source.modified_date.strftime('%Y-%m-%d %H:%M') if source.modified_date else None
+                            },
+                            'multi_value_columns': preview.multi_value_columns[:3],  # Show first 3
+                            'column_types': getattr(preview, 'column_types', {})
+                        }
+                        
+                        all_datasets.append(dataset_info)
+                        
+                    except Exception as dataset_error:
+                        logger.warning(f"DIRECT LOAD ALL DATASETS: Error loading dataset {dataset_name} from {source.name}: {dataset_error}")
+                        # Add error entry
+                        all_datasets.append({
+                            'name': dataset_name,
+                            'source_name': source.name,
+                            'source_display_name': f"{source.name} ({source.format})",
+                            'error': str(dataset_error),
+                            'row_count': 0,
+                            'column_count': 0,
+                            'cell_count': 0
+                        })
+                        continue
+                        
+            except Exception as source_error:
+                logger.error(f"DIRECT LOAD ALL DATASETS: Error processing source {source.name}: {source_error}")
+                continue
+        
+        logger.info(f"DIRECT LOAD ALL DATASETS: Built {len(all_datasets)} dataset entries")
+        
+        return render(request, 'partials/datasets_grid.html', {
+            'datasets': all_datasets,
+            'organization_id': organization_id,
+            'total_datasets': len(all_datasets),
+            'sources_count': len(sources)
+        })
+        
+    except Exception as e:
+        logger.error(f"DIRECT LOAD ALL DATASETS: Error loading all datasets: {e}", exc_info=True)
+        
+        return render(request, 'partials/datasets_grid.html', {
+            'error': f"Error loading datasets: {str(e)}",
+            'datasets': []
+        })
 
 
 @login_required
@@ -363,6 +482,48 @@ def direct_get_import_preview(request):
     except Exception as e:
         logger.error(f"Error getting import preview: {e}")
         return JsonResponse({'error': str(e)}, status=500)
+
+
+def _discover_available_organizations(analyzer):
+    """
+    Discover available organizations by checking S3 buckets.
+    Similar to how archivist dashboard works.
+    """
+    try:
+        # Standard organization list (same as archivist dashboard)
+        standard_orgs = [
+            {'id': 'rsh', 'name': 'Robert Schumann Hochschule Düsseldorf', 'status': 'unknown'},
+            {'id': 'khm', 'name': 'Kunsthochschule für Medien Köln', 'status': 'unknown'},
+            {'id': 'fuk', 'name': 'Folkwang Universität der Künste', 'status': 'unknown'},
+            {'id': 'hmt', 'name': 'Hochschule für Musik und Tanz Köln', 'status': 'unknown'},
+            {'id': 'det', 'name': 'Hochschule für Musik Detmold', 'status': 'unknown'},
+        ]
+        
+        # Check which organizations actually have S3 data
+        for org in standard_orgs:
+            try:
+                # Try to discover sources for this organization
+                sources = analyzer.discover_s3_data_sources(org['id'])
+                if sources:  # If sources found, mark as active
+                    org['status'] = 'active'
+                else:
+                    org['status'] = 'inactive'
+            except Exception as e:
+                logger.debug(f"Organization {org['id']} check failed: {e}")
+                org['status'] = 'inactive'
+        
+        return standard_orgs
+        
+    except Exception as e:
+        logger.error(f"Error discovering organizations: {e}")
+        # Return standard list with unknown status if discovery fails
+        return [
+            {'id': 'rsh', 'name': 'Robert Schumann Hochschule Düsseldorf', 'status': 'unknown'},
+            {'id': 'khm', 'name': 'Kunsthochschule für Medien Köln', 'status': 'unknown'},
+            {'id': 'fuk', 'name': 'Folkwang Universität der Künste', 'status': 'unknown'},
+            {'id': 'hmt', 'name': 'Hochschule für Musik und Tanz Köln', 'status': 'unknown'},
+            {'id': 'det', 'name': 'Hochschule für Musik Detmold', 'status': 'unknown'},
+        ]
 
 
 def _build_direct_graph_data(source_summary):

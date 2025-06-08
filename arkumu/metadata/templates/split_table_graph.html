@@ -88,7 +88,7 @@
     <div class="hero bg-gradient-to-r from-primary to-secondary text-primary-content py-6">
         <div class="hero-content text-center w-full max-w-none">
             <div class="max-w-none">
-        <h1 class="text-3xl font-bold mb-2">Dataset Explorer</h1>
+        <h1 class="text-3xl font-bold mb-2">Database Dataset Explorer</h1>
                 <p class="text-base opacity-90 mb-3">Interactive data visualization with side-by-side table and graph</p>
                 <div class="flex justify-center gap-2 flex-wrap">
                     <div class="badge badge-outline badge-sm">
@@ -128,10 +128,10 @@
             <div class="form-control">
                 <select name="source" 
                         class="select select-bordered select-primary w-64"
-                        hx-get="{% if is_direct_mode %}/metadata/direct-analysis/load-source-data/{% else %}/metadata/split-view/load-source-data/{% endif %}"
+                        hx-get="/metadata/split-view/load-source-data/"
                         hx-trigger="change{% if selected_source %} load delay:10ms{% endif %}"
                         hx-swap="none"
-                        {% if is_direct_mode and organization_id %}hx-vals='{"organization": "{{ organization_id }}"}'{% endif %}
+
                         hx-indicator=".loading-indicator">
                     <option value="">Select a data source...</option>
                     {% for source in sources %}
@@ -149,9 +149,9 @@
             
                             <div class="stats shadow">
                 <div class="stat">
-                    <div class="stat-title text-xs">{% if is_direct_mode %}Direct Mode{% else %}Database Mode{% endif %}</div>
-                    <div class="stat-value text-sm {% if is_direct_mode %}text-info{% else %}text-success{% endif %}">
-                        {% if is_direct_mode %}File-based{% else %}DB-based{% endif %}
+                    <div class="stat-title text-xs">Database Mode</div>
+                    <div class="stat-value text-sm text-success">
+                        DB-based
                     </div>
                 </div>
             </div>

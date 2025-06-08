@@ -1,0 +1,198 @@
+{% if error %}
+<!-- Error State -->
+<div class="col-span-full">
+    <div class="alert alert-error">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+        <div>
+            <h3 class="font-bold">Error Loading Datasets</h3>
+            <div class="text-sm">{{ error }}</div>
+        </div>
+    </div>
+</div>
+{% elif not datasets %}
+<!-- Empty State -->
+<div class="col-span-full">
+    <div class="hero h-40">
+        <div class="hero-content text-center">
+            <div class="max-w-md">
+                <svg class="w-16 h-16 mx-auto mb-4 text-base-content/30" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+                </svg>
+                <h3 class="text-lg font-medium">No Datasets Found</h3>
+                <p class="text-sm text-base-content/70 mt-2">
+                    No datasets were found in the S3 metadata folder for this organization.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% else %}
+<!-- Success State - Dataset Cards -->
+{% for dataset in datasets %}
+<div class="dataset-card card bg-base-100 shadow-lg hover:shadow-xl transition-shadow duration-200 cursor-pointer border border-base-300 hover:border-info"
+     data-dataset-name="{{ dataset.name }}"
+     data-source-name="{{ dataset.source_name }}"
+     _="on click
+         log 'Dataset card clicked:', '{{ dataset.name }}', 'from source:', '{{ dataset.source_name }}'
+         call window.selectDataset('{{ dataset.name }}', '{{ dataset.source_name }}')">
+    
+    <div class="card-body p-4">
+        <!-- Header -->
+        <div class="flex items-start justify-between mb-3">
+            <div class="flex-1 min-w-0">
+                <h3 class="card-title text-lg font-bold text-info truncate" title="{{ dataset.name }}">
+                    {{ dataset.name }}
+                </h3>
+                <div class="flex items-center gap-2 mt-1">
+                    <div class="badge badge-info badge-sm">{{ dataset.source_name }}</div>
+                    {% if dataset.file_info.format %}
+                        <div class="badge badge-outline badge-xs">{{ dataset.file_info.format }}</div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            {% if not dataset.error %}
+            <div class="text-right">
+                <div class="stat-value text-sm text-success">{{ dataset.row_count|floatformat:0 }}</div>
+                <div class="stat-desc text-xs">rows</div>
+            </div>
+            {% endif %}
+        </div>
+        
+        {% if dataset.error %}
+        <!-- Error Card Content -->
+        <div class="alert alert-error alert-sm">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <span class="text-xs">{{ dataset.error }}</span>
+        </div>
+        {% else %}
+        <!-- Dataset Stats -->
+        <div class="stats stats-horizontal stats-sm bg-base-200 shadow">
+            <div class="stat px-2 py-1">
+                <div class="stat-title text-xs">Columns</div>
+                <div class="stat-value text-sm">{{ dataset.column_count }}</div>
+            </div>
+            <div class="stat px-2 py-1">
+                <div class="stat-title text-xs">Cells</div>
+                <div class="stat-value text-sm">{{ dataset.cell_count|floatformat:0 }}</div>
+            </div>
+            {% if dataset.file_info.size_mb %}
+            <div class="stat px-2 py-1">
+                <div class="stat-title text-xs">Size</div>
+                <div class="stat-value text-sm">{{ dataset.file_info.size_mb }}MB</div>
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Column Preview -->
+        {% if dataset.preview.colHeaders %}
+        <div class="mt-3">
+            <div class="text-xs text-base-content/70 mb-1">Sample Columns:</div>
+            <div class="flex flex-wrap gap-1">
+                {% for header in dataset.preview.colHeaders %}
+                <span class="badge badge-outline badge-xs" title="{{ header }}">
+                    {% if header|length > 12 %}
+                        {{ header|slice:":12" }}...
+                    {% else %}
+                        {{ header }}
+                    {% endif %}
+                </span>
+                {% endfor %}
+                {% if dataset.column_count > dataset.preview.colHeaders|length %}
+                <span class="badge badge-ghost badge-xs">+{{ dataset.column_count|add:"-"|add:dataset.preview.colHeaders|length }} more</span>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Multi-value Columns (if any) -->
+        {% if dataset.multi_value_columns %}
+        <div class="mt-2">
+            <div class="text-xs text-base-content/70 mb-1">Multi-value Columns:</div>
+            <div class="flex flex-wrap gap-1">
+                {% for col in dataset.multi_value_columns %}
+                <span class="badge badge-warning badge-xs">{{ col }}</span>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Footer -->
+        <div class="card-actions justify-between items-center mt-4">
+            <div class="text-xs text-base-content/50">
+                {% if dataset.file_info.modified_date %}
+                    Updated: {{ dataset.file_info.modified_date }}
+                {% endif %}
+            </div>
+            
+            <div class="flex gap-1">
+                <button class="btn btn-info btn-xs"
+                        _="on click
+                            halt the event's bubbling
+                            call window.selectDataset('{{ dataset.name }}', '{{ dataset.source_name }}')">
+                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"/>
+                    </svg>
+                    Select
+                </button>
+                
+                <button class="btn btn-ghost btn-xs"
+                        hx-get="/metadata/direct-analysis/dataset-card/"
+                        hx-vals='{"source": "{{ dataset.source_name }}", "dataset_name": "{{ dataset.name }}", "organization": "{{ organization_id }}"}'
+                        hx-target="#dataset-preview-modal .modal-box"
+                        hx-trigger="click"
+                        _="on click
+                            halt the event's bubbling
+                            show #dataset-preview-modal">
+                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/>
+                        <path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/>
+                    </svg>
+                    Preview
+                </button>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endfor %}
+
+<!-- Summary Stats -->
+<div class="col-span-full mt-4">
+    <div class="stats stats-horizontal shadow w-full">
+        <div class="stat">
+            <div class="stat-title">Total Datasets</div>
+            <div class="stat-value text-info">{{ total_datasets|default:datasets|length }}</div>
+            <div class="stat-desc">Available in S3</div>
+        </div>
+        
+        <div class="stat">
+            <div class="stat-title">Data Sources</div>
+            <div class="stat-value text-info">{{ sources_count|default:"—" }}</div>
+            <div class="stat-desc">S3 sources found</div>
+        </div>
+        
+        <div class="stat">
+            <div class="stat-title">Organization</div>
+            <div class="stat-value text-sm">{{ organization_id }}</div>
+            <div class="stat-desc">Current context</div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Dataset Preview Modal -->
+<div id="dataset-preview-modal" class="modal">
+    <div class="modal-box w-11/12 max-w-5xl">
+        <h3 class="font-bold text-lg mb-4">Dataset Preview</h3>
+        <div class="loading loading-spinner loading-lg mx-auto block"></div>
+        <p class="text-center mt-4">Loading dataset preview...</p>
+    </div>
+    <div class="modal-backdrop">
+        <button _="on click hide #dataset-preview-modal">close</button>
+    </div>
+</div> 
