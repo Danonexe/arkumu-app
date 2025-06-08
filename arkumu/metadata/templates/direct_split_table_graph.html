@@ -127,13 +127,12 @@
                     <div class="badge badge-primary badge-sm cursor-pointer hover:badge-secondary transition-colors"
                          data-source="{{ dataset.source }}"
                          data-dataset="{{ dataset.name }}"
-                         _="on click
+                                                  _="on click
                              set datasetName to my @data-dataset
                              set sourceName to my @data-source
                              hide #empty-state
-                             set fetchUrl to '/metadata/direct-analysis/dataset-card/?source=' + sourceName + '&dataset_name=' + datasetName + '&organization={{ organization_id }}'
-                             fetch fetchUrl
-                             put the result at the start of #table-content
+                             fetch `/metadata/direct-analysis/dataset-card/?source=${encodeURIComponent(sourceName)}&dataset_name=${encodeURIComponent(datasetName)}&organization={{ organization_id }}`
+                             put it at the start of #table-content
                              remove .badge-info from <.badge/>
                              add .badge-primary to <.badge/>
                              remove .badge-primary from me
