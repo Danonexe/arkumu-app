@@ -10,77 +10,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="min-h-screen bg-base-200 p-0 m-0 w-full"
-     _="on load
-         log 'Direct S3 data explorer loaded - Org:', '{{ organization_id|default:"NOT_SET" }}', 'Sources:', {{ sources|length|default:0 }}
-         
-         -- Set up global event handlers for graph coordination
-         on graphReady from body
-           log 'Graph is ready for interactions'
-           
-         on columnHighlighted(detail) from body
-           log 'Column highlighted:', detail.columnName
-           
-         on datasetSelected(detail) from body
-           log 'Dataset selected:', detail.datasetName
-           
-         -- Handle column highlighting at document level
-         on highlightColumn(columnName) from body
-           log 'GLOBAL: Received highlight request for column:', columnName
-           
-           -- Check if graph API is ready with better timing
-           if window.GraphAPI
-             log 'GraphAPI exists, checking if ready...'
-             if window.GraphAPI.isReady()
-               log 'Graph API is ready, highlighting column:', columnName
-               call window.GraphAPI.highlightColumn(columnName)
-               
-               -- Show success feedback
-               trigger showToast(message: `Column '${columnName}' highlighted in graph`, type: 'success') on body
-             else
-               log 'Graph API not ready, trying with delays...'
-               
-               -- Try multiple times with increasing delays
-               call retryHighlight(columnName, 1)
-             end
-           else
-             log 'ERROR: GraphAPI not found at all'
-             trigger showToast(message: 'Graph not initialized yet. Please wait and try again.', type: 'warning') on body
-           end
-           
-         -- Reset highlights listener  
-         on resetGraphHighlights from body
-           log 'Resetting graph highlights'
-           if window.GraphAPI and window.GraphAPI.resetHighlights
-             call window.GraphAPI.resetHighlights()
-           else
-             log 'Graph API not available for reset'
-           end
-           
-         -- Toast notification handler
-         on showToast(message, type) from body
-           log 'Showing toast:', message, 'type:', type
-           set #status-message's textContent to message
-           
-           -- Set appropriate styling based on type
-           if type === 'success'
-             add .alert-success to first .alert in #status-toast
-             remove .alert-warning from first .alert in #status-toast
-             remove .alert-error from first .alert in #status-toast
-           else if type === 'warning'  
-             add .alert-warning to first .alert in #status-toast
-             remove .alert-success from first .alert in #status-toast
-             remove .alert-error from first .alert in #status-toast
-           else if type === 'error'
-             add .alert-error to first .alert in #status-toast
-             remove .alert-success from first .alert in #status-toast
-             remove .alert-warning from first .alert in #status-toast
-           end
-           
-           -- Show toast
-           show #status-toast
-           wait 3s
-           hide #status-toast">
+<div class="min-h-screen bg-base-200 p-0 m-0 w-full">
 
     <!-- Header -->
     <div class="bg-base-100 border-b border-base-300">
@@ -198,23 +128,16 @@
                          data-source="{{ dataset.source }}"
                          data-dataset="{{ dataset.name }}"
                          _="on click
-                             -- Select the corresponding source in dropdown
-                             set sourceDropdown to #source-selector
-                             set targetSource to my @data-source
-                             set sourceDropdown.value to targetSource
-                             
-                             -- Trigger the dropdown change event
-                             trigger change on sourceDropdown
-                             
-                             -- Highlight this dataset label
-                             for otherLabel in <.badge/>
-                               remove .badge-info from otherLabel
-                               add .badge-primary to otherLabel
-                             end
+                             set datasetName to my @data-dataset
+                             set sourceName to my @data-source
+                             hide #empty-state
+                             set fetchUrl to '/metadata/direct-analysis/dataset-card/?source=' + sourceName + '&dataset_name=' + datasetName + '&organization={{ organization_id }}'
+                             fetch fetchUrl
+                             put the result at the start of #table-content
+                             remove .badge-info from <.badge/>
+                             add .badge-primary to <.badge/>
                              remove .badge-primary from me
-                             add .badge-info to me
-                             
-                             log 'Dataset clicked:', my @data-dataset, 'from source:', targetSource">
+                             add .badge-info to me">
                         {{ dataset.name }}
                     </div>
                 {% endfor %}
@@ -243,15 +166,15 @@
                     </div>
                 </div>
                 <div class="card-body p-4 overflow-y-auto" id="table-content">
-                    <!-- Initial empty state -->
-                    <div class="hero h-40">
+                    <!-- Initial state - multi-dataset accumulation view -->
+                    <div class="hero h-40" id="empty-state">
                         <div class="hero-content text-center">
                             <div class="max-w-md">
                                 <svg class="w-16 h-16 mx-auto mb-4 text-base-content/30" fill="currentColor" viewBox="0 0 20 20">
                                     <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
                                 </svg>
-                                <p class="text-base-content/50">Select an S3 data source to view tables</p>
-                                <p class="text-xs text-base-content/30 mt-2">Data is read directly from S3 files</p>
+                                <p class="text-base-content/50">Click dataset labels to add them here</p>
+                                <p class="text-xs text-base-content/30 mt-2">Multiple datasets stack vertically • Latest on top</p>
                             </div>
                         </div>
                     </div>

@@ -3,7 +3,9 @@
 
 <!-- Enhanced Dataset Card for {{ dataset.name }} -->
 <div class="card dataset-card transition-all duration-300 hover:scale-[1.02] border border-base-300"
+     id="dataset-{{ dataset.name }}"
      data-dataset="{{ dataset.name }}"
+     data-dataset-id="{{ dataset.name }}"
 
      {% if not dataset.preview %}
      {# This is a placeholder card. Load the full card with preview when it becomes visible. #}

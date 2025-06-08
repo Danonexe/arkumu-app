@@ -328,24 +328,35 @@ def direct_get_dataset_card(request):
     dataset_name = request.GET.get('dataset_name', '')
     organization_id = get_organization_id_from_request(request)
 
+    logger.info(f"🎯 DATASET CARD REQUEST: source={source_name}, dataset={dataset_name}, org={organization_id}")
+    logger.info(f"🎯 DATASET CARD REQUEST: All GET params: {dict(request.GET)}")
+
     if not source_name or not dataset_name:
+        logger.error(f"🎯 DATASET CARD ERROR: Missing parameters - source={source_name}, dataset={dataset_name}")
         return HttpResponseBadRequest("Missing source or dataset_name")
 
     if not organization_id or organization_id == 'default-org':
+        logger.error(f"🎯 DATASET CARD ERROR: Invalid organization - {organization_id}")
         return HttpResponseBadRequest("Organization parameter required")
 
     try:
         analyzer = S3DirectDataAnalyzer()
         
         # Find the source in S3
+        logger.info(f"🎯 DATASET CARD: Discovering sources for org {organization_id}")
         sources = analyzer.discover_s3_data_sources(organization_id)
+        logger.info(f"🎯 DATASET CARD: Found {len(sources)} sources: {[s.name for s in sources]}")
+        
         source_info = next((s for s in sources if s.name == source_name), None)
         
         if not source_info:
+            logger.error(f"🎯 DATASET CARD ERROR: Source '{source_name}' not found in available sources: {[s.name for s in sources]}")
             return HttpResponseBadRequest(f"Source '{source_name}' not found")
         
         # Get detailed preview for this dataset from S3
+        logger.info(f"🎯 DATASET CARD: Getting preview for {dataset_name} from source {source_name}")
         preview = analyzer.get_s3_table_preview(source_info, dataset_name, limit=10)
+        logger.info(f"🎯 DATASET CARD: Preview loaded - {preview.total_rows} rows, {len(preview.column_headers)} columns")
         
         dataset = {
             'name': dataset_name,
@@ -365,7 +376,8 @@ def direct_get_dataset_card(request):
             'multi_value_columns': preview.multi_value_columns
         }
 
-        return render(request, 'partials/dataset_card.html', {
+        logger.info(f"🎯 DATASET CARD: Rendering template with dataset {dataset_name}")
+        response = render(request, 'partials/dataset_card.html', {
             'dataset': dataset,
             'colHeaders': preview.column_headers,
             'rowIds': [f"row_{i}" for i in range(len(preview.data_rows))],  # Generate row IDs
@@ -373,9 +385,11 @@ def direct_get_dataset_card(request):
             'is_direct_mode': True,
             'organization_id': organization_id  # Add organization to context
         })
+        logger.info(f"🎯 DATASET CARD SUCCESS: Template rendered for {dataset_name}")
+        return response
         
     except Exception as e:
-        logger.error(f"Error getting direct dataset card: {e}")
+        logger.error(f"🎯 DATASET CARD ERROR: Exception getting dataset card: {e}", exc_info=True)
         return HttpResponseBadRequest(f"Error: {str(e)}")
 
 
@@ -549,6 +563,62 @@ def _discover_available_organizations(analyzer):
             {'id': 'hmt', 'name': 'Hochschule für Musik und Tanz Köln', 'status': 'unknown'},
             {'id': 'det', 'name': 'Hochschule für Musik Detmold', 'status': 'unknown'},
         ]
+
+
+def _load_all_csv_datasets_data(analyzer, organization_id, sources, csv_datasets):
+    """
+    Load table data for all CSV datasets from all sources.
+    Similar to direct_load_source_data but for all sources at once.
+    """
+    all_datasets_data = []
+    
+    # Group datasets by source for efficient loading
+    datasets_by_source = {}
+    for dataset in csv_datasets:
+        source_name = dataset['source']
+        if source_name not in datasets_by_source:
+            datasets_by_source[source_name] = []
+        datasets_by_source[source_name].append(dataset)
+    
+    # Load data for each source
+    for source_name, source_datasets in datasets_by_source.items():
+        try:
+            logger.info(f"Loading data for source: {source_name} with {len(source_datasets)} datasets")
+            
+            # Get source summary for this source
+            source_summary = analyzer.get_s3_source_summary(organization_id, source_name)
+            
+            # Build datasets information for table display
+            for dataset_info in source_summary['datasets']:
+                if 'error' not in dataset_info:
+                    # Check if this dataset is in our CSV list
+                    if any(d['name'] == dataset_info['name'] for d in source_datasets):
+                        logger.info(f"Adding dataset {dataset_info['name']}: {dataset_info['row_count']} rows, {dataset_info['column_count']} cols")
+                        all_datasets_data.append({
+                            'name': dataset_info['name'],
+                            'source': source_name,
+                            'cell_count': dataset_info['row_count'] * dataset_info['column_count'],
+                            'row_count': dataset_info['row_count'],
+                            'column_count': dataset_info['column_count'],
+                            'preview': {
+                                'colHeaders': dataset_info['columns'],
+                                'data': dataset_info['sample_data'],
+                                'showing_rows': len(dataset_info['sample_data']),
+                                'total_rows': dataset_info['row_count'],
+                                'has_more': dataset_info['row_count'] > len(dataset_info['sample_data']),
+                                'offset': 0
+                            },
+                            'multi_value_columns': dataset_info.get('multi_value_columns', [])
+                        })
+                else:
+                    logger.error(f"Dataset {dataset_info.get('name', 'unknown')} has error: {dataset_info.get('error')}")
+        
+        except Exception as source_error:
+            logger.error(f"Error loading source {source_name}: {source_error}")
+            continue
+    
+    logger.info(f"Loaded {len(all_datasets_data)} datasets total for table display")
+    return all_datasets_data
 
 
 def _build_direct_graph_data(source_summary):
