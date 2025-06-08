@@ -82,57 +82,21 @@
            wait 3s
            hide #status-toast">
 
-    <!-- Hero Section -->
-    <div class="hero bg-gradient-to-r from-info to-success text-info-content py-6">
-        <div class="hero-content text-center w-full max-w-none">
-            <div class="max-w-none">
-                <h1 class="text-3xl font-bold mb-2">Direct S3 Dataset Explorer</h1>
-                <p class="text-base opacity-90 mb-3">Real-time data visualization directly from S3 sources</p>
-                <div class="flex justify-center gap-2 flex-wrap">
-                    <div class="badge badge-outline badge-sm">
-                        <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
-                        </svg>
-                        S3 Direct
-                    </div>
-                    <div class="badge badge-outline badge-sm">
-                        <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M13 10V3L4 14h7v7l9-11h-7z"/>
-                        </svg>
-                        Real-time
-                    </div>
-                    <div class="badge badge-outline badge-sm">
-                        <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"/>
-                        </svg>
-                        Analytics
-                    </div>
-                </div>
-            </div>
+    <!-- Header -->
+    <div class="bg-base-100 border-b border-base-300">
+        <div class="container mx-auto max-w-none px-4 py-3">
+            <h1 class="text-xl font-semibold">Direct S3 Dataset Explorer</h1>
         </div>
     </div>
     
     <!-- Controls Section -->
-    <div class="navbar bg-base-100 shadow-lg">
-        <div class="navbar-start">
-            <div class="avatar placeholder">
-                <div class="bg-info text-info-content rounded-full w-8">
-                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
-                    </svg>
-                </div>
-            </div>
-            <div class="ml-3">
-                <div class="text-lg font-semibold">S3 Data Sources</div>
-                <div class="text-sm text-base-content/70">Organization: <span class="text-info font-medium">{{ organization_id|default:"Not set" }}</span></div>
-            </div>
-        </div>
-        
-        <div class="navbar-end gap-4">
-            <!-- Organization selector - always show -->
-            <div class="form-control">
+    <div class="bg-base-100 p-4 shadow-sm">
+        <div class="flex items-center gap-6">
+            <!-- Organization selector with label -->
+            <div class="flex items-center gap-3">
+                <span class="text-sm font-medium">Organization:</span>
                 <select name="organization" 
-                        class="select select-bordered select-info w-48"
+                        class="select select-bordered select-sm"
                         id="organization-selector"
                         _="on change
                             if my value !== ''
@@ -150,13 +114,17 @@
                         </option>
                     {% endfor %}
                 </select>
+                {% if organization_id %}
+                <span class="text-sm text-base-content/70">{{ organization_id }}</span>
+                {% endif %}
             </div>
             
             {% if organization_id %}
-            <!-- Source selector when organization is set -->
-            <div class="form-control">
+            <!-- Source selector with label -->
+            <div class="flex items-center gap-3">
+                <span class="text-sm font-medium">Source:</span>
                 <select name="source" 
-                        class="select select-bordered select-info w-48"
+                        class="select select-bordered select-sm"
                         id="source-selector"
                         hx-get="/metadata/direct-analysis/load-source-data/"
                         hx-trigger="change"
@@ -168,9 +136,8 @@
                             set selectedSource to my value
                             log 'Source selected:', selectedSource
                             
-                            -- Always keep the dropdown functional and show selected value
+                            -- Update URL to reflect selection
                             if selectedSource !== ''
-                              -- Update URL to reflect selection (but don't redirect) - simple approach
                               set baseUrl to window.location.href.split('&source=')[0].split('?source=')[0]
                               if baseUrl.includes('?')
                                 set newUrl to baseUrl + '&source=' + selectedSource
@@ -180,23 +147,22 @@
                               call window.history.replaceState({}, '', newUrl)
                             end
                             
-                            -- Update the source filter tabs to highlight selected source
-                            if selectedSource !== ''
-                              for tab in <.tab/>
-                                remove .tab-active from tab
-                                if tab.dataset.source === selectedSource
-                                  add .tab-active to tab
-                                end
+                            -- Highlight datasets from selected source
+                            for datasetLabel in <.badge/>
+                              if datasetLabel.dataset.source === selectedSource
+                                remove .badge-primary from datasetLabel
+                                add .badge-info to datasetLabel
+                              else
+                                remove .badge-info from datasetLabel
+                                add .badge-primary to datasetLabel
                               end
-                              
-                              -- Filter datasets in the browser
-                              for datasetCard in <.dataset-card/>
-                                set cardSource to datasetCard.dataset.sourceName
-                                if cardSource === selectedSource
-                                  show datasetCard
-                                else
-                                  hide datasetCard
-                                end
+                            end
+                            
+                            -- If no source selected, reset all to primary
+                            if selectedSource === ''
+                              for datasetLabel in <.badge/>
+                                remove .badge-info from datasetLabel
+                                add .badge-primary to datasetLabel
                               end
                             end">
                     <option value="">Select a S3 data source...</option>
@@ -206,156 +172,65 @@
                         </option>
                     {% endfor %}
                 </select>
+                {% if selected_source %}
+                <span class="text-sm text-base-content/70">{{ selected_source }}</span>
+                {% endif %}
             </div>
             {% endif %}
             
-            <div class="loading-indicator htmx-indicator flex items-center gap-2">
-                <span class="loading loading-spinner loading-sm text-info"></span>
-                <span class="text-sm">Loading from S3...</span>
-            </div>
-            
-            <div class="stats shadow">
-                <div class="stat">
-                    <div class="stat-title text-xs">Direct S3 Mode</div>
-                    <div class="stat-value text-sm text-info">
-                        File-based
-                    </div>
-                    <div class="stat-desc text-xs">Real-time access</div>
-                </div>
+            <div class="loading-indicator htmx-indicator flex items-center gap-2 ml-auto">
+                <span class="loading loading-spinner loading-sm"></span>
+                <span class="text-sm">Loading...</span>
             </div>
         </div>
     </div>
     
-
-    
-    <!-- Dataset Browser Section -->
+    <!-- Dataset Labels -->
     {% if organization_id %}
-    <div class="container mx-auto max-w-none p-4">
-        <div class="card bg-base-100 shadow-lg">
-            <div class="card-body">
-                <div class="flex items-center justify-between mb-4">
-                    <div class="flex items-center gap-3">
-                        <div class="avatar placeholder">
-                            <div class="bg-info text-info-content rounded-full w-10">
-                                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                    <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
-                                </svg>
-                            </div>
-                        </div>
-                        <div>
-                            <h2 class="text-xl font-bold">Available Datasets</h2>
-                            <p class="text-sm text-base-content/70">Browse all datasets available in S3 metadata folder</p>
-                        </div>
-                    </div>
-                    
-                    <div class="flex items-center gap-2">
-                        <!-- Filter Controls -->
-                        <div class="form-control">
-                            <input type="text" 
-                                   placeholder="Search datasets..." 
-                                   class="input input-bordered input-sm w-48"
-                                   id="dataset-search"
-                                   _="on keyup
-                                       set searchTerm to my value.toLowerCase()
-                                       for datasetCard in <.dataset-card/>
-                                         set datasetName to datasetCard.dataset.datasetName.toLowerCase()
-                                         if searchTerm === '' or datasetName.includes(searchTerm)
-                                           show datasetCard
-                                         else
-                                           hide datasetCard
-                                         end
-                                       end">
-                        </div>
-                        
-                        <button class="btn btn-sm btn-info btn-outline"
-                                hx-get="/metadata/direct-analysis/load-all-datasets/"
-                                hx-target="#datasets-grid"
-                                hx-vals='{"organization": "{{ organization_id }}"}'
-                                hx-indicator="#datasets-loading"
-                                _="on click
-                                    add .loading to me
-                                    wait for htmx:afterSwap
-                                    remove .loading from me">
-                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/>
-                            </svg>
-                            Refresh
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- Source Filter Tabs -->
-                <div class="tabs tabs-boxed mb-4" id="source-filter-tabs">
-                    <a class="tab tab-active" 
-                       data-source="all"
-                       _="on click
-                           for otherTab in <.tab/>
-                             remove .tab-active from otherTab
-                           end
-                           add .tab-active to me
-                           
-                           for datasetCard in <.dataset-card/>
-                             show datasetCard
-                           end">
-                        All Sources
-                    </a>
-                    {% for source in sources %}
-                    <a class="tab" 
-                       data-source="{{ source.name }}"
-                       _="on click
-                           for otherTab in <.tab/>
-                             remove .tab-active from otherTab
-                           end
-                           add .tab-active to me
-                           
-                           set targetSource to my @data-source
-                           for datasetCard in <.dataset-card/>
-                             set cardSource to datasetCard.dataset.sourceName
-                             if cardSource === targetSource
-                               show datasetCard
-                             else
-                               hide datasetCard
+    <div class="bg-base-100 px-4 py-3 border-b border-base-300">
+        <div class="flex items-center gap-3 mb-2">
+            <span class="text-sm font-medium">Datasets:</span>
+        </div>
+        <div class="flex flex-wrap gap-2">
+            {% if datasets %}
+                {% for dataset in datasets %}
+                    <div class="badge badge-primary badge-sm cursor-pointer hover:badge-secondary transition-colors"
+                         data-source="{{ dataset.source }}"
+                         data-dataset="{{ dataset.name }}"
+                         _="on click
+                             -- Select the corresponding source in dropdown
+                             set sourceDropdown to #source-selector
+                             set targetSource to my @data-source
+                             set sourceDropdown.value to targetSource
+                             
+                             -- Trigger the dropdown change event
+                             trigger change on sourceDropdown
+                             
+                             -- Highlight this dataset label
+                             for otherLabel in <.badge/>
+                               remove .badge-info from otherLabel
+                               add .badge-primary to otherLabel
                              end
-                           end">
-                        {{ source.display_name }}
-                    </a>
-                    {% endfor %}
-                </div>
-                
-                <!-- Loading indicator -->
-                <div id="datasets-loading" class="htmx-indicator flex justify-center items-center py-8">
-                    <div class="loading loading-spinner loading-lg text-info"></div>
-                    <span class="ml-3">Loading datasets from S3...</span>
-                </div>
-                
-                <!-- Datasets Grid with fixed height container -->
-                <div class="h-96 overflow-y-auto border border-base-300 rounded-lg p-2">
-                    <div id="datasets-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        <!-- Initial empty state -->
-                        <div class="col-span-full">
-                            <div class="hero h-32">
-                                <div class="hero-content text-center">
-                                    <div class="max-w-md">
-                                        <svg class="w-12 h-12 mx-auto mb-3 text-base-content/30" fill="currentColor" viewBox="0 0 20 20">
-                                            <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
-                                        </svg>
-                                        <p class="text-base-content/50">Click "Refresh" to load available datasets</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                             remove .badge-primary from me
+                             add .badge-info to me
+                             
+                             log 'Dataset clicked:', my @data-dataset, 'from source:', targetSource">
+                        {{ dataset.name }}
                     </div>
-                </div>
-            </div>
+                {% endfor %}
+            {% else %}
+                <div class="badge badge-ghost badge-sm">No datasets found</div>
+            {% endif %}
         </div>
     </div>
     {% endif %}
+
     
     <!-- Split Content Area with Fixed Graph Panel -->
     <div class="container mx-auto max-w-none p-4">
         <div id="split-content" class="relative grid grid-cols-1 lg:grid-cols-2 gap-4">
             <!-- Table Panel (Left) - Scrollable -->
-            <div class="card bg-base-100 shadow-xl h-[calc(100vh-220px)] overflow-y-auto">
+            <div class="card bg-base-100 shadow-xl h-[calc(100vh-160px)] overflow-y-auto">
                 <div class="card-header sticky top-0 z-10 bg-base-100">
                     <div class="flex items-center gap-2 p-4 border-b border-base-300">
                         <svg class="w-5 h-5 text-info" fill="currentColor" viewBox="0 0 20 20">
@@ -384,7 +259,7 @@
             </div>
             
             <!-- Graph Panel (Right) - Fixed -->
-            <div class="lg:sticky lg:top-4 h-[calc(100vh-220px)]">
+            <div class="lg:sticky lg:top-4 h-[calc(100vh-160px)]">
                 <div class="card rounded-box bg-base-100 shadow-lg h-full overflow-hidden">
                     <div class="card-body p-4 flex flex-col h-full">
                         <div class="card-title flex gap-2 items-center">
@@ -449,12 +324,7 @@
 {% block inline_javascript %}
 {{ block.super }}
 <script>
-// Global dataset browser state
-window.DatasetBrowser = {
-    selectedDataset: null,
-    allDatasets: [],
-    filteredDatasets: []
-};
+
 
 // SAFE coordination between HTMX and hyperscript - only handle specific targets
 document.addEventListener('htmx:afterSwap', function(event) {
@@ -489,10 +359,6 @@ document.addEventListener('htmx:afterSwap', function(event) {
         }, 100);
     } else if (targetId === 'table-content') {
         console.log('Table content updated - expected behavior');
-    } else if (targetId === 'datasets-grid') {
-        console.log('Datasets grid updated - expected behavior');
-        const datasetCards = event.detail.target.querySelectorAll('.dataset-card');
-        window.DatasetBrowser.allDatasets = Array.from(datasetCards);
     } else {
         console.warn('HTMX updated unexpected target:', targetId);
     }
@@ -528,21 +394,7 @@ window.retryHighlight = function(columnName, attempt) {
     }, delay);
 };
 
-// Dataset selection helper function (disabled automatic source loading)
-window.selectDataset = function(datasetName, sourceName) {
-    console.log(`Dataset referenced: ${datasetName} from source: ${sourceName}`);
-    
-    // Update global state only
-    window.DatasetBrowser.selectedDataset = { name: datasetName, source: sourceName };
-    
-    // Show info toast but don't auto-load
-    document.body.dispatchEvent(new CustomEvent('showToast', {
-        detail: { 
-            message: `Dataset '${datasetName}' from source '${sourceName}' - select source manually`, 
-            type: 'info' 
-        }
-    }));
-};
+
 
 // Simplified HTMX logging for S3 operations
 document.addEventListener('htmx:beforeRequest', function(event) {

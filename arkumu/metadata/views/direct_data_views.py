@@ -78,21 +78,46 @@ def direct_split_table_graph_view(request):
         # Discover available data sources from S3 for this organization
         sources = analyzer.discover_s3_data_sources(organization_id)
         
-        # Format sources for dropdown
+        # Format sources for dropdown and collect CSV datasets
         sources_info = []
+        csv_datasets = []
+        
         for source in sources:
             dataset_names = analyzer.get_dataset_names_from_s3_source(source)
-            sources_info.append({
-                'name': source.name,
-                'dataset_count': len(dataset_names),
-                'display_name': f"{source.name} ({len(dataset_names)} dataset{'s' if len(dataset_names) != 1 else ''})",
-                'format': source.format,
-                'size_mb': round(source.size_bytes / (1024 * 1024), 2) if source.size_bytes else 0,
-                'modified_date': source.modified_date.strftime('%Y-%m-%d %H:%M') if source.modified_date else None
-            })
+            logger.info(f"Source: {source.name}, Format: {source.format}, Datasets: {dataset_names}")
+            
+            # Collect CSV/parseable datasets from this source
+            source_csv_datasets = []
+            for dataset_name in dataset_names:
+                dataset_lower = dataset_name.lower()
+                if (dataset_lower.endswith(('.csv', '.tsv', '.txt')) or 
+                    'csv' in dataset_lower or 
+                    (source.format and source.format.lower() in ['csv', 'tsv', 'text'])):
+                    csv_dataset = {
+                        'name': dataset_name,
+                        'source': source.name,
+                        'format': source.format or 'csv'
+                    }
+                    csv_datasets.append(csv_dataset)
+                    source_csv_datasets.append(csv_dataset)
+                    logger.info(f"Added CSV dataset: {dataset_name} from source {source.name} (format: {source.format})")
+            
+            # Only add source to dropdown if it has CSV datasets
+            if source_csv_datasets:
+                sources_info.append({
+                    'name': source.name,
+                    'dataset_count': len(source_csv_datasets),
+                    'display_name': source.name,
+                    'format': source.format,
+                    'size_mb': round(source.size_bytes / (1024 * 1024), 2) if source.size_bytes else 0,
+                    'modified_date': source.modified_date.strftime('%Y-%m-%d %H:%M') if source.modified_date else None
+                })
+        
+        logger.info(f"Found {len(csv_datasets)} CSV datasets total: {[d['name'] for d in csv_datasets]}")
         
         context = {
             'sources': sources_info,
+            'datasets': csv_datasets,  # Add CSV datasets to context
             'selected_source': request.GET.get('source', ''),
             'is_direct_mode': True,  # Flag to indicate we're using direct mode
             'organizations': available_organizations,
