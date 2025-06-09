@@ -49,64 +49,7 @@
                 {% endif %}
             </div>
             
-            {% if organization_id %}
-            <!-- Source selector with label -->
-            <div class="flex items-center gap-3">
-                <span class="text-sm font-medium">Source:</span>
-                <select name="source" 
-                        class="select select-bordered select-sm"
-                        id="source-selector"
-                        hx-get="/metadata/direct-analysis/load-source-data/"
-                        hx-trigger="change"
-                        hx-target="#table-content"
-                        hx-swap="innerHTML"
-                        hx-vals='{"organization": "{{ organization_id }}"}'
-                        hx-indicator=".loading-indicator"
-                        _="on change
-                            set selectedSource to my value
-                            log 'Source selected:', selectedSource
-                            
-                            -- Update URL to reflect selection
-                            if selectedSource !== ''
-                              set baseUrl to window.location.href.split('&source=')[0].split('?source=')[0]
-                              if baseUrl.includes('?')
-                                set newUrl to baseUrl + '&source=' + selectedSource
-                              else
-                                set newUrl to baseUrl + '?source=' + selectedSource
-                              end
-                              call window.history.replaceState({}, '', newUrl)
-                            end
-                            
-                            -- Highlight datasets from selected source
-                            for datasetLabel in <.badge/>
-                              if datasetLabel.dataset.source === selectedSource
-                                remove .badge-primary from datasetLabel
-                                add .badge-info to datasetLabel
-                              else
-                                remove .badge-info from datasetLabel
-                                add .badge-primary to datasetLabel
-                              end
-                            end
-                            
-                            -- If no source selected, reset all to primary
-                            if selectedSource === ''
-                              for datasetLabel in <.badge/>
-                                remove .badge-info from datasetLabel
-                                add .badge-primary to datasetLabel
-                              end
-                            end">
-                    <option value="">Select a S3 data source...</option>
-                    {% for source in sources %}
-                        <option value="{{ source.name }}" {% if source.name == selected_source %}selected{% endif %}>
-                            {{ source.display_name }}{% if source.dataset_count == 0 %} (no data){% endif %}
-                        </option>
-                    {% endfor %}
-                </select>
-                {% if selected_source %}
-                <span class="text-sm text-base-content/70">{{ selected_source }}</span>
-                {% endif %}
-            </div>
-            {% endif %}
+
             
             <div class="loading-indicator htmx-indicator flex items-center gap-2 ml-auto">
                 <span class="loading loading-spinner loading-sm"></span>
@@ -253,22 +196,7 @@ document.addEventListener('htmx:afterSwap', function(event) {
     const targetId = event.detail.target ? event.detail.target.id : 'unknown';
     console.log('HTMX afterSwap for target:', targetId);
     
-    // Check if source dropdown still exists and has correct options
-    const sourceSelector = document.getElementById('source-selector');
-    if (sourceSelector) {
-        const optionCount = sourceSelector.options.length;
-        const firstOption = sourceSelector.options[0] ? sourceSelector.options[0].text : 'none';
-        console.log(`Source dropdown check: ${optionCount} options, first: "${firstOption}"`);
-        
-        // If dropdown was corrupted, log it
-        if (firstOption.includes('dataset') || firstOption.includes('Dataset')) {
-            console.error('🚨 SOURCE DROPDOWN CORRUPTED! Contains dataset data instead of sources');
-            console.log('Dropdown options:', Array.from(sourceSelector.options).map(opt => opt.text));
-            
-            // Show visible alert that can't be missed
-            alert('🚨 BUG DETECTED: Source dropdown corrupted with dataset data!\n\nCheck browser console for details.');
-        }
-    }
+
     
     // Only handle expected targets, prevent interference
     if (targetId === 'graph-container') {
