@@ -81,7 +81,6 @@
                                 -- Create badge ID (simple: replace spaces and special chars with dashes)
                                 js(datasetName) return datasetName.toLowerCase().replace(/[^a-z0-9]/g, '-') end
                                 set badgeId to 'badge-' + the result
-                                log 'Looking for badge with ID: ' + badgeId
                                 
                                 -- Find the corresponding badge by ID and restore its state
                                 get #{badgeId}
@@ -91,7 +90,7 @@
                                     add .badge-primary to badge
                                     log 'Restored badge state for: ' + datasetName
                                 else
-                                    log 'Badge not found with ID: ' + badgeId
+                                    -- Badge not found, but continue silently
                                 end
                                 
                                 -- Remove the dataset card with smooth animation
