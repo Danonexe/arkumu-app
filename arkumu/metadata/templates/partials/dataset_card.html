@@ -3,9 +3,9 @@
 
 <!-- Enhanced Dataset Card for {{ dataset.name }} -->
 <div class="card bg-base-100 shadow-lg border border-base-300 transition-all duration-300 hover:scale-[1.02]"
-     id="dataset-{{ dataset.name }}"
-     data-dataset="{{ dataset.name }}"
-     data-dataset-id="{{ dataset.name }}"
+         id="dataset-{{ dataset.name|slugify }}"
+    data-dataset="{{ dataset.name }}"
+    data-dataset-id="{{ dataset.name|slugify }}"
 
      {% if not dataset.preview %}
      {# This is a placeholder card. Load the full card with preview when it becomes visible. #}
@@ -93,9 +93,13 @@
                 <button class="btn btn-ghost btn-sm btn-circle"
                         title="Collapse/Expand dataset"
                         hx-trigger="click"
-                        hx-target="#card-body-{{ dataset.name }}"
+                        hx-target="#card-body-{{ dataset.name|slugify }}"
                         hx-swap="none"
-                        _="on click toggle .hidden on #card-body-{{ dataset.name }}">
+                        data-target-id="card-body-{{ dataset.name|slugify }}"
+                        _="on click 
+                            set targetId to @data-target-id
+                            set target to #{targetId}
+                            toggle .hidden on target">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                     </svg>
@@ -127,11 +131,15 @@
                           -- Find and highlight the table column
                           set columnIndex to @data-column-index
                           set datasetName to @data-dataset-name
-                          set tableColumnId to 'column-' + columnIndex + '-' + datasetName
-                          log 'Looking for table column with ID:', tableColumnId
+                          -- Use data attributes to find the matching column instead of constructing ID
+                          get .column-header in closest .card
+                          set allColumns to it
                           
-                          get #{tableColumnId}
-                          set tableColumn to it
+                          repeat for column in allColumns
+                              if @data-column-index of column is columnIndex and @data-dataset-name of column is datasetName
+                                  set tableColumn to column
+                              end
+                          end
                           log 'Found table column element:', tableColumn
                           
                           if tableColumn exists
@@ -159,7 +167,7 @@
                                   tableColumn.scrollIntoView({behavior: 'smooth', block: 'nearest', inline: 'center'});
                               end
                           else
-                              log 'ERROR: Table column not found with ID:', tableColumnId
+                              log 'ERROR: Table column not found for:', columnIndex, datasetName
                           end
                           
                           -- Also trigger graph highlighting
@@ -175,18 +183,18 @@
     </div>
     
     <!-- Card Body using DaisyUI collapse pattern -->
-    <div class="card-body pt-2 px-4 pb-4 bg-base-100 transition-all duration-300" id="card-body-{{ dataset.name }}">
+    <div class="card-body pt-2 px-4 pb-4 bg-base-100 transition-all duration-300" id="card-body-{{ dataset.name|slugify }}">
         
         {% if dataset.preview and dataset.preview.data %}
             <!-- Table Container with DaisyUI styling -->
-            <div class="table-container rounded-lg border border-base-300 overflow-hidden bg-base-100 w-full" id="table-{{ dataset.name }}">
+            <div class="table-container rounded-lg border border-base-300 overflow-hidden bg-base-100 w-full" id="table-{{ dataset.name|slugify }}">
                 <div class="overflow-x-auto w-full">
                     <table class="table table-sm w-full border-collapse text-sm">
                         <thead class="bg-base-200">
                             <tr>
                                 {% for header in dataset.preview.colHeaders %}
                                 <th class="p-2 border border-base-300 font-medium cursor-pointer hover:bg-primary-100 min-w-[120px] whitespace-nowrap column-header"
-                                    id="column-{{ forloop.counter0 }}-{{ dataset.name }}"
+                                    id="column-{{ forloop.counter0 }}-{{ dataset.name|slugify }}"
                                     data-column-name="{{ header }}"
                                     data-column-index="{{ forloop.counter0 }}"
                                     data-dataset-name="{{ dataset.name }}"
@@ -238,7 +246,7 @@
                                 {% endfor %}
                             </tr>
                         </thead>
-                        <tbody id="table-body-{{ dataset.name }}">
+                        <tbody id="table-body-{{ dataset.name|slugify }}">
                             {% include 'partials/table_rows.html' with data=dataset.preview.data dataset=dataset.name source=dataset.source %}
                         </tbody>
                     </table>
@@ -246,14 +254,14 @@
                 
                 <!-- HTMX Load More (matching server response format) -->
                 {% if dataset.preview.has_more %}
-                <div class="border-t border-base-300 bg-base-50 p-3" id="load-more-{{ dataset.name }}">
+                <div class="border-t border-base-300 bg-base-50 p-3" id="load-more-{{ dataset.name|slugify }}">
                     <button class="btn btn-sm btn-ghost btn-outline w-full gap-2 hover:btn-primary"
                             {% if is_direct_mode %}
                             hx-get="{% url 'metadata:direct_load_more_dataset_rows' %}?source={{ dataset.source|urlencode }}&dataset={{ dataset.name|urlencode }}&offset={{ dataset.preview.showing_rows }}&limit=10{% if organization_id %}&organization={{ organization_id }}{% endif %}"
                             {% else %}
                             hx-get="{% url 'metadata:load_more_dataset_rows' %}?source={{ dataset.source|urlencode }}&dataset={{ dataset.name|urlencode }}&offset={{ dataset.preview.showing_rows }}&limit=10"
                             {% endif %}
-                            hx-target="#table-body-{{ dataset.name }}"
+                            hx-target="#table-body-{{ dataset.name|slugify }}"
                             hx-swap="beforeend">
                         <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                             <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/>
@@ -266,27 +274,7 @@
                 {% endif %}
             </div>
 
-            <!-- Table Stats with DaisyUI stats component -->
-            <div class="mt-3">
-                <div class="stats stats-horizontal shadow-sm border border-base-300 bg-base-100 w-full">
-                    <div class="stat py-2 px-3">
-                        <div class="stat-title text-xs">Rows</div>
-                        <div class="stat-value text-sm">{{ dataset.preview.showing_rows }}</div>
-                        <div class="stat-desc text-xs">of {{ dataset.preview.total_rows|default:"?" }}</div>
-                    </div>
-                    <div class="stat py-2 px-3">
-                        <div class="stat-title text-xs">Columns</div>
-                        <div class="stat-value text-sm">{{ dataset.preview.colHeaders|length }}</div>
-                        <div class="stat-desc text-xs">attributes</div>
-                    </div>
-                    <div class="stat py-2 px-3">
-                        <div class="stat-title text-xs">Cells</div>
-                        <div class="stat-value text-sm">{{ dataset.cell_count|default:0 }}</div>
-                        <div class="stat-desc text-xs">total</div>
-                    </div>
-                </div>
-            </div>
-            
+
             <!-- Relationship Analysis Container -->
             <div id="relationship-analysis-{{ dataset.name|slugify }}" class="mt-4">
                 <!-- Relationship analysis will be loaded here via HTMX -->
