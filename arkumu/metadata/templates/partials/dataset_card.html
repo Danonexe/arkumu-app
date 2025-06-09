@@ -1,29 +1,8 @@
 {% load metadata_tags %}
 {% load relationship_tags %}
 
-<style>
-    .dataset-card .collapse-icon { display: none; }
-    .dataset-card .expand-icon { display: block; }
-    .dataset-card.is-collapsed .collapse-icon { display: block; }
-    .dataset-card.is-collapsed .expand-icon { display: none; }
-
-    .dataset-card .card-body {
-        transition: max-height 0.3s ease-out, padding 0.3s ease-out, opacity 0.3s ease-out;
-        max-height: 2000px; /* Set a large enough max-height */
-        overflow: hidden;
-        opacity: 1;
-    }
-
-    .dataset-card.is-collapsed .card-body {
-        max-height: 0;
-        padding-top: 0;
-        padding-bottom: 0;
-        opacity: 0;
-    }
-</style>
-
 <!-- Enhanced Dataset Card for {{ dataset.name }} -->
-<div class="card dataset-card transition-all duration-300 hover:scale-[1.02] border border-base-300"
+<div class="card bg-base-100 shadow-lg border border-base-300 transition-all duration-300 hover:scale-[1.02]"
      id="dataset-{{ dataset.name }}"
      data-dataset="{{ dataset.name }}"
      data-dataset-id="{{ dataset.name }}"
@@ -33,169 +12,170 @@
      hx-get="{% url 'metadata:split_dataset_card' %}?source={{ dataset.source|urlencode }}&dataset_name={{ dataset.name|urlencode }}"
      hx-trigger="intersect once"
      hx-swap="outerHTML"
-     hx-on:htmx:after-swap="htmx.process(this)"
      {% else %}
      {# This is a fully-loaded card. No need to click to load graph - it's already loaded! #}
      {% endif %}
 >
-    <!-- Dataset Header -->
-    <div class="dataset-header relative {% if not dataset.preview %}animate-pulse{% endif %}">
-        <div class="dataset-content">
-            <div class="flex items-center justify-between">
-                <div class="flex items-center gap-3">
-                    <div class="avatar placeholder">
-                        <div class="bg-primary-content text-primary rounded-full w-10">
-                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/>
-                            </svg>
-                        </div>
-                    </div>
-                    <div>
-                        <h3 class="text-lg font-bold text-primary-content">{{ dataset.name }}</h3>
-                        <p class="text-xs text-primary-content/70">{{ dataset.source }}</p>
+    <!-- Dataset Header with DaisyUI styling -->
+    <div class="card-header bg-primary text-primary-content p-3 {% if not dataset.preview %}animate-pulse{% endif %}">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="avatar placeholder">
+                    <div class="bg-primary-content text-primary rounded-full w-10">
+                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/>
+                        </svg>
                     </div>
                 </div>
-                
-                <div class="flex items-center gap-2">
-                    <div class="flex flex-col gap-1 items-end">
-                        {% if dataset.preview %}
-                            <div class="badge badge-sm bg-primary-content/20 border-primary-content/30 text-primary-content">
-                                {{ dataset.preview.showing_rows }} of {{ dataset.preview.total_rows|default:"?" }} rows
-                            </div>
-                        {% else %}
-                            <div class="badge badge-sm badge-ghost">Loading...</div>
-                        {% endif %}
-                        <div class="badge badge-sm bg-primary-content/20 border-primary-content/30 text-primary-content">
-                            {{ dataset.cell_count|default:0 }} cells
-                        </div>
-                    </div>
-                    
-                    <!-- Close Button -->
-                    <button class="btn btn-ghost btn-sm btn-circle text-error hover:bg-error hover:text-error-content"
-                            title="Close dataset"
-                            _="on click
-                                -- Get dataset name to restore badge state
-                                get @data-dataset of closest .dataset-card
-                                set datasetName to it
-                                log 'Closing dataset: ' + datasetName
-                                
-                                -- Create badge ID (simple: replace spaces and special chars with dashes)
-                                js(datasetName) return datasetName.toLowerCase().replace(/[^a-z0-9]/g, '-') end
-                                set badgeId to 'badge-' + the result
-                                
-                                -- Find the corresponding badge by ID and restore its state
-                                get #{badgeId}
-                                set badge to it
-                                if badge exists
-                                    remove .badge-info from badge
-                                    add .badge-primary to badge
-                                    log 'Restored badge state for: ' + datasetName
-                                else
-                                    -- Badge not found, but continue silently
-                                end
-                                
-                                -- Remove the dataset card with smooth animation
-                                add .opacity-0 to closest .dataset-card
-                                add .scale-95 to closest .dataset-card
-                                wait 300ms
-                                remove closest .dataset-card
-                                
-                                -- Check if table-content is empty and show empty state
-                                get #table-content
-                                get children of it
-                                if the length of it is 0
-                                    show #empty-state
-                                    log 'All datasets closed - showing empty state'
-                                end">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                        </svg>
-                    </button>
-                    
-                    <!-- Collapse Button -->
-                    <button class="btn btn-ghost btn-sm btn-circle"
-                            title="Collapse/Expand dataset"
-                            _="on click toggle .is-collapsed on closest .dataset-card">
-                        <svg class="w-6 h-6 expand-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                        <svg class="w-6 h-6 collapse-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
-                    </button>
+                <div>
+                    <h3 class="text-lg font-bold text-primary-content">{{ dataset.name }}</h3>
+                    <p class="text-xs text-primary-content/70">{{ dataset.source }}</p>
                 </div>
             </div>
             
-            <!-- Column Names Display - Right below dataset name -->
-            {% if dataset.preview.colHeaders %}
-            <div class="alert alert-success p-1">
-                <div class="flex flex-wrap gap-1">
-                    {% for column in dataset.preview.colHeaders %}
-                    <div class="badge badge-success badge-xs cursor-pointer hover:badge-accent"
-                          data-column-name="{{ column }}"
-                          data-dataset-name="{{ dataset.name }}"
-                          data-column-index="{{ forloop.counter0 }}"
-                          _="on click 
-                              log 'Column badge clicked:', @data-column-name
-                              
-                              -- Reset all column highlights first
-                              remove .badge-accent from .badge in me.parentElement
-                              add .badge-success to .badge in me.parentElement
-                              
-                              -- Highlight this column badge
-                              remove .badge-success from me
-                              add .badge-accent to me
-                              log 'Badge highlight updated for:', @data-column-name
-                              
-                              -- Find and highlight the table column
-                              set columnIndex to @data-column-index
-                              set datasetName to @data-dataset-name
-                              set tableColumnId to 'column-' + columnIndex + '-' + datasetName
-                              log 'Looking for table column with ID:', tableColumnId
-                              
-                              get #{tableColumnId}
-                              set tableColumn to it
-                              log 'Found table column element:', tableColumn
-                              
-                              if tableColumn exists
-                                  log 'Table column found, highlighting it'
-                                  
-                                  -- Find the table container
-                                  set tableContainer to closest .table-container to tableColumn
-                                  log 'Table container:', tableContainer
-                                  
-                                  -- Reset all table column highlights first
-                                  remove .bg-primary from .column-header in tableContainer
-                                  remove .text-primary-content from .column-header in tableContainer  
-                                  remove .font-bold from .column-header in tableContainer
-                                  log 'Reset other column highlights'
-                                  
-                                  -- Highlight the table column
-                                  add .bg-primary to tableColumn
-                                  add .text-primary-content to tableColumn
-                                  add .font-bold to tableColumn
-                                  log 'Added highlighting classes to column'
-                                  
-                                  -- Scroll the table column into view
-                                  js(tableColumn)
-                                      console.log('Scrolling column into view:', tableColumn);
-                                      tableColumn.scrollIntoView({behavior: 'smooth', block: 'nearest', inline: 'center'});
-                                  end
-                              else
-                                  log 'ERROR: Table column not found with ID:', tableColumnId
-                              end
-                              
-                              -- Also trigger graph highlighting
-                              set columnName to @data-column-name
-                              log 'Triggering graph highlight for:', columnName
-                              trigger highlightColumn(columnName: columnName) on body">
-                        {{ column }}
+            <div class="flex items-center gap-2">
+                <div class="flex flex-col gap-1 items-end">
+                    {% if dataset.preview %}
+                        <div class="badge badge-sm bg-primary-content/20 border-primary-content/30 text-primary-content">
+                            {{ dataset.preview.showing_rows }} of {{ dataset.preview.total_rows|default:"?" }} rows
+                        </div>
+                    {% else %}
+                        <div class="badge badge-sm badge-ghost">Loading...</div>
+                    {% endif %}
+                    <div class="badge badge-sm bg-primary-content/20 border-primary-content/30 text-primary-content">
+                        {{ dataset.cell_count|default:0 }} cells
                     </div>
-                    {% endfor %}
                 </div>
+                
+                <!-- Close Button -->
+                <button class="btn btn-ghost btn-sm btn-circle text-error hover:bg-error hover:text-error-content"
+                        title="Close dataset"
+                        _="on click
+                            -- Get dataset name to restore badge state
+                            get @data-dataset of closest .card
+                            set datasetName to it
+                            log 'Closing dataset: ' + datasetName
+                            
+                            -- Create badge ID (simple: replace spaces and special chars with dashes)
+                            js(datasetName) return datasetName.toLowerCase().replace(/[^a-z0-9]/g, '-') end
+                            set badgeId to 'badge-' + the result
+                            
+                            -- Find the corresponding badge by ID and restore its state
+                            get #{badgeId}
+                            set badge to it
+                            if badge exists
+                                remove .badge-info from badge
+                                add .badge-primary to badge
+                                log 'Restored badge state for: ' + datasetName
+                            else
+                                -- Badge not found, but continue silently
+                            end
+                            
+                            -- Remove the dataset card with smooth animation
+                            add .opacity-0 to closest .card
+                            add .scale-95 to closest .card
+                            wait 300ms
+                            remove closest .card
+                            
+                            -- Check if table-content is empty and show empty state
+                            get #table-content
+                            get children of it
+                            if the length of it is 0
+                                show #empty-state
+                                log 'All datasets closed - showing empty state'
+                            end">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+                
+                <!-- Collapse Button using HTMX -->
+                <button class="btn btn-ghost btn-sm btn-circle"
+                        title="Collapse/Expand dataset"
+                        hx-trigger="click"
+                        hx-target="#card-body-{{ dataset.name }}"
+                        hx-swap="none"
+                        _="on click toggle .hidden on #card-body-{{ dataset.name }}">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                    </svg>
+                </button>
             </div>
-            {% endif %}
         </div>
+        
+        <!-- Column Names Display - Right below dataset name -->
+        {% if dataset.preview.colHeaders %}
+        <div class="alert alert-success p-1 mt-2">
+            <div class="flex flex-wrap gap-1">
+                {% for column in dataset.preview.colHeaders %}
+                <div class="badge badge-success badge-xs cursor-pointer hover:badge-accent"
+                      data-column-name="{{ column }}"
+                      data-dataset-name="{{ dataset.name }}"
+                      data-column-index="{{ forloop.counter0 }}"
+                      _="on click 
+                          log 'Column badge clicked:', @data-column-name
+                          
+                          -- Reset all column highlights first
+                          remove .badge-accent from .badge in me.parentElement
+                          add .badge-success to .badge in me.parentElement
+                          
+                          -- Highlight this column badge
+                          remove .badge-success from me
+                          add .badge-accent to me
+                          log 'Badge highlight updated for:', @data-column-name
+                          
+                          -- Find and highlight the table column
+                          set columnIndex to @data-column-index
+                          set datasetName to @data-dataset-name
+                          set tableColumnId to 'column-' + columnIndex + '-' + datasetName
+                          log 'Looking for table column with ID:', tableColumnId
+                          
+                          get #{tableColumnId}
+                          set tableColumn to it
+                          log 'Found table column element:', tableColumn
+                          
+                          if tableColumn exists
+                              log 'Table column found, highlighting it'
+                              
+                              -- Find the table container
+                              set tableContainer to closest .table-container to tableColumn
+                              log 'Table container:', tableContainer
+                              
+                              -- Reset all table column highlights first
+                              remove .bg-primary from .column-header in tableContainer
+                              remove .text-primary-content from .column-header in tableContainer
+                              remove .font-bold from .column-header in tableContainer
+                              log 'Reset other column highlights'
+                              
+                              -- Highlight the table column
+                              add .bg-primary to tableColumn
+                              add .text-primary-content to tableColumn
+                              add .font-bold to tableColumn
+                              log 'Added highlighting classes to column'
+                              
+                              -- Scroll the table column into view
+                              js(tableColumn)
+                                  console.log('Scrolling column into view:', tableColumn);
+                                  tableColumn.scrollIntoView({behavior: 'smooth', block: 'nearest', inline: 'center'});
+                              end
+                          else
+                              log 'ERROR: Table column not found with ID:', tableColumnId
+                          end
+                          
+                          -- Also trigger graph highlighting
+                          set columnName to @data-column-name
+                          log 'Triggering graph highlight for:', columnName
+                          trigger highlightColumn(columnName: columnName) on body">
+                    {{ column }}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
     </div>
     
-    <!-- Card Body -->
-    <div class="card-body pt-2 px-4 pb-4 bg-base-100">
+    <!-- Card Body using DaisyUI collapse pattern -->
+    <div class="card-body pt-2 px-4 pb-4 bg-base-100 transition-all duration-300" id="card-body-{{ dataset.name }}">
         <!-- Loading indicator for this specific dataset -->
         <div id="graph-loading-{{ dataset.name }}" class="htmx-indicator">
             <div class="flex items-center justify-center py-4">
@@ -210,7 +190,7 @@
         </div>
         
         {% if dataset.preview and dataset.preview.data %}
-            <!-- Table Container with improved styling -->
+            <!-- Table Container with DaisyUI styling -->
             <div class="table-container rounded-lg border border-base-300 overflow-hidden bg-base-100 w-full" id="table-{{ dataset.name }}">
                 <div class="overflow-x-auto w-full">
                     <table class="table table-sm w-full border-collapse text-sm">
@@ -225,7 +205,7 @@
                                         
                                         -- Reset all column highlights first
                                         remove .bg-primary from .column-header in closest .table-container
-                                        remove .text-primary-content from .column-header in closest .table-container  
+                                        remove .text-primary-content from .column-header in closest .table-container
                                         remove .font-bold from .column-header in closest .table-container
                                         
                                         -- Highlight this column
@@ -234,7 +214,7 @@
                                         add .font-bold to me
                                         
                                         -- Trigger event for graph highlighting
-                                        set columnName to @data-column-ndame
+                                        set columnName to @data-column-name
                                         trigger highlightColumn(columnName: columnName) on body">
                                     {{ header }}
                                 </th>
@@ -247,7 +227,7 @@
                     </table>
                 </div>
                 
-                <!-- Load More Section - Pure HTMX -->
+                <!-- HTMX Load More (matching server response format) -->
                 {% if dataset.preview.has_more %}
                 <div class="border-t border-base-300 bg-base-50 p-3" id="load-more-{{ dataset.name }}">
                     <button class="btn btn-sm btn-ghost btn-outline w-full gap-2 hover:btn-primary"
@@ -257,12 +237,11 @@
                             hx-get="{% url 'metadata:load_more_dataset_rows' %}?source={{ dataset.source|urlencode }}&dataset={{ dataset.name|urlencode }}&offset={{ dataset.preview.showing_rows }}&limit=10"
                             {% endif %}
                             hx-target="#table-body-{{ dataset.name }}"
-                            hx-swap="beforeend"
-                            onclick="console.log('Button clicked!'); console.log('HTMX loaded:', typeof htmx); console.log('Button attributes:', this.getAttribute('hx-get')); if (typeof htmx !== 'undefined') { htmx.ajax('GET', this.getAttribute('hx-get'), {target: this.getAttribute('hx-target'), swap: 'beforeend'}); }"
+                            hx-swap="beforeend">
                         <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                             <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/>
                         </svg>
-                        <span>Load 10 more rows{% if is_direct_mode %} (Direct){% endif %}</span>
+                        <span>Load 10 more rows</span>
                         <span class="badge badge-sm ml-1">{{ dataset.preview.showing_rows }} of {{ dataset.preview.total_rows }}</span>
                         <span class="htmx-indicator loading loading-spinner loading-sm ml-2"></span>
                     </button>
@@ -270,13 +249,12 @@
                 {% endif %}
             </div>
 
-            
-            <!-- Table Stats -->
+            <!-- Table Stats with DaisyUI stats component -->
             <div class="mt-3">
                 <div class="stats stats-horizontal shadow-sm border border-base-300 bg-base-100 w-full">
                     <div class="stat py-2 px-3">
                         <div class="stat-title text-xs">Rows</div>
-                        <div class="stat-value text-sm" id="rows-count-{{ dataset.name }}">{{ dataset.preview.showing_rows }}</div>
+                        <div class="stat-value text-sm">{{ dataset.preview.showing_rows }}</div>
                         <div class="stat-desc text-xs">of {{ dataset.preview.total_rows|default:"?" }}</div>
                     </div>
                     <div class="stat py-2 px-3">
@@ -297,22 +275,16 @@
                 <!-- Relationship analysis will be loaded here via HTMX -->
             </div>
             
-
-            
         {% else %}
-            <!-- Enhanced Empty State -->
-            <div class="flex items-center justify-center h-32 border-2 border-dashed border-base-300 rounded-lg bg-base-50">
-                <div class="text-center">
-                    <div class="relative mb-3">
-                        <svg class="w-12 h-12 mx-auto text-base-content/30" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/>
-                        </svg>
-                        <div class="absolute -top-1 -right-1">
-                            <div class="badge badge-warning badge-xs">!</div>
-                        </div>
+            <!-- Enhanced Empty State with DaisyUI hero component -->
+            <div class="hero min-h-32 bg-base-200 rounded-lg">
+                <div class="hero-content text-center">
+                    <div class="max-w-md">
+                        <div class="text-4xl mb-2">📊</div>
+                        <h3 class="text-lg font-bold">No Preview Available</h3>
+                        <p class="text-sm text-base-content/70 mt-2">This card will load the data preview automatically.</p>
+                        <div class="badge badge-warning mt-2">Loading</div>
                     </div>
-                    <p class="text-sm font-medium text-base-content/60">No Preview Available</p>
-                    <p class="text-xs text-base-content/40">This card will load the data preview automatically.</p>
                 </div>
             </div>
         {% endif %}
@@ -357,13 +329,4 @@
     </div>
 </div>
 
-<!-- Ensure HTMX processes this card's content -->
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Process HTMX attributes in this dataset card
-    const card = document.querySelector('#dataset-{{ dataset.name }}');
-    if (card && typeof htmx !== 'undefined') {
-        htmx.process(card);
-    }
-});
-</script> 
+ 

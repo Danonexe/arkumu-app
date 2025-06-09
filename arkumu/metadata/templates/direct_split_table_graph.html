@@ -77,6 +77,14 @@
                              hide #empty-state
                              fetch `/metadata/direct-analysis/dataset-card/?source=${encodeURIComponent(sourceName)}&dataset_name=${encodeURIComponent(datasetName)}&organization={{ organization_id }}`
                              put it at the start of #table-content
+                             js
+                               // Process HTMX attributes in the newly loaded content
+                               const newCard = document.querySelector('#table-content .card:first-child');
+                               if (newCard && typeof htmx !== 'undefined') {
+                                 console.log('Processing HTMX for dynamically loaded card:', newCard.id);
+                                 htmx.process(newCard);
+                               }
+                             end
                              remove .badge-info from <.badge/>
                              add .badge-primary to <.badge/>
                              remove .badge-primary from me

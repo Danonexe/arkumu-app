@@ -21,7 +21,7 @@
         <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
             <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/>
         </svg>
-        <span>Load 10 more rows{% if is_direct_mode %} (Direct){% endif %}</span>
+        <span>Load 10 more rows{% if is_direct_mode %} {% endif %}</span>
         <span class="badge badge-sm ml-1">{{ preview.showing_rows }} of {{ preview.total_rows }}</span>
         <span class="htmx-indicator loading loading-spinner loading-sm ml-2"></span>
     </button>
