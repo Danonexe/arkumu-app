@@ -8,7 +8,7 @@ Now also loads comprehensive graph with all columns.
     {% if datasets %}
         <div class="p-4 space-y-4">
             {% for dataset in datasets %}
-                {% include "partials/dataset_card.html" with dataset=dataset source=source %}
+                {% include "partials/dataset_card.html" with dataset=dataset source=source is_direct_mode=is_direct_mode organization_id=organization_id %}
             {% endfor %}
         </div>
     {% else %}

@@ -396,11 +396,19 @@ def direct_get_dataset_card(request):
 @login_required
 def direct_load_more_dataset_rows(request):
     """Load more rows using S3DirectDataAnalyzer pagination."""
+    logger.info("=== LOAD MORE ROWS VIEW CALLED ===")
+    logger.info(f"Request method: {request.method}")
+    logger.info(f"Request path: {request.path}")
+    logger.info(f"Request GET params: {dict(request.GET)}")
+    logger.info(f"Request headers: {dict(request.headers)}")
+    
     source_name = request.GET.get('source')
     dataset_name = request.GET.get('dataset')
     offset = int(request.GET.get('offset', 0))
     limit = int(request.GET.get('limit', 20))
     organization_id = get_organization_id_from_request(request)
+    
+    logger.info(f"Parsed params - source: {source_name}, dataset: {dataset_name}, offset: {offset}, limit: {limit}, org: {organization_id}")
     
     if not source_name or not dataset_name:
         return render(request, 'partials/table_rows.html', {'data': []})
@@ -421,17 +429,17 @@ def direct_load_more_dataset_rows(request):
         # Get the requested slice from S3
         preview = analyzer.get_s3_table_preview(source_info, dataset_name, offset=offset, limit=limit)
         
-        return render(request, 'partials/table_rows.html', {
+        return render(request, 'partials/load_more_response.html', {
             'data': preview.data_rows,
             'colHeaders': preview.column_headers,
             'rowIds': [f"row_{offset + i}" for i in range(len(preview.data_rows))],
             'source': source_name,
             'dataset': dataset_name,
             'preview': {
-                'showing_rows': preview.showing_rows,
+                'showing_rows': offset + len(preview.data_rows),  # Total rows shown so far
                 'total_rows': preview.total_rows,
                 'has_more': preview.has_more,
-                'offset': offset + preview.showing_rows
+                'offset': offset + len(preview.data_rows)  # Next offset
             },
             'is_direct_mode': True,
             'organization_id': organization_id  # Add organization to context

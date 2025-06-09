@@ -33,6 +33,7 @@
      hx-get="{% url 'metadata:split_dataset_card' %}?source={{ dataset.source|urlencode }}&dataset_name={{ dataset.name|urlencode }}"
      hx-trigger="intersect once"
      hx-swap="outerHTML"
+     hx-on:htmx:after-swap="htmx.process(this)"
      {% else %}
      {# This is a fully-loaded card. No need to click to load graph - it's already loaded! #}
      {% endif %}
@@ -233,7 +234,7 @@
                                         add .font-bold to me
                                         
                                         -- Trigger event for graph highlighting
-                                        set columnName to @data-column-name
+                                        set columnName to @data-column-ndame
                                         trigger highlightColumn(columnName: columnName) on body">
                                     {{ header }}
                                 </th>
@@ -246,47 +247,25 @@
                     </table>
                 </div>
                 
-                <!-- Enhanced Load More Section 
-                     This uses HTMX for lazy loading with _hyperscript to update the button state.
-                     No external JavaScript is needed - everything is contained here:
-                     1. HTMX loads more rows when clicked
-                     2. _hyperscript updates the counter after loading
-                     3. The button removes itself when all rows are loaded
-                -->
+                <!-- Load More Section - Pure HTMX -->
                 {% if dataset.preview.has_more %}
-                <div class="border-t border-base-300 bg-base-50 p-3" id="load-more-container-{{ dataset.name }}">
+                <div class="border-t border-base-300 bg-base-50 p-3" id="load-more-{{ dataset.name }}">
                     <button class="btn btn-sm btn-ghost btn-outline w-full gap-2 hover:btn-primary"
-                            hx-get="{% if is_direct_mode %}/metadata/direct-analysis/load-more-rows/{% if organization_id %}?organization={{ organization_id }}&{% else %}?{% endif %}{% else %}/metadata/split-view/load-more-rows/?{% endif %}source={{ dataset.source|urlencode }}&dataset={{ dataset.name|urlencode }}&offset={{ dataset.preview.showing_rows }}&limit=10"
+                            {% if is_direct_mode %}
+                            hx-get="{% url 'metadata:direct_load_more_dataset_rows' %}?source={{ dataset.source|urlencode }}&dataset={{ dataset.name|urlencode }}&offset={{ dataset.preview.showing_rows }}&limit=10{% if organization_id %}&organization={{ organization_id }}{% endif %}"
+                            {% else %}
+                            hx-get="{% url 'metadata:load_more_dataset_rows' %}?source={{ dataset.source|urlencode }}&dataset={{ dataset.name|urlencode }}&offset={{ dataset.preview.showing_rows }}&limit=10"
+                            {% endif %}
                             hx-target="#table-body-{{ dataset.name }}"
                             hx-swap="beforeend"
-                            hx-indicator="#load-more-indicator-{{ dataset.name }}"
-                            _="on htmx:afterRequest
-                                -- Get current count from the badge text
-                                get first .badge in me then get its textContent
-                                set badgeText to it
-                                -- Extract the current number before 'of'
-                                js(badgeText)
-                                  var currentCount = parseInt(badgeText.split(' of ')[0]);
-                                  var newOffset = currentCount + 10;
-                                  var totalRows = {{ dataset.preview.total_rows }};
-                                  var newText = newOffset + ' of ' + totalRows;
-                                  console.log('Load more: ' + currentCount + ' -> ' + newOffset);
-                                  return {newOffset: newOffset, newText: newText, totalRows: totalRows};
-                                end
-                                set newOffset to the result.newOffset
-                                put the result.newText into first .badge in me
-                                if newOffset >= the result.totalRows remove me end">
+                            onclick="console.log('Button clicked!'); console.log('HTMX loaded:', typeof htmx); console.log('Button attributes:', this.getAttribute('hx-get')); if (typeof htmx !== 'undefined') { htmx.ajax('GET', this.getAttribute('hx-get'), {target: this.getAttribute('hx-target'), swap: 'beforeend'}); }"
                         <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                             <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/>
                         </svg>
-                        Load 10 more rows <span class="badge badge-sm ml-1">{{ dataset.preview.showing_rows }} of {{ dataset.preview.total_rows }}</span>
+                        <span>Load 10 more rows{% if is_direct_mode %} (Direct){% endif %}</span>
+                        <span class="badge badge-sm ml-1">{{ dataset.preview.showing_rows }} of {{ dataset.preview.total_rows }}</span>
+                        <span class="htmx-indicator loading loading-spinner loading-sm ml-2"></span>
                     </button>
-                    <div id="load-more-indicator-{{ dataset.name }}" class="htmx-indicator flex items-center justify-center py-3">
-                        <div class="flex items-center gap-2">
-                            <span class="loading loading-spinner loading-sm text-primary"></span>
-                            <span class="text-sm font-medium">Loading additional rows...</span>
-                        </div>
-                    </div>
                 </div>
                 {% endif %}
             </div>
@@ -297,7 +276,7 @@
                 <div class="stats stats-horizontal shadow-sm border border-base-300 bg-base-100 w-full">
                     <div class="stat py-2 px-3">
                         <div class="stat-title text-xs">Rows</div>
-                        <div class="stat-value text-sm">{{ dataset.preview.showing_rows }}</div>
+                        <div class="stat-value text-sm" id="rows-count-{{ dataset.name }}">{{ dataset.preview.showing_rows }}</div>
                         <div class="stat-desc text-xs">of {{ dataset.preview.total_rows|default:"?" }}</div>
                     </div>
                     <div class="stat py-2 px-3">
@@ -317,6 +296,8 @@
             <div id="relationship-analysis-{{ dataset.name|slugify }}" class="mt-4">
                 <!-- Relationship analysis will be loaded here via HTMX -->
             </div>
+            
+
             
         {% else %}
             <!-- Enhanced Empty State -->
@@ -374,4 +355,15 @@
             </div>
         </div>
     </div>
-</div> 
+</div>
+
+<!-- Ensure HTMX processes this card's content -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Process HTMX attributes in this dataset card
+    const card = document.querySelector('#dataset-{{ dataset.name }}');
+    if (card && typeof htmx !== 'undefined') {
+        htmx.process(card);
+    }
+});
+</script> 
