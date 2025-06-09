@@ -188,6 +188,8 @@
                                 <th class="p-2 border border-base-300 font-medium cursor-pointer hover:bg-primary-100 min-w-[120px] whitespace-nowrap column-header"
                                     id="column-{{ forloop.counter0 }}-{{ dataset.name }}"
                                     data-column-name="{{ header }}"
+                                    data-column-index="{{ forloop.counter0 }}"
+                                    data-dataset-name="{{ dataset.name }}"
                                     _="on click 
                                         log 'Column clicked:', @data-column-name
                                         
@@ -201,8 +203,35 @@
                                         add .text-primary-content to me
                                         add .font-bold to me
                                         
-                                        -- Trigger event for graph highlighting
+                                        -- Find and highlight the corresponding badge
                                         set columnName to @data-column-name
+                                        set columnIndex to @data-column-index
+                                        set datasetName to @data-dataset-name
+                                        log 'Looking for badge with column name:', columnName, 'and index:', columnIndex
+                                        
+                                        -- Find the dataset card container
+                                        set datasetCard to closest .card
+                                        
+                                        -- Reset all badge highlights in this dataset first
+                                        remove .badge-accent from .badge in datasetCard
+                                        add .badge-success to .badge in datasetCard
+                                        log 'Reset all badge highlights'
+                                        
+                                        -- Find all badges in the dataset card and match by data attributes
+                                        get .badge in datasetCard
+                                        set allBadges to it
+                                        
+                                        repeat for badge in allBadges
+                                            if @data-column-name of badge is columnName and @data-dataset-name of badge is datasetName
+                                                set targetBadge to badge
+                                                log 'Found matching badge for:', columnName
+                                                remove .badge-success from targetBadge
+                                                add .badge-accent to targetBadge
+                                                log 'Badge highlight updated for:', columnName
+                                            end
+                                        end
+                                        
+                                        -- Trigger event for graph highlighting
                                         trigger highlightColumn(columnName: columnName) on body">
                                     {{ header }}
                                 </th>
