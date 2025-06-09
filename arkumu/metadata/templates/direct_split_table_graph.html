@@ -68,6 +68,7 @@
             {% if datasets %}
                 {% for dataset in datasets %}
                     <div class="badge badge-primary badge-sm cursor-pointer hover:badge-secondary transition-colors"
+                         id="badge-{{ dataset.name|slugify }}"
                          data-source="{{ dataset.source }}"
                          data-dataset="{{ dataset.name }}"
                                                   _="on click
