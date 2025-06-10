@@ -1,0 +1,155 @@
+<!-- Relationship Discovery Controls -->
+<div class="space-y-4">
+    <!-- Loaded Datasets Analysis -->
+    <div id="loaded-datasets-analysis" class="space-y-2"
+         _="init
+            if $loadedDatasets is not undefined and $loadedDatasets.length > 1
+                show me
+            else
+                hide me
+            end">
+        <div class="alert alert-info alert-sm">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <span class="text-xs">
+                <span id="loaded-count">0</span> datasets loaded from left panel
+            </span>
+        </div>
+        <button class="btn btn-sm btn-success w-full" 
+                id="analyze-loaded-btn"
+                _="on click
+                    if $loadedDatasets is not undefined and $loadedDatasets.length > 1
+                        fetch `/metadata/direct-analysis/relationship-discovery/?organization={{ organization_id }}&auto_discover=true`
+                          with {'HX-Request': 'true'}
+                        put it into #relationship-results
+                    else
+                        put '<div class=\"alert alert-warning alert-sm\"><span class=\"text-xs\">Load 2 or more datasets from the left panel first</span></div>' into #relationship-results
+                    end">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+            </svg>
+            Analyze Loaded Datasets
+        </button>
+    </div>
+    
+    <!-- Divider -->
+    <div class="divider text-xs opacity-50">OR</div>
+    
+    <!-- Quick Actions -->
+    <div class="flex gap-2">
+        <button class="btn btn-sm btn-outline flex-1" 
+                hx-get="/metadata/direct-analysis/relationship-discovery/?organization={{ organization_id }}&auto_discover=true"
+                hx-target="#relationship-results"
+                hx-indicator="#discovery-loading">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+            </svg>
+            Discover All
+        </button>
+        <button class="btn btn-sm btn-outline flex-1" 
+                hx-get="/metadata/direct-analysis/dataset-linking/?organization={{ organization_id }}"
+                hx-target="#relationship-results"
+                hx-indicator="#discovery-loading">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+            </svg>
+            Manual Link
+        </button>
+    </div>
+    
+    <!-- Loading indicator -->
+    <div id="discovery-loading" class="htmx-indicator flex items-center gap-2 py-2">
+        <span class="loading loading-spinner loading-sm"></span>
+        <span class="text-sm">Analyzing relationships...</span>
+    </div>
+    
+    <!-- Results container -->
+    <div id="relationship-results" class="space-y-3">
+        {% if discovery_results %}
+            {% if discovery_results.error %}
+                <div class="alert alert-error alert-sm">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    <span class="text-xs">{{ discovery_results.error }}</span>
+                </div>
+            {% else %}
+                <!-- Discovery Results Header -->
+                <div class="flex items-center justify-between py-2">
+                    <h4 class="font-medium text-sm">Found {{ discovery_results.total_relationships }} relationship{{ discovery_results.total_relationships|pluralize }}</h4>
+                    <span class="badge badge-success badge-xs">{{ discovery_results.datasets_analyzed }} datasets</span>
+                </div>
+                
+                <!-- Relationships List -->
+                {% if discovery_results.relationships %}
+                    <div class="space-y-2 max-h-80 overflow-y-auto">
+                        {% for rel in discovery_results.relationships %}
+                            <div class="card card-compact bg-base-200 shadow-sm">
+                                <div class="card-body p-3">
+                                    <div class="flex items-start gap-3">
+                                        <!-- Relationship Icon -->
+                                        <div class="badge badge-primary badge-xs mt-1">{{ rel.relationship_type|upper }}</div>
+                                        
+                                        <!-- Relationship Details -->
+                                        <div class="flex-1 min-w-0">
+                                            <div class="text-xs font-medium mb-1">
+                                                <span class="text-primary">{{ rel.source_dataset }}</span>.<span class="text-base-content opacity-80">{{ rel.source_column }}</span>
+                                                <span class="mx-2">↔</span>
+                                                <span class="text-secondary">{{ rel.target_dataset }}</span>.<span class="text-base-content opacity-80">{{ rel.target_column }}</span>
+                                            </div>
+                                            
+                                            {% if rel.relationship_description %}
+                                                <p class="text-xs text-base-content opacity-70 mb-1">{{ rel.relationship_description }}</p>
+                                            {% endif %}
+                                            
+                                            <div class="flex items-center gap-2">
+                                                <div class="badge badge-ghost badge-xs">{{ rel.confidence_score|floatformat:1 }}% confidence</div>
+                                                {% if rel.sample_values %}
+                                                    <div class="text-xs text-base-content opacity-50">{{ rel.sample_values|length }} samples</div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <p class="text-sm text-base-content opacity-70">No relationships found in this analysis.</p>
+                    </div>
+                {% endif %}
+            {% endif %}
+        {% else %}
+            <div class="text-center py-6">
+                <svg class="w-12 h-12 mx-auto text-base-content opacity-30 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+                </svg>
+                <h4 class="font-medium text-base-content opacity-70">Ready to Discover</h4>
+                <p class="text-sm text-base-content opacity-50 mt-1">
+                    Load multiple datasets on the left to enable automatic analysis, or click "Auto Discover" to analyze all available datasets.
+                </p>
+                <!-- Show loaded dataset status -->
+                                 <div id="loaded-datasets-status" class="mt-3 text-xs text-base-content opacity-60"
+                     _="init 
+                        if $loadedDatasets is not undefined
+                            set count to $loadedDatasets.length
+                            if count > 0
+                                put `${count} dataset${count === 1 ? '' : 's'} loaded from left panel` into me
+                                if count > 1
+                                    add .text-success to me
+                                    put `${count} datasets loaded - analysis ready!` into me
+                                end
+                                -- Update loaded-count if it exists
+                                if #loaded-count exists
+                                    put count into #loaded-count
+                                end
+                            end
+                        end">
+                    <!-- Status will be updated by hyperscript -->
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div> 

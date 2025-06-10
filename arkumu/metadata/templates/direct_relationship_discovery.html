@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Cross-Dataset Relationship Discovery{% endblock %}
+
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-3xl font-bold">Cross-Dataset Relationship Discovery</h1>
+        
+        <div class="flex gap-2">
+            <select id="organizationSelect" class="select select-bordered">
+                {% for org in organizations %}
+                <option value="{{ org.id }}" {% if org.id == organization_id %}selected{% endif %}>
+                    {{ org.name }} ({{ org.id }})
+                </option>
+                {% endfor %}
+            </select>
+            
+            <button class="btn btn-primary" 
+                    _="on click 
+                       set org to #organizationSelect's value 
+                       then go to url `?organization=${org}`">
+                Switch
+            </button>
+        </div>
+    </div>
+    
+    {% if error %}
+    <div class="alert alert-error mb-6">
+        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span>{{ error }}</span>
+    </div>
+    {% endif %}
+    
+    <div class="alert alert-info mb-6">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+        <span>Automatically discover relationships between datasets by analyzing column values and patterns.</span>
+    </div>
+    
+    <div class="divider">Select Datasets for Analysis</div>
+    
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+        {% for dataset in datasets %}
+        <div class="card bg-base-100 shadow-sm border-2 border-base-300 cursor-pointer hover:shadow-md hover:scale-105 transition-transform" 
+             _="on click 
+                toggle .border-primary on me
+                toggle .bg-primary on me
+                toggle .bg-opacity-10 on me
+                toggle .selected on me 
+                then set selectedCount to .selected's length 
+                then put selectedCount into #selectedCount">
+            <div class="card-body p-4">
+                <h2 class="card-title text-lg">{{ dataset.name }}</h2>
+                <p class="text-sm opacity-70 mb-2">{{ dataset.source_display_name }}</p>
+                <div class="flex gap-1">
+                    <div class="badge badge-outline badge-sm">{{ dataset.row_count }} rows</div>
+                    <div class="badge badge-outline badge-sm">{{ dataset.column_count }} cols</div>
+                </div>
+                <input type="hidden" class="dataset-info" 
+                       data-name="{{ dataset.name }}" 
+                       data-source="{{ dataset.source_name }}">
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    
+    <div class="card bg-base-200 shadow-sm mb-8">
+        <div class="card-body">
+            <h2 class="card-title mb-4">Analysis Configuration</h2>
+            
+            <div class="form-control mb-4">
+                <label class="label">
+                    <span class="label-text font-medium">Sample Size (rows per dataset)</span>
+                    <span class="label-text-alt" id="sampleSizeDisplay">500 rows</span>
+                </label>
+                <input type="range" min="100" max="2000" value="500" step="100" 
+                       class="range range-primary" id="sampleSizeRange"
+                       _="on input put `${my value} rows` into #sampleSizeDisplay"/>
+                <div class="w-full flex justify-between text-xs px-2 mt-1">
+                    <span>100</span>
+                    <span>500</span>
+                    <span>1000</span>
+                    <span>1500</span>
+                    <span>2000</span>
+                </div>
+            </div>
+            
+            <div class="alert">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-info shrink-0 w-6 h-6">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <span>Selected <span id="selectedCount" class="font-bold">0</span> of {{ total_datasets }} datasets</span>
+            </div>
+            
+            <div class="card-actions justify-end mt-6">
+                <button class="btn btn-primary" id="runAnalysisBtn" 
+                        hx-post="/metadata/direct/run_relationship_discovery"
+                        hx-target="#resultsContainer"
+                        hx-indicator="#analysisSpinner"
+                        _="on htmx:configRequest(configRequest) 
+                           set selectedCards to .dataset-card.selected
+                           if selectedCards's length < 2 
+                               halt the event
+                               call showAlert('Please select at least 2 datasets', 'error')
+                           else
+                               set datasets to []
+                               repeat for card in selectedCards
+                                   set info to first .dataset-info in card
+                                   set datasets to datasets + [{name: info@data-name, source_name: info@data-source}]
+                               end
+                               set configRequest.parameters.datasets to JSON.stringify(datasets)
+                               set configRequest.parameters.organization_id to '{{ organization_id }}'
+                               set configRequest.parameters.sample_size to #sampleSizeRange's value
+                           end">
+                    <span class="loading loading-spinner loading-sm htmx-indicator" id="analysisSpinner"></span>
+                    Discover Relationships
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="resultsContainer" class="hidden">
+        <!-- Results will be loaded here via HTMX -->
+    </div>
+</div>
+
+<div class="toast toast-top toast-center" id="toastContainer"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script type="text/hyperscript">
+    def showAlert(message, type)
+        set alertClass to 'alert-info'
+        if type is 'error' set alertClass to 'alert-error' end
+        if type is 'success' set alertClass to 'alert-success' end
+        if type is 'warning' set alertClass to 'alert-warning' end
+        
+        set toast to `
+            <div class="alert ${alertClass} shadow-lg">
+                <span>${message}</span>
+            </div>
+        `
+        
+        put toast at the end of #toastContainer
+        wait 3s
+        remove the last .alert from #toastContainer
+    end
+    
+    on htmx:afterRequest from #runAnalysisBtn
+        if event.detail.successful
+            remove .hidden from #resultsContainer
+            call #resultsContainer.scrollIntoView({behavior: 'smooth'})
+            call showAlert('Analysis completed successfully!', 'success')
+        else
+            call showAlert('Analysis failed. Please try again.', 'error')
+        end
+    end
+    
+    on htmx:responseError from #runAnalysisBtn
+        call showAlert('Network error occurred. Please check your connection.', 'error')
+    end
+</script>
+{% endblock %} 

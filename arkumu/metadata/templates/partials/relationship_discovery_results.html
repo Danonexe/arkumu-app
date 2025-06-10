@@ -1,0 +1,121 @@
+<div class="divider">Discovery Results</div>
+
+<!-- Stats Section -->
+<div class="stats shadow mb-6 w-full">
+    <div class="stat">
+        <div class="stat-title">Total Relationships</div>
+        <div class="stat-value">{{ total_relationships }}</div>
+        <div class="stat-desc">Found across datasets</div>
+    </div>
+    
+    <div class="stat">
+        <div class="stat-title">Confident Matches</div>
+        <div class="stat-value text-primary">{{ confident_relationships }}</div>
+        <div class="stat-desc">High confidence (≥30%)</div>
+    </div>
+    
+    <div class="stat">
+        <div class="stat-title">Datasets Analyzed</div>
+        <div class="stat-value">{{ total_datasets }}</div>
+        <div class="stat-desc">In this analysis</div>
+    </div>
+</div>
+
+<!-- Toggle for All Results -->
+<div class="mb-6">
+    <label class="label cursor-pointer justify-start">
+        <input type="checkbox" class="toggle toggle-primary" id="showAllToggle" 
+               hx-get="/metadata/direct/get_discovery_results"
+               hx-target="#relationshipsContainer"
+               hx-include="this"
+               hx-vals='{"organization_id": "{{ organization_id }}"}'
+               _="on change 
+                  if my checked 
+                      set @hx-vals to '{\"organization_id\": \"{{ organization_id }}\", \"include_all\": \"true\"}'
+                  else 
+                      set @hx-vals to '{\"organization_id\": \"{{ organization_id }}\", \"include_all\": \"false\"}'
+                  end"/>
+        <span class="label-text ml-2">Show all relationships (including low confidence)</span>
+    </label>
+</div>
+
+<!-- Relationships Container -->
+<div id="relationshipsContainer">
+    {% if relationships %}
+        <div class="grid grid-cols-1 gap-4">
+            {% for rel in relationships %}
+            <div class="card bg-base-100 shadow-sm relationship-card">
+                <div class="card-body p-4">
+                    <div class="flex justify-between items-start mb-3">
+                        <h2 class="card-title text-base">
+                            <span class="badge badge-primary dataset-badge">{{ rel.source_dataset }}</span>
+                            <span class="mx-2">→</span>
+                            <span class="badge badge-secondary dataset-badge">{{ rel.target_dataset }}</span>
+                        </h2>
+                        <div class="badge {% if rel.confidence >= 0.7 %}badge-success{% elif rel.confidence >= 0.4 %}badge-warning{% else %}badge-error{% endif %}">
+                            {{ rel.confidence|floatformat:0 }}%
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="flex items-center justify-between">
+                            <div class="font-medium text-sm">{{ rel.source_column }}</div>
+                            <div class="text-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16l-4-4m0 0l4-4m-4 4h18" />
+                                </svg>
+                            </div>
+                            <div class="font-medium text-sm">{{ rel.target_column }}</div>
+                        </div>
+                        
+                        <div class="text-xs opacity-70 mt-2">
+                            Type: {{ rel.relationship_type|title }}
+                        </div>
+                    </div>
+                    
+                    <!-- Evidence Details Collapsible -->
+                    <div class="collapse collapse-arrow">
+                        <input type="checkbox" class="peer" /> 
+                        <div class="collapse-title text-sm font-medium px-0 py-2">
+                            Evidence Details
+                        </div>
+                        <div class="collapse-content px-0">
+                            {% if rel.evidence %}
+                            <div class="overflow-x-auto">
+                                <table class="table table-xs table-zebra">
+                                    <tbody>
+                                        {% for key, value in rel.evidence.items %}
+                                        {% if value is not None %}
+                                        <tr>
+                                            <td class="font-medium">{{ key|title }}</td>
+                                            <td>
+                                                {% if value|floatformat:2 != value %}
+                                                    {{ value|floatformat:3 }}
+                                                {% else %}
+                                                    {{ value }}
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        {% endif %}
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {% else %}
+                            <p class="text-sm opacity-70">No detailed evidence available</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="alert alert-warning">
+            <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <span>No relationships discovered between the selected datasets.</span>
+        </div>
+    {% endif %}
+</div> 

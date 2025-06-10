@@ -1175,4 +1175,606 @@ def _extract_column_relationship_insights(column_name, dataset_analysis):
     quality_metrics = dataset_analysis.quality_metrics
     insights['quality_score'] = quality_metrics.get('overall_quality', 0.0)
     
-    return insights 
+    return insights
+
+
+@login_required
+def direct_dataset_linking_view(request):
+    """
+    View for manually linking columns between different datasets.
+    Allows users to select multiple datasets and define relationships between their columns.
+    Can be used as a partial view for HTMX requests.
+    """
+    organization_id = get_organization_id_from_request(request)
+    
+    logger.info(f"DATASET LINKING: Initializing view for org={organization_id}")
+    
+    # Check if this is a partial request (HTMX)
+    is_partial = 'HX-Request' in request.headers
+    
+    if not organization_id or organization_id == 'default-org':
+        analyzer = S3DirectDataAnalyzer()
+        available_organizations = _discover_available_organizations(analyzer)
+        context = {
+            'error': 'Organization parameter required. Please add ?organization=YOUR_ORG_ID to the URL.',
+            'organizations': available_organizations,
+            'show_organization_help': True
+        }
+        template = 'partials/dataset_linking_panel.html' if is_partial else 'direct_dataset_linking.html'
+        return render(request, template, context)
+    
+    try:
+        analyzer = S3DirectDataAnalyzer()
+        available_organizations = _discover_available_organizations(analyzer)
+        
+        # Check if the selected organization exists in S3
+        org_exists = any(org['id'] == organization_id for org in available_organizations)
+        if not org_exists:
+            context = {
+                'organizations': available_organizations,
+                'organization_id': organization_id,
+                'error': f'Organization "{organization_id}" not found in S3. Available organizations: {", ".join([org["id"] for org in available_organizations])}'
+            }
+            template = 'partials/dataset_linking_panel.html' if is_partial else 'direct_dataset_linking.html'
+            return render(request, template, context)
+        
+        # Discover available data sources from S3 for this organization
+        sources = analyzer.discover_s3_data_sources(organization_id)
+        
+        # Build a list of all datasets with their columns for selection
+        all_datasets = []
+        
+        for source in sources:
+            try:
+                # Get dataset names for this source
+                dataset_names = analyzer.get_dataset_names_from_s3_source(source)
+                
+                for dataset_name in dataset_names:
+                    try:
+                        # Get preview to get column information
+                        preview = analyzer.get_s3_table_preview(source, dataset_name, limit=3)
+                        
+                        dataset_info = {
+                            'name': dataset_name,
+                            'source_name': source.name,
+                            'source_display_name': f"{source.name} ({source.format})",
+                            'row_count': preview.total_rows,
+                            'column_count': len(preview.column_headers),
+                            'columns': preview.column_headers,
+                            'source_info': {
+                                'format': source.format,
+                                'size_mb': round(source.size_bytes / (1024 * 1024), 2) if source.size_bytes else 0,
+                                'modified_date': source.modified_date.strftime('%Y-%m-%d %H:%M') if source.modified_date else None
+                            }
+                        }
+                        
+                        all_datasets.append(dataset_info)
+                        
+                    except Exception as dataset_error:
+                        logger.warning(f"DATASET LINKING: Error loading dataset {dataset_name} from {source.name}: {dataset_error}")
+                        continue
+                        
+            except Exception as source_error:
+                logger.error(f"DATASET LINKING: Error processing source {source.name}: {source_error}")
+                continue
+        
+        logger.info(f"DATASET LINKING: Found {len(all_datasets)} datasets for linking")
+        
+        context = {
+            'datasets': all_datasets,
+            'organizations': available_organizations,
+            'organization_id': organization_id,
+            'total_datasets': len(all_datasets)
+        }
+        
+        template = 'partials/dataset_linking_panel.html' if is_partial else 'direct_dataset_linking.html'
+        return render(request, template, context)
+        
+    except Exception as e:
+        logger.error(f"DATASET LINKING: Error setting up linking view: {e}", exc_info=True)
+        
+        context = {
+            'error': f"Error loading datasets: {str(e)}",
+            'organizations': available_organizations,
+            'organization_id': organization_id
+        }
+        template = 'partials/dataset_linking_panel.html' if is_partial else 'direct_dataset_linking.html'
+        return render(request, template, context)
+
+
+@login_required
+def save_dataset_links(request):
+    """
+    AJAX endpoint to save manually created links between datasets.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Only POST method allowed'}, status=400)
+    
+    try:
+        data = json.loads(request.body)
+        links = data.get('links', [])
+        organization_id = data.get('organization_id') or get_organization_id_from_request(request)
+        
+        logger.info(f"SAVE LINKS: Received {len(links)} dataset links for org={organization_id}")
+        
+        # Validate links format
+        for link in links:
+            if not all(k in link for k in ['source_dataset', 'source_column', 'target_dataset', 'target_column', 'relationship_type']):
+                return JsonResponse({'error': 'Invalid link format'}, status=400)
+        
+        # Save links to cache for now (in production, this would go to a database)
+        cache_key = f"manual_dataset_links_{organization_id}"
+        existing_links = cache.get(cache_key, [])
+        
+        # Add new links, avoiding duplicates
+        for link in links:
+            if link not in existing_links:
+                existing_links.append(link)
+        
+        # Save back to cache
+        cache.set(cache_key, existing_links, timeout=60*60*24*30)  # 30 days
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Saved {len(links)} dataset links',
+            'total_links': len(existing_links)
+        })
+        
+    except Exception as e:
+        logger.error(f"SAVE LINKS: Error saving dataset links: {e}", exc_info=True)
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@login_required
+def get_saved_dataset_links(request):
+    """
+    AJAX endpoint to retrieve saved links between datasets.
+    """
+    organization_id = request.GET.get('organization_id') or get_organization_id_from_request(request)
+    
+    logger.info(f"GET LINKS: Retrieving saved dataset links for org={organization_id}")
+    
+    try:
+        # Get links from cache
+        cache_key = f"manual_dataset_links_{organization_id}"
+        links = cache.get(cache_key, [])
+        
+        return JsonResponse({
+            'links': links,
+            'count': len(links),
+            'organization_id': organization_id
+        })
+        
+    except Exception as e:
+        logger.error(f"GET LINKS: Error retrieving dataset links: {e}", exc_info=True)
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@login_required
+def direct_relationship_discovery_view(request):
+    """
+    View for automated cross-dataset relationship discovery.
+    Allows users to select datasets for automated relationship analysis.
+    Can be used as a partial view for HTMX requests.
+    """
+    organization_id = get_organization_id_from_request(request)
+    auto_discover = request.GET.get('auto_discover', False)
+    
+    logger.info(f"RELATIONSHIP DISCOVERY: Initializing view for org={organization_id}, auto_discover={auto_discover}")
+    
+    # Check if this is a partial request (HTMX)
+    is_partial = 'HX-Request' in request.headers
+    
+    if not organization_id or organization_id == 'default-org':
+        analyzer = S3DirectDataAnalyzer()
+        available_organizations = _discover_available_organizations(analyzer)
+        context = {
+            'error': 'Organization parameter required. Please add ?organization=YOUR_ORG_ID to the URL.',
+            'organizations': available_organizations,
+            'show_organization_help': True
+        }
+        template = 'partials/relationship_discovery_panel.html' if is_partial else 'direct_relationship_discovery.html'
+        return render(request, template, context)
+    
+    try:
+        analyzer = S3DirectDataAnalyzer()
+        available_organizations = _discover_available_organizations(analyzer)
+        
+        # Check if the selected organization exists in S3
+        org_exists = any(org['id'] == organization_id for org in available_organizations)
+        if not org_exists:
+            context = {
+                'organizations': available_organizations,
+                'organization_id': organization_id,
+                'error': f'Organization "{organization_id}" not found in S3. Available organizations: {", ".join([org["id"] for org in available_organizations])}'
+            }
+            template = 'partials/relationship_discovery_panel.html' if is_partial else 'direct_relationship_discovery.html'
+            return render(request, template, context)
+        
+        # Discover available data sources from S3 for this organization
+        sources = analyzer.discover_s3_data_sources(organization_id)
+        
+        # Build a list of all datasets for selection
+        all_datasets = []
+        
+        for source in sources:
+            try:
+                # Get dataset names for this source
+                dataset_names = analyzer.get_dataset_names_from_s3_source(source)
+                
+                for dataset_name in dataset_names:
+                    try:
+                        # Get basic preview for each dataset
+                        preview = analyzer.get_s3_table_preview(source, dataset_name, limit=3)
+                        
+                        dataset_info = {
+                            'name': dataset_name,
+                            'source_name': source.name,
+                            'source_display_name': f"{source.name} ({source.format})",
+                            'row_count': preview.total_rows,
+                            'column_count': len(preview.column_headers),
+                            'columns': preview.column_headers,
+                            'source_info': {
+                                'format': source.format,
+                                'size_mb': round(source.size_bytes / (1024 * 1024), 2) if source.size_bytes else 0,
+                                'modified_date': source.modified_date.strftime('%Y-%m-%d %H:%M') if source.modified_date else None
+                            }
+                        }
+                        
+                        all_datasets.append(dataset_info)
+                        
+                    except Exception as dataset_error:
+                        logger.warning(f"RELATIONSHIP DISCOVERY: Error loading dataset {dataset_name} from {source.name}: {dataset_error}")
+                        continue
+                        
+            except Exception as source_error:
+                logger.error(f"RELATIONSHIP DISCOVERY: Error processing source {source.name}: {source_error}")
+                continue
+        
+        logger.info(f"RELATIONSHIP DISCOVERY: Found {len(all_datasets)} datasets for analysis")
+        
+        # If auto_discover is requested, automatically run discovery on all datasets
+        discovery_results = None
+        if auto_discover and all_datasets:
+            try:
+                logger.info("RELATIONSHIP DISCOVERY: Running auto-discovery")
+                discovery_results = _run_auto_discovery(analyzer, organization_id, all_datasets[:5])  # Limit to first 5 for performance
+            except Exception as discovery_error:
+                logger.error(f"RELATIONSHIP DISCOVERY: Auto-discovery failed: {discovery_error}")
+        
+        context = {
+            'datasets': all_datasets,
+            'organizations': available_organizations,
+            'organization_id': organization_id,
+            'total_datasets': len(all_datasets),
+            'discovery_results': discovery_results,
+            'auto_discover': auto_discover
+        }
+        
+        template = 'partials/relationship_discovery_panel.html' if is_partial else 'direct_relationship_discovery.html'
+        return render(request, template, context)
+        
+    except Exception as e:
+        logger.error(f"RELATIONSHIP DISCOVERY: Error setting up discovery view: {e}", exc_info=True)
+        
+        context = {
+            'error': f"Error loading datasets: {str(e)}",
+            'organizations': available_organizations,
+            'organization_id': organization_id
+        }
+        template = 'partials/relationship_discovery_panel.html' if is_partial else 'direct_relationship_discovery.html'
+        return render(request, template, context)
+
+
+def _run_auto_discovery(analyzer, organization_id, datasets, sample_size=500):
+    """
+    Helper function to run automated relationship discovery on selected datasets.
+    """
+    from arkumu.semantic_graph.services import RelationshipDiscoveryService
+    import tempfile
+    import os
+    
+    temp_files = []
+    
+    try:
+        # Create temporary CSV files for analysis
+        for dataset_info in datasets:
+            source_name = dataset_info.get('source_name')
+            dataset_name = dataset_info.get('name')
+            
+            if not source_name or not dataset_name:
+                continue
+            
+            try:
+                # Find the source in S3
+                sources = analyzer.discover_s3_data_sources(organization_id)
+                source_info = next((s for s in sources if s.name == source_name), None)
+                
+                if not source_info:
+                    continue
+                
+                # Get dataset preview for analysis
+                preview = analyzer.get_s3_table_preview(source_info, dataset_name, limit=sample_size)
+                
+                # Create temporary CSV file for relationship analysis
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as temp_file:
+                    # Write headers
+                    temp_file.write(','.join(preview.column_headers) + '\n')
+                    
+                    # Write data rows
+                    for row in preview.data_rows:
+                        # Ensure all rows have the same number of columns
+                        padded_row = row + [''] * (len(preview.column_headers) - len(row))
+                        row_str = ','.join([f'"{str(cell).replace('"', '""')}"' if cell else '' for cell in padded_row])
+                        temp_file.write(row_str + '\n')
+                    
+                    # Add to list of temporary files with dataset info
+                    temp_files.append({
+                        'path': temp_file.name,
+                        'dataset_name': dataset_name,
+                        'source_name': source_name
+                    })
+            
+            except Exception as dataset_error:
+                logger.warning(f"Auto-discovery: Error processing dataset {dataset_name} from {source_name}: {dataset_error}")
+                continue
+        
+        if not temp_files:
+            return {'error': 'Could not process any datasets for discovery'}
+        
+        # Run relationship discovery across datasets
+        relationship_service = RelationshipDiscoveryService()
+        dataset_paths = [temp_file['path'] for temp_file in temp_files]
+        
+        analysis_results = relationship_service.compare_datasets_relationships(dataset_paths, sample_size)
+        
+        # Format results for UI display
+        cross_relationships = analysis_results.get('cross_dataset_relationships', [])
+        
+        # Format for visualization
+        formatted_relationships = []
+        for rel in cross_relationships:
+            # Extract dataset and column names
+            source_parts = rel['source_column'].split('.')
+            target_parts = rel['target_column'].split('.')
+            
+            source_dataset = source_parts[0]
+            source_column = '.'.join(source_parts[1:])
+            target_dataset = target_parts[0]
+            target_column = '.'.join(target_parts[1:])
+            
+            formatted_rel = {
+                'source_dataset': source_dataset,
+                'source_column': source_column,
+                'target_dataset': target_dataset,
+                'target_column': target_column,
+                'relationship_type': rel['relationship_type'],
+                'confidence_score': rel['confidence_score'],
+                'relationship_description': rel.get('relationship_description', ''),
+                'sample_values': rel.get('sample_values', [])
+            }
+            
+            formatted_relationships.append(formatted_rel)
+        
+        return {
+            'relationships': formatted_relationships,
+            'total_relationships': len(formatted_relationships),
+            'datasets_analyzed': len(temp_files)
+        }
+        
+    finally:
+        # Clean up temporary files
+        for temp_file in temp_files:
+            try:
+                os.unlink(temp_file['path'])
+            except Exception:
+                pass
+
+
+@login_required
+def run_relationship_discovery(request):
+    """
+    AJAX endpoint to run automated relationship discovery across selected datasets.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Only POST method allowed'}, status=400)
+    
+    try:
+        data = json.loads(request.body)
+        selected_datasets = data.get('datasets', [])
+        organization_id = data.get('organization_id') or get_organization_id_from_request(request)
+        sample_size = int(data.get('sample_size', 500))
+        
+        logger.info(f"RUN DISCOVERY: Analyzing {len(selected_datasets)} datasets for org={organization_id}")
+        
+        if not selected_datasets:
+            return JsonResponse({'error': 'No datasets selected'}, status=400)
+        
+        # Create temporary CSV files for analysis
+        analyzer = S3DirectDataAnalyzer()
+        temp_files = []
+        
+        for dataset_info in selected_datasets:
+            source_name = dataset_info.get('source_name')
+            dataset_name = dataset_info.get('name')
+            
+            if not source_name or not dataset_name:
+                continue
+            
+            try:
+                # Find the source in S3
+                sources = analyzer.discover_s3_data_sources(organization_id)
+                source_info = next((s for s in sources if s.name == source_name), None)
+                
+                if not source_info:
+                    logger.warning(f"RUN DISCOVERY: Source '{source_name}' not found")
+                    continue
+                
+                # Get dataset preview for analysis
+                preview = analyzer.get_s3_table_preview(source_info, dataset_name, limit=sample_size)
+                
+                # Create temporary CSV file for relationship analysis
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as temp_file:
+                    # Write headers
+                    temp_file.write(','.join(preview.column_headers) + '\n')
+                    
+                    # Write data rows
+                    for row in preview.data_rows:
+                        # Ensure all rows have the same number of columns
+                        padded_row = row + [''] * (len(preview.column_headers) - len(row))
+                        row_str = ','.join([f'"{str(cell).replace('"', '""')}"' if cell else '' for cell in padded_row])
+                        temp_file.write(row_str + '\n')
+                    
+                    # Add to list of temporary files with dataset info
+                    temp_files.append({
+                        'path': temp_file.name,
+                        'dataset_name': dataset_name,
+                        'source_name': source_name
+                    })
+                    
+                    logger.info(f"RUN DISCOVERY: Created temp file for {dataset_name} from {source_name}")
+            
+            except Exception as dataset_error:
+                logger.warning(f"RUN DISCOVERY: Error processing dataset {dataset_name} from {source_name}: {dataset_error}")
+                continue
+        
+        if not temp_files:
+            return JsonResponse({'error': 'Could not process any of the selected datasets'}, status=400)
+        
+        try:
+            # Run relationship discovery across datasets
+            relationship_service = RelationshipDiscoveryService()
+            dataset_paths = [temp_file['path'] for temp_file in temp_files]
+            
+            logger.info(f"RUN DISCOVERY: Running relationship discovery on {len(dataset_paths)} datasets")
+            analysis_results = relationship_service.compare_datasets_relationships(dataset_paths, sample_size)
+            
+            # Create a lookup map from path to dataset name
+            dataset_name_lookup = {temp_file['path']: temp_file['dataset_name'] for temp_file in temp_files}
+            source_name_lookup = {temp_file['path']: temp_file['source_name'] for temp_file in temp_files}
+            
+            # Format results for UI display - focus on cross-dataset relationships
+            cross_relationships = analysis_results.get('cross_dataset_relationships', [])
+            
+            # Format for visualization
+            formatted_relationships = []
+            for rel in cross_relationships:
+                # Extract dataset and column names
+                source_parts = rel['source_column'].split('.')
+                target_parts = rel['target_column'].split('.')
+                
+                source_dataset = source_parts[0]
+                source_column = '.'.join(source_parts[1:])
+                target_dataset = target_parts[0]
+                target_column = '.'.join(target_parts[1:])
+                
+                # Format for visualization
+                formatted_rel = {
+                    'source_dataset': source_dataset,
+                    'source_column': source_column,
+                    'target_dataset': target_dataset,
+                    'target_column': target_column,
+                    'relationship_type': rel['relationship_type'],
+                    'confidence': rel['confidence'],
+                    'evidence': rel.get('evidence', {}),
+                    'source': {
+                        'dataset': source_dataset,
+                        'source_name': next((source_name_lookup.get(path) for path, name in dataset_name_lookup.items() if name == source_dataset), ""),
+                    },
+                    'target': {
+                        'dataset': target_dataset,
+                        'source_name': next((source_name_lookup.get(path) for path, name in dataset_name_lookup.items() if name == target_dataset), ""),
+                    }
+                }
+                
+                formatted_relationships.append(formatted_rel)
+            
+            # Filter to only reasonably confident relationships
+            confident_relationships = [r for r in formatted_relationships if r['confidence'] >= 0.3]
+            
+            # Store results in cache
+            cache_key = f"discovery_results_{organization_id}"
+            cache.set(cache_key, {
+                'relationships': formatted_relationships,
+                'confident_relationships': confident_relationships,
+                'analysis_timestamp': analysis_results.get('analysis_timestamp'),
+                'total_datasets': len(dataset_paths),
+                'sample_size': sample_size
+            }, timeout=60*60*24)  # 24 hours
+            
+            # Return partial template for HTMX or JSON for regular requests
+            if request.headers.get('HX-Request'):
+                return render(request, 'partials/relationship_discovery_results.html', {
+                    'relationships': confident_relationships[:20],  # Limit initial response size
+                    'total_relationships': len(formatted_relationships),
+                    'confident_relationships': len(confident_relationships),
+                    'total_datasets': len(dataset_paths),
+                    'organization_id': organization_id,
+                    'analysis_timestamp': analysis_results.get('analysis_timestamp')
+                })
+            else:
+                return JsonResponse({
+                    'success': True,
+                    'relationships': confident_relationships[:20],  # Limit initial response size
+                    'total_relationships': len(formatted_relationships),
+                    'confident_relationships': len(confident_relationships),
+                    'analysis_timestamp': analysis_results.get('analysis_timestamp')
+                })
+            
+        finally:
+            # Clean up temporary files
+            for temp_file in temp_files:
+                try:
+                    os.unlink(temp_file['path'])
+                except Exception as cleanup_error:
+                    logger.warning(f"RUN DISCOVERY: Could not clean up temp file: {cleanup_error}")
+        
+    except Exception as e:
+        logger.error(f"RUN DISCOVERY: Error in relationship discovery: {e}", exc_info=True)
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@login_required
+def get_discovery_results(request):
+    """
+    AJAX endpoint to retrieve the results of a previous relationship discovery run.
+    """
+    organization_id = request.GET.get('organization_id') or get_organization_id_from_request(request)
+    include_all = request.GET.get('include_all', 'false').lower() == 'true'
+    
+    logger.info(f"GET DISCOVERY: Retrieving relationship discovery results for org={organization_id}")
+    
+    try:
+        # Get results from cache
+        cache_key = f"discovery_results_{organization_id}"
+        results = cache.get(cache_key, {})
+        
+        if not results:
+            return JsonResponse({'error': 'No discovery results found. Please run a new analysis.'}, status=404)
+        
+        # Return either all relationships or just confident ones
+        if include_all:
+            relationships = results.get('relationships', [])
+        else:
+            relationships = results.get('confident_relationships', [])
+        
+        # Return partial template for HTMX or JSON for regular requests
+        if request.headers.get('HX-Request'):
+            # Use relationships list partial for toggle updates
+            return render(request, 'partials/relationships_list.html', {
+                'relationships': relationships,
+                'organization_id': organization_id
+            })
+        else:
+            return JsonResponse({
+                'relationships': relationships,
+                'total_relationships': len(results.get('relationships', [])),
+                'confident_relationships': len(results.get('confident_relationships', [])),
+                'analysis_timestamp': results.get('analysis_timestamp'),
+                'sample_size': results.get('sample_size', 500),
+                'total_datasets': results.get('total_datasets', 0)
+            })
+        
+    except Exception as e:
+        logger.error(f"GET DISCOVERY: Error retrieving discovery results: {e}", exc_info=True)
+        return JsonResponse({'error': str(e)}, status=500) 

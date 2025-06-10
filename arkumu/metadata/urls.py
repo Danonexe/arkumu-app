@@ -92,4 +92,8 @@ urlpatterns = [
     path('direct-analysis/analyze-relationships/', direct_data_views.direct_analyze_dataset_relationships, name='direct_analyze_dataset_relationships'),
     path('direct-analysis/import-preview/', direct_data_views.direct_get_import_preview, name='direct_import_preview'),
     path('direct-analysis/analyze-column/', direct_data_views.direct_analyze_column, name='direct_analyze_column'),
+    
+    # Cross-Dataset Relationship Discovery
+    path('direct-analysis/relationship-discovery/', direct_data_views.direct_relationship_discovery_view, name='direct_relationship_discovery'),
+    path('direct-analysis/dataset-linking/', direct_data_views.direct_dataset_linking_view, name='direct_dataset_linking'),
     ]

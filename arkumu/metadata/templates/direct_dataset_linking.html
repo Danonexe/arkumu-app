@@ -1,0 +1,361 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Dataset Relationship Linking{% endblock %}
+
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <!-- Header -->
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-3xl font-bold">Dataset Relationship Linking</h1>
+        
+        <div class="flex gap-2">
+            <select id="organizationSelect" class="select select-bordered">
+                {% for org in organizations %}
+                <option value="{{ org.id }}" {% if org.id == organization_id %}selected{% endif %}>
+                    {{ org.name }} ({{ org.id }})
+                </option>
+                {% endfor %}
+            </select>
+            
+            <button class="btn btn-primary" 
+                    _="on click 
+                       set org to #organizationSelect's value 
+                       then go to url `?organization=${org}`">
+                Switch
+            </button>
+        </div>
+    </div>
+    
+    <!-- Error Alert -->
+    {% if error %}
+    <div class="alert alert-error mb-6">
+        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span>{{ error }}</span>
+    </div>
+    {% endif %}
+    
+    <!-- Description -->
+    <div class="alert alert-info mb-6">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+        <span>Create relationships between columns in different datasets by selecting datasets and their columns.</span>
+    </div>
+    
+    <!-- Link Creator Panel -->
+    <div class="card bg-base-200 shadow-sm mb-8">
+        <div class="card-body">
+            <h2 class="card-title mb-4">Create New Relationship</h2>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Source Dataset Selection -->
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text font-medium">Source Dataset</span>
+                    </label>
+                    <select id="sourceDatasetSelect" class="select select-bordered w-full"
+                            _="on change 
+                               set selectedDataset to my value
+                               if selectedDataset is not ''
+                                   set :datasets to {{ datasets|escapejs|safe }}
+                                   set dataset to first d in :datasets where d.name is selectedDataset
+                                   if dataset and dataset.columns
+                                       set #sourceColumnSelect.innerHTML to '<option value=\"\">Select source column...</option>'
+                                       repeat for column in dataset.columns
+                                           make an <option /> called opt
+                                           set opt.value to column
+                                           set opt.textContent to column
+                                           put opt at the end of #sourceColumnSelect
+                                       end
+                                       remove @disabled from #sourceColumnSelect
+                                   end
+                               else
+                                   set #sourceColumnSelect.innerHTML to '<option value=\"\">Select source column...</option>'
+                                   add @disabled to #sourceColumnSelect
+                               end">
+                        <option value="">Select source dataset...</option>
+                        {% for dataset in datasets %}
+                        <option value="{{ dataset.name }}" data-source="{{ dataset.source_name }}">
+                            {{ dataset.name }} ({{ dataset.source_name }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Source Column</span>
+                    </label>
+                    <select id="sourceColumnSelect" class="select select-bordered w-full" disabled>
+                        <option value="">Select source column...</option>
+                    </select>
+                </div>
+                
+                <!-- Target Dataset Selection -->
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text font-medium">Target Dataset</span>
+                    </label>
+                    <select id="targetDatasetSelect" class="select select-bordered w-full"
+                            _="on change 
+                               set selectedDataset to my value
+                               if selectedDataset is not ''
+                                   set :datasets to {{ datasets|escapejs|safe }}
+                                   set dataset to first d in :datasets where d.name is selectedDataset
+                                   if dataset and dataset.columns
+                                       set #targetColumnSelect.innerHTML to '<option value=\"\">Select target column...</option>'
+                                       repeat for column in dataset.columns
+                                           make an <option /> called opt
+                                           set opt.value to column
+                                           set opt.textContent to column
+                                           put opt at the end of #targetColumnSelect
+                                       end
+                                       remove @disabled from #targetColumnSelect
+                                   end
+                               else
+                                   set #targetColumnSelect.innerHTML to '<option value=\"\">Select target column...</option>'
+                                   add @disabled to #targetColumnSelect
+                               end">
+                        <option value="">Select target dataset...</option>
+                        {% for dataset in datasets %}
+                        <option value="{{ dataset.name }}" data-source="{{ dataset.source_name }}">
+                            {{ dataset.name }} ({{ dataset.source_name }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Target Column</span>
+                    </label>
+                    <select id="targetColumnSelect" class="select select-bordered w-full" disabled>
+                        <option value="">Select target column...</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="form-control mt-4">
+                <label class="label">
+                    <span class="label-text font-medium">Relationship Type</span>
+                </label>
+                <select id="relationshipTypeSelect" class="select select-bordered w-full"
+                        _="on change 
+                           if my value is 'custom'
+                               remove .hidden from #customRelationshipDiv
+                           else
+                               add .hidden to #customRelationshipDiv
+                           end">
+                    <option value="foreign_key">Foreign Key</option>
+                    <option value="primary_key">Primary Key</option>
+                    <option value="value_match">Value Match</option>
+                    <option value="reference">Reference</option>
+                    <option value="same_entity">Same Entity</option>
+                    <option value="lookup">Lookup</option>
+                    <option value="custom">Custom</option>
+                </select>
+            </div>
+            
+            <div id="customRelationshipDiv" class="form-control mt-4 hidden">
+                <label class="label">
+                    <span class="label-text">Custom Relationship Name</span>
+                </label>
+                <input id="customRelationshipInput" type="text" class="input input-bordered w-full" 
+                       placeholder="Enter custom relationship name...">
+            </div>
+            
+            <div class="card-actions justify-end mt-6">
+                <button class="btn btn-primary" id="createLinkButton"
+                        _="on click 
+                           set sourceDataset to #sourceDatasetSelect's value
+                           set sourceColumn to #sourceColumnSelect's value
+                           set targetDataset to #targetDatasetSelect's value
+                           set targetColumn to #targetColumnSelect's value
+                           set relationshipType to #relationshipTypeSelect's value
+                           
+                           if sourceDataset is '' or sourceColumn is '' or targetDataset is '' or targetColumn is ''
+                               call showAlert('Please select both source and target datasets and columns.', 'error')
+                               return
+                           end
+                           
+                           if sourceDataset is targetDataset
+                               if not confirm('Creating a relationship between columns in the same dataset. Continue?')
+                                   return
+                               end
+                           end
+                           
+                           if relationshipType is 'custom'
+                               if #customRelationshipInput's value.trim() is ''
+                                   call showAlert('Please enter a custom relationship name.', 'error')
+                                   return
+                               end
+                               set relationshipType to #customRelationshipInput's value.trim()
+                           end
+                           
+                           set :datasets to {{ datasets|escapejs|safe }}
+                           set sourceInfo to first d in :datasets where d.name is sourceDataset
+                           set targetInfo to first d in :datasets where d.name is targetDataset
+                           
+                           set link to {
+                               source_dataset: sourceDataset,
+                               source_column: sourceColumn,
+                               target_dataset: targetDataset,
+                               target_column: targetColumn,
+                               relationship_type: relationshipType,
+                               source: {
+                                   dataset: sourceDataset,
+                                   source_name: sourceInfo ? sourceInfo.source_name : ''
+                               },
+                               target: {
+                                   dataset: targetDataset,
+                                   source_name: targetInfo ? targetInfo.source_name : ''
+                               }
+                           }
+                           
+                           if not :currentLinks
+                               set :currentLinks to []
+                           end
+                           set :currentLinks to :currentLinks + [link]
+                           
+                           call renderLinks()
+                           
+                           set #sourceColumnSelect's value to ''
+                           set #targetColumnSelect's value to ''
+                           if relationshipType is 'custom'
+                               set #customRelationshipInput's value to ''
+                               set #relationshipTypeSelect's value to 'foreign_key'
+                               add .hidden to #customRelationshipDiv
+                           end">
+                    Create Relationship
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Existing Links -->
+    <div class="card bg-base-100 shadow-sm">
+        <div class="card-body">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="card-title">Defined Relationships</h2>
+                
+                <button class="btn btn-success" id="saveAllLinksButton"
+                        hx-post="/metadata/direct/save_dataset_links"
+                        hx-vals='{"organization_id": "{{ organization_id }}"}'
+                        hx-indicator="#saveSpinner"
+                        _="on htmx:configRequest(configRequest) 
+                           if not :currentLinks or :currentLinks.length is 0
+                               halt the event
+                               call showAlert('No relationships to save.', 'warning')
+                           else
+                               set configRequest.parameters.links to JSON.stringify(:currentLinks)
+                           end
+                           on htmx:afterRequest(event)
+                               set data to JSON.parse(event.detail.xhr.responseText)
+                               if event.detail.successful and data.success
+                                   call showAlert(`Successfully saved ${data.total_links} relationships.`, 'success')
+                               else
+                                   call showAlert(data.error or 'Error saving relationships.', 'error')
+                               end">
+                    <span class="loading loading-spinner loading-sm htmx-indicator" id="saveSpinner"></span>
+                    Save All Relationships
+                </button>
+            </div>
+            
+            <div id="linksContainer" class="space-y-3">
+                <div class="text-center py-8 opacity-70">
+                    No relationships defined yet. Create relationships above.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast toast-top toast-center" id="toastContainer"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script type="text/hyperscript">
+    def renderLinks()
+        if not :currentLinks or :currentLinks.length is 0
+            set #linksContainer.innerHTML to `
+                <div class="text-center py-8 opacity-70">
+                    No relationships defined yet. Create relationships above.
+                </div>
+            `
+            return
+        end
+        
+        set #linksContainer.innerHTML to ''
+        
+        repeat for link in :currentLinks index i
+            make a <div.card.bg-base-100.border.border-base-300.mb-3 /> called linkCard
+            set linkCard.innerHTML to `
+                <div class="card-body p-4">
+                    <div class="flex justify-between items-center">
+                        <div class="flex-1">
+                            <div class="font-medium">
+                                ${link.source_dataset}.${link.source_column}
+                                <span class="text-primary mx-2">→</span>
+                                ${link.target_dataset}.${link.target_column}
+                            </div>
+                            <div class="text-sm opacity-70 mt-1">
+                                Relationship: <span class="font-medium">${link.relationship_type}</span>
+                            </div>
+                        </div>
+                        <button class="btn btn-sm btn-error" data-index="${i}">
+                            Remove
+                        </button>
+                    </div>
+                </div>
+            `
+            
+            set deleteBtn to last <button /> in linkCard
+            set deleteBtn to deleteBtn with _="on click 
+                set index to my @data-index
+                set :currentLinks to :currentLinks.slice(0, index) + :currentLinks.slice(parseInt(index) + 1)
+                call renderLinks()"
+            
+            put linkCard at the end of #linksContainer
+        end
+    end
+    
+    def showAlert(message, type)
+        set alertClass to 'alert-info'
+        if type is 'error' set alertClass to 'alert-error' end
+        if type is 'success' set alertClass to 'alert-success' end
+        if type is 'warning' set alertClass to 'alert-warning' end
+        
+        set toast to `
+            <div class="alert ${alertClass} shadow-lg">
+                <span>${message}</span>
+            </div>
+        `
+        
+        put toast at the end of #toastContainer
+        wait 3s
+        remove the last .alert from #toastContainer
+    end
+    
+    def loadSavedLinks()
+        fetch `/metadata/direct/get_saved_dataset_links?organization_id={{ organization_id }}`
+            then response to response.json()
+            then data to 
+                if data.links and data.links.length > 0
+                    set :currentLinks to data.links
+                    call renderLinks()
+                end
+            catch error to 
+                call showAlert('Error loading saved links.', 'error')
+    end
+    
+    -- Initialize on page load
+    init
+        call loadSavedLinks()
+    end
+</script>
+{% endblock %} 
