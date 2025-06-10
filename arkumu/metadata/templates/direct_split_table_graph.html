@@ -48,7 +48,7 @@
                     {% endfor %}
                 </select>
                 {% if organization_id %}
-                <span class="text-sm text-base-content/70">{{ organization_id }}</span>
+                <span class="text-sm text-base-content opacity-70">{{ organization_id }}</span>
                 {% endif %}
             </div>
             
@@ -70,7 +70,7 @@
         <div class="flex flex-wrap gap-2">
             {% if datasets %}
                 {% for dataset in datasets %}
-                    <div class="badge badge-primary badge-sm cursor-pointer hover:badge-secondary transition-colors"
+                    <div class="badge badge-success badge-sm cursor-pointer hover:bg-success-focus hover:text-success-content transition-colors"
                          id="badge-{{ dataset.name|slugify }}"
                          data-source="{{ dataset.source }}"
                          data-dataset="{{ dataset.name }}"
@@ -88,10 +88,10 @@
                                  htmx.process(newCard);
                                }
                              end
-                             remove .badge-info from <.badge/>
-                             add .badge-primary to <.badge/>
-                             remove .badge-primary from me
-                             add .badge-info to me">
+                             remove .bg-success-focus from <.badge/>
+                             add .badge-success to <.badge/>
+                             remove .badge-success from me
+                             add .bg-success-focus to me">
                         {{ dataset.name }}
                     </div>
                 {% endfor %}
@@ -110,12 +110,12 @@
             <div class="card bg-base-100 shadow-xl h-[calc(100vh-160px)] overflow-y-auto">
                 <div class="card-header sticky top-0 z-10 bg-base-100">
                     <div class="flex items-center gap-2 p-4 border-b border-base-300">
-                        <svg class="w-5 h-5 text-info" fill="currentColor" viewBox="0 0 20 20">
+                        <svg class="w-5 h-5 text-success" fill="currentColor" viewBox="0 0 20 20">
                             <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
                         </svg>
-                        <h3 class="card-title text-lg">S3 Data Tables</h3>
+                        <h3 class="card-title text-lg text-success">S3 Data Tables</h3>
                         <div class="ml-auto">
-                            <div class="badge badge-info badge-sm">Direct Access</div>
+                            <div class="badge badge-success badge-sm">Direct Access</div>
                         </div>
                     </div>
                 </div>
@@ -124,11 +124,11 @@
                     <div class="hero h-40" id="empty-state">
                         <div class="hero-content text-center">
                             <div class="max-w-md">
-                                <svg class="w-16 h-16 mx-auto mb-4 text-base-content/30" fill="currentColor" viewBox="0 0 20 20">
+                                <svg class="w-16 h-16 mx-auto mb-4 text-base-content opacity-30" fill="currentColor" viewBox="0 0 20 20">
                                     <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
                                 </svg>
-                                <p class="text-base-content/50">Click dataset labels to add them here</p>
-                                <p class="text-xs text-base-content/30 mt-2">Multiple datasets stack vertically • Latest on top</p>
+                                <p class="text-base-content opacity-50">Click dataset labels to add them here</p>
+                                <p class="text-xs text-base-content opacity-30 mt-2">Multiple datasets stack vertically • Latest on top</p>
                             </div>
                         </div>
                     </div>
@@ -142,17 +142,17 @@
                         <div class="card-title flex gap-2 items-center">
                             <div class="flex-1">
                                 <h2 class="text-lg font-medium">
-                                    <span class="text-success">Column</span> Analysis
+                                    <span class="text-info">Column</span> Analysis
                                 </h2>
-                                <p class="text-xs text-base-content/70">Data profiling and insights</p>
+                                <p class="text-xs text-base-content opacity-70">Data profiling and insights</p>
                             </div>
-                            <div class="badge badge-success badge-outline badge-sm">Live</div>
+                            <div class="badge badge-info badge-outline badge-sm">Live</div>
                         </div>
                         <div class="divider my-0"></div>
                         
                         <!-- Loading indicator for analysis updates -->
                         <div id="analysis-loading-indicator" class="htmx-indicator flex justify-center items-center py-4">
-                            <div class="loading loading-spinner loading-md text-success"></div>
+                            <div class="loading loading-spinner loading-md text-info"></div>
                             <span class="ml-2">Analyzing column data...</span>
                         </div>
                         
@@ -160,14 +160,14 @@
                         <div id="analysis-container" class="flex-1 overflow-y-auto">
                             <div class="flex h-full flex-col items-center justify-center text-center">
                                 <div class="max-w-md">
-                                    <svg class="w-16 h-16 mx-auto text-base-content/30 mb-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <svg class="w-16 h-16 mx-auto text-base-content opacity-30 mb-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                                         <path d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                                     </svg>
                                     <h3 class="text-lg font-medium">Select a Column</h3>
-                                    <p class="text-sm text-base-content/70 mt-2">
+                                    <p class="text-sm text-base-content opacity-70 mt-2">
                                         Click on a column header in the left panel to view its analysis, data patterns, and linking suggestions.
                                     </p>
-                                    <div class="mt-4 text-xs text-base-content/50">
+                                    <div class="mt-4 text-xs text-base-content opacity-50">
                                         <div class="badge badge-ghost badge-xs mb-1">Data Profiling</div>
                                         <div class="badge badge-ghost badge-xs mb-1">Pattern Detection</div>
                                         <div class="badge badge-ghost badge-xs mb-1">Linking Suggestions</div>

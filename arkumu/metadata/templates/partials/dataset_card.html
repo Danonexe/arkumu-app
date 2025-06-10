@@ -16,33 +16,33 @@
      {# This is a fully-loaded card. No need to click to load graph - it's already loaded! #}
      {% endif %}
 >
-    <!-- Dataset Header with DaisyUI styling -->
-    <div class="card-header bg-primary text-primary-content p-3 {% if not dataset.preview %}animate-pulse{% endif %}">
+    <!-- Dataset Header with DaisyUI styling - Using white background for datasets -->
+    <div class="card-header bg-base-100 text-base-content p-3 {% if not dataset.preview %}animate-pulse{% endif %}">
         <div class="flex items-center justify-between">
             <div class="flex items-center gap-3">
                 <div class="avatar placeholder">
-                                          <div class="bg-primary-content text-primary rounded-full w-10">
+                                          <div class="bg-success text-success-content rounded-full w-10">
                           <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                               <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/>
                           </svg>
                     </div>
                 </div>
                 <div>
-                    <h3 class="text-lg font-bold text-primary-content">{{ dataset.name }}</h3>
-                    <p class="text-xs text-primary-content/70">{{ dataset.source }}</p>
+                    <h3 class="text-lg font-bold text-success">{{ dataset.name }}</h3>
+                    <p class="text-xs text-base-content opacity-70">{{ dataset.source }}</p>
                 </div>
             </div>
             
             <div class="flex items-center gap-2">
                 <div class="flex flex-col gap-1 items-end">
                     {% if dataset.preview %}
-                        <div class="badge badge-sm bg-primary-content/20 border-primary-content/30 text-primary-content">
+                        <div class="badge badge-sm bg-success-content/20 border-success text-success-content">
                             {{ dataset.preview.showing_rows }} of {{ dataset.preview.total_rows|default:"?" }} rows
                         </div>
                     {% else %}
                         <div class="badge badge-sm badge-ghost">Loading...</div>
                     {% endif %}
-                    <div class="badge badge-sm bg-primary-content/20 border-primary-content/30 text-primary-content">
+                    <div class="badge badge-sm bg-success-content/20 border-success text-success-content">
                         {{ dataset.cell_count|default:0 }} cells
                     </div>
                 </div>
@@ -109,10 +109,10 @@
         
         <!-- Column Names Display - Right below dataset name -->
         {% if dataset.preview.colHeaders %}
-        <div class="alert alert-success p-1 mt-2">
+        <div class="alert bg-base-100 border border-info p-1 mt-2">
             <div class="flex flex-wrap gap-1">
                 {% for column in dataset.preview.colHeaders %}
-                <div class="badge badge-success badge-xs cursor-pointer hover:badge-accent"
+                <div class="badge badge-outline badge-info badge-xs cursor-pointer hover:bg-info-focus hover:text-info-content"
                       data-column-name="{{ column }}"
                       data-dataset-name="{{ dataset.name }}"
                       data-column-index="{{ forloop.counter0 }}"
@@ -120,12 +120,14 @@
                           log 'Column badge clicked:', @data-column-name
                           
                           -- Reset all column highlights first
-                          remove .badge-accent from .badge in me.parentElement
-                          add .badge-success to .badge in me.parentElement
+                          remove .bg-info from .badge in me.parentElement
+                          remove .text-info-content from .badge in me.parentElement
+                          add .badge-outline to .badge in me.parentElement
                           
                           -- Highlight this column badge
-                          remove .badge-success from me
-                          add .badge-accent to me
+                          remove .badge-outline from me
+                          add .bg-info to me
+                          add .text-info-content to me
                           log 'Badge highlight updated for:', @data-column-name
                           
                           -- Find and highlight the table column
@@ -178,7 +180,7 @@
                           get #analysis-container
                           set it.innerHTML to `
                             <div class='flex justify-center items-center h-full'>
-                              <div class='loading loading-spinner loading-lg text-success'></div>
+                              <div class='loading loading-spinner loading-lg text-info'></div>
                               <span class='ml-3'>Analyzing column data...</span>
                             </div>
                           `
@@ -209,7 +211,7 @@
                         <thead class="bg-base-200">
                             <tr>
                                 {% for header in dataset.preview.colHeaders %}
-                                <th class="p-2 border border-base-300 font-medium cursor-pointer hover:bg-primary-100 min-w-[120px] whitespace-nowrap column-header"
+                                <th class="p-2 border border-base-300 font-medium cursor-pointer hover:bg-info-focus hover:bg-opacity-50 min-w-[120px] whitespace-nowrap column-header"
                                     id="column-{{ forloop.counter0 }}-{{ dataset.name|slugify }}"
                                     data-column-name="{{ header }}"
                                     data-column-index="{{ forloop.counter0 }}"
@@ -218,13 +220,13 @@
                                         log 'Column clicked:', @data-column-name
                                         
                                         -- Reset all column highlights first
-                                        remove .bg-primary from .column-header in closest .table-container
-                                        remove .text-primary-content from .column-header in closest .table-container
+                                        remove .bg-info from .column-header in closest .table-container
+                                        remove .text-info-content from .column-header in closest .table-container
                                         remove .font-bold from .column-header in closest .table-container
                                         
                                         -- Highlight this column
-                                        add .bg-primary to me
-                                        add .text-primary-content to me
+                                        add .bg-info-focus to me
+                                        add .text-info-content to me
                                         add .font-bold to me
                                         
                                         -- Find and highlight the corresponding badge
@@ -237,8 +239,9 @@
                                         set datasetCard to closest .card
                                         
                                         -- Reset all badge highlights in this dataset first
-                                        remove .badge-accent from .badge in datasetCard
-                                        add .badge-success to .badge in datasetCard
+                                        remove .bg-info from .badge in datasetCard
+                                        remove .text-info-content from .badge in datasetCard
+                                        add .badge-outline to .badge in datasetCard
                                         log 'Reset all badge highlights'
                                         
                                         -- Find all badges in the dataset card and match by data attributes
@@ -249,8 +252,9 @@
                                             if @data-column-name of badge is columnName and @data-dataset-name of badge is datasetName
                                                 set targetBadge to badge
                                                 log 'Found matching badge for:', columnName
-                                                remove .badge-success from targetBadge
-                                                add .badge-accent to targetBadge
+                                                remove .badge-outline from targetBadge
+                                                add .bg-info to targetBadge
+                                                add .text-info-content to targetBadge
                                                 log 'Badge highlight updated for:', columnName
                                             end
                                         end
@@ -261,7 +265,7 @@
                                         get #analysis-container
                                         set it.innerHTML to `
                                           <div class='flex justify-center items-center h-full'>
-                                            <div class='loading loading-spinner loading-lg text-success'></div>
+                                            <div class='loading loading-spinner loading-lg text-info'></div>
                                             <span class='ml-3'>Analyzing column data...</span>
                                           </div>
                                         `
@@ -287,7 +291,7 @@
                 <!-- HTMX Load More (matching server response format) -->
                 {% if dataset.preview.has_more %}
                 <div class="border-t border-base-300 bg-base-50 p-3" id="load-more-{{ dataset.name|slugify }}">
-                    <button class="btn btn-sm btn-ghost btn-outline w-full gap-2 hover:btn-primary"
+                    <button class="btn btn-sm btn-ghost btn-outline w-full gap-2 hover:btn-info"
                             {% if is_direct_mode %}
                             hx-get="{% url 'metadata:direct_load_more_dataset_rows' %}?source={{ dataset.source|urlencode }}&dataset={{ dataset.name|urlencode }}&offset={{ dataset.preview.showing_rows }}&limit=10{% if organization_id %}&organization={{ organization_id }}{% endif %}"
                             {% else %}
@@ -319,7 +323,7 @@
                     <div class="max-w-md">
                         <div class="text-4xl mb-2">📊</div>
                         <h3 class="text-lg font-bold">No Preview Available</h3>
-                        <p class="text-sm text-base-content/70 mt-2">This card will load the data preview automatically.</p>
+                        <p class="text-sm text-base-content opacity-70 mt-2">This card will load the data preview automatically.</p>
                         <div class="badge badge-warning mt-2">Loading</div>
                     </div>
                 </div>
@@ -338,7 +342,7 @@
                         View Graph
                     </div>
                     {% if dataset.preview %}
-                        <button class="btn btn-xs btn-primary"
+                        <button class="btn btn-xs btn-info btn-outline"
                                 hx-get="{% if is_direct_mode %}{% url 'metadata:direct_analyze_dataset_relationships' %}{% if organization_id %}?organization={{ organization_id }}&{% else %}?{% endif %}{% else %}{% url 'metadata:analyze_dataset_relationships' %}?{% endif %}source={{ dataset.source|urlencode }}&dataset={{ dataset.name|urlencode }}"
                                 hx-target="#relationship-analysis-{{ dataset.name|slugify }}"
                                 hx-swap="innerHTML"
@@ -351,30 +355,10 @@
                             </svg>
                             Data Loaded
                         </div>
-                    {% endif %}// Column analysis functionality
-                    window.analyzeColumn = function(columnName, datasetName) {
-                        console.log(`Analyzing column '${columnName}' from dataset '${datasetName}'`);
-                        
-                        // Show loading indicator
-                        const analysisContainer = document.getElementById('analysis-container');
-                        if (analysisContainer) {
-                            analysisContainer.innerHTML = `
-                                <div class="flex justify-center items-center h-full">
-                                    <div class="loading loading-spinner loading-lg text-success"></div>
-                                    <span class="ml-3">Analyzing column data...</span>https://hyperscript.org/img/hyperscript-cheatsheet.pdf
-                                </div>
-                            `;
-                            
-                            // Trigger success toast
-                            document.body.dispatchEvent(new CustomEvent('showToast', {
-                                detail: { message: `Analyzing column '${columnName}' from ${datasetName}`, type: 'info' }
-                            }));
-                        }
-                    };
-                    
+                    {% endif %}
                 </div>
                 
-                <div class="text-xs text-base-content/40 flex items-center gap-1">
+                <div class="text-xs text-base-content opacity-40 flex items-center gap-1">
                     <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                         <path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/>
                         <path d="M10 2a8 8 0 018 8 8 8 0 01-8 8 8 8 0 01-8-8 8 8 0 018-8zm0 2a6 6 0 00-6 6 6 6 0 006 6 6 6 0 006-6 6 6 0 00-6-6z"/>

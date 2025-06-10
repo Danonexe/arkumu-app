@@ -12,12 +12,12 @@
             </div>
         </div>
     {% else %}
-        <!-- Column Header -->
-        <div class="card bg-primary text-primary-content">
+        <!-- Column Header - Using info (blue) color for column analysis -->
+        <div class="card bg-info text-info-content">
             <div class="card-body p-4">
                 <div class="flex items-center gap-3">
                     <div class="avatar placeholder">
-                        <div class="bg-primary-content text-primary rounded-full w-10">
+                        <div class="bg-info-content text-info rounded-full w-10">
                             <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                                 <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/>
                             </svg>
@@ -167,17 +167,17 @@
             </div>
             <div class="card-body p-4 space-y-3">
                 {% for rel in analysis.relationships %}
-                <div class="card bg-info-content text-base-content">
+                <div class="card bg-base-100 text-base-content">
                     <div class="card-body p-3">
                         <div class="flex items-start justify-between">
                             <div class="flex-1">
                                 <div class="flex items-center gap-2 mb-2">
                                     <span class="font-medium">{{ rel.partner_column }}</span>
-                                    <div class="badge {% if rel.confidence > 0.8 %}badge-success{% elif rel.confidence > 0.5 %}badge-warning{% else %}badge-ghost{% endif %} badge-sm">
+                                    <div class="badge {% if rel.confidence > 0.8 %}badge-info{% elif rel.confidence > 0.5 %}badge-warning{% else %}badge-ghost{% endif %} badge-sm">
                                         {{ rel.confidence|floatformat:1 }}
                                     </div>
                                     {% if rel.bidirectional %}
-                                    <div class="badge badge-accent badge-xs">↔</div>
+                                    <div class="badge badge-info badge-xs">↔</div>
                                     {% endif %}
                                 </div>
                                 <div class="text-sm text-base-content/70">
@@ -204,8 +204,8 @@
 
         <!-- Semantic Clusters -->
         {% if analysis.semantic_clusters %}
-        <div class="card bg-secondary text-secondary-content shadow-sm">
-            <div class="card-header bg-secondary p-3">
+        <div class="card bg-info text-info-content shadow-sm">
+            <div class="card-header bg-info p-3">
                 <h4 class="font-medium flex items-center gap-2">
                     <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                         <path d="M4 3a2 2 0 100 4h12a2 2 0 100-4H4zM4 9a2 2 0 100 4h12a2 2 0 100-4H4zM4 15a2 2 0 100 4h12a2 2 0 100-4H4z"/>
@@ -215,12 +215,12 @@
             </div>
             <div class="card-body p-4 space-y-3">
                 {% for cluster in analysis.semantic_clusters %}
-                <div class="card bg-secondary-content text-base-content">
+                <div class="card bg-base-100 text-base-content">
                     <div class="card-body p-3">
                         <div class="text-sm font-medium mb-2">Related Columns ({{ cluster.cluster_size }} total)</div>
                         <div class="flex flex-wrap gap-1">
                             {% for member in cluster.members %}
-                            <div class="badge badge-secondary badge-sm">{{ member }}</div>
+                            <div class="badge badge-info badge-sm">{{ member }}</div>
                             {% endfor %}
                         </div>
                     </div>
@@ -232,14 +232,14 @@
 
         <!-- Foreign Key Potential -->
         {% if analysis.foreign_key_potential %}
-        <div class="card bg-accent text-accent-content shadow-sm">
-            <div class="card-header bg-accent p-3">
+        <div class="card bg-info text-info-content shadow-sm">
+            <div class="card-header bg-info p-3">
                 <h4 class="font-medium flex items-center gap-2">
                     <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                         <path d="M18 8a6 6 0 01-7.743 5.743L10 14l-1 1-1 1H6v2H2v-4l4.257-4.257A6 6 0 1118 8zm-6-2a1 1 0 11-2 0 1 1 0 012 0z"/>
                     </svg>
                     Foreign Key Candidate
-                    <div class="badge badge-accent-content badge-sm">{{ analysis.relationship_strength|floatformat:1 }}</div>
+                    <div class="badge badge-info-content badge-sm">{{ analysis.relationship_strength|floatformat:1 }}</div>
                 </h4>
             </div>
             <div class="card-body p-4">
@@ -258,8 +258,8 @@
 
         <!-- Suggested Predicates -->
         {% if analysis.suggested_predicates %}
-        <div class="card bg-base-100 shadow-sm">
-            <div class="card-header bg-base-200 p-3">
+        <div class="card bg-info text-info-content shadow-sm">
+            <div class="card-header bg-info p-3">
                 <h4 class="font-medium flex items-center gap-2">
                     <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                         <path d="M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM2 11a2 2 0 012-2h12a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4z"/>
@@ -270,7 +270,7 @@
             <div class="card-body p-4">
                 <div class="flex flex-wrap gap-2">
                     {% for predicate in analysis.suggested_predicates %}
-                    <div class="badge badge-primary badge-outline">{{ predicate }}</div>
+                    <div class="badge badge-info-content badge-outline">{{ predicate }}</div>
                     {% endfor %}
                 </div>
             </div>
@@ -279,8 +279,8 @@
 
         <!-- Basic Linking Suggestions (Fallback) -->
         {% if analysis.linking_suggestions %}
-        <div class="card bg-base-100 shadow-sm">
-            <div class="card-header bg-base-200 p-3">
+        <div class="card bg-info text-info-content shadow-sm">
+            <div class="card-header bg-info p-3">
                 <h4 class="font-medium flex items-center gap-2">
                     <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                         <path d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5zm-5 5a2 2 0 012.828 0 1 1 0 101.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5a1 1 0 10-1.414-1.414l-1.5 1.5a2 2 0 11-2.828-2.828l3-3z"/>
@@ -290,16 +290,16 @@
             </div>
             <div class="card-body p-4 space-y-3">
                 {% for suggestion in analysis.linking_suggestions %}
-                <div class="card bg-base-200">
+                <div class="card bg-base-100 text-base-content">
                     <div class="card-body p-3">
                         <div class="flex items-start gap-3">
-                            <div class="badge {% if suggestion.confidence == 'high' %}badge-success{% elif suggestion.confidence == 'medium' %}badge-warning{% else %}badge-ghost{% endif %} badge-sm">
+                            <div class="badge {% if suggestion.confidence == 'high' %}badge-info{% elif suggestion.confidence == 'medium' %}badge-warning{% else %}badge-ghost{% endif %} badge-sm">
                                 {{ suggestion.confidence|title }}
                             </div>
                             <div class="flex-1">
                                 <div class="text-sm font-medium">{{ suggestion.type|title }}</div>
                                 <div class="text-xs text-base-content/70 mt-1">{{ suggestion.description }}</div>
-                                <div class="text-xs font-mono bg-base-300 rounded px-2 py-1 mt-2">{{ suggestion.action }}</div>
+                                <div class="text-xs font-mono bg-base-200 rounded px-2 py-1 mt-2">{{ suggestion.action }}</div>
                             </div>
                         </div>
                     </div>
@@ -311,8 +311,8 @@
 
         <!-- Preprocessing Recommendations -->
         {% if analysis.preprocessing_recommendations %}
-        <div class="card bg-success text-success-content shadow-sm">
-            <div class="card-header bg-success p-3">
+        <div class="card bg-info text-info-content shadow-sm">
+            <div class="card-header bg-info p-3">
                 <h4 class="font-medium flex items-center gap-2">
                     <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                         <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/>
@@ -322,7 +322,7 @@
             </div>
             <div class="card-body p-4 space-y-3">
                 {% for rec in analysis.preprocessing_recommendations %}
-                <div class="card bg-success-content text-base-content">
+                <div class="card bg-info-content text-base-content">
                     <div class="card-body p-3">
                         <div class="flex items-start gap-3">
                             <div class="badge {% if rec.priority == 'high' %}badge-error{% elif rec.priority == 'medium' %}badge-warning{% else %}badge-info{% endif %} badge-sm">
