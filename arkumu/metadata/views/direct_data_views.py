@@ -9,6 +9,9 @@ This approach is more memory-efficient and faster than the traditional database-
 
 import logging
 import json
+import tempfile
+import os
+import re
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse, HttpResponseBadRequest, HttpResponse
@@ -16,6 +19,7 @@ from django.conf import settings
 from django.core.cache import cache
 
 from arkumu.metadata.services.data_analysis.s3_direct_data_analyzer import S3DirectDataAnalyzer
+from arkumu.metadata.services.relationship_discovery.service import RelationshipDiscoveryService
 
 logger = logging.getLogger(__name__)
 
@@ -531,6 +535,109 @@ def direct_get_import_preview(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
+@login_required
+def direct_analyze_column(request):
+    """
+    Analyze a specific column from a dataset using direct S3 file analysis.
+    Provides data profiling, pattern detection, and linking suggestions.
+    """
+    source_name = request.GET.get('source')
+    dataset_name = request.GET.get('dataset')
+    column_name = request.GET.get('column')
+    organization_id = get_organization_id_from_request(request)
+    
+    logger.info(f"Column analysis request: source={source_name}, dataset={dataset_name}, column={column_name}, org={organization_id}")
+    
+    if not source_name or not dataset_name or not column_name:
+        return HttpResponseBadRequest("Missing required parameters: source, dataset, and column")
+    
+    if not organization_id or organization_id == 'default-org':
+        return HttpResponseBadRequest("Organization parameter required")
+    
+    try:
+        analyzer = S3DirectDataAnalyzer()
+        
+        # Find the source in S3
+        sources = analyzer.discover_s3_data_sources(organization_id)
+        source_info = next((s for s in sources if s.name == source_name), None)
+        
+        if not source_info:
+            return HttpResponseBadRequest(f"Source '{source_name}' not found")
+        
+        # Get column data and analysis
+        preview = analyzer.get_s3_table_preview(source_info, dataset_name, limit=100)
+        
+        # Find column index
+        try:
+            column_index = preview.column_headers.index(column_name)
+        except ValueError:
+            return HttpResponseBadRequest(f"Column '{column_name}' not found in dataset")
+        
+        # Get full dataset for relationship analysis
+        full_preview = analyzer.get_s3_table_preview(source_info, dataset_name, limit=1000)  # Larger sample for better analysis
+        
+        # Create temporary CSV file for relationship analysis
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as temp_file:
+            # Write headers
+            temp_file.write(','.join(full_preview.column_headers) + '\n')
+            # Write data rows
+            for row in full_preview.data_rows:
+                # Ensure all rows have the same number of columns
+                padded_row = row + [None] * (len(full_preview.column_headers) - len(row))
+                row_str = ','.join([f'"{str(cell).replace('"', '""')}"' if cell is not None else '' for cell in padded_row])
+                temp_file.write(row_str + '\n')
+            temp_csv_path = temp_file.name
+        
+        try:
+            # Use relationship discovery service for sophisticated analysis
+            relationship_service = RelationshipDiscoveryService()
+            dataset_analysis = relationship_service.analyze_dataset_relationships(temp_csv_path, sample_size=1000)
+            
+            # Extract column values for basic analysis
+            column_values = [row[column_index] if column_index < len(row) else None for row in preview.data_rows]
+            
+            # Combine basic analysis with relationship insights
+            basic_analysis = _analyze_column_data(column_name, column_values, preview.total_rows)
+            relationship_insights = _extract_column_relationship_insights(column_name, dataset_analysis)
+            
+            # Merge analyses
+            analysis = {**basic_analysis, **relationship_insights}
+            
+            # Add dataset context
+            analysis['dataset_info'] = {
+                'name': dataset_name,
+                'source': source_name,
+                'total_rows': preview.total_rows,
+                'total_columns': len(preview.column_headers),
+                'column_index': column_index
+            }
+            
+        finally:
+            # Clean up temporary file
+            try:
+                os.unlink(temp_csv_path)
+            except Exception as cleanup_error:
+                logger.warning(f"Could not clean up temp file: {cleanup_error}")
+        
+        # Render the analysis partial
+        return render(request, 'partials/column_analysis.html', {
+            'analysis': analysis,
+            'column_name': column_name,
+            'dataset_name': dataset_name,
+            'source_name': source_name,
+            'organization_id': organization_id
+        })
+        
+    except Exception as e:
+        logger.error(f"Error analyzing column: {e}", exc_info=True)
+        return render(request, 'partials/column_analysis.html', {
+            'error': f"Error analyzing column: {str(e)}",
+            'column_name': column_name,
+            'dataset_name': dataset_name,
+            'source_name': source_name
+        })
+
+
 def _discover_available_organizations(analyzer):
     """
     Discover available organizations by checking S3 buckets.
@@ -701,4 +808,371 @@ def _build_direct_graph_data(source_summary):
         'total_nodes': len(nodes),
         'total_links': len(links),
         'is_direct_mode': True
-    } 
+    }
+
+
+def _analyze_column_data(column_name, column_values, total_rows):
+    """
+    Analyze column data to provide insights for linking and preprocessing.
+    """
+    import re
+    from collections import Counter, defaultdict
+    
+    # Filter out None/empty values
+    non_empty_values = [str(v).strip() for v in column_values if v is not None and str(v).strip()]
+    
+    # Basic statistics
+    total_values = len(column_values)
+    non_empty_count = len(non_empty_values)
+    empty_count = total_values - non_empty_count
+    fill_rate = (non_empty_count / total_values) * 100 if total_values > 0 else 0
+    
+    # Value frequency analysis
+    value_counts = Counter(non_empty_values)
+    unique_count = len(value_counts)
+    most_common = value_counts.most_common(10)
+    
+    # Data type detection
+    data_type = _detect_data_type(non_empty_values)
+    
+    # Pattern analysis
+    patterns = _analyze_patterns(non_empty_values)
+    
+    # Multi-value detection (values that might need splitting)
+    multi_value_analysis = _analyze_multi_values(non_empty_values)
+    
+    # Linking suggestions
+    linking_suggestions = _generate_linking_suggestions(column_name, non_empty_values, data_type)
+    
+    # Data quality issues
+    quality_issues = _detect_quality_issues(non_empty_values, patterns)
+    
+    return {
+        'basic_stats': {
+            'total_values': total_values,
+            'non_empty_count': non_empty_count,
+            'empty_count': empty_count,
+            'fill_rate': round(fill_rate, 1),
+            'unique_count': unique_count,
+            'duplicate_rate': round(((non_empty_count - unique_count) / non_empty_count) * 100, 1) if non_empty_count > 0 else 0
+        },
+        'data_type': data_type,
+        'value_distribution': {
+            'most_common': most_common[:5],
+            'sample_values': non_empty_values[:10] if non_empty_values else []
+        },
+        'patterns': patterns,
+        'multi_value_analysis': multi_value_analysis,
+        'linking_suggestions': linking_suggestions,
+        'quality_issues': quality_issues,
+        'preprocessing_recommendations': _generate_preprocessing_recommendations(patterns, multi_value_analysis, quality_issues)
+    }
+
+
+def _detect_data_type(values):
+    """Detect the primary data type of the column values."""
+    if not values:
+        return {'type': 'empty', 'confidence': 100}
+    
+    type_counts = {'integer': 0, 'float': 0, 'date': 0, 'url': 0, 'email': 0, 'text': 0}
+    
+    for value in values[:50]:  # Sample first 50 values for performance
+        # Integer check
+        if re.match(r'^-?\d+$', value):
+            type_counts['integer'] += 1
+        # Float check
+        elif re.match(r'^-?\d+\.\d+$', value):
+            type_counts['float'] += 1
+        # Date check (basic patterns)
+        elif re.match(r'\d{4}-\d{2}-\d{2}', value) or re.match(r'\d{2}/\d{2}/\d{4}', value):
+            type_counts['date'] += 1
+        # URL check
+        elif re.match(r'https?://', value):
+            type_counts['url'] += 1
+        # Email check
+        elif re.match(r'\S+@\S+\.\S+', value):
+            type_counts['email'] += 1
+        else:
+            type_counts['text'] += 1
+    
+    # Determine primary type
+    total_checked = sum(type_counts.values())
+    if total_checked == 0:
+        return {'type': 'empty', 'confidence': 100}
+    
+    primary_type = max(type_counts.keys(), key=lambda k: type_counts[k])
+    confidence = round((type_counts[primary_type] / total_checked) * 100, 1)
+    
+    return {'type': primary_type, 'confidence': confidence, 'distribution': type_counts}
+
+
+def _analyze_patterns(values):
+    """Analyze common patterns in the values."""
+    if not values:
+        return {}
+    
+    # Length analysis
+    lengths = [len(v) for v in values]
+    
+    # Common separators
+    separators = {';': 0, ',': 0, '|': 0, '/': 0, '-': 0, ':': 0}
+    for value in values:
+        for sep in separators:
+            if sep in value:
+                separators[sep] += 1
+    
+    # Character patterns
+    has_numbers = sum(1 for v in values if re.search(r'\d', v))
+    has_special_chars = sum(1 for v in values if re.search(r'[^a-zA-Z0-9\s]', v))
+    
+    return {
+        'length_stats': {
+            'min': min(lengths) if lengths else 0,
+            'max': max(lengths) if lengths else 0,
+            'avg': round(sum(lengths) / len(lengths), 1) if lengths else 0
+        },
+        'common_separators': {k: v for k, v in separators.items() if v > 0},
+        'character_analysis': {
+            'has_numbers': has_numbers,
+            'has_special_chars': has_special_chars,
+            'numeric_percentage': round((has_numbers / len(values)) * 100, 1),
+            'special_char_percentage': round((has_special_chars / len(values)) * 100, 1)
+        }
+    }
+
+
+def _analyze_multi_values(values):
+    """Detect if values contain multiple sub-values that might need splitting."""
+    if not values:
+        return {'needs_splitting': False}
+    
+    separators = [';', ',', '|', '/', ' and ', ' & ', ' + ']
+    separator_analysis = {}
+    
+    for sep in separators:
+        split_counts = []
+        for value in values[:20]:  # Sample for performance
+            if sep in value:
+                parts = value.split(sep)
+                if len(parts) > 1:
+                    split_counts.append(len(parts))
+        
+        if split_counts:
+            separator_analysis[sep] = {
+                'occurrence_count': len(split_counts),
+                'avg_splits': round(sum(split_counts) / len(split_counts), 1),
+                'max_splits': max(split_counts)
+            }
+    
+    # Determine if splitting is recommended
+    needs_splitting = False
+    recommended_separator = None
+    
+    for sep, analysis in separator_analysis.items():
+        if analysis['occurrence_count'] > len(values) * 0.1:  # 10% threshold
+            needs_splitting = True
+            if not recommended_separator or analysis['occurrence_count'] > separator_analysis[recommended_separator]['occurrence_count']:
+                recommended_separator = sep
+    
+    return {
+        'needs_splitting': needs_splitting,
+        'recommended_separator': recommended_separator,
+        'separator_analysis': separator_analysis
+    }
+
+
+def _generate_linking_suggestions(column_name, values, data_type):
+    """Generate suggestions for linking this column to other datasets."""
+    suggestions = []
+    
+    # Name-based suggestions
+    name_lower = column_name.lower()
+    
+    if 'id' in name_lower:
+        suggestions.append({
+            'type': 'identifier',
+            'confidence': 'high',
+            'description': 'This appears to be an identifier column - good for linking records',
+            'action': 'Use as primary key for joins'
+        })
+    
+    if any(term in name_lower for term in ['name', 'title', 'label']):
+        suggestions.append({
+            'type': 'text_match',
+            'confidence': 'medium',
+            'description': 'Text column that might match names/titles in other datasets',
+            'action': 'Consider fuzzy matching with similar columns'
+        })
+    
+    if any(term in name_lower for term in ['date', 'time', 'created', 'modified']):
+        suggestions.append({
+            'type': 'temporal',
+            'confidence': 'medium',
+            'description': 'Temporal column useful for time-based joins',
+            'action': 'Link records within time ranges'
+        })
+    
+    # Data type-based suggestions
+    if data_type['type'] == 'url':
+        suggestions.append({
+            'type': 'url_reference',
+            'confidence': 'high',
+            'description': 'URLs can be matched exactly across datasets',
+            'action': 'Direct URL matching'
+        })
+    
+    if data_type['type'] == 'email':
+        suggestions.append({
+            'type': 'email_reference',
+            'confidence': 'high',
+            'description': 'Email addresses are unique identifiers',
+            'action': 'Use for person/contact linking'
+        })
+    
+    # Value pattern-based suggestions
+    if not suggestions:
+        suggestions.append({
+            'type': 'general',
+            'confidence': 'low',
+            'description': 'General text column - may need preprocessing before linking',
+            'action': 'Clean and standardize values first'
+        })
+    
+    return suggestions
+
+
+def _detect_quality_issues(values, patterns):
+    """Detect potential data quality issues."""
+    issues = []
+    
+    if not values:
+        return [{'type': 'empty_column', 'severity': 'high', 'description': 'Column is completely empty'}]
+    
+    # Check for inconsistent formatting
+    if patterns.get('length_stats', {}).get('max', 0) - patterns.get('length_stats', {}).get('min', 0) > 50:
+        issues.append({
+            'type': 'inconsistent_length',
+            'severity': 'medium',
+            'description': 'Values have very different lengths - possible formatting issues'
+        })
+    
+    # Check for mixed separators
+    separators = patterns.get('common_separators', {})
+    if len([s for s in separators.values() if s > 0]) > 1:
+        issues.append({
+            'type': 'mixed_separators',
+            'severity': 'medium',
+            'description': 'Multiple separators used - standardization needed'
+        })
+    
+    # Check for potential encoding issues
+    encoding_issues = sum(1 for v in values if any(char in v for char in ['�', '\ufffd']))
+    if encoding_issues > 0:
+        issues.append({
+            'type': 'encoding_issues',
+            'severity': 'high',
+            'description': f'{encoding_issues} values may have encoding problems'
+        })
+    
+    return issues
+
+
+def _generate_preprocessing_recommendations(patterns, multi_value_analysis, quality_issues):
+    """Generate recommendations for preprocessing this column."""
+    recommendations = []
+    
+    # Multi-value splitting
+    if multi_value_analysis.get('needs_splitting'):
+        sep = multi_value_analysis.get('recommended_separator', ';')
+        recommendations.append({
+            'type': 'split_values',
+            'priority': 'high',
+            'description': f'Split values using "{sep}" separator to create multiple records',
+            'action': f'Apply split transformation with separator "{sep}"'
+        })
+    
+    # Quality issue fixes
+    for issue in quality_issues:
+        if issue['type'] == 'mixed_separators':
+            recommendations.append({
+                'type': 'standardize_separators',
+                'priority': 'medium',
+                'description': 'Standardize all separators to a single type',
+                'action': 'Replace all separators with semicolons'
+            })
+        elif issue['type'] == 'encoding_issues':
+            recommendations.append({
+                'type': 'fix_encoding',
+                'priority': 'high',
+                'description': 'Fix character encoding issues',
+                'action': 'Re-encode data with UTF-8'
+            })
+    
+    # Length normalization
+    length_stats = patterns.get('length_stats', {})
+    if length_stats.get('max', 0) - length_stats.get('min', 0) > 100:
+        recommendations.append({
+            'type': 'normalize_length',
+            'priority': 'low',
+            'description': 'Consider truncating very long values',
+            'action': 'Limit values to reasonable length (e.g., 255 characters)'
+        })
+    
+    return recommendations
+
+
+def _extract_column_relationship_insights(column_name, dataset_analysis):
+    """
+    Extract relationship insights for a specific column from the dataset analysis.
+    Uses the sophisticated RelationshipDiscoveryService results.
+    """
+    insights = {
+        'relationships': [],
+        'semantic_clusters': [],
+        'foreign_key_potential': False,
+        'relationship_strength': 0.0,
+        'suggested_predicates': []
+    }
+    
+    # Find relationships involving this column
+    column_relationships = []
+    for relationship in dataset_analysis.relationships:
+        if relationship.source_column == column_name or relationship.target_column == column_name:
+            column_relationships.append({
+                'partner_column': relationship.target_column if relationship.source_column == column_name else relationship.source_column,
+                'type': relationship.relationship_type,
+                'confidence': relationship.confidence,
+                'evidence': relationship.evidence,
+                'bidirectional': relationship.bidirectional,
+                'suggested_predicate': relationship.suggested_predicate
+            })
+    
+    insights['relationships'] = column_relationships
+    
+    # Check if column is in any semantic clusters
+    for cluster in dataset_analysis.semantic_clusters:
+        if column_name in cluster:
+            insights['semantic_clusters'].append({
+                'members': [col for col in cluster if col != column_name],
+                'cluster_size': len(cluster)
+            })
+    
+    # Check foreign key potential
+    insights['foreign_key_potential'] = column_name in dataset_analysis.foreign_key_candidates
+    
+    # Calculate overall relationship strength (average confidence of relationships)
+    if column_relationships:
+        insights['relationship_strength'] = sum(rel['confidence'] for rel in column_relationships) / len(column_relationships)
+    
+    # Extract unique suggested predicates
+    predicates = set()
+    for rel in column_relationships:
+        if rel['suggested_predicate']:
+            predicates.add(rel['suggested_predicate'])
+    insights['suggested_predicates'] = list(predicates)
+    
+    # Add quality metrics for this column if available
+    quality_metrics = dataset_analysis.quality_metrics
+    insights['quality_score'] = quality_metrics.get('overall_quality', 0.0)
+    
+    return insights 

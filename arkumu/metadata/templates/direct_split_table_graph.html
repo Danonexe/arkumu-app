@@ -4,9 +4,12 @@
 {% block title %}Direct S3 Dataset Explorer{% endblock %}
 
 {% block extrahead %}
-<!-- vis.js for network visualization -->
-<script src="https://unpkg.com/vis-network@9.1.2/dist/vis-network.min.js"></script>
-<link href="https://unpkg.com/vis-network@9.1.2/dist/dist/vis-network.min.css" rel="stylesheet" type="text/css" />
+<!-- Column analysis styling -->
+<style>
+.column-analysis {
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+}
+</style>
 {% endblock %}
 
 {% block content %}
@@ -132,44 +135,45 @@
                 </div>
             </div>
             
-            <!-- Graph Panel (Right) - Fixed -->
+            <!-- Column Analysis Panel (Right) - Fixed -->
             <div class="lg:sticky lg:top-4 h-[calc(100vh-160px)]">
                 <div class="card rounded-box bg-base-100 shadow-lg h-full overflow-hidden">
                     <div class="card-body p-4 flex flex-col h-full">
                         <div class="card-title flex gap-2 items-center">
                             <div class="flex-1">
                                 <h2 class="text-lg font-medium">
-                                    <span class="text-info">S3 Graph</span> Visualization
+                                    <span class="text-success">Column</span> Analysis
                                 </h2>
-                                <p class="text-xs text-base-content/70">Real-time structure analysis</p>
+                                <p class="text-xs text-base-content/70">Data profiling and insights</p>
                             </div>
-                            <div class="badge badge-info badge-outline badge-sm">Live</div>
+                            <div class="badge badge-success badge-outline badge-sm">Live</div>
                         </div>
                         <div class="divider my-0"></div>
                         
-                        <!-- Loading indicator for graph updates -->
-                        <div id="graph-loading-indicator" class="htmx-indicator flex justify-center items-center py-4">
-                            <div class="loading loading-spinner loading-md text-info"></div>
-                            <span class="ml-2">Analyzing S3 data...</span>
+                        <!-- Loading indicator for analysis updates -->
+                        <div id="analysis-loading-indicator" class="htmx-indicator flex justify-center items-center py-4">
+                            <div class="loading loading-spinner loading-md text-success"></div>
+                            <span class="ml-2">Analyzing column data...</span>
                         </div>
                         
-                        <!-- Graph Container -->
-                        <div id="graph-container" class="flex-1 overflow-hidden">
-                            {% if graph_data %}
-                                {% include 'partials/graph_visualization.html' with graph_data=graph_data %}
-                            {% else %}
-                                <div class="flex h-full flex-col items-center justify-center text-center">
-                                    <div class="max-w-md">
-                                        <svg class="w-16 h-16 mx-auto text-base-content/30 mb-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                            <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                        </svg>
-                                        <h3 class="text-lg font-medium">No Graph Data</h3>
-                                        <p class="text-sm text-base-content/70 mt-2">
-                                            Select a dataset from S3 to view its structure visualization.
-                                        </p>
+                        <!-- Column Analysis Container -->
+                        <div id="analysis-container" class="flex-1 overflow-y-auto">
+                            <div class="flex h-full flex-col items-center justify-center text-center">
+                                <div class="max-w-md">
+                                    <svg class="w-16 h-16 mx-auto text-base-content/30 mb-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
+                                    <h3 class="text-lg font-medium">Select a Column</h3>
+                                    <p class="text-sm text-base-content/70 mt-2">
+                                        Click on a column header in the left panel to view its analysis, data patterns, and linking suggestions.
+                                    </p>
+                                    <div class="mt-4 text-xs text-base-content/50">
+                                        <div class="badge badge-ghost badge-xs mb-1">Data Profiling</div>
+                                        <div class="badge badge-ghost badge-xs mb-1">Pattern Detection</div>
+                                        <div class="badge badge-ghost badge-xs mb-1">Linking Suggestions</div>
                                     </div>
                                 </div>
-                            {% endif %}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -208,14 +212,9 @@ document.addEventListener('htmx:afterSwap', function(event) {
 
     
     // Only handle expected targets, prevent interference
-    if (targetId === 'graph-container') {
-        console.log('Graph container updated - safe to proceed');
-        setTimeout(function() {
-            if (window.GraphAPI && window.GraphAPI.isReady()) {
-                window.GraphAPI.network.redraw();
-                window.GraphAPI.network.fit();
-            }
-        }, 100);
+    if (targetId === 'analysis-container') {
+        console.log('Analysis container updated - safe to proceed');
+        // Initialize any analysis-specific components here
     } else if (targetId === 'table-content') {
         console.log('Table content updated - expected behavior');
     } else {
@@ -223,35 +222,8 @@ document.addEventListener('htmx:afterSwap', function(event) {
     }
 });
 
-// Enhanced retry mechanism for column highlighting in S3 data
-window.retryHighlight = function(columnName, attempt) {
-    const maxAttempts = 5;
-    const delay = attempt * 500; // Increasing delay: 500ms, 1s, 1.5s, 2s, 2.5s
-    
-    console.log(`S3 Retry attempt ${attempt} for column '${columnName}' after ${delay}ms`);
-    
-    setTimeout(function() {
-        if (window.GraphAPI && window.GraphAPI.isReady()) {
-            console.log(`S3 Success on attempt ${attempt}: highlighting column '${columnName}'`);
-            window.GraphAPI.highlightColumn(columnName);
-            
-            // Trigger success toast
-            document.body.dispatchEvent(new CustomEvent('showToast', {
-                detail: { message: `S3 Column '${columnName}' highlighted in graph (attempt ${attempt})`, type: 'success' }
-            }));
-        } else if (attempt < maxAttempts) {
-            console.log(`S3 Attempt ${attempt} failed, trying again...`);
-            window.retryHighlight(columnName, attempt + 1);
-        } else {
-            console.error(`S3 Failed to highlight column '${columnName}' after ${maxAttempts} attempts`);
-            
-            // Trigger error toast
-            document.body.dispatchEvent(new CustomEvent('showToast', {
-                detail: { message: `Failed to highlight S3 column '${columnName}' - graph may not be ready`, type: 'error' }
-            }));
-        }
-    }, delay);
-};
+// Column analysis functionality is now implemented directly in the HTML elements using _hyperscript
+// This improves maintainability by keeping behavior with the elements
 
 
 

@@ -170,10 +170,26 @@
                               log 'ERROR: Table column not found for:', columnIndex, datasetName
                           end
                           
-                          -- Also trigger graph highlighting
+                          -- Show loading indicator directly
                           set columnName to @data-column-name
-                          log 'Triggering graph highlight for:', columnName
-                          trigger highlightColumn(columnName: columnName) on body">
+                          set datasetName to @data-dataset-name
+                          log 'Analyzing column:', columnName, 'from dataset:', datasetName
+                          
+                          get #analysis-container
+                          set it.innerHTML to `
+                            <div class='flex justify-center items-center h-full'>
+                              <div class='loading loading-spinner loading-lg text-success'></div>
+                              <span class='ml-3'>Analyzing column data...</span>
+                            </div>
+                          `
+                          
+                          -- Trigger success toast
+                          send showToast(message: `Analyzing column '${columnName}' from ${datasetName}`, type: 'info') to body"
+                      hx-get="{% url 'metadata:direct_analyze_column' %}?source={{ dataset.source|urlencode }}&dataset={{ dataset.name|urlencode }}&column={{ column|urlencode }}{% if organization_id %}&organization={{ organization_id }}{% endif %}"
+                      hx-target="#analysis-container"
+                      hx-swap="innerHTML"
+                      hx-trigger="click"
+                      hx-indicator="#analysis-loading-indicator">
                     {{ column }}
                 </div>
                 {% endfor %}
@@ -239,8 +255,24 @@
                                             end
                                         end
                                         
-                                        -- Trigger event for graph highlighting
-                                        trigger highlightColumn(columnName: columnName) on body">
+                                        -- Show loading indicator directly
+                                        log 'Analyzing column:', columnName, 'from dataset:', datasetName
+                                        
+                                        get #analysis-container
+                                        set it.innerHTML to `
+                                          <div class='flex justify-center items-center h-full'>
+                                            <div class='loading loading-spinner loading-lg text-success'></div>
+                                            <span class='ml-3'>Analyzing column data...</span>
+                                          </div>
+                                        `
+                                        
+                                        -- Trigger success toast
+                                        send showToast(message: `Analyzing column '${columnName}' from ${datasetName}`, type: 'info') to body"
+                                    hx-get="{% url 'metadata:direct_analyze_column' %}?source={{ dataset.source|urlencode }}&dataset={{ dataset.name|urlencode }}&column={{ header|urlencode }}{% if organization_id %}&organization={{ organization_id }}{% endif %}"
+                                    hx-target="#analysis-container"
+                                    hx-swap="innerHTML"
+                                    hx-trigger="click"
+                                    hx-indicator="#analysis-loading-indicator">
                                     {{ header }}
                                 </th>
                                 {% endfor %}
@@ -319,7 +351,27 @@
                             </svg>
                             Data Loaded
                         </div>
-                    {% endif %}
+                    {% endif %}// Column analysis functionality
+                    window.analyzeColumn = function(columnName, datasetName) {
+                        console.log(`Analyzing column '${columnName}' from dataset '${datasetName}'`);
+                        
+                        // Show loading indicator
+                        const analysisContainer = document.getElementById('analysis-container');
+                        if (analysisContainer) {
+                            analysisContainer.innerHTML = `
+                                <div class="flex justify-center items-center h-full">
+                                    <div class="loading loading-spinner loading-lg text-success"></div>
+                                    <span class="ml-3">Analyzing column data...</span>https://hyperscript.org/img/hyperscript-cheatsheet.pdf
+                                </div>
+                            `;
+                            
+                            // Trigger success toast
+                            document.body.dispatchEvent(new CustomEvent('showToast', {
+                                detail: { message: `Analyzing column '${columnName}' from ${datasetName}`, type: 'info' }
+                            }));
+                        }
+                    };
+                    
                 </div>
                 
                 <div class="text-xs text-base-content/40 flex items-center gap-1">

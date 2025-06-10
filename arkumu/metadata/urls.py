@@ -91,4 +91,5 @@ urlpatterns = [
     path('direct-analysis/load-more-rows/', direct_data_views.direct_load_more_dataset_rows, name='direct_load_more_dataset_rows'),
     path('direct-analysis/analyze-relationships/', direct_data_views.direct_analyze_dataset_relationships, name='direct_analyze_dataset_relationships'),
     path('direct-analysis/import-preview/', direct_data_views.direct_get_import_preview, name='direct_import_preview'),
+    path('direct-analysis/analyze-column/', direct_data_views.direct_analyze_column, name='direct_analyze_column'),
     ]

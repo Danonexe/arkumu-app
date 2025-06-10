@@ -415,7 +415,8 @@ class S3DirectDataAnalyzer:
             preview_df = sample_df.slice(offset, limit)
             
             # Convert to list of lists for template compatibility (avoiding pandas dependency)
-            data_rows = preview_df.fill_null("").rows()
+            # Ensure we're returning lists, not tuples (which Polars might return)
+            data_rows = [list(row) for row in preview_df.fill_null("").rows()]
             
             # Analyze multi-value columns using the sample we already have
             # Take a smaller subset for analysis if needed
