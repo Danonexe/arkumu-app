@@ -75,23 +75,28 @@
                             set remainingCount to the result
                             log 'Removed dataset from loaded list. Remaining count:', remainingCount
                             
-                            -- Create badge ID (simple: replace spaces and special chars with dashes)
-                            js(datasetName) return datasetName.toLowerCase().replace(/[^a-z0-9]/g, '-') end
-                            set badgeId to 'badge-' + the result
+                            -- Find the corresponding badge by data attributes (more reliable than ID construction)
+                            get .badge
+                            set allBadges to it
+                            set targetBadge to null
                             
-                            -- Find the corresponding badge by ID and restore its state
-                            get #{badgeId}
-                            set badge to it
-                            if badge exists
-                                remove .badge-info from badge
-                                remove .bg-info-focus from badge
-                                remove .text-info-content from badge
-                                remove .font-bold from badge
-                                add .badge-success to badge
-                                add .hover:bg-success-focus to badge
+                            repeat for badge in allBadges
+                                if @data-dataset of badge is datasetName and @data-source of badge is sourceName
+                                    set targetBadge to badge
+                                end
+                            end
+                            
+                            log 'Found badge for dataset:', datasetName, targetBadge
+                            if targetBadge exists
+                                remove .badge-info from targetBadge
+                                remove .bg-info-focus from targetBadge
+                                remove .text-info-content from targetBadge
+                                remove .font-bold from targetBadge
+                                add .badge-success to targetBadge
+                                add .hover:bg-success-focus to targetBadge
                                 log 'Restored badge state for: ' + datasetName
                             else
-                                -- Badge not found, but continue silently
+                                log 'ERROR: Badge not found for dataset:', datasetName
                             end
                             
                             -- Update dataset count badge and UI elements
