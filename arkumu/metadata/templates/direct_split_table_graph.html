@@ -95,8 +95,13 @@
                     id="clear-datasets-btn"
                     _="on click
                        set $loadedDatasets to []
-                       remove .bg-success-focus from <.badge/>
+                       -- Reset all dataset badges to original state
+                       remove .badge-info from <.badge/>
+                       remove .bg-info-focus from <.badge/>
+                       remove .text-info-content from <.badge/>
+                       remove .font-bold from <.badge/>
                        add .badge-success to <.badge/>
+                       add .hover:bg-success-focus to <.badge/>
                        put '' into #table-content
                        show #empty-state
                        hide #dataset-count-badge
@@ -118,26 +123,102 @@
                          _="on click
                              set datasetName to my @data-dataset
                              set sourceName to my @data-source
-                             hide #empty-state
-                             fetch `/metadata/direct-analysis/dataset-card/?source=${encodeURIComponent(sourceName)}&dataset_name=${encodeURIComponent(datasetName)}&organization={{ organization_id }}`
-                             put it at the start of #table-content
+                             set datasetKey to sourceName + '::' + datasetName
                              
-                             -- Track loaded datasets for relationship analysis (using global variable)
+                             -- Initialize loaded datasets array if needed
                              if $loadedDatasets is undefined
                                  set $loadedDatasets to []
                              end
                              
-                             -- Add this dataset if not already loaded
-                             set datasetKey to sourceName + '::' + datasetName
-                             if datasetKey is not in $loadedDatasets
+                             -- Check if dataset is already loaded (toggle behavior)
+                             if datasetKey is in $loadedDatasets
+                                 log 'Dataset already loaded, removing:', datasetName
+                                 
+                                 -- Remove from loaded datasets array
+                                 js($loadedDatasets, datasetKey) 
+                                     const index = $loadedDatasets.indexOf(datasetKey);
+                                     if (index > -1) {
+                                         $loadedDatasets.splice(index, 1);
+                                     }
+                                     return $loadedDatasets.length;
+                                 end
+                                 set remainingCount to the result
+                                 
+                                 -- Reset badge to unloaded state
+                                 remove .badge-info from me
+                                 remove .bg-info-focus from me
+                                 remove .text-info-content from me
+                                 remove .font-bold from me
+                                 add .badge-success to me
+                                 add .hover:bg-success-focus to me
+                                 
+                                 -- Find and remove the dataset card using data attributes
+                                 get .card in #table-content
+                                 set allCards to it
+                                 set datasetCard to null
+                                 
+                                 repeat for card in allCards
+                                     if @data-dataset of card is datasetName and @data-source of card is sourceName
+                                         set datasetCard to card
+                                     end
+                                 end
+                                 
+                                 log 'Found dataset card:', datasetCard
+                                 if datasetCard exists
+                                     add .opacity-0 to datasetCard
+                                     add .scale-95 to datasetCard
+                                     wait 300ms
+                                     remove datasetCard
+                                     log 'Removed dataset card for:', datasetName
+                                 else
+                                     log 'ERROR: Dataset card not found for removal:', datasetName
+                                 end
+                                 
+                                 -- Update UI elements based on remaining count
+                                 if remainingCount > 0
+                                     put remainingCount into #dataset-count-badge
+                                     if #loaded-count exists
+                                         put remainingCount into #loaded-count
+                                     end
+                                     if remainingCount < 2
+                                         if #loaded-datasets-analysis exists
+                                             hide #loaded-datasets-analysis
+                                         end
+                                         if #quick-analyze-btn exists
+                                             hide #quick-analyze-btn
+                                         end
+                                     end
+                                 else
+                                     hide #dataset-count-badge
+                                     hide #clear-datasets-btn
+                                     show #empty-state
+                                     if #loaded-datasets-analysis exists
+                                         hide #loaded-datasets-analysis
+                                     end
+                                     if #quick-analyze-btn exists
+                                         hide #quick-analyze-btn
+                                     end
+                                 end
+                                 
+                             else
+                                 log 'Loading new dataset:', datasetName
+                                 
+                                 -- Load the dataset
+                                 hide #empty-state
+                                 fetch `/metadata/direct-analysis/dataset-card/?source=${encodeURIComponent(sourceName)}&dataset_name=${encodeURIComponent(datasetName)}&organization={{ organization_id }}`
+                                 put it at the start of #table-content
+                                 
+                                 -- Add to loaded datasets array
                                  append datasetKey to $loadedDatasets
+                                 
+                                 -- Update badge to loaded state
+                                 remove .badge-success from me
+                                 remove .hover:bg-success-focus from me
+                                 add .badge-info to me
+                                 add .bg-info-focus to me
+                                 add .text-info-content to me
+                                 add .font-bold to me
                              end
-                             
-                             -- Update badge states
-                             remove .bg-success-focus from <.badge/>
-                             add .badge-success to <.badge/>
-                             remove .badge-success from me
-                             add .bg-success-focus to me
                              
                              -- Update dataset count badge and clear button
                              if $loadedDatasets.length > 0
@@ -173,21 +254,6 @@
                                  if #quick-analyze-btn exists
                                      hide #quick-analyze-btn
                                  end
-                             end
-                             
-                             -- Trigger relationship analysis if we have multiple datasets and relationship tab is active
-                             if $loadedDatasets.length > 1 and #relationship-tab.classList.contains('tab-active')
-                                 fetch `/metadata/direct-analysis/relationship-discovery/?organization={{ organization_id|default:"" }}&auto_discover=true`
-                                   with {'HX-Request': 'true'}
-                                 put it into #relationship-content
-                             end
-                             
-                             -- If relationship panel content is already loaded, refresh it with new dataset
-                             if #relationship-content.innerHTML.trim() is not '' and $loadedDatasets.length > 1
-                                 wait 500ms -- Give table card time to load
-                                 fetch `/metadata/direct-analysis/relationship-discovery/?organization={{ organization_id|default:"" }}&auto_discover=true`
-                                   with {'HX-Request': 'true'}
-                                 put it into #relationship-content
                              end">
                         {{ dataset.name }}
                     </div>
@@ -248,23 +314,16 @@
                                     Column Analysis
                                 </a>
                                 <a class="tab" id="relationship-tab"
-                                   _="on click
-                                      remove .tab-active from <.tab/>
-                                      add .tab-active to me
-                                      hide #column-panel
-                                      show #relationship-panel
-                                      if #relationship-content.innerHTML.trim() is ''
-                                        fetch '/metadata/direct-analysis/relationship-discovery/?organization={{ organization_id|default:"" }}'
-                                          with {'HX-Request': 'true'}
-                                        put it into #relationship-content
-                                      end
-                                      -- Auto-analyze if we have multiple loaded datasets
-                                      if $loadedDatasets is not undefined and $loadedDatasets.length > 1
-                                        wait 200ms
-                                        fetch `/metadata/direct-analysis/relationship-discovery/?organization={{ organization_id|default:"" }}&auto_discover=true`
-                                          with {'HX-Request': 'true'}
-                                        put it into #relationship-content
-                                      end">
+                                                      _="on click
+                      remove .tab-active from <.tab/>
+                      add .tab-active to me
+                      hide #column-panel
+                      show #relationship-panel
+                      if #relationship-content.innerHTML.trim() is ''
+                        fetch '/metadata/direct-analysis/relationship-discovery/?organization={{ organization_id|default:"" }}'
+                          with {'HX-Request': 'true'}
+                        put it into #relationship-content
+                      end">
                                     Cross-Dataset Relationships
                                     <span id="dataset-count-badge" class="badge badge-xs badge-success ml-1" style="display: none;">0</span>
                                 </a>

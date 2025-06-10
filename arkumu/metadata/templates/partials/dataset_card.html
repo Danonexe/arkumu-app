@@ -5,6 +5,7 @@
 <div class="card bg-base-100 shadow-lg border border-base-300 transition-all duration-300 hover:scale-[1.02]"
          id="dataset-{{ dataset.name|slugify }}"
     data-dataset="{{ dataset.name }}"
+    data-source="{{ dataset.source }}"
     data-dataset-id="{{ dataset.name|slugify }}"
 
      {% if not dataset.preview %}
@@ -51,10 +52,28 @@
                 <button class="btn btn-ghost btn-sm btn-circle text-error hover:bg-error hover:text-error-content"
                         title="Close dataset"
                         _="on click
-                            -- Get dataset name to restore badge state
+                            -- Get dataset name and source to restore badge state
                             get @data-dataset of closest .card
                             set datasetName to it
+                            get @data-source of closest .card
+                            set sourceName to it
                             log 'Closing dataset: ' + datasetName
+                            
+                            -- Update the global loadedDatasets array to remove this dataset
+                            if $loadedDatasets is undefined
+                                set $loadedDatasets to []
+                            end
+                            set datasetKey to sourceName + '::' + datasetName
+                            -- Remove this dataset from the loaded datasets array
+                            js($loadedDatasets, datasetKey) 
+                                const index = $loadedDatasets.indexOf(datasetKey);
+                                if (index > -1) {
+                                    $loadedDatasets.splice(index, 1);
+                                }
+                                return $loadedDatasets.length;
+                            end
+                            set remainingCount to the result
+                            log 'Removed dataset from loaded list. Remaining count:', remainingCount
                             
                             -- Create badge ID (simple: replace spaces and special chars with dashes)
                             js(datasetName) return datasetName.toLowerCase().replace(/[^a-z0-9]/g, '-') end
@@ -65,10 +84,40 @@
                             set badge to it
                             if badge exists
                                 remove .badge-info from badge
-                                add .badge-primary to badge
+                                remove .bg-info-focus from badge
+                                remove .text-info-content from badge
+                                remove .font-bold from badge
+                                add .badge-success to badge
+                                add .hover:bg-success-focus to badge
                                 log 'Restored badge state for: ' + datasetName
                             else
                                 -- Badge not found, but continue silently
+                            end
+                            
+                            -- Update dataset count badge and UI elements
+                            if remainingCount > 0
+                                put remainingCount into #dataset-count-badge
+                                if #loaded-count exists
+                                    put remainingCount into #loaded-count
+                                end
+                                -- Hide relationship analysis elements if less than 2 datasets
+                                if remainingCount < 2
+                                    if #loaded-datasets-analysis exists
+                                        hide #loaded-datasets-analysis
+                                    end
+                                    if #quick-analyze-btn exists
+                                        hide #quick-analyze-btn
+                                    end
+                                end
+                            else
+                                hide #dataset-count-badge
+                                hide #clear-datasets-btn
+                                if #loaded-datasets-analysis exists
+                                    hide #loaded-datasets-analysis
+                                end
+                                if #quick-analyze-btn exists
+                                    hide #quick-analyze-btn
+                                end
                             end
                             
                             -- Remove the dataset card with smooth animation
@@ -152,14 +201,15 @@
                               log 'Table container:', tableContainer
                               
                               -- Reset all table column highlights first
-                              remove .bg-primary from .column-header in tableContainer
-                              remove .text-primary-content from .column-header in tableContainer
+                              remove .bg-info from .column-header in tableContainer
+                              remove .bg-info-focus from .column-header in tableContainer
+                              remove .text-info-content from .column-header in tableContainer
                               remove .font-bold from .column-header in tableContainer
                               log 'Reset other column highlights'
                               
                               -- Highlight the table column
-                              add .bg-primary to tableColumn
-                              add .text-primary-content to tableColumn
+                              add .bg-info to tableColumn
+                              add .text-info-content to tableColumn
                               add .font-bold to tableColumn
                               log 'Added highlighting classes to column'
                               
@@ -221,11 +271,12 @@
                                         
                                         -- Reset all column highlights first
                                         remove .bg-info from .column-header in closest .table-container
+                                        remove .bg-info-focus from .column-header in closest .table-container
                                         remove .text-info-content from .column-header in closest .table-container
                                         remove .font-bold from .column-header in closest .table-container
                                         
                                         -- Highlight this column
-                                        add .bg-info-focus to me
+                                        add .bg-info to me
                                         add .text-info-content to me
                                         add .font-bold to me
                                         
