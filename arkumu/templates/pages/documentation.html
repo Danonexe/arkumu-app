@@ -1,0 +1,537 @@
+{% extends "base2.html" %}
+{% load static %}
+
+{% block title %}Arkumu Components Documentation{% endblock title %}
+
+{% block content %}
+<div class="w-full min-h-screen transition-colors duration-300
+     bg-arkumu-light
+     theme-dark:bg-arkumu-dark 
+     theme-dark:text-arkumu-light">
+  <div class="container mx-auto px-6 py-12 max-w-4xl">
+    
+    <!-- Header with Theme Switcher -->
+    <div class="flex justify-between items-center mb-8">
+      <h1 class="text-4xl font-bold transition-colors text-arkumu-dark theme-dark:text-arkumu-light theme-blue:text-arkumu-blue">
+        Arkumu Components Documentation
+      </h1>
+      
+      <!-- Theme Switcher -->
+      {% include 'components/header/theme_buttons.html' %}
+    </div>
+
+    <!-- Table of Contents -->
+    <nav class="mb-12 p-6 rounded-lg border transition-colors 
+                bg-white border-arkumu-dark
+                theme-dark:bg-arkumu-dark theme-dark:border-arkumu-light 
+                theme-blue:border-arkumu-blue">
+      <h2 class="text-xl font-semibold mb-4">Table of Contents</h2>
+      <ul class="space-y-2">
+        <li><a href="#overview" class="text-blue-600 hover:underline">1. Overview</a></li>
+        <li><a href="#component-catalog" class="text-blue-600 hover:underline">2. Component Catalog Location</a></li>
+        <li><a href="#theme-system" class="text-blue-600 hover:underline">3. Theme System</a></li>
+        <li><a href="#implementation" class="text-blue-600 hover:underline">4. Component Implementation</a></li>
+        <li><a href="#variables" class="text-blue-600 hover:underline">5. Passing Variables</a></li>
+        <li><a href="#examples" class="text-blue-600 hover:underline">6. Practical Examples</a></li>
+      </ul>
+    </nav>
+    </nav>
+
+    <!-- Overview Section -->
+    <section id="overview" class="mb-12">
+      <h2 class="text-2xl font-semibold mb-6 pb-2 border-b transition-colors 
+                 border-arkumu-dark theme-dark:border-arkumu-light theme-blue:border-arkumu-blue">
+        1. Overview
+      </h2>
+      <p class="mb-4">
+        The Arkumu component system is a collection of reusable UI components built with Django templates and Tailwind CSS. 
+        Each component supports multiple themes (Light, Dark, Blue) and can be easily customized through variable passing.
+      </p>
+      <p class="mb-4">
+        <strong>Key Features:</strong>
+      </p>
+      <ul class="list-disc pl-6 space-y-2">
+        <li>Multi-theme support with seamless switching</li>
+        <li>Modular component architecture</li>
+        <li>Consistent design language</li>
+        <li>Easy variable passing for customization</li>
+        <li>Responsive design built-in</li>
+      </ul>
+    </section>
+
+    <!-- Component Catalog Section -->
+    <section id="component-catalog" class="mb-12">
+      <h2 class="text-2xl font-semibold mb-6 pb-2 border-b transition-colors 
+                 border-arkumu-dark theme-dark:border-arkumu-light theme-blue:border-arkumu-blue">
+        2. Component Catalog Location
+      </h2>
+      <p class="mb-4">
+        All components are showcased in the <strong>Components Page</strong>, which serves as your complete reference guide. 
+        This page displays every component with its exact file path and usage examples.
+      </p>
+      
+      <div class="p-4 border-l-4 border-blue-400 mb-6 transition-colors
+                  bg-blue-50 
+                  theme-dark:bg-gray-800 
+                  theme-blue:bg-blue-50">
+        <p class="font-semibold">📍 Component Paths Structure:</p>
+        <div class="mt-2 p-4 rounded transition-colors
+                    bg-gray-900 text-gray-100
+                    theme-dark:bg-gray-950 theme-dark:border theme-dark:border-arkumu-light
+                    theme-blue:border theme-blue:border-arkumu-blue">
+          <pre class="text-sm"><code>components/
+├── buttons/
+│   ├── primary_button.html
+│   ├── secondary_button.html
+│   ├── small_secondary_button.html
+│   ├── primary_pill.html
+│   ├── secondary_pill.html
+│   └── themed_button.html
+├── header/
+│   ├── theme_buttons.html
+│   ├── search_button.html
+│   └── menu_button.html
+├── inputs/
+│   ├── navbar.html
+│   ├── tab_navigation.html
+│   ├── pagination.html
+│   ├── filter.html
+│   └── text_field.html
+├── text/
+│   ├── arkumu_text.html
+│   ├── projekt_title.html
+│   └── text_dotted_line.html
+├── labels/
+│   ├── tag.html
+│   └── secondary_tag.html
+├── cards/
+│   ├── card.html
+│   └── card_grid.html
+├── media/
+│   ├── big_media.html
+│   ├── small_media.html
+│   └── audio.html
+└── events/
+    ├── event_item.html
+    └── event_list.html</code></pre>
+        </div>
+      </div>
+      
+      <p>
+        Each component in the catalog shows its exact path, making it easy to reference and include in your templates.
+      </p>
+    </section>
+
+    <!-- Theme System Section -->
+    <section id="theme-system" class="mb-12">
+      <h2 class="text-2xl font-semibold mb-6 pb-2 border-b transition-colors 
+                 border-arkumu-dark theme-dark:border-arkumu-light theme-blue:border-arkumu-blue">
+        3. Theme System
+      </h2>
+      
+      <h3 class="text-lg font-medium mb-4">How Theme Switching Works</h3>
+      <p class="mb-4">
+        The theme system uses CSS classes applied to the <code class="px-2 py-1 rounded text-sm transition-colors
+                                                                     bg-gray-200 
+                                                                     theme-dark:bg-gray-700 theme-dark:text-arkumu-light
+                                                                     theme-blue:bg-blue-100 theme-blue:text-arkumu-blue">body</code> element. 
+        Components automatically adapt their appearance based on the active theme class.
+      </p>
+
+      <h4 class="font-medium mb-3">Theme Classes:</h4>
+      <ul class="list-disc pl-6 mb-6 space-y-1">
+        <li><code class="px-2 py-1 rounded text-sm transition-colors
+                         bg-gray-200 
+                         theme-dark:bg-gray-700 theme-dark:text-arkumu-light
+                         theme-blue:bg-blue-100 theme-blue:text-arkumu-blue">theme-light</code> - Default light theme</li>
+        <li><code class="px-2 py-1 rounded text-sm transition-colors
+                         bg-gray-200 
+                         theme-dark:bg-gray-700 theme-dark:text-arkumu-light
+                         theme-blue:bg-blue-100 theme-blue:text-arkumu-blue">theme-dark</code> - Dark theme with inverted colors</li>
+        <li><code class="px-2 py-1 rounded text-sm transition-colors
+                         bg-gray-200 
+                         theme-dark:bg-gray-700 theme-dark:text-arkumu-light
+                         theme-blue:bg-blue-100 theme-blue:text-arkumu-blue">theme-blue</code> - Blue accent theme</li>
+      </ul>
+
+      <h4 class="font-medium mb-3">Theme Buttons Implementation:</h4>
+      <div class="p-4 rounded transition-colors mb-6
+                  bg-gray-900 text-gray-100
+                  theme-dark:bg-gray-950 theme-dark:border theme-dark:border-arkumu-light
+                  theme-blue:border theme-blue:border-arkumu-blue">
+        <pre class="text-sm overflow-x-auto"><code>&lt;!-- Theme Switcher Buttons --&gt;
+&lt;div class="flex space-x-4 p-4 rounded-lg"&gt;
+  &lt;button type="button" 
+    class="theme-button px-4 py-1.5 rounded-full font-mono transition-colors
+      bg-arkumu-light text-arkumu-blue border border-arkumu-blue hover:bg-blue-50
+      theme-dark:bg-transparent theme-dark:text-arkumu-blue 
+      theme-blue:bg-arkumu-light theme-blue:text-arkumu-blue"
+    data-theme="blue"&gt;
+    Blue
+  &lt;/button&gt;
+  
+  &lt;button type="button" 
+    class="theme-button px-4 py-1.5 rounded-full font-mono transition-colors
+      bg-arkumu-light text-arkumu-dark border border-arkumu-dark hover:bg-gray-100
+      theme-dark:bg-transparent theme-dark:text-arkumu-light 
+      theme-blue:bg-arkumu-light theme-blue:text-arkumu-blue"
+    data-theme="light"&gt;
+    Light
+  &lt;/button&gt;
+  
+  &lt;button type="button" 
+    class="theme-button px-4 py-1.5 rounded-full font-mono transition-colors
+      bg-arkumu-dark text-arkumu-light border-none hover:bg-arkumu-dark-hover
+      theme-dark:bg-white theme-dark:text-arkumu-dark theme-dark:border 
+      theme-blue:bg-arkumu-dark theme-blue:text-arkumu-light"
+    data-theme="dark"&gt;
+    Dark
+  &lt;/button&gt;
+&lt;/div&gt;</code></pre>
+      </div>
+
+      <h4 class="font-medium mb-3">JavaScript Theme Controller:</h4>
+      <div class="p-4 rounded transition-colors mb-6
+                  bg-gray-900 text-gray-100
+                  theme-dark:bg-gray-950 theme-dark:border theme-dark:border-arkumu-light
+                  theme-blue:border theme-blue:border-arkumu-blue">
+        <pre class="text-sm overflow-x-auto"><code>// Theme switcher functionality
+document.addEventListener('DOMContentLoaded', function() {
+  const themeButtons = document.querySelectorAll('[data-theme]');
+  
+  themeButtons.forEach(button => {
+    button.addEventListener('click', function() {
+      const theme = this.getAttribute('data-theme');
+      
+      // Apply theme class to body
+      document.body.classList.remove('theme-dark', 'theme-light', 'theme-blue');
+      document.body.classList.add(`theme-${theme}`);
+      
+      // Update button states
+      themeButtons.forEach(btn => {
+        btn.classList.remove('ring-2', 'ring-white');
+      });
+      this.classList.add('ring-2', 'ring-white');
+      
+      // Store preference
+      localStorage.setItem('arkumu-theme', theme);
+    });
+  });
+  
+  // Apply saved theme on page load
+  const savedTheme = localStorage.getItem('arkumu-theme') || 'light';
+  document.body.classList.add(`theme-${savedTheme}`);
+});</code></pre>
+      </div>
+    </section>
+
+    <!-- Component Implementation Section -->
+    <section id="implementation" class="mb-12">
+      <h2 class="text-2xl font-semibold mb-6 pb-2 border-b transition-colors 
+                 border-arkumu-dark theme-dark:border-arkumu-light theme-blue:border-arkumu-blue">
+        4. Component Implementation
+      </h2>
+      
+      <h3 class="text-lg font-medium mb-4">Including Components in Templates</h3>
+      <p class="mb-4">
+        Components are included using Django's <code class="px-2 py-1 rounded text-sm transition-colors
+                                                             bg-gray-200 
+                                                             theme-dark:bg-gray-700 theme-dark:text-arkumu-light
+                                                             theme-blue:bg-blue-100 theme-blue:text-arkumu-blue">{% templatetag openblock %} include {% templatetag closeblock %}</code> template tag. 
+        The path corresponds to the component's location in the file structure.
+      </p>
+
+      <h4 class="font-medium mb-3">Basic Syntax:</h4>
+      <div class="p-4 rounded transition-colors mb-6
+                  bg-gray-900 text-gray-100
+                  theme-dark:bg-gray-950 theme-dark:border theme-dark:border-arkumu-light
+                  theme-blue:border theme-blue:border-arkumu-blue">
+        <pre class="text-sm"><code>{% templatetag openblock %} include 'components/category/component_name.html' {% templatetag closeblock %}</code></pre>
+      </div>
+
+      <h4 class="font-medium mb-3">With Variables:</h4>
+      <div class="p-4 rounded transition-colors mb-6
+                  bg-gray-900 text-gray-100
+                  theme-dark:bg-gray-950 theme-dark:border theme-dark:border-arkumu-light
+                  theme-blue:border theme-blue:border-arkumu-blue">
+        <pre class="text-sm"><code>{% templatetag openblock %} include 'components/category/component_name.html' with variable1="value1" variable2="value2" {% templatetag closeblock %}</code></pre>
+      </div>
+
+      <h3 class="text-lg font-medium mb-4 mt-8">Theme-Aware Component Structure</h3>
+      <p class="mb-4">
+        Each component uses Tailwind CSS classes with theme prefixes to support automatic theme switching:
+      </p>
+      
+      <div class="p-4 rounded transition-colors mb-6
+                  bg-gray-900 text-gray-100
+                  theme-dark:bg-gray-950 theme-dark:border theme-dark:border-arkumu-light
+                  theme-blue:border theme-blue:border-arkumu-blue">
+        <pre class="text-sm overflow-x-auto"><code>&lt;!-- Example: Theme-aware button --&gt;
+&lt;button class="px-4 py-2 transition-colors
+               border border-arkumu-dark text-arkumu-dark
+               theme-dark:border-arkumu-light theme-dark:text-arkumu-light
+               theme-blue:border-arkumu-blue theme-blue:text-arkumu-blue"&gt;
+  {% templatetag openvariable %} button_text|default:"Default Text" {% templatetag closevariable %}
+&lt;/button&gt;</code></pre>
+      </div>
+
+      <h4 class="font-medium mb-3">Theme Class Patterns:</h4>
+      <ul class="list-disc pl-6 space-y-2 mb-6">
+        <li><code class="px-2 py-1 rounded text-sm transition-colors bg-gray-200 theme-dark:bg-gray-700 theme-dark:text-arkumu-light theme-blue:bg-blue-100 theme-blue:text-arkumu-blue">border-arkumu-dark</code> → <code class="px-2 py-1 rounded text-sm transition-colors bg-gray-200 theme-dark:bg-gray-700 theme-dark:text-arkumu-light theme-blue:bg-blue-100 theme-blue:text-arkumu-blue">theme-dark:border-arkumu-light</code></li>
+        <li><code class="px-2 py-1 rounded text-sm transition-colors bg-gray-200 theme-dark:bg-gray-700 theme-dark:text-arkumu-light theme-blue:bg-blue-100 theme-blue:text-arkumu-blue">text-arkumu-dark</code> → <code class="px-2 py-1 rounded text-sm transition-colors bg-gray-200 theme-dark:bg-gray-700 theme-dark:text-arkumu-light theme-blue:bg-blue-100 theme-blue:text-arkumu-blue">theme-dark:text-arkumu-light</code></li>
+        <li><code class="px-2 py-1 rounded text-sm transition-colors bg-gray-200 theme-dark:bg-gray-700 theme-dark:text-arkumu-light theme-blue:bg-blue-100 theme-blue:text-arkumu-blue">bg-arkumu-light</code> → <code class="px-2 py-1 rounded text-sm transition-colors bg-gray-200 theme-dark:bg-gray-700 theme-dark:text-arkumu-light theme-blue:bg-blue-100 theme-blue:text-arkumu-blue">theme-dark:bg-arkumu-dark</code></li>
+        <li>Blue theme uses <code class="px-2 py-1 rounded text-sm transition-colors bg-gray-200 theme-dark:bg-gray-700 theme-dark:text-arkumu-light theme-blue:bg-blue-100 theme-blue:text-arkumu-blue">theme-blue:*-arkumu-blue</code> for accent colors</li>
+      </ul>
+    </section>
+
+    <!-- Variables Section -->
+    <section id="variables" class="mb-12">
+      <h2 class="text-2xl font-semibold mb-6 pb-2 border-b transition-colors 
+                 border-arkumu-dark theme-dark:border-arkumu-light theme-blue:border-arkumu-blue">
+        5. Passing Variables to Components
+      </h2>
+      
+      <h3 class="text-lg font-medium mb-4">Variable Syntax</h3>
+      <p class="mb-4">
+        Variables are passed using the <code class="px-2 py-1 rounded text-sm transition-colors
+                                                     bg-gray-200 
+                                                     theme-dark:bg-gray-700 theme-dark:text-arkumu-light
+                                                     theme-blue:bg-blue-100 theme-blue:text-arkumu-blue">with</code> keyword in the include statement:
+      </p>
+      
+      <div class="p-4 rounded transition-colors mb-6
+                  bg-gray-900 text-gray-100
+                  theme-dark:bg-gray-950 theme-dark:border theme-dark:border-arkumu-light
+                  theme-blue:border theme-blue:border-arkumu-blue">
+        <pre class="text-sm"><code>{% templatetag openblock %} include 'components/buttons/primary_button.html' with button_text="Click Me" {% templatetag closeblock %}</code></pre>
+      </div>
+
+      <h3 class="text-lg font-medium mb-4">Default Values</h3>
+      <p class="mb-4">
+        Components use Django's <code class="px-2 py-1 rounded text-sm transition-colors
+                                             bg-gray-200 
+                                             theme-dark:bg-gray-700 theme-dark:text-arkumu-light
+                                             theme-blue:bg-blue-100 theme-blue:text-arkumu-blue">default</code> filter to provide fallback values:
+      </p>
+      
+      <div class="p-4 rounded transition-colors mb-6
+                  bg-gray-900 text-gray-100
+                  theme-dark:bg-gray-950 theme-dark:border theme-dark:border-arkumu-light
+                  theme-blue:border theme-blue:border-arkumu-blue">
+        <pre class="text-sm"><code>&lt;!-- Inside component template --&gt;
+&lt;button&gt;{% templatetag openvariable %} button_text|default:"Default Button Text" {% templatetag closevariable %}&lt;/button&gt;</code></pre>
+      </div>
+
+      <h3 class="text-lg font-medium mb-4">Multiple Variables</h3>
+      <p class="mb-4">
+        Pass multiple variables by separating them with spaces:
+      </p>
+      
+      <div class="p-4 rounded transition-colors mb-6
+                  bg-gray-900 text-gray-100
+                  theme-dark:bg-gray-950 theme-dark:border theme-dark:border-arkumu-light
+                  theme-blue:border theme-blue:border-arkumu-blue">
+        <pre class="text-sm overflow-x-auto"><code>{% templatetag openblock %} include 'components/cards/card.html' with title="Project Title" subtitle="Project Subtitle" year="2024" institution="University Name" button_text="View Project" {% templatetag closeblock %}</code></pre>
+      </div>
+
+      <h3 class="text-lg font-medium mb-4">Complex Variables</h3>
+      <p class="mb-4">
+        For multiple contributors or categories, use numbered variables:
+      </p>
+      
+      <div class="p-4 rounded transition-colors mb-6
+                  bg-gray-900 text-gray-100
+                  theme-dark:bg-gray-950 theme-dark:border theme-dark:border-arkumu-light
+                  theme-blue:border theme-blue:border-arkumu-blue">
+        <pre class="text-sm overflow-x-auto"><code>{% templatetag openblock %} include 'components/cards/card.html' with contributor1_name="John Doe" contributor1_role="Designer" contributor2_name="Jane Smith" contributor2_role="Developer" category1="Web Design" category2="Frontend Development" {% templatetag closeblock %}</code></pre>
+      </div>
+    </section>
+
+    <!-- Examples Section -->
+    <section id="examples" class="mb-12">
+      <h2 class="text-2xl font-semibold mb-6 pb-2 border-b transition-colors 
+                 border-arkumu-dark theme-dark:border-arkumu-light theme-blue:border-arkumu-blue">
+        6. Practical Examples
+      </h2>
+      
+      <h3 class="text-lg font-medium mb-4">Example 1: Basic Button</h3>
+      <div class="p-4 rounded-lg mb-4 transition-colors
+                  bg-gray-50 
+                  theme-dark:bg-gray-800 
+                  theme-blue:bg-blue-50">
+        <div class="p-4 rounded transition-colors mb-4
+                    bg-gray-900 text-gray-100
+                    theme-dark:bg-gray-950 theme-dark:border theme-dark:border-arkumu-light
+                    theme-blue:border theme-blue:border-arkumu-blue">
+          <pre class="text-sm"><code>{% templatetag openblock %} include 'components/buttons/primary_button.html' with button_text="Save Changes" {% templatetag closeblock %}</code></pre>
+        </div>
+        <p class="text-sm">Path: <code class="px-2 py-1 rounded text-sm transition-colors
+                                            bg-gray-200 
+                                            theme-dark:bg-gray-700 theme-dark:text-arkumu-light
+                                            theme-blue:bg-blue-100 theme-blue:text-arkumu-blue">components/buttons/primary_button.html</code></p>
+      </div>
+
+      <h3 class="text-lg font-medium mb-4">Example 2: Project Card with Full Data</h3>
+      <div class="p-4 rounded-lg mb-4 transition-colors
+                  bg-gray-50 
+                  theme-dark:bg-gray-800 
+                  theme-blue:bg-blue-50">
+        <div class="p-4 rounded transition-colors mb-4
+                    bg-gray-900 text-gray-100
+                    theme-dark:bg-gray-950 theme-dark:border theme-dark:border-arkumu-light
+                    theme-blue:border theme-blue:border-arkumu-blue">
+          <pre class="text-sm overflow-x-auto"><code>{% templatetag openblock %} include 'components/cards/card.html' with year="2024" institution="Folkwang Universität der Kunst" title="Digital Art Project" subtitle="Interactive Installation" contributor1_name="Maria Schmidt" contributor1_role="Lead Designer" contributor2_name="Prof. Dr. Weber" contributor2_role="Supervisor" category1="Digital Art" category2="Interactive Design" button_text="View Details" {% templatetag closeblock %}</code></pre>
+        </div>
+        <p class="text-sm">Path: <code class="px-2 py-1 rounded text-sm transition-colors
+                                            bg-gray-200 
+                                            theme-dark:bg-gray-700 theme-dark:text-arkumu-light
+                                            theme-blue:bg-blue-100 theme-blue:text-arkumu-blue">components/cards/card.html</code></p>
+      </div>
+
+      <h3 class="text-lg font-medium mb-4">Example 3: Search Bar</h3>
+      <div class="p-4 rounded-lg mb-4 transition-colors
+                  bg-gray-50 
+                  theme-dark:bg-gray-800 
+                  theme-blue:bg-blue-50">
+        <div class="p-4 rounded transition-colors mb-4
+                    bg-gray-900 text-gray-100
+                    theme-dark:bg-gray-950 theme-dark:border theme-dark:border-arkumu-light
+                    theme-blue:border theme-blue:border-arkumu-blue">
+          <pre class="text-sm"><code>{% templatetag openblock %} include 'components/inputs/navbar.html' with placeholder_text="Search projects..." {% templatetag closeblock %}</code></pre>
+        </div>
+        <p class="text-sm">Path: <code class="px-2 py-1 rounded text-sm transition-colors
+                                            bg-gray-200 
+                                            theme-dark:bg-gray-700 theme-dark:text-arkumu-light
+                                            theme-blue:bg-blue-100 theme-blue:text-arkumu-blue">components/inputs/navbar.html</code></p>
+      </div>
+
+      <h3 class="text-lg font-medium mb-4">Example 4: Event Item</h3>
+      <div class="p-4 rounded-lg mb-4 transition-colors
+                  bg-gray-50 
+                  theme-dark:bg-gray-800 
+                  theme-blue:bg-blue-50">
+        <div class="p-4 rounded transition-colors mb-4
+                    bg-gray-900 text-gray-100
+                    theme-dark:bg-gray-950 theme-dark:border theme-dark:border-arkumu-light
+                    theme-blue:border theme-blue:border-arkumu-blue">
+          <pre class="text-sm overflow-x-auto"><code>{% templatetag openblock %} include 'components/events/event_item.html' with beginn_ende="2024-03-15 to 2024-03-20" ereignistyp="Workshop" ereignistitel="3D Modeling Fundamentals" akteur1="Prof. Johnson" akteur2="Dr. Anderson" button_text="Register Now" {% templatetag closeblock %}</code></pre>
+        </div>
+        <p class="text-sm">Path: <code class="px-2 py-1 rounded text-sm transition-colors
+                                            bg-gray-200 
+                                            theme-dark:bg-gray-700 theme-dark:text-arkumu-light
+                                            theme-blue:bg-blue-100 theme-blue:text-arkumu-blue">components/events/event_item.html</code></p>
+      </div>
+    </section>
+
+    <!-- Custom CSS Section -->
+    <section id="custom-css" class="mb-12">
+      <h2 class="text-2xl font-semibold mb-6 pb-2 border-b transition-colors 
+                 border-arkumu-dark theme-dark:border-arkumu-light theme-blue:border-arkumu-blue">
+        7. Custom CSS Usage
+      </h2>
+      
+      <h3 class="text-lg font-medium mb-4">When Custom CSS is Needed</h3>
+      <p class="mb-4">
+        The Arkumu component system is built primarily with Tailwind CSS classes to maintain consistency and leverage the utility-first approach. 
+        However, there is <strong>one specific case</strong> where custom CSS was necessary: the <strong>Tag component</strong>.
+      </p>
+
+      <h4 class="font-medium mb-3">Tag Component Special Case</h4>
+      <div class="p-4 border-l-4 border-yellow-400 mb-6 transition-colors
+                  bg-yellow-50 
+                  theme-dark:bg-yellow-900 
+                  theme-blue:bg-blue-50 theme-blue:border-blue-400">
+        <p class="font-semibold mb-2">⚠️ Why Custom CSS was Required:</p>
+        <p class="mb-4">
+          The Tag component needed a <strong>text highlight effect</strong> where the background wraps each individual line of text, 
+          rather than creating a single rectangular background. This specific visual effect cannot be achieved with standard Tailwind utilities.
+        </p>
+      </div>
+
+      <h4 class="font-medium mb-3">Custom CSS Implementation:</h4>
+      <div class="p-4 rounded transition-colors mb-6
+                  bg-gray-900 text-gray-100
+                  theme-dark:bg-gray-950 theme-dark:border theme-dark:border-arkumu-light
+                  theme-blue:border theme-blue:border-arkumu-blue">
+        <pre class="text-sm overflow-x-auto"><code>&lt;!-- Text Highlight Component with Background that Wraps Each Line --&gt;
+&lt;style&gt;
+  .highlight-text {
+    display: inline;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+    padding: 0.25rem 0.5rem;
+    line-height: 2.2; /* Espacio entre líneas para que no se superpongan */
+    
+    /* Colores por tema */
+    background-color: #1E1E1E;
+    color: #FAF9F6;
+  }
+  
+  .theme-dark .highlight-text {
+    background-color: #FAF9F6;
+    color: #1E1E1E;
+  }
+  
+  .theme-blue .highlight-text {
+    background-color: #2B7EF2;
+    color: #FAF9F6;
+  }
+&lt;/style&gt;
+
+&lt;p&gt;
+  &lt;span class="highlight-text font-mono text-sm md:text-base lg:text-lg xl:text-xl leading-[2.2] md:leading-[2.2] lg:leading-[2.2] xl:leading-[2.5]"&gt;
+    {% templatetag openvariable %} label_text|default:"Este es un texto de ejemplo que se ajustará por líneas, con el fondo adaptándose al contenido exacto en cada línea." {% templatetag closevariable %}
+  &lt;/span&gt;
+&lt;/p&gt;</code></pre>
+      </div>
+
+      <h4 class="font-medium mb-3">Key CSS Properties Explained:</h4>
+      <ul class="list-disc pl-6 space-y-2 mb-6">
+        <li><code class="px-2 py-1 rounded text-sm transition-colors bg-gray-200 theme-dark:bg-gray-700 theme-dark:text-arkumu-light theme-blue:bg-blue-100 theme-blue:text-arkumu-blue">box-decoration-break: clone</code> - Makes the background wrap each line individually</li>
+        <li><code class="px-2 py-1 rounded text-sm transition-colors bg-gray-200 theme-dark:bg-gray-700 theme-dark:text-arkumu-light theme-blue:bg-blue-100 theme-blue:text-arkumu-blue">display: inline</code> - Allows the text to flow naturally and break across lines</li>
+        <li><code class="px-2 py-1 rounded text-sm transition-colors bg-gray-200 theme-dark:bg-gray-700 theme-dark:text-arkumu-light theme-blue:bg-blue-100 theme-blue:text-arkumu-blue">line-height: 2.2</code> - Provides adequate spacing to prevent background overlap</li>
+        <li><strong>Theme-specific colors</strong> - Custom CSS handles theme switching for the highlight effect</li>
+      </ul>
+
+      <h4 class="font-medium mb-3">Why Tailwind Wasn't Sufficient:</h4>
+      <p class="mb-4">
+        Tailwind CSS doesn't provide utilities for <code class="px-2 py-1 rounded text-sm transition-colors bg-gray-200 theme-dark:bg-gray-700 theme-dark:text-arkumu-light theme-blue:bg-blue-100 theme-blue:text-arkumu-blue">box-decoration-break</code>, 
+        which is essential for creating this line-wrapping highlight effect. This property is crucial for making the background 
+        adapt to the actual text content on each line, rather than creating a single rectangular block.
+      </p>
+
+      <div class="p-4 border-l-4 border-green-400 mb-6 transition-colors
+                  bg-green-50 
+                  theme-dark:bg-green-900 
+                  theme-blue:bg-blue-50 theme-blue:border-blue-400">
+        <p class="font-semibold mb-2">✅ Design Principle:</p>
+        <p>
+          <strong>All other components</strong> in the Arkumu system use pure Tailwind CSS classes. 
+          Custom CSS should only be used when Tailwind's utilities cannot achieve the desired visual effect, 
+          as demonstrated in this Tag component example.
+        </p>
+      </div>
+    </section>
+
+    
+  </div>
+</div>
+{% endblock content %}
+
+{% block inline_javascript %}
+<script>
+// Smooth scrolling for navigation links
+document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+    anchor.addEventListener('click', function (e) {
+        e.preventDefault();
+        const target = document.querySelector(this.getAttribute('href'));
+        if (target) {
+            target.scrollIntoView({
+                behavior: 'smooth',
+                block: 'start'
+            });
+        }
+    });
+});
+</script>
+{% endblock inline_javascript %}
