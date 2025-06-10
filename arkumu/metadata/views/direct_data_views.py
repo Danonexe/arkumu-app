@@ -380,6 +380,9 @@ def direct_get_dataset_card(request):
             'multi_value_columns': preview.multi_value_columns
         }
 
+        # Track that this dataset is now loaded
+        _track_dataset_loading(organization_id, dataset_name, source_name, preview.column_headers)
+        
         logger.info(f"🎯 DATASET CARD: Rendering template with dataset {dataset_name}")
         response = render(request, 'partials/dataset_card.html', {
             'dataset': dataset,
@@ -1121,6 +1124,44 @@ def _generate_preprocessing_recommendations(patterns, multi_value_analysis, qual
     return recommendations
 
 
+def _track_dataset_loading(organization_id, dataset_name, source_name, columns):
+    """
+    Helper function to track when a dataset is loaded/viewed.
+    This maintains the list of currently loaded datasets for the manual linking tool.
+    """
+    try:
+        from datetime import datetime
+        
+        # Get current loaded datasets from cache
+        loaded_datasets_cache_key = f"loaded_datasets_{organization_id}"
+        loaded_datasets = cache.get(loaded_datasets_cache_key, [])
+        
+        # Create dataset info object
+        dataset_info = {
+            'name': dataset_name,
+            'source_name': source_name,
+            'columns': columns,
+            'loaded_at': datetime.now().isoformat(),
+        }
+        
+        # Remove if already exists (to update timestamp)
+        loaded_datasets = [d for d in loaded_datasets if not (d['name'] == dataset_name and d['source_name'] == source_name)]
+        
+        # Add to beginning of list (most recently loaded first)
+        loaded_datasets.insert(0, dataset_info)
+        
+        # Keep only last 15 loaded datasets to avoid cache bloat
+        loaded_datasets = loaded_datasets[:15]
+        
+        # Save back to cache
+        cache.set(loaded_datasets_cache_key, loaded_datasets, timeout=60*60*24)  # 24 hours
+        
+        logger.info(f"TRACK: Dataset {dataset_name} from {source_name} tracked as loaded ({len(loaded_datasets)} total)")
+        
+    except Exception as e:
+        logger.warning(f"TRACK: Could not track dataset loading: {e}")
+
+
 def _extract_column_relationship_insights(column_name, dataset_analysis):
     """
     Extract relationship insights for a specific column from the dataset analysis.
@@ -1470,7 +1511,6 @@ def _run_auto_discovery(analyzer, organization_id, datasets, sample_size=500):
     """
     Helper function to run automated relationship discovery on selected datasets.
     """
-    from arkumu.semantic_graph.services import RelationshipDiscoveryService
     import tempfile
     import os
     
@@ -1575,6 +1615,7 @@ def _run_auto_discovery(analyzer, organization_id, datasets, sample_size=500):
 def run_relationship_discovery(request):
     """
     AJAX endpoint to run automated relationship discovery across selected datasets.
+    Supports both manual selection and "analyze all" modes.
     """
     if request.method != 'POST':
         return JsonResponse({'error': 'Only POST method allowed'}, status=400)
@@ -1584,11 +1625,43 @@ def run_relationship_discovery(request):
         selected_datasets = data.get('datasets', [])
         organization_id = data.get('organization_id') or get_organization_id_from_request(request)
         sample_size = int(data.get('sample_size', 500))
+        analyze_all = data.get('analyze_all', 'false').lower() == 'true'
         
-        logger.info(f"RUN DISCOVERY: Analyzing {len(selected_datasets)} datasets for org={organization_id}")
+        logger.info(f"RUN DISCOVERY: analyze_all={analyze_all}, manual_datasets={len(selected_datasets)}, org={organization_id}")
         
+        # Handle "Analyze All" mode
+        if analyze_all:
+            logger.info("RUN DISCOVERY: Running in 'analyze all' mode")
+            try:
+                analyzer = S3DirectDataAnalyzer()
+                sources = analyzer.discover_s3_data_sources(organization_id)
+                
+                # Get all datasets from all sources
+                all_datasets = []
+                for source in sources:
+                    try:
+                        dataset_names = analyzer.get_dataset_names_from_s3_source(source)
+                        for dataset_name in dataset_names:
+                            # Add basic dataset info for analysis
+                            all_datasets.append({
+                                'name': dataset_name,
+                                'source_name': source.name
+                            })
+                    except Exception as source_error:
+                        logger.warning(f"RUN DISCOVERY: Error processing source {source.name}: {source_error}")
+                        continue
+                
+                # Limit to reasonable number for performance (first 10 datasets)
+                selected_datasets = all_datasets[:10]
+                logger.info(f"RUN DISCOVERY: Analyze all mode selected {len(selected_datasets)} datasets from {len(all_datasets)} total")
+                
+            except Exception as all_error:
+                logger.error(f"RUN DISCOVERY: Error in analyze all mode: {all_error}")
+                return JsonResponse({'error': f'Error discovering all datasets: {str(all_error)}'}, status=500)
+        
+        # Validate we have datasets to analyze
         if not selected_datasets:
-            return JsonResponse({'error': 'No datasets selected'}, status=400)
+            return JsonResponse({'error': 'No datasets available for analysis'}, status=400)
         
         # Create temporary CSV files for analysis
         analyzer = S3DirectDataAnalyzer()
@@ -1642,7 +1715,7 @@ def run_relationship_discovery(request):
             return JsonResponse({'error': 'Could not process any of the selected datasets'}, status=400)
         
         try:
-            # Run relationship discovery across datasets
+            # Run relationship discovery across datasets  
             relationship_service = RelationshipDiscoveryService()
             dataset_paths = [temp_file['path'] for temp_file in temp_files]
             
@@ -1777,4 +1850,114 @@ def get_discovery_results(request):
         
     except Exception as e:
         logger.error(f"GET DISCOVERY: Error retrieving discovery results: {e}", exc_info=True)
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@login_required
+def get_loaded_datasets(request):
+    """
+    AJAX endpoint to get the datasets currently loaded in the left panel.
+    This checks what datasets have been loaded/opened by the user in the current session.
+    """
+    organization_id = request.GET.get('organization_id') or get_organization_id_from_request(request)
+    
+    logger.info(f"GET LOADED DATASETS: Retrieving loaded datasets for org={organization_id}")
+    
+    if not organization_id or organization_id == 'default-org':
+        return JsonResponse({'error': 'Organization parameter required'}, status=400)
+    
+    try:
+        # Get loaded datasets from session/cache (based on what's been loaded in left panel)
+        # We'll check for recently accessed datasets from the cache keys
+        loaded_datasets = []
+        
+        analyzer = S3DirectDataAnalyzer()
+        
+        # Strategy 1: Check for dataset cards that have been loaded recently
+        # Look for cache keys that indicate dataset loading activity
+        dataset_cache_pattern = f"dataset_card_{organization_id}_*"
+        
+        # Strategy 2: Since we don't have direct session tracking, 
+        # we'll provide a way to track loaded datasets via cache
+        loaded_datasets_cache_key = f"loaded_datasets_{organization_id}"
+        cached_loaded_datasets = cache.get(loaded_datasets_cache_key, [])
+        
+        if cached_loaded_datasets:
+            logger.info(f"GET LOADED DATASETS: Found {len(cached_loaded_datasets)} cached loaded datasets")
+            return JsonResponse({
+                'success': True,
+                'datasets': cached_loaded_datasets,
+                'count': len(cached_loaded_datasets),
+                'source': 'cache'
+            })
+        
+        # If no cached data, return empty list with instruction
+        logger.info("GET LOADED DATASETS: No loaded datasets found in cache")
+        return JsonResponse({
+            'success': True,
+            'datasets': [],
+            'count': 0,
+            'message': 'No datasets currently loaded. Load datasets in the left panel first.',
+            'source': 'empty'
+        })
+        
+    except Exception as e:
+        logger.error(f"GET LOADED DATASETS: Error retrieving loaded datasets: {e}", exc_info=True)
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@login_required
+def track_loaded_dataset(request):
+    """
+    AJAX endpoint to track when a dataset is loaded in the left panel.
+    This should be called whenever a dataset card is opened/viewed.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Only POST method allowed'}, status=400)
+    
+    try:
+        data = json.loads(request.body)
+        organization_id = data.get('organization_id') or get_organization_id_from_request(request)
+        dataset_name = data.get('dataset_name')
+        source_name = data.get('source_name')
+        columns = data.get('columns', [])
+        
+        logger.info(f"TRACK LOADED DATASET: Tracking {dataset_name} from {source_name} for org={organization_id}")
+        
+        if not dataset_name or not source_name:
+            return JsonResponse({'error': 'Missing dataset_name or source_name'}, status=400)
+        
+        # Get current loaded datasets from cache
+        loaded_datasets_cache_key = f"loaded_datasets_{organization_id}"
+        loaded_datasets = cache.get(loaded_datasets_cache_key, [])
+        
+        # Create dataset info object
+        from datetime import datetime
+        dataset_info = {
+            'name': dataset_name,
+            'source_name': source_name,
+            'columns': columns,
+            'loaded_at': datetime.now().isoformat(),  # Track when it was loaded
+        }
+        
+        # Remove if already exists (to update timestamp)
+        loaded_datasets = [d for d in loaded_datasets if not (d['name'] == dataset_name and d['source_name'] == source_name)]
+        
+        # Add to beginning of list (most recently loaded first)
+        loaded_datasets.insert(0, dataset_info)
+        
+        # Keep only last 10 loaded datasets to avoid cache bloat
+        loaded_datasets = loaded_datasets[:10]
+        
+        # Save back to cache
+        cache.set(loaded_datasets_cache_key, loaded_datasets, timeout=60*60*24)  # 24 hours
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Tracked loading of {dataset_name}',
+            'total_loaded': len(loaded_datasets)
+        })
+        
+    except Exception as e:
+        logger.error(f"TRACK LOADED DATASET: Error tracking loaded dataset: {e}", exc_info=True)
         return JsonResponse({'error': str(e)}, status=500) 
