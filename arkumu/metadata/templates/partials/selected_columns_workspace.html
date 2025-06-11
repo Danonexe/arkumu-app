@@ -1,8 +1,8 @@
 <!-- Selected Columns Workspace -->
-<div id="selected-columns-workspace" class="flex-1 flex flex-col">
+<div id="selected-columns-workspace" class="flex-1 flex flex-col h-full">
     
     <!-- Header with count and controls -->
-    <div class="flex items-center justify-between mb-3">
+    <div class="flex items-center justify-between mb-2 flex-shrink-0">
         <h4 class="text-sm font-medium flex items-center gap-2">
             <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
@@ -25,9 +25,9 @@
         </div>
     </div>
 
-    <!-- Column Selection Area -->
-    <div class="flex-1 overflow-y-auto">
-        <div id="column-workspace" class="space-y-3">
+    <!-- Column Selection Area - This is the scrollable section -->
+    <div class="flex-1 overflow-y-auto min-h-0">
+        <div id="column-workspace" class="space-y-1 pr-1">
             
             {% if selected_columns %}
                 <!-- Render each selected column -->
@@ -48,7 +48,28 @@
     </div>
 
     <!-- Action Panel (shown when columns are selected) -->
-    {% if selected_columns %}
-        {% include 'partials/column_mapping_form.html' with selected_columns=selected_columns anchor_column=anchor_column %}
-    {% endif %}
+    <div class="flex-shrink-0">
+        {% if selected_columns %}
+            {% include 'partials/column_mapping_form.html' with selected_columns=selected_columns anchor_column=anchor_column %}
+        {% endif %}
+    </div>
+    
+    <!-- Mappings Section (shows created relationships) -->
+    <div id="mappings-section" class="border-t border-base-300 pt-4 mt-4 flex-shrink-0" style="{% if not selected_columns %}display: none;{% endif %}">
+        <!-- This will be populated by HTMX when mappings are created -->
+        <h4 class="text-sm font-medium mb-3 flex items-center gap-2">
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+            </svg>
+            Created Mappings
+            <span class="badge badge-xs badge-success">0</span>
+        </h4>
+        <div class="text-center py-6 text-base-content opacity-50 text-sm">
+            <svg class="w-12 h-12 mx-auto mb-2 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+            </svg>
+            <p>No mappings created yet</p>
+            <p class="text-xs mt-1 opacity-70">Select columns and create relationships</p>
+        </div>
+    </div>
 </div> 

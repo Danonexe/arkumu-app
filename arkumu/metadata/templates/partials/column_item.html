@@ -1,41 +1,41 @@
-<!-- Individual Column Item Card -->
-<div class="card bg-base-100 border p-3 hover:shadow-md transition-shadow" 
+<!-- Compact Column Item using DaisyUI List Style -->
+<div class="flex items-center justify-between p-2 hover:bg-base-200 rounded-lg border border-base-300 bg-base-100 transition-colors" 
      data-column-id="{{ column.id }}"
      id="column-{{ column.id }}">
     
-    <div class="flex items-center justify-between">
-        <div class="flex-1">
-            <div class="flex items-center gap-2">
+    <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2">
+            <!-- Anchor indicator -->
+            {% if column.is_anchor %}
+            <div class="badge badge-warning badge-xs flex-shrink-0">⚓</div>
+            {% endif %}
+            
+            <!-- Column info in compact format -->
+            <div class="min-w-0 flex-1">
+                <div class="text-sm font-medium truncate">
+                    <span class="text-primary">{{ column.dataset }}</span><span class="text-base-content opacity-50">.</span><span class="text-info">{{ column.name }}</span>
+                </div>
                 
-                <!-- Anchor indicator -->
-                {% if column.is_anchor %}
-                <div class="badge badge-warning badge-xs">ANCHOR</div>
-                {% endif %}
-                
-                <div class="text-sm font-medium">
-                    <span class="text-primary">{{ column.dataset }}</span>
-                    <span class="text-base-content opacity-50">.</span>
-                    <span class="text-info">{{ column.name }}</span>
+                <!-- Optional metadata in compact form -->
+                <div class="flex items-center gap-2 text-xs text-base-content opacity-60">
+                    {% if column.type %}
+                    <span class="badge badge-ghost badge-xs">{{ column.type }}</span>
+                    {% endif %}
+                    {% if column.sample_values %}
+                    <span class="truncate max-w-[120px]" title="{{ column.sample_values|join:', ' }}">{{ column.sample_values.0|default:'' }}{% if column.sample_values|length > 1 %}...{% endif %}</span>
+                    {% endif %}
                 </div>
             </div>
-            
-            {% if column.type %}
-            <div class="text-xs text-base-content opacity-60 mt-1">{{ column.type }}</div>
-            {% endif %}
-            
-            {% if column.sample_values %}
-            <div class="text-xs text-base-content opacity-40 mt-1 truncate">
-                Sample: {{ column.sample_values|join:", " }}
-            </div>
-            {% endif %}
         </div>
+    </div>
+    
+    <!-- Compact action buttons -->
+    <div class="flex items-center gap-1 flex-shrink-0 ml-2">
         
-        <div class="flex items-center gap-2">
-            
-            <!-- Set as anchor button -->
-            {% if not column.is_anchor %}
-            <button class="btn btn-xs btn-warning btn-outline" 
-                    title="Set as anchor column"
+        <!-- Set as anchor button -->
+        {% if not column.is_anchor %}
+        <div class="tooltip tooltip-left" data-tip="Set as anchor">
+            <button class="btn btn-xs btn-square btn-warning btn-outline" 
                     hx-post="{% url 'metadata:set_anchor_column' %}"
                     hx-vals='{"column_id": "{{ column.id }}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
                     hx-target="#selected-columns-workspace"
@@ -44,11 +44,12 @@
                     <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
                 </svg>
             </button>
-            {% endif %}
-            
-            <!-- Remove button -->
-            <button class="btn btn-xs btn-ghost btn-circle text-error" 
-                    title="Remove column"
+        </div>
+        {% endif %}
+        
+        <!-- Remove button -->
+        <div class="tooltip tooltip-left" data-tip="Remove column">
+            <button class="btn btn-xs btn-square btn-ghost text-error" 
                     hx-post="{% url 'metadata:remove_column_from_workspace' %}"
                     hx-vals='{"column_id": "{{ column.id }}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
                     hx-target="#selected-columns-workspace"
@@ -59,22 +60,4 @@
             </button>
         </div>
     </div>
-    
-    <!-- Additional metadata if needed -->
-    {% if column.stats %}
-    <div class="mt-2 pt-2 border-t border-base-300">
-        <div class="grid grid-cols-2 gap-2 text-xs">
-            {% if column.stats.unique_count %}
-            <div class="text-base-content opacity-60">
-                Unique: {{ column.stats.unique_count }}
-            </div>
-            {% endif %}
-            {% if column.stats.null_count %}
-            <div class="text-base-content opacity-60">
-                Nulls: {{ column.stats.null_count }}
-            </div>
-            {% endif %}
-        </div>
-    </div>
-    {% endif %}
 </div> 

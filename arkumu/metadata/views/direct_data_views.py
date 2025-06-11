@@ -2166,38 +2166,58 @@ def remove_column_from_workspace(request):
 
 def save_column_mapping(request):
     """
-    HTMX endpoint to save a relationship mapping between two columns.
+    HTMX endpoint to save a relationship mapping between columns.
     """
     if request.method != 'POST':
         return JsonResponse({'error': 'Only POST method allowed'}, status=400)
     
     try:
-        data = json.loads(request.body)
-        organization_id = data.get('organization_id') or get_organization_id_from_request(request)
-        source_column_id = data.get('source_column_id')
-        target_column_id = data.get('target_column_id')
-        relationship_type = data.get('relationship_type', 'related_to')
-        confidence = data.get('confidence', 0.8)
-        notes = data.get('notes', '')
+        # Handle form data from HTMX
+        organization_id = get_organization_id_from_request(request)
+        selected_columns = request.POST.getlist('selected_columns')
+        anchor_column_id = request.POST.get('anchor_column')
+        relationship_type = request.POST.get('relationship_type', 'relates_to')
+        direction = request.POST.get('direction', 'unidirectional')
+        confidence = request.POST.get('confidence', 'medium')
         
-        logger.info(f"SAVE COLUMN MAPPING: {source_column_id} -> {target_column_id} ({relationship_type}) for org={organization_id}")
+        logger.info(f"SAVE COLUMN MAPPING: anchor={anchor_column_id}, columns={selected_columns}, type={relationship_type} for org={organization_id}")
         
-        if not all([source_column_id, target_column_id]):
-            return JsonResponse({'error': 'Missing source or target column'}, status=400)
+        if not anchor_column_id or len(selected_columns) < 2:
+            return JsonResponse({'error': 'Need anchor column and at least 2 columns total'}, status=400)
+        
+        # Get current workspace to access column details
+        workspace_cache_key = f"relationship_workspace_{organization_id}"
+        workspace = cache.get(workspace_cache_key, {'columns': []})
+        columns_data = {col['id']: col for col in workspace.get('columns', [])}
         
         # Get current mappings from cache
         mappings_cache_key = f"column_mappings_{organization_id}"
         mappings = cache.get(mappings_cache_key, [])
         
+        # Get anchor column data
+        anchor_column = columns_data.get(anchor_column_id)
+        if not anchor_column:
+            return JsonResponse({'error': 'Anchor column not found in workspace'}, status=400)
+        
+        # Get related columns data (excluding anchor)
+        related_columns = []
+        for col_id in selected_columns:
+            if col_id != anchor_column_id and col_id in columns_data:
+                related_columns.append(columns_data[col_id])
+        
+        if not related_columns:
+            return JsonResponse({'error': 'No related columns found'}, status=400)
+        
         # Create mapping object
         mapping = {
-            'id': f"{source_column_id}_to_{target_column_id}_{datetime.now().timestamp()}",
-            'source_column_id': source_column_id,
-            'target_column_id': target_column_id,
+            'id': f"mapping_{anchor_column_id}_{datetime.now().timestamp()}",
+            'anchor_column': anchor_column,
+            'related_columns': related_columns,
             'relationship_type': relationship_type,
+            'direction': direction,
             'confidence': confidence,
-            'notes': notes,
-            'created_at': datetime.now().isoformat()
+            'created_at': datetime.now().isoformat(),
+            'description': f"Links {anchor_column['dataset']}.{anchor_column['name']} to {len(related_columns)} other column(s)"
         }
         
         # Add to mappings
@@ -2209,13 +2229,13 @@ def save_column_mapping(request):
         # Save back to cache
         cache.set(mappings_cache_key, mappings, timeout=60*60*24*7)  # 7 days
         
-        logger.info(f"SAVE COLUMN MAPPING: Saved mapping, total mappings: {len(mappings)}")
+        logger.info(f"SAVE COLUMN MAPPING: Saved mapping linking {anchor_column['name']} to {len(related_columns)} columns, total mappings: {len(mappings)}")
         
         # Return updated mappings partial
         return render(request, 'partials/mappings_section.html', {
             'mappings': mappings,
             'organization_id': organization_id,
-            'message': 'Mapping saved successfully'
+            'message': f'Created relationship from {anchor_column["name"]} to {len(related_columns)} column(s)'
         })
         
     except Exception as e:
@@ -2337,6 +2357,102 @@ def set_anchor_column(request):
         
     except Exception as e:
         logger.error(f"SET ANCHOR: Error setting anchor column: {e}", exc_info=True)
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+def toggle_all_columns(request):
+    """
+    HTMX endpoint to toggle all columns from a dataset in/out of the workspace.
+    More efficient than individual column selections.
+    """
+    logger.info("="*50)
+    logger.info("TOGGLE_ALL_COLUMNS: ENDPOINT HIT!")
+    logger.info(f"TOGGLE_ALL_COLUMNS: Method={request.method}")
+    logger.info(f"TOGGLE_ALL_COLUMNS: Content-Type={request.content_type}")
+    logger.info(f"TOGGLE_ALL_COLUMNS: Headers={dict(request.headers)}")
+    logger.info(f"TOGGLE_ALL_COLUMNS: POST data: {dict(request.POST)}")
+    logger.info(f"TOGGLE_ALL_COLUMNS: User: {request.user}")
+    logger.info(f"TOGGLE_ALL_COLUMNS: Path: {request.path}")
+    logger.info("="*50)
+    
+    if request.method != 'POST':
+        logger.error("TOGGLE_ALL_COLUMNS: Only POST method allowed")
+        return JsonResponse({'error': 'Only POST method allowed'}, status=400)
+    
+    try:
+        dataset_name = request.POST.get('dataset_name')
+        source_name = request.POST.get('source_name')
+        column_names_str = request.POST.get('column_names', '')
+        organization_id = get_organization_id_from_request(request)
+        
+        column_names = [name.strip() for name in column_names_str.split(',') if name.strip()]
+        
+        logger.info(f"TOGGLE ALL COLUMNS: {len(column_names)} columns from {dataset_name}/{source_name} for org={organization_id}")
+        
+        if not all([dataset_name, source_name]) or not column_names:
+            return JsonResponse({'error': 'Missing required parameters'}, status=400)
+        
+        # Get current workspace from cache
+        workspace_cache_key = f"relationship_workspace_{organization_id}"
+        workspace = cache.get(workspace_cache_key, {'columns': []})
+        existing_columns = workspace.get('columns', [])
+        
+        # Check if any columns from this dataset are already in workspace
+        dataset_columns_in_workspace = [
+            col for col in existing_columns 
+            if col.get('dataset_name') == dataset_name and col.get('source_name') == source_name
+        ]
+        
+        if dataset_columns_in_workspace:
+            # Remove all columns from this dataset (toggle off)
+            existing_columns = [
+                col for col in existing_columns 
+                if not (col.get('dataset_name') == dataset_name and col.get('source_name') == source_name)
+            ]
+            action = 'removed_all'
+            logger.info(f"TOGGLE ALL: Removed {len(dataset_columns_in_workspace)} columns from {dataset_name}")
+        else:
+            # Add all columns from this dataset (toggle on)
+            for i, column_name in enumerate(column_names):
+                column_info = {
+                    'id': f"{dataset_name}_{source_name}_{column_name}".replace(' ', '_').replace('-', '_'),
+                    'dataset': dataset_name,
+                    'name': column_name,
+                    'source': source_name,
+                    'index': i,
+                    'added_at': datetime.now().isoformat(),
+                    'is_anchor': False,
+                    # Internal fields for backend use
+                    'dataset_name': dataset_name,
+                    'source_name': source_name,
+                    'column_name': column_name,
+                    'column_index': i
+                }
+                existing_columns.append(column_info)
+            
+            action = 'added_all'
+            logger.info(f"TOGGLE ALL: Added {len(column_names)} columns from {dataset_name}")
+        
+        # Keep only last 30 columns to avoid cache bloat
+        existing_columns = existing_columns[-30:]
+        workspace['columns'] = existing_columns
+        
+        # Save back to cache
+        cache.set(workspace_cache_key, workspace, timeout=60*60*24)  # 24 hours
+        
+        logger.info(f"TOGGLE ALL: {action}, workspace now has {len(workspace['columns'])} columns")
+        
+        # Generate workspace HTML
+        workspace_html = render_to_string('partials/selected_columns_workspace.html', {
+            'selected_columns': workspace['columns'],
+            'anchor_column': next((col for col in workspace['columns'] if col.get('is_anchor')), None),
+            'organization_id': organization_id,
+        }, request=request)
+        
+        return HttpResponse(workspace_html)
+        
+    except Exception as e:
+        logger.error(f"TOGGLE ALL: Error toggling all columns: {e}", exc_info=True)
         return JsonResponse({'error': str(e)}, status=500)
 
 

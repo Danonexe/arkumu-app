@@ -19,44 +19,14 @@
           hx-target="#mappings-section"
           hx-swap="outerHTML">
         
-        <!-- Relationship Type -->
-        <div class="mb-3">
-            <h5 class="text-xs font-medium mb-2 text-base-content opacity-70">Relationship Type:</h5>
-            <select class="select select-bordered select-xs w-full" name="relationship_type">
-                <option value="join">Join/Link</option>
-                <option value="foreign_key">Foreign Key</option>
-                <option value="derived">Derived From</option>
-                <option value="calculated">Calculated Field</option>
-                <option value="lookup">Lookup Reference</option>
-                <option value="grouping">Grouping Key</option>
-                <option value="transformation">Data Transformation</option>
-            </select>
-        </div>
+        <!-- Hidden relationship type - simplified to just "relates_to" -->
+        <input type="hidden" name="relationship_type" value="relates_to">
 
-        <!-- Direction/Flow -->
-        <div class="mb-3">
-            <h5 class="text-xs font-medium mb-2 text-base-content opacity-70">Direction:</h5>
-            <div class="grid grid-cols-2 gap-2">
-                <label class="btn btn-xs btn-outline cursor-pointer">
-                    <input type="radio" name="direction" value="bidirectional" class="sr-only">
-                    <span>↔ Both Ways</span>
-                </label>
-                <label class="btn btn-xs btn-outline btn-active cursor-pointer">
-                    <input type="radio" name="direction" value="unidirectional" checked class="sr-only">
-                    <span>→ One Way</span>
-                </label>
-            </div>
-        </div>
+        <!-- Hidden direction - always unidirectional (standard RDF) -->
+        <input type="hidden" name="direction" value="unidirectional">
 
-        <!-- Optional: Mapping Strength/Confidence -->
-        <div class="mb-3">
-            <h5 class="text-xs font-medium mb-2 text-base-content opacity-70">Confidence:</h5>
-            <select class="select select-bordered select-xs w-full" name="confidence">
-                <option value="high">High - Direct relationship</option>
-                <option value="medium" selected>Medium - Likely relationship</option>
-                <option value="low">Low - Possible relationship</option>
-            </select>
-        </div>
+        <!-- Hidden confidence - simplified to medium -->
+        <input type="hidden" name="confidence" value="medium">
 
         <!-- Hidden fields for selected columns -->
         {% for column in selected_columns %}
@@ -101,16 +71,4 @@
     </div>
 </div>
 
-<script type="text/hyperscript">
-    -- Handle radio button styling for direction selection
-    on change from body
-        if target's name is 'direction' then
-            -- Remove active class from all direction buttons
-            repeat for input in <input[name='direction']/> in the document
-                remove .btn-active from input's closest(<label/>)
-            end
-            -- Add active class to selected button
-            add .btn-active to target's closest(<label/>)
-        end
-    end
-</script> 
+ 

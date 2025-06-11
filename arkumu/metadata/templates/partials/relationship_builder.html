@@ -9,17 +9,17 @@
         end">
 
     <!-- Header -->
-    <div class="flex justify-between items-center mb-4">
+    <div class="flex justify-between items-center mb-2 flex-shrink-0">
         <h3 class="text-lg font-medium">
             <span class="text-primary">Column</span> Workspace
         </h3>
         <div class="badge badge-primary badge-outline badge-sm">Interactive</div>
     </div>
-    <div class="divider my-0"></div>
+    <div class="divider my-1 flex-shrink-0"></div>
 
     <!-- Loaded Datasets Section -->
-    <div class="mb-4" id="loaded-datasets-section">
-        <h4 class="text-sm font-medium mb-2 flex items-center gap-2">
+    <div class="mb-2 flex-shrink-0" id="loaded-datasets-section">
+        <h4 class="text-sm font-medium mb-1 flex items-center gap-2">
             <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/>
             </svg>
@@ -27,7 +27,7 @@
             <span class="badge badge-xs badge-info">{{ active_datasets|length }}</span>
         </h4>
         
-        <div id="loaded-datasets-list" class="space-y-2">
+        <div id="loaded-datasets-list" class="space-y-1">
             {% if active_datasets %}
                 {% for dataset in active_datasets %}
                 <div class="card bg-base-100 border p-2">
@@ -49,18 +49,22 @@
                 </div>
                 {% endfor %}
             {% else %}
-                <div class="text-center py-4 text-base-content opacity-50 text-sm">
+                <div class="text-center py-2 text-base-content opacity-50 text-sm">
                     No datasets loaded yet
                 </div>
             {% endif %}
         </div>
     </div>
 
-    <!-- Include the Selected Columns Workspace partial -->
-    {% include 'partials/selected_columns_workspace.html' with selected_columns=selected_columns anchor_column=anchor_column %}
+    <!-- Selected Columns Workspace - This should take MORE space and be scrollable -->
+    <div class="flex-1 min-h-0" style="min-height: 300px;">
+        {% include 'partials/selected_columns_workspace.html' with selected_columns=selected_columns anchor_column=anchor_column %}
+    </div>
 
-    <!-- Include the Mappings Section partial -->
-    {% include 'partials/mappings_section.html' with mappings=mappings %}
+    <!-- Include the Mappings Section partial - Make it smaller/collapsible -->
+    <div class="flex-shrink-0 mt-2">
+        {% include 'partials/mappings_section.html' with mappings=mappings %}
+    </div>
 
 </div>
 
@@ -129,6 +133,59 @@
 
 .badge.selected:hover {
     @apply bg-primary-focus;
+}
+
+/* Improved scrolling for selected columns workspace */
+#selected-columns-workspace {
+    /* Ensure proper height constraints */
+    max-height: 100%;
+    min-height: 300px; /* Ensure minimum visible area */
+}
+
+#column-workspace {
+    /* Smooth scrolling */
+    scroll-behavior: smooth;
+}
+
+/* Force the workspace to take more space */
+#relationship-builder > div:nth-child(4) {
+    flex-grow: 2; /* Give more weight to the workspace section */
+    min-height: 350px; /* Ensure minimum height */
+}
+
+/* Custom scrollbar styling for the column workspace */
+#selected-columns-workspace .overflow-y-auto::-webkit-scrollbar {
+    width: 6px;
+}
+
+#selected-columns-workspace .overflow-y-auto::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#selected-columns-workspace .overflow-y-auto::-webkit-scrollbar-thumb {
+    background: oklch(var(--bc) / 0.2);
+    border-radius: 3px;
+}
+
+#selected-columns-workspace .overflow-y-auto::-webkit-scrollbar-thumb:hover {
+    background: oklch(var(--bc) / 0.3);
+}
+
+/* Ensure scrollable area has visible scrollbar when needed */
+#selected-columns-workspace .overflow-y-auto {
+    overflow-y: auto !important;
+    scrollbar-width: thin;
+    scrollbar-color: oklch(var(--bc) / 0.2) transparent;
+    min-height: 250px; /* Minimum scrollable height */
+}
+
+/* Visual indicator for scrollable content */
+#column-workspace::after {
+    content: '';
+    display: block;
+    height: 1px;
+    width: 100%;
+    background: transparent;
 }
 </style>
 

@@ -255,7 +255,7 @@
                         <div class="divider my-0"></div>
                         
                         <!-- Relationship Builder Content -->
-                        <div class="flex-1 overflow-hidden">
+                        <div class="flex-1 overflow-y-auto">
                             {% include 'partials/relationship_builder.html' %}
                         </div>
                     </div>
@@ -304,6 +304,33 @@ document.addEventListener('htmx:afterSwap', function(event) {
         console.log('Workspace updated - expected behavior');
     } else {
         console.warn('HTMX updated unexpected target:', targetId);
+    }
+});
+
+// DOM Readiness Check for Workspace
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('=== DOM CONTENT LOADED ===');
+    const workspaceExists = !!document.getElementById('selected-columns-workspace');
+    console.log('Workspace element exists at DOMContentLoaded:', workspaceExists);
+    
+    if (workspaceExists) {
+        console.log('✅ Workspace ready for Select All buttons');
+    } else {
+        console.log('⚠️ Workspace not ready - Select All buttons may fail');
+        
+        // Set up a mutation observer to detect when workspace is added
+        const observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                if (mutation.type === 'childList') {
+                    const workspace = document.getElementById('selected-columns-workspace');
+                    if (workspace) {
+                        console.log('✅ Workspace element detected via MutationObserver');
+                        observer.disconnect();
+                    }
+                }
+            });
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
     }
 });
 

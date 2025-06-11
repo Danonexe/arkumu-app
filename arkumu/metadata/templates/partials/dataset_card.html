@@ -174,6 +174,60 @@
         <!-- Column Names Display - Right below dataset name -->
         {% if dataset.preview.colHeaders %}
         <div class="alert bg-base-100 border border-info p-1 mt-2">
+            <!-- Select All Columns Button -->
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-medium text-base-content opacity-70">Columns ({{ dataset.preview.colHeaders|length }})</span>
+                <div>
+                    <input type="hidden" name="dataset_name" value="{{ dataset.name }}" id="dataset-name-{{ dataset.name|slugify }}">
+                    <input type="hidden" name="source_name" value="{{ dataset.source }}" id="source-name-{{ dataset.name|slugify }}">
+                    <input type="hidden" name="column_names" value="{{ dataset.preview.colHeaders|join:',' }}" id="column-names-{{ dataset.name|slugify }}">
+                    {% csrf_token %}
+                    
+                    <button class="btn btn-xs btn-outline btn-info" 
+                            id="select-all-{{ dataset.name|slugify }}"
+                            data-dataset="{{ dataset.name }}"
+                            data-source="{{ dataset.source }}"
+                            data-columns="{{ dataset.preview.colHeaders|join:',' }}"
+                            _="on click
+                                log '=== SELECT ALL BUTTON CLICKED ==='
+                                log 'Dataset: {{ dataset.name }}'
+                                
+                                -- Check if target workspace exists
+                                if #selected-columns-workspace exists
+                                    log 'Target workspace found - proceeding with HTMX request'
+                                    
+                                    -- Use HTMX to toggle all columns
+                                    js(me)
+                                        const dataset = me.getAttribute('data-dataset');
+                                        const source = me.getAttribute('data-source');
+                                        const columns = me.getAttribute('data-columns');
+                                        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+                                        
+                                        console.log('Making HTMX request with data:', {dataset, source, columns});
+                                        
+                                        htmx.ajax('POST', '{% url "metadata:toggle_all_columns" %}', {
+                                            values: {
+                                                'dataset_name': dataset,
+                                                'source_name': source, 
+                                                'column_names': columns,
+                                                'csrfmiddlewaretoken': csrfToken
+                                            },
+                                            target: '#selected-columns-workspace',
+                                            swap: 'innerHTML'
+                                        });
+                                    end
+                                else
+                                    log 'ERROR: #selected-columns-workspace not found!'
+                                    js
+                                        alert('Column workspace not ready. Please scroll down to view the relationship builder panel first, or reload the page.');
+                                        return false;
+                                    end
+                                    halt
+                                end">
+                        Select All
+                    </button>
+                </div>
+            </div>
             <div class="flex flex-wrap gap-1">
                 {% for column in dataset.preview.colHeaders %}
                 <div class="badge badge-outline badge-info badge-xs cursor-pointer hover:bg-info-focus hover:text-info-content"
