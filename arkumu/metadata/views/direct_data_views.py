@@ -22,6 +22,8 @@ from django.template.loader import render_to_string
 
 from arkumu.metadata.services.data_analysis.s3_direct_data_analyzer import S3DirectDataAnalyzer
 from arkumu.metadata.services.relationship_discovery.service import RelationshipDiscoveryService
+from arkumu.metadata.models.mappings import Mapping, MappingType
+from arkumu.metadata.services.mapping_executor import MappingExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +123,27 @@ def direct_split_table_graph_view(request):
         
         logger.info(f"Found {len(csv_datasets)} CSV datasets total: {[d['name'] for d in csv_datasets]}")
         
+        # Load existing mappings from database (new structure)
+        existing_mappings = Mapping.objects.filter(
+            organization_id=organization_id
+        ).order_by('-created_at')[:50]  # Get latest 50 mappings
+        
+        # Convert database mappings to template format
+        mappings_data = []
+        for mapping in existing_mappings:
+            mapping_info = {
+                'id': str(mapping.id),
+                'name': mapping.name,
+                'mapping_type': mapping.mapping_type,
+                'mapping_type_display': mapping.get_mapping_type_display(),
+                'source_dataset': mapping.source_dataset,
+                'validation_status': mapping.validation_status,
+                'created_at': mapping.created_at.isoformat(),
+                'config': mapping.mapping_config,
+                'execution_stats': mapping.execution_stats
+            }
+            mappings_data.append(mapping_info)
+        
         context = {
             'sources': sources_info,
             'datasets': csv_datasets,  # Add CSV datasets to context
@@ -128,6 +151,7 @@ def direct_split_table_graph_view(request):
             'is_direct_mode': True,  # Flag to indicate we're using direct mode
             'organizations': available_organizations,
             'organization_id': organization_id,  # Include organization in context
+            'mappings': mappings_data,  # Add mappings to context
         }
         
         return render(request, 'direct_split_table_graph.html', context)
@@ -2018,6 +2042,7 @@ def add_column_to_workspace(request):
             'index': column_index,
             'added_at': datetime.now().isoformat(),
             'is_anchor': False,  # Default value
+            'is_multi_value': False,  # Default multi-value status
             # Internal fields for backend use
             'dataset_name': dataset_name,
             'source_name': source_name,
@@ -2042,8 +2067,8 @@ def add_column_to_workspace(request):
             # Add to workspace (toggle on)
             existing_columns.append(column_info)
             action = 'added'
-            # Keep only last 20 columns to avoid cache bloat
-            existing_columns = existing_columns[-20:]
+            # Keep only last 100 columns to avoid cache bloat while allowing larger datasets
+            existing_columns = existing_columns[-100:]
         
         workspace['columns'] = existing_columns
         
@@ -2176,82 +2201,114 @@ def remove_column_from_workspace(request):
 
 
 
-def save_column_mapping(request):
+def create_mapping(request):
     """
-    HTMX endpoint to save a relationship mapping between columns.
+    HTMX endpoint to create a new mapping definition.
     """
     if request.method != 'POST':
         return JsonResponse({'error': 'Only POST method allowed'}, status=400)
     
     try:
-        # Handle form data from HTMX
         organization_id = get_organization_id_from_request(request)
-        selected_columns = request.POST.getlist('selected_columns')
-        anchor_column_id = request.POST.get('anchor_column')
-        relationship_type = request.POST.get('relationship_type', 'relates_to')
-        direction = request.POST.get('direction', 'unidirectional')
-        confidence = request.POST.get('confidence', 'medium')
         
-        logger.info(f"SAVE COLUMN MAPPING: anchor={anchor_column_id}, columns={selected_columns}, type={relationship_type} for org={organization_id}")
+        # Get form data
+        mapping_name = request.POST.get('mapping_name', '').strip()
+        mapping_type = request.POST.get('mapping_type')
+        source_dataset = request.POST.get('source_dataset', '').strip()
         
-        if not anchor_column_id or len(selected_columns) < 2:
-            return JsonResponse({'error': 'Need anchor column and at least 2 columns total'}, status=400)
+        logger.info(f"CREATE MAPPING: {mapping_name} ({mapping_type}) for dataset {source_dataset}, org={organization_id}")
         
-        # Get current workspace to access column details
-        workspace_cache_key = f"relationship_workspace_{organization_id}"
-        workspace = cache.get(workspace_cache_key, {'columns': []})
-        columns_data = {col['id']: col for col in workspace.get('columns', [])}
+        if not all([mapping_name, mapping_type, source_dataset]):
+            return JsonResponse({'error': 'Missing required fields: name, type, and source dataset'}, status=400)
         
-        # Get current mappings from cache
-        mappings_cache_key = f"column_mappings_{organization_id}"
-        mappings = cache.get(mappings_cache_key, [])
+        if mapping_type not in [choice[0] for choice in MappingType.choices]:
+            return JsonResponse({'error': f'Invalid mapping type: {mapping_type}'}, status=400)
         
-        # Get anchor column data
-        anchor_column = columns_data.get(anchor_column_id)
-        if not anchor_column:
-            return JsonResponse({'error': 'Anchor column not found in workspace'}, status=400)
+        # Build mapping configuration based on type
+        mapping_config = {}
         
-        # Get related columns data (excluding anchor)
-        related_columns = []
-        for col_id in selected_columns:
-            if col_id != anchor_column_id and col_id in columns_data:
-                related_columns.append(columns_data[col_id])
+        if mapping_type == MappingType.ENTITY:
+            # Entity mapping configuration
+            subject_column = request.POST.get('subject_column', '').strip()
+            predicate_mappings_json = request.POST.get('predicate_mappings', '{}')
+            
+            if not subject_column:
+                return JsonResponse({'error': 'Entity mapping requires subject column'}, status=400)
+            
+            try:
+                predicate_mappings = json.loads(predicate_mappings_json)
+            except json.JSONDecodeError:
+                return JsonResponse({'error': 'Invalid predicate mappings JSON'}, status=400)
+            
+            mapping_config = {
+                'subject_column': subject_column,
+                'predicate_mappings': predicate_mappings,
+                'base_uri_template': f'http://arkumu.org/data/{organization_id}/{source_dataset}/entities/{{subject}}'
+            }
+            
+        elif mapping_type == MappingType.LOOKUP:
+            # Lookup mapping configuration
+            source_column = request.POST.get('source_column', '').strip()
+            target_column = request.POST.get('target_column', '').strip()
+            source_dataset_ref = request.POST.get('source_dataset_ref', '').strip()
+            target_dataset_ref = request.POST.get('target_dataset_ref', '').strip()
+            relationship_property = request.POST.get('relationship_property', '').strip()
+            
+            if not all([source_column, target_column, source_dataset_ref, target_dataset_ref, relationship_property]):
+                return JsonResponse({'error': 'Lookup mapping requires all lookup configuration fields'}, status=400)
+            
+            mapping_config = {
+                'lookup_config': {
+                    'source_column': source_column,
+                    'target_column': target_column,
+                    'source_dataset': source_dataset_ref,
+                    'target_dataset': target_dataset_ref,
+                    'relationship_property': relationship_property
+                }
+            }
         
-        if not related_columns:
-            return JsonResponse({'error': 'No related columns found'}, status=400)
+        # Create the mapping
+        mapping = Mapping.objects.create(
+            name=mapping_name,
+            mapping_type=mapping_type,
+            organization_id=organization_id,
+            source_dataset=source_dataset,
+            mapping_config=mapping_config,
+            validation_status='draft',
+            created_by=f'user_{request.user.id}' if request.user.is_authenticated else 'anonymous'
+        )
         
-        # Create mapping object
-        mapping = {
-            'id': f"mapping_{anchor_column_id}_{datetime.now().timestamp()}",
-            'anchor_column': anchor_column,
-            'related_columns': related_columns,
-            'relationship_type': relationship_type,
-            'direction': direction,
-            'confidence': confidence,
-            'created_at': datetime.now().isoformat(),
-            'description': f"Links {anchor_column['dataset']}.{anchor_column['name']} to {len(related_columns)} other column(s)"
-        }
+        logger.info(f"CREATE MAPPING: Created mapping {mapping.id} - {mapping_name}")
         
-        # Add to mappings
-        mappings.append(mapping)
+        # Get updated mappings for template
+        updated_mappings = Mapping.objects.filter(
+            organization_id=organization_id
+        ).order_by('-created_at')[:50]
         
-        # Keep only last 50 mappings
-        mappings = mappings[-50:]
-        
-        # Save back to cache
-        cache.set(mappings_cache_key, mappings, timeout=60*60*24*7)  # 7 days
-        
-        logger.info(f"SAVE COLUMN MAPPING: Saved mapping linking {anchor_column['name']} to {len(related_columns)} columns, total mappings: {len(mappings)}")
+        mappings_data = []
+        for m in updated_mappings:
+            mapping_info = {
+                'id': str(m.id),
+                'name': m.name,
+                'mapping_type': m.mapping_type,
+                'mapping_type_display': m.get_mapping_type_display(),
+                'source_dataset': m.source_dataset,
+                'validation_status': m.validation_status,
+                'created_at': m.created_at.isoformat(),
+                'config': m.mapping_config,
+                'execution_stats': m.execution_stats
+            }
+            mappings_data.append(mapping_info)
         
         # Return updated mappings partial
         return render(request, 'partials/mappings_section.html', {
-            'mappings': mappings,
+            'mappings': mappings_data,
             'organization_id': organization_id,
-            'message': f'Created relationship from {anchor_column["name"]} to {len(related_columns)} column(s)'
+            'message': f'Created {mapping.get_mapping_type_display()}: {mapping_name}'
         })
         
     except Exception as e:
-        logger.error(f"SAVE COLUMN MAPPING: Error saving mapping: {e}", exc_info=True)
+        logger.error(f"CREATE MAPPING: Error creating mapping: {e}", exc_info=True)
         return JsonResponse({'error': str(e)}, status=500)
 
 
@@ -2434,6 +2491,7 @@ def toggle_all_columns(request):
                     'index': i,
                     'added_at': datetime.now().isoformat(),
                     'is_anchor': False,
+                    'is_multi_value': False,  # Default multi-value status
                     # Internal fields for backend use
                     'dataset_name': dataset_name,
                     'source_name': source_name,
@@ -2445,8 +2503,8 @@ def toggle_all_columns(request):
             action = 'added_all'
             logger.info(f"TOGGLE ALL: Added {len(column_names)} columns from {dataset_name}")
         
-        # Keep only last 30 columns to avoid cache bloat
-        existing_columns = existing_columns[-30:]
+        # Keep only last 100 columns to avoid cache bloat while allowing larger datasets
+        existing_columns = existing_columns[-100:]
         workspace['columns'] = existing_columns
         
         # Save back to cache
@@ -2477,9 +2535,13 @@ def export_mappings(request):
         
         logger.info(f"EXPORT MAPPINGS: Exporting mappings for org={organization_id}")
         
-        # Get mappings from cache
-        mappings_cache_key = f"column_mappings_{organization_id}"
-        mappings = cache.get(mappings_cache_key, [])
+        # Get mappings from database
+        db_mappings = Mapping.objects.filter(
+            organization_id=organization_id,
+            scope='multi_dataset'
+        ).order_by('-created_at')
+        
+        mappings = [mapping.mapping_data for mapping in db_mappings]
         
         # Create export data
         export_data = {
@@ -2499,4 +2561,66 @@ def export_mappings(request):
         
     except Exception as e:
         logger.error(f"EXPORT MAPPINGS: Error exporting mappings: {e}", exc_info=True)
-        return JsonResponse({'error': str(e)}, status=500) 
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+def toggle_multi_value_column(request):
+    """
+    HTMX endpoint to toggle the multi-value status of a column.
+    Multi-value columns will be split during mapping execution.
+    """
+    logger.info(f"TOGGLE_MULTI_VALUE: Method={request.method}, Content-Type={request.content_type}")
+    logger.info(f"TOGGLE_MULTI_VALUE: POST data: {dict(request.POST)}")
+    
+    if request.method != 'POST':
+        logger.error("TOGGLE_MULTI_VALUE: Only POST method allowed")
+        return JsonResponse({'error': 'Only POST method allowed'}, status=400)
+    
+    try:
+        column_id = request.POST.get('column_id')
+        organization_id = get_organization_id_from_request(request)
+        
+        logger.info(f"TOGGLE MULTI-VALUE: {column_id} for org={organization_id}")
+        
+        if not column_id:
+            return JsonResponse({'error': 'Missing column_id'}, status=400)
+        
+        # Get current workspace from cache
+        workspace_cache_key = f"relationship_workspace_{organization_id}"
+        workspace = cache.get(workspace_cache_key, {'columns': []})
+        
+        # Update multi-value status
+        existing_columns = workspace.get('columns', [])
+        column_found = False
+        
+        for col in existing_columns:
+            if col.get('id') == column_id:
+                # Toggle multi-value status
+                current_status = col.get('is_multi_value', False)
+                col['is_multi_value'] = not current_status
+                column_found = True
+                logger.info(f"TOGGLE MULTI-VALUE: Column {column_id} multi-value status: {col['is_multi_value']}")
+                break
+        
+        if not column_found:
+            return JsonResponse({'error': 'Column not found in workspace'}, status=400)
+        
+        workspace['columns'] = existing_columns
+        
+        # Save back to cache
+        cache.set(workspace_cache_key, workspace, timeout=60*60*24)  # 24 hours
+        
+        logger.info(f"TOGGLE MULTI-VALUE: Updated workspace")
+        
+        # Generate workspace HTML with updated multi-value status
+        workspace_html = render_to_string('partials/selected_columns_workspace.html', {
+            'selected_columns': workspace['columns'],
+            'anchor_column': next((col for col in workspace['columns'] if col.get('is_anchor')), None),
+            'organization_id': organization_id,
+        }, request=request)
+        
+        return HttpResponse(workspace_html)
+        
+    except Exception as e:
+        logger.error(f"TOGGLE MULTI-VALUE: Error toggling multi-value status: {e}", exc_info=True)
+        return JsonResponse({'error': str(e)}, status=500)

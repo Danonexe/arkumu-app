@@ -1,0 +1,223 @@
+<!-- Smart Mapping Creation Form -->
+<div class="border-t border-base-300 pt-4 mt-4" id="smart-mapping-form">
+    {% if selected_columns %}
+        <h4 class="text-sm font-medium mb-3 flex items-center gap-2">
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+            </svg>
+            Create Mapping from Selected Columns
+            <span class="badge badge-info badge-xs">{{ selected_columns|length }} columns</span>
+        </h4>
+
+        <!-- Selected Columns Context -->
+        <div class="text-xs text-base-content opacity-60 mb-4">
+            {% regroup selected_columns by dataset_name as columns_by_dataset %}
+            Using columns from: 
+            {% for dataset_group in columns_by_dataset %}
+                <span class="badge badge-outline badge-xs">{{ dataset_group.grouper }}</span>
+            {% endfor %}
+        </div>
+
+        <form hx-post="{% url 'metadata:create_mapping' %}"
+              hx-target="#mappings-section"
+              hx-swap="innerHTML"
+              hx-indicator="#mapping-spinner"
+              class="space-y-4">
+            
+            {% csrf_token %}
+            
+            <!-- Auto-populated from context -->
+            <input type="hidden" name="selected_columns_context" value="{{ selected_columns|length }}">
+            
+            <!-- Basic Mapping Info -->
+            <div class="grid grid-cols-1 gap-4">
+                <div>
+                    <label class="label">
+                        <span class="label-text text-xs font-medium">Mapping Name</span>
+                    </label>
+                    <input type="text" 
+                           name="mapping_name" 
+                           id="smart-mapping-name"
+                           placeholder="Auto-generated based on selection..."
+                           class="input input-sm input-bordered w-full" 
+                           required>
+                </div>
+            </div>
+
+            <!-- Mapping Type Selection -->
+            <div>
+                <label class="label">
+                    <span class="label-text text-xs font-medium">Mapping Type</span>
+                </label>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    <label class="cursor-pointer">
+                        <input type="radio" 
+                               name="mapping_type" 
+                               value="entity" 
+                               class="radio radio-primary radio-sm"
+                               _="on change toggle .hidden on #entity-config then add .hidden to .mapping-config then remove .hidden from #entity-config" 
+                               required>
+                        <span class="label-text ml-2 text-xs">Entity</span>
+                        <div class="text-xs text-base-content opacity-60">Row → Entity</div>
+                    </label>
+                    
+                    <label class="cursor-pointer">
+                        <input type="radio" 
+                               name="mapping_type" 
+                               value="lookup" 
+                               class="radio radio-secondary radio-sm"
+                               _="on change toggle .hidden on #lookup-config then add .hidden to .mapping-config then remove .hidden from #lookup-config">
+                        <span class="label-text ml-2 text-xs">Lookup</span>
+                        <div class="text-xs text-base-content opacity-60">FK → References</div>
+                    </label>
+                    
+                    <label class="cursor-pointer">
+                        <input type="radio" 
+                               name="mapping_type" 
+                               value="vocabulary" 
+                               class="radio radio-accent radio-sm"
+                               _="on change toggle .hidden on #vocabulary-config then add .hidden to .mapping-config then remove .hidden from #vocabulary-config">
+                        <span class="label-text ml-2 text-xs">Vocabulary</span>
+                        <div class="text-xs text-base-content opacity-60">Multi-value → Terms</div>
+                    </label>
+                    
+                    <label class="cursor-pointer">
+                        <input type="radio" 
+                               name="mapping_type" 
+                               value="junction" 
+                               class="radio radio-info radio-sm"
+                               _="on change toggle .hidden on #junction-config then add .hidden to .mapping-config then remove .hidden from #junction-config">
+                        <span class="label-text ml-2 text-xs">Junction</span>
+                        <div class="text-xs text-base-content opacity-60">Table → Relationships</div>
+                    </label>
+                </div>
+            </div>
+
+        <!-- Dynamic Configuration Sections -->
+        
+        <!-- Entity Mapping Configuration -->
+        <div id="entity-config" class="mapping-config hidden">
+            <div class="card bg-base-100 border p-4">
+                <h5 class="text-sm font-medium mb-3">Entity Mapping Configuration</h5>
+                <div class="space-y-3">
+                    <div>
+                        <label class="label">
+                            <span class="label-text text-xs">Subject Column (Entity ID)</span>
+                        </label>
+                        <select name="subject_column" class="select select-sm select-bordered w-full">
+                            <option value="">Choose column that identifies entities...</option>
+                            <!-- Will be populated dynamically based on selected dataset -->
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label class="label">
+                            <span class="label-text text-xs">Predicate Mappings (Column → Property)</span>
+                        </label>
+                        <div id="predicate-mappings-builder" class="space-y-2">
+                            <div class="text-xs text-base-content opacity-60 p-2 bg-base-200 rounded">
+                                Select a dataset first to configure column mappings
+                            </div>
+                        </div>
+                        <input type="hidden" name="predicate_mappings" id="predicate-mappings-json" value="{}">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lookup Mapping Configuration -->
+        <div id="lookup-config" class="mapping-config hidden">
+            <div class="card bg-base-100 border p-4">
+                <h5 class="text-sm font-medium mb-3">Lookup Mapping Configuration</h5>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                        <label class="label">
+                            <span class="label-text text-xs">Source Column (FK)</span>
+                        </label>
+                        <select name="source_column" class="select select-sm select-bordered w-full">
+                            <option value="">Choose source FK column...</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label class="label">
+                            <span class="label-text text-xs">Target Column (FK)</span>
+                        </label>
+                        <select name="target_column" class="select select-sm select-bordered w-full">
+                            <option value="">Choose target FK column...</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label class="label">
+                            <span class="label-text text-xs">Source Dataset</span>
+                        </label>
+                        <select name="source_dataset_ref" class="select select-sm select-bordered w-full">
+                            <option value="">Choose source dataset...</option>
+                            {% for dataset in active_datasets %}
+                                <option value="{{ dataset.name }}">{{ dataset.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label class="label">
+                            <span class="label-text text-xs">Target Dataset</span>
+                        </label>
+                        <select name="target_dataset_ref" class="select select-sm select-bordered w-full">
+                            <option value="">Choose target dataset...</option>
+                            {% for dataset in active_datasets %}
+                                <option value="{{ dataset.name }}">{{ dataset.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="md:col-span-2">
+                        <label class="label">
+                            <span class="label-text text-xs">Relationship Property</span>
+                        </label>
+                        <input type="text" 
+                               name="relationship_property" 
+                               placeholder="e.g., hasParticipant, relatedTo"
+                               class="input input-sm input-bordered w-full">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Vocabulary & Junction configs (placeholders for now) -->
+        <div id="vocabulary-config" class="mapping-config hidden">
+            <div class="alert alert-info">
+                <span class="text-xs">Vocabulary mapping configuration coming soon...</span>
+            </div>
+        </div>
+
+        <div id="junction-config" class="mapping-config hidden">
+            <div class="alert alert-info">
+                <span class="text-xs">Junction mapping configuration coming soon...</span>
+            </div>
+        </div>
+
+            <!-- Submit Button -->
+            <div class="flex justify-end gap-2 pt-2">
+                <button type="button" 
+                        class="btn btn-sm btn-ghost"
+                        _="on click reset() the closest <form/> then add .hidden to .mapping-config">
+                    Cancel
+                </button>
+                <button type="submit" 
+                        class="btn btn-sm btn-primary">
+                    <span id="mapping-spinner" class="loading loading-spinner loading-xs htmx-indicator"></span>
+                    Create Mapping
+                </button>
+            </div>
+        </form>
+    {% else %}
+        <div class="text-center py-8 text-base-content opacity-50">
+            <svg class="w-12 h-12 mx-auto mb-2 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+            </svg>
+            <p class="text-sm">Select columns above to create mappings</p>
+        </div>
+    {% endif %}
+</div> 

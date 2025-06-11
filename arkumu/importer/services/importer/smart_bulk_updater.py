@@ -13,6 +13,8 @@ from django.utils import timezone as django_timezone
 
 from arkumu.metadata.models.resource import Resource, ResourceType
 from arkumu.metadata.models.triples import Triple
+from arkumu.metadata.models.mappings import Mapping, MappingType
+from arkumu.metadata.services.mapping_executor import MappingExecutor, MappingExecutionStats
 from arkumu.importer.services.importer.uri_utils import mint_uri, slugify_uri_part
 from arkumu.importer.services.importer.data_utils import normalize_string_nfc
 
@@ -912,4 +914,170 @@ class SmartBulkUpdater:
             
         finally:
             if strategy:
-                self.default_strategy = original_strategy 
+                self.default_strategy = original_strategy
+
+    def import_csv_with_mappings(self,
+                               csv_data: List[Dict[str, Any]],
+                               dataset_name: str,
+                               organization_id: str,
+                               auto_create_entity_mapping: bool = True) -> Dict[str, Any]:
+        """
+        Import CSV data using Mapping definitions for efficient entity-focused triple creation.
+        
+        Args:
+            csv_data: List of row dictionaries from CSV
+            dataset_name: Name of the dataset  
+            organization_id: Organization identifier
+            auto_create_entity_mapping: Whether to auto-create entity mapping if none exists
+            
+        Returns:
+            Dictionary with execution results and statistics
+        """
+        logger.info(f"Starting mapping-based import for dataset: {dataset_name}, org: {organization_id}")
+        
+        try:
+            # Look for existing mappings for this dataset
+            existing_mappings = Mapping.objects.filter(
+                organization_id=organization_id,
+                source_dataset=dataset_name,
+                validation_status='active'
+            ).order_by('mapping_type')
+            
+            results = {
+                'dataset_name': dataset_name,
+                'organization_id': organization_id,
+                'mappings_executed': [],
+                'total_entities_created': 0,
+                'total_triples_created': 0,
+                'total_errors': 0,
+                'execution_time': None
+            }
+            
+            start_time = datetime.now()
+            executor = MappingExecutor(base_uri=self.base_uri)
+            
+            if not existing_mappings.exists():
+                if auto_create_entity_mapping:
+                    logger.info(f"No mappings found for {dataset_name}. Auto-creating entity mapping.")
+                    entity_mapping = self._auto_create_entity_mapping(
+                        csv_data, dataset_name, organization_id
+                    )
+                    existing_mappings = [entity_mapping]
+                else:
+                    raise ValueError(f"No active mappings found for dataset {dataset_name} in organization {organization_id}")
+            
+            # Execute mappings in order: ENTITY first, then LOOKUP/JUNCTION/VOCABULARY
+            mapping_order = [MappingType.ENTITY, MappingType.LOOKUP, MappingType.JUNCTION, MappingType.VOCABULARY]
+            
+            for mapping_type in mapping_order:
+                type_mappings = [m for m in existing_mappings if m.mapping_type == mapping_type]
+                
+                for mapping in type_mappings:
+                    try:
+                        logger.info(f"Executing {mapping.get_mapping_type_display()}: {mapping.name}")
+                        
+                        stats = executor.execute_mapping(mapping, csv_data)
+                        
+                        mapping_result = {
+                            'mapping_id': str(mapping.id),
+                            'mapping_name': mapping.name,
+                            'mapping_type': mapping.get_mapping_type_display(),
+                            'entities_created': stats.entities_created,
+                            'entities_updated': stats.entities_updated,
+                            'triples_created': stats.triples_created,
+                            'lookups_resolved': stats.lookups_resolved,
+                            'rows_processed': stats.rows_processed,
+                            'errors': stats.errors
+                        }
+                        
+                        results['mappings_executed'].append(mapping_result)
+                        results['total_entities_created'] += stats.entities_created
+                        results['total_triples_created'] += stats.triples_created
+                        results['total_errors'] += stats.errors
+                        
+                        logger.info(f"Mapping {mapping.name} completed: {stats.entities_created} entities, {stats.triples_created} triples")
+                        
+                    except Exception as e:
+                        logger.error(f"Error executing mapping {mapping.name}: {e}", exc_info=True)
+                        results['total_errors'] += 1
+                        
+                        error_result = {
+                            'mapping_id': str(mapping.id),
+                            'mapping_name': mapping.name,
+                            'mapping_type': mapping.get_mapping_type_display(),
+                            'error': str(e),
+                            'entities_created': 0,
+                            'triples_created': 0,
+                            'errors': 1
+                        }
+                        results['mappings_executed'].append(error_result)
+            
+            end_time = datetime.now()
+            results['execution_time'] = (end_time - start_time).total_seconds()
+            
+            logger.info(f"Mapping-based import completed: {results['total_entities_created']} entities, "
+                       f"{results['total_triples_created']} triples, {results['total_errors']} errors")
+            
+            return results
+            
+        except Exception as e:
+            logger.error(f"Error in mapping-based import: {e}", exc_info=True)
+            raise
+
+    def _auto_create_entity_mapping(self, 
+                                  csv_data: List[Dict[str, Any]], 
+                                  dataset_name: str, 
+                                  organization_id: str) -> Mapping:
+        """
+        Auto-create a basic entity mapping for a dataset.
+        
+        Analyzes the CSV structure and creates sensible defaults:
+        - Uses first column or 'ID' column as subject
+        - Maps remaining columns to generic properties
+        """
+        if not csv_data:
+            raise ValueError("Cannot create mapping from empty CSV data")
+        
+        # Get column names from first row
+        columns = list(csv_data[0].keys())
+        
+        # Determine subject column (prefer 'ID', 'id', or first column)
+        subject_column = None
+        for candidate in ['ID', 'id', 'Id', 'uuid', 'UUID']:
+            if candidate in columns:
+                subject_column = candidate
+                break
+        
+        if not subject_column:
+            subject_column = columns[0]
+            logger.info(f"Using first column '{subject_column}' as subject for entity mapping")
+        
+        # Create predicate mappings for other columns
+        predicate_mappings = {}
+        base_predicate_uri = f"http://arkumu.org/vocab/{organization_id}/"
+        
+        for column in columns:
+            if column != subject_column:
+                # Create a simple predicate URI from column name
+                predicate_name = slugify_uri_part(column.lower().replace(' ', '_'))
+                predicate_mappings[column] = f"{base_predicate_uri}{predicate_name}"
+        
+        # Create the mapping
+        mapping_config = {
+            'subject_column': subject_column,
+            'predicate_mappings': predicate_mappings,
+            'base_uri_template': f'{self.base_uri}/{organization_id}/{dataset_name}/entities/{{subject}}'
+        }
+        
+        mapping = Mapping.objects.create(
+            name=f"Auto-generated Entity Mapping for {dataset_name}",
+            mapping_type=MappingType.ENTITY,
+            organization_id=organization_id,
+            source_dataset=dataset_name,
+            mapping_config=mapping_config,
+            validation_status='active',
+            created_by='system_auto_generation'
+        )
+        
+        logger.info(f"Auto-created entity mapping {mapping.id} for {dataset_name} with subject column: {subject_column}")
+        return mapping 

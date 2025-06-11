@@ -47,11 +47,9 @@
         </div>
     </div>
 
-    <!-- Action Panel (shown when columns are selected) -->
+    <!-- Mapping Creation Panel -->
     <div class="flex-shrink-0">
-        {% if selected_columns %}
-            {% include 'partials/column_mapping_form.html' with selected_columns=selected_columns anchor_column=anchor_column %}
-        {% endif %}
+        {% include 'partials/mapping_creation_form.html' with active_datasets=active_datasets %}
     </div>
     
 </div> 
