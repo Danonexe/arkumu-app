@@ -2049,6 +2049,7 @@ def add_column_to_workspace(request):
         logger.info(f"RENDERING WORKSPACE TEMPLATE with {len(workspace['columns'])} columns")
         workspace_html = render_to_string('partials/selected_columns_workspace.html', {
             'selected_columns': workspace['columns'],
+            'anchor_column': next((col for col in workspace['columns'] if col.get('is_anchor')), None),
             'organization_id': organization_id,
         }, request=request)
         logger.info(f"WORKSPACE HTML LENGTH: {len(workspace_html)}")
@@ -2133,6 +2134,7 @@ def remove_column_from_workspace(request):
         # Generate workspace HTML
         workspace_html = render_to_string('partials/selected_columns_workspace.html', {
             'selected_columns': workspace['columns'],
+            'anchor_column': next((col for col in workspace['columns'] if col.get('is_anchor')), None),
             'organization_id': organization_id,
         }, request=request)
         
@@ -2249,6 +2251,7 @@ def clear_workspace(request):
         # Generate workspace HTML
         workspace_html = render_to_string('partials/selected_columns_workspace.html', {
             'selected_columns': [],
+            'anchor_column': None,
             'organization_id': organization_id,
         }, request=request)
         
@@ -2274,6 +2277,67 @@ def clear_workspace(request):
         logger.error(f"CLEAR WORKSPACE: Error clearing workspace: {e}", exc_info=True)
         return JsonResponse({'error': str(e)}, status=500)
 
+
+@login_required
+def set_anchor_column(request):
+    """
+    HTMX endpoint to set/unset a column as the anchor column.
+    Only one column can be the anchor at a time.
+    """
+    logger.info(f"SET_ANCHOR_COLUMN: Method={request.method}, Content-Type={request.content_type}")
+    logger.info(f"SET_ANCHOR_COLUMN: POST data: {dict(request.POST)}")
+    
+    if request.method != 'POST':
+        logger.error("SET_ANCHOR_COLUMN: Only POST method allowed")
+        return JsonResponse({'error': 'Only POST method allowed'}, status=400)
+    
+    try:
+        column_id = request.POST.get('column_id')
+        organization_id = get_organization_id_from_request(request)
+        
+        logger.info(f"SET ANCHOR COLUMN: {column_id} for org={organization_id}")
+        
+        if not column_id:
+            return JsonResponse({'error': 'Missing column_id'}, status=400)
+        
+        # Get current workspace from cache
+        workspace_cache_key = f"relationship_workspace_{organization_id}"
+        workspace = cache.get(workspace_cache_key, {'columns': []})
+        
+        # Update anchor status
+        existing_columns = workspace.get('columns', [])
+        anchor_set = False
+        
+        for col in existing_columns:
+            if col.get('id') == column_id:
+                # Toggle anchor status for this column
+                col['is_anchor'] = not col.get('is_anchor', False)
+                anchor_set = col['is_anchor']
+                logger.info(f"SET ANCHOR: Column {column_id} anchor status: {anchor_set}")
+            else:
+                # Clear anchor status for all other columns (only one anchor allowed)
+                if anchor_set:
+                    col['is_anchor'] = False
+        
+        workspace['columns'] = existing_columns
+        
+        # Save back to cache
+        cache.set(workspace_cache_key, workspace, timeout=60*60*24)  # 24 hours
+        
+        logger.info(f"SET ANCHOR: Updated workspace, anchor_set={anchor_set}")
+        
+        # Generate workspace HTML with updated anchor status
+        workspace_html = render_to_string('partials/selected_columns_workspace.html', {
+            'selected_columns': workspace['columns'],
+            'anchor_column': next((col for col in workspace['columns'] if col.get('is_anchor')), None),
+            'organization_id': organization_id,
+        }, request=request)
+        
+        return HttpResponse(workspace_html)
+        
+    except Exception as e:
+        logger.error(f"SET ANCHOR: Error setting anchor column: {e}", exc_info=True)
+        return JsonResponse({'error': str(e)}, status=500)
 
 
 def export_mappings(request):
