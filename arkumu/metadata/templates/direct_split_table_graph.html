@@ -334,4 +334,64 @@ document.addEventListener('htmx:responseError', function(event) {
     }
 });
 </script>
+
+<!-- Global Hyperscript Functions -->
+<script type="text/hyperscript">
+    -- Global function to update loaded datasets display
+    def updateLoadedDatasetsList()
+        if $loadedDatasets and $loadedDatasets.length > 0 then
+            set html to ''
+            set optionsHtml to '<option value="">Choose dataset...</option>'
+            
+            repeat for datasetKey in $loadedDatasets
+                js(datasetKey) return datasetKey.split('::'); end
+                set parts to the result
+                set source to parts[0]
+                set dataset to parts[1]
+                
+                -- Build display HTML
+                set datasetHtml to '<div class="flex items-center gap-2 p-2 bg-base-100 rounded border border-base-300">'
+                set datasetHtml to datasetHtml + '<div class="avatar placeholder">'
+                set datasetHtml to datasetHtml + '<div class="bg-primary text-primary-content rounded w-6 h-6">'
+                set datasetHtml to datasetHtml + '<svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">'
+                set datasetHtml to datasetHtml + '<path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4z"/>'
+                set datasetHtml to datasetHtml + '</svg></div></div>'
+                set datasetHtml to datasetHtml + '<div class="flex-1 min-w-0">'
+                set datasetHtml to datasetHtml + '<div class="text-sm font-medium truncate">' + dataset + '</div>'
+                set datasetHtml to datasetHtml + '<div class="text-xs text-base-content opacity-60 truncate">' + source + '</div>'
+                set datasetHtml to datasetHtml + '</div></div>'
+                
+                set html to html + datasetHtml
+                
+                -- Build option HTML
+                set optionsHtml to optionsHtml + '<option value="' + dataset + '">' + dataset + ' (' + source + ')</option>'
+            end
+            
+            -- Update elements if they exist (defensive checks)
+            if #loaded-datasets-list exists
+                put html into #loaded-datasets-list
+            end
+            if #loaded-dataset-count exists
+                put $loadedDatasets.length into #loaded-dataset-count
+            end
+            
+            -- Update intra-dataset selector if it exists
+            if #intra-dataset-selector exists
+                put optionsHtml into #intra-dataset-selector
+            end
+        else
+            -- Update elements if they exist (defensive checks)
+            if #loaded-datasets-list exists
+                put '<div class="text-center py-4 text-base-content opacity-50 text-sm">No datasets loaded yet</div>' into #loaded-datasets-list
+            end
+            if #loaded-dataset-count exists
+                put '0' into #loaded-dataset-count
+            end
+            if #intra-dataset-selector exists
+                put '<option value="">Choose dataset...</option>' into #intra-dataset-selector
+            end
+        end
+    end
+</script>
+
 {% endblock %} 

@@ -1,18 +1,18 @@
-<!-- Relationship Builder Panel -->
+<!-- Column-Centric Mapping Builder -->
 <div class="flex flex-col h-full" 
      _="on load
-        -- Initialize relationship tracking variables
-        if $selectedColumn1 is undefined then set $selectedColumn1 to null end
-        if $selectedColumn2 is undefined then set $selectedColumn2 to null end
-        if $activeRelationships is undefined then set $activeRelationships to [] end
-        log 'Relationship builder initialized'">
+        -- Initialize column-centric tracking variables
+        if $selectedColumns is undefined then set $selectedColumns to [] end
+        if $anchorColumn is undefined then set $anchorColumn to null end
+        if $createdMappings is undefined then set $createdMappings to [] end
+        log 'Column-centric mapping builder initialized'">
 
     <!-- Header -->
     <div class="flex justify-between items-center mb-4">
         <h3 class="text-lg font-medium">
-            <span class="text-primary">Dataset</span> Relationships
+            <span class="text-primary">Column</span> Workspace
         </h3>
-        <div class="badge badge-primary badge-outline badge-sm">Phase 1</div>
+        <div class="badge badge-primary badge-outline badge-sm">Interactive</div>
     </div>
     <div class="divider my-0"></div>
 
@@ -22,235 +22,413 @@
             <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/>
             </svg>
-            Loaded Datasets
+            Active Datasets
             <span id="loaded-dataset-count" class="badge badge-xs badge-info">0</span>
         </h4>
         
         <div id="loaded-datasets-list" class="space-y-2">
-            <!-- This will be populated by hyperscript when datasets are loaded -->
             <div class="text-center py-4 text-base-content opacity-50 text-sm">
                 No datasets loaded yet
             </div>
         </div>
     </div>
 
-    <!-- Column Selection Section -->
-    <div class="mb-4">
-        <h4 class="text-sm font-medium mb-2 flex items-center gap-2">
-            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
-            Selected Columns
-        </h4>
-        
-        <div class="space-y-2">
-            <!-- First Column Selection -->
-            <div class="card bg-base-200 p-3">
-                <div class="flex items-center justify-between">
-                    <span class="text-xs font-medium opacity-70">Column A:</span>
-                    <button class="btn btn-xs btn-ghost opacity-50" 
-                            id="clear-column1-btn"
-                            style="display: none;"
-                            _="on click
-                               set $selectedColumn1 to null
-                               put 'Select a column...' into #selected-column1-display
-                               hide me
-                               call updateLinkButton()">
-                        ×
-                    </button>
+    <!-- Selected Columns Workspace -->
+    <div class="flex-1 flex flex-col">
+        <div class="flex items-center justify-between mb-3">
+            <h4 class="text-sm font-medium flex items-center gap-2">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                Selected Columns
+                <span id="selected-columns-count" class="badge badge-xs badge-warning">0</span>
+            </h4>
+            <div class="flex gap-2">
+                <button class="btn btn-xs btn-ghost opacity-60" 
+                        id="clear-all-selections-btn"
+                        style="display: none;"
+                        _="on click call clearAllSelections()">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                    Clear All
+                </button>
+            </div>
+        </div>
+
+        <!-- Column Selection Area -->
+        <div class="flex-1 overflow-y-auto">
+            <div id="column-workspace" class="space-y-3">
+                <!-- Empty state -->
+                <div id="workspace-empty-state" class="text-center py-8">
+                    <svg class="w-16 h-16 mx-auto mb-4 text-base-content opacity-20" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <p class="text-sm text-base-content opacity-50">Click columns to add them here</p>
+                    <p class="text-xs text-base-content opacity-30 mt-1">Build relationships visually</p>
                 </div>
-                <div id="selected-column1-display" class="text-sm mt-1 text-base-content opacity-60">
-                    Select a column...
+            </div>
+        </div>
+
+        <!-- Action Panel -->
+        <div id="action-panel" class="border-t border-base-300 pt-4 mt-4" style="display: none;">
+            <!-- Anchor Selection -->
+            <div class="mb-3">
+                <h5 class="text-xs font-medium mb-2 text-base-content opacity-70">Primary/Anchor Column:</h5>
+                <div id="anchor-selection" class="text-sm text-base-content opacity-50">
+                    Select a column as anchor first
                 </div>
             </div>
 
-            <!-- Second Column Selection -->
-            <div class="card bg-base-200 p-3">
-                <div class="flex items-center justify-between">
-                    <span class="text-xs font-medium opacity-70">Column B:</span>
-                    <button class="btn btn-xs btn-ghost opacity-50" 
-                            id="clear-column2-btn"
-                            style="display: none;"
+            <!-- Relationship Type -->
+            <div class="mb-3">
+                <h5 class="text-xs font-medium mb-2 text-base-content opacity-70">Relationship Type:</h5>
+                <select class="select select-bordered select-xs w-full" id="relationship-type-selector">
+                    <option value="join">Join/Link</option>
+                    <option value="foreign_key">Foreign Key</option>
+                    <option value="derived">Derived From</option>
+                    <option value="calculated">Calculated Field</option>
+                    <option value="lookup">Lookup Reference</option>
+                    <option value="grouping">Grouping Key</option>
+                    <option value="transformation">Data Transformation</option>
+                </select>
+            </div>
+
+            <!-- Direction/Flow -->
+            <div class="mb-3">
+                <h5 class="text-xs font-medium mb-2 text-base-content opacity-70">Direction:</h5>
+                <div class="grid grid-cols-2 gap-2">
+                    <button class="btn btn-xs btn-outline" 
+                            id="bidirectional-btn"
                             _="on click
-                               set $selectedColumn2 to null
-                               put 'Select a column...' into #selected-column2-display
-                               hide me
-                               call updateLinkButton()">
-                        ×
+                               add .btn-active to me
+                               remove .btn-active from #unidirectional-btn
+                               set $mappingDirection to 'bidirectional'">
+                        ↔ Both Ways
                     </button>
-                </div>
-                <div id="selected-column2-display" class="text-sm mt-1 text-base-content opacity-60">
-                    Select a column...
+                    <button class="btn btn-xs btn-outline btn-active" 
+                            id="unidirectional-btn"
+                            _="on click
+                               add .btn-active to me
+                               remove .btn-active from #bidirectional-btn
+                               set $mappingDirection to 'unidirectional'">
+                        → One Way
+                    </button>
                 </div>
             </div>
 
-            <!-- Link Button -->
+            <!-- Create Mapping Button -->
             <button class="btn btn-sm btn-success w-full gap-2" 
-                    id="link-columns-btn"
-                    style="display: none;"
-                    _="on click
-                       if $selectedColumn1 and $selectedColumn2
-                           -- Create relationship object
-                           js(me, $selectedColumn1, $selectedColumn2, $activeRelationships)
-                               const relationship = {
-                                   id: Date.now(),
-                                   column1: $selectedColumn1,
-                                   column2: $selectedColumn2,
-                                   type: 'basic_link',
-                                   created: new Date().toLocaleTimeString()
-                               };
-                               $activeRelationships.push(relationship);
-                               return relationship;
-                           end
-                           set newRelationship to the result
-                           
-                           log 'Created relationship:', newRelationship
-                           
-                           -- Clear selections
-                           set $selectedColumn1 to null
-                           set $selectedColumn2 to null
-                           put 'Select a column...' into #selected-column1-display
-                           put 'Select a column...' into #selected-column2-display
-                           hide #clear-column1-btn
-                           hide #clear-column2-btn
-                           hide #link-columns-btn
-                           
-                           -- Update relationships display
-                           call updateRelationshipsList()
-                           
-                           -- Show success toast
-                           set toastMsg to 'Linked ' + newRelationship.column1.dataset + '.' + newRelationship.column1.name + ' ↔ ' + newRelationship.column2.dataset + '.' + newRelationship.column2.name
-                           send showToast(message: toastMsg, type: 'success') to body
-                       end">
+                    id="create-mapping-btn"
+                    _="on click call createColumnMapping()">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
                 </svg>
-                Link Columns
+                Create Mapping
             </button>
         </div>
     </div>
 
-    <!-- Active Relationships Section -->
-    <div class="flex-1 overflow-y-auto">
-        <h4 class="text-sm font-medium mb-2 flex items-center gap-2">
+    <!-- Created Mappings -->
+    <div class="border-t border-base-300 pt-4 mt-4">
+        <h4 class="text-sm font-medium mb-3 flex items-center gap-2">
             <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
             </svg>
-            Active Relationships
-            <span id="relationships-count" class="badge badge-xs badge-success">0</span>
+            Created Mappings
+            <span id="mappings-count" class="badge badge-xs badge-success">0</span>
         </h4>
         
-        <div id="relationships-list" class="space-y-2">
-            <div class="text-center py-8 text-base-content opacity-50 text-sm">
-                <svg class="w-12 h-12 mx-auto mb-2 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
-                </svg>
-                No relationships created yet
-                <div class="text-xs mt-1 opacity-70">Select two columns to create a link</div>
+        <div id="mappings-list" class="space-y-2 max-h-40 overflow-y-auto">
+            <div class="text-center py-4 text-base-content opacity-50 text-xs">
+                No mappings created yet
             </div>
         </div>
     </div>
 </div>
 
-<!-- Hyperscript Functions -->
+<!-- Enhanced Hyperscript Functions -->
 <script type="text/hyperscript">
-    -- Function to update the link button visibility
-    def updateLinkButton()
-        if $selectedColumn1 and $selectedColumn2 then
-            show #link-columns-btn
-        else
-            hide #link-columns-btn
-        end
-    end
+    -- Initialize mapping direction
+    on load set $mappingDirection to 'unidirectional' end
 
-    -- Function to update relationships list display
-    def updateRelationshipsList()
-        if $activeRelationships.length > 0 then
-            set html to ''
-            repeat for relationship in $activeRelationships
-                -- Build relationship HTML using string concatenation
-                set relationshipHtml to '<div class="card bg-base-100 border border-base-300 p-3">'
-                set relationshipHtml to relationshipHtml + '<div class="flex items-start justify-between">'
-                set relationshipHtml to relationshipHtml + '<div class="flex-1">'
-                set relationshipHtml to relationshipHtml + '<div class="text-sm font-medium">'
-                set relationshipHtml to relationshipHtml + '<span class="text-primary">' + relationship.column1.dataset + '</span>'
-                set relationshipHtml to relationshipHtml + '.<span class="text-info">' + relationship.column1.name + '</span>'
-                set relationshipHtml to relationshipHtml + '<span class="mx-2 text-base-content opacity-50">↔</span>'
-                set relationshipHtml to relationshipHtml + '<span class="text-primary">' + relationship.column2.dataset + '</span>'
-                set relationshipHtml to relationshipHtml + '.<span class="text-info">' + relationship.column2.name + '</span>'
-                set relationshipHtml to relationshipHtml + '</div>'
-                set relationshipHtml to relationshipHtml + '<div class="text-xs text-base-content opacity-60 mt-1">'
-                set relationshipHtml to relationshipHtml + 'Created: ' + relationship.created
-                set relationshipHtml to relationshipHtml + '</div></div>'
-                set relationshipHtml to relationshipHtml + '<button class="btn btn-xs btn-ghost btn-circle text-error hover:bg-error hover:text-error-content" title="Remove relationship" data-rel-id="' + relationship.id + '"'
-                set relationshipHtml to relationshipHtml + ' _="on click js(me, $activeRelationships) const relationshipId = parseInt(me.getAttribute(\'data-rel-id\')); const index = $activeRelationships.findIndex(r => r.id === relationshipId); if (index > -1) { $activeRelationships.splice(index, 1); } end call updateRelationshipsList() send showToast(message: \'Relationship removed\', type: \'info\') to body">'
-                set relationshipHtml to relationshipHtml + '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">'
-                set relationshipHtml to relationshipHtml + '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>'
-                set relationshipHtml to relationshipHtml + '</svg></button></div></div>'
-                
-                set html to html + relationshipHtml
-            end
-            put html into #relationships-list
-            put $activeRelationships.length into #relationships-count
-        else
-            put '<div class="text-center py-8 text-base-content opacity-50 text-sm"><svg class="w-12 h-12 mx-auto mb-2 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>No relationships created yet<div class="text-xs mt-1 opacity-70">Select two columns to create a link</div></div>' into #relationships-list
-            put '0' into #relationships-count
-        end
-    end
+         -- Function to handle column selection from dataset cards
+     def handleColumnSelection(columnData)
+         log 'Column selected:', columnData
+         
+         -- Check if column is already selected
+         set isAlreadySelected to false
+         repeat for col in $selectedColumns
+             if col.dataset + '.' + col.name is columnData.dataset + '.' + columnData.name then
+                 set isAlreadySelected to true
+             end
+         end
+         
+         if isAlreadySelected then
+             send showToast(message: 'Column already selected: ' + columnData.dataset + '.' + columnData.name, type: 'info') to body
+             exit
+         end
+         
+         -- Add unique ID to column data
+         js(columnData) columnData.id = Date.now() + Math.random(); return columnData; end
+         set columnData to the result
+         
+         -- Add to selected columns
+         append columnData to $selectedColumns
+         
+         log 'Total selected columns:', $selectedColumns.length
+         
+         -- Update workspace display
+         call updateColumnWorkspace()
+         
+         -- Always show action panel and controls when we have columns
+         call showActionPanelIfNeeded()
+     end
+     
+     -- Function to show action panel when needed
+     def showActionPanelIfNeeded()
+         if $selectedColumns.length > 0 then
+             log 'Showing action panel - columns:', $selectedColumns.length
+             if #action-panel exists then 
+                 show #action-panel
+                 log 'Action panel shown'
+             else
+                 log 'Action panel element not found'
+             end
+             if #workspace-empty-state exists then hide #workspace-empty-state end
+             if #clear-all-selections-btn exists then show #clear-all-selections-btn end
+         else
+             log 'Hiding action panel - no columns'
+             if #action-panel exists then hide #action-panel end
+             if #workspace-empty-state exists then show #workspace-empty-state end
+             if #clear-all-selections-btn exists then hide #clear-all-selections-btn end
+         end
+     end
 
-    -- Function to handle column selection from dataset cards
-    def handleColumnSelection(columnData)
-        if not $selectedColumn1 then
-            set $selectedColumn1 to columnData
-            put columnData.dataset + '.' + columnData.name into #selected-column1-display
-            show #clear-column1-btn
-        else if not $selectedColumn2 and columnData.dataset + '.' + columnData.name != $selectedColumn1.dataset + '.' + $selectedColumn1.name then
-            set $selectedColumn2 to columnData
-            put columnData.dataset + '.' + columnData.name into #selected-column2-display
-            show #clear-column2-btn
-        else
-            -- Replace first selection if trying to select same column or third column
-            set $selectedColumn1 to columnData
-            put columnData.dataset + '.' + columnData.name into #selected-column1-display
-            show #clear-column1-btn
+    -- Function to update column workspace display
+    def updateColumnWorkspace()
+        set html to ''
+        
+        repeat for column in $selectedColumns
+            set isAnchor to ($anchorColumn and $anchorColumn.id is column.id)
             
-            -- Clear second selection
-            set $selectedColumn2 to null
-            put 'Select a column...' into #selected-column2-display
-            hide #clear-column2-btn
+            set columnHtml to '<div class="card bg-base-100 border p-3 hover:shadow-md transition-shadow" data-column-id="' + column.id + '">'
+            set columnHtml to columnHtml + '<div class="flex items-center justify-between">'
+            set columnHtml to columnHtml + '<div class="flex-1">'
+            set columnHtml to columnHtml + '<div class="flex items-center gap-2">'
+            
+            -- Anchor indicator
+            if isAnchor then
+                set columnHtml to columnHtml + '<div class="badge badge-warning badge-xs">ANCHOR</div>'
+            end
+            
+            set columnHtml to columnHtml + '<div class="text-sm font-medium">'
+            set columnHtml to columnHtml + '<span class="text-primary">' + column.dataset + '</span>'
+            set columnHtml to columnHtml + '<span class="text-base-content opacity-50">.</span>'
+            set columnHtml to columnHtml + '<span class="text-info">' + column.name + '</span>'
+            set columnHtml to columnHtml + '</div></div>'
+            
+            if column.type then
+                set columnHtml to columnHtml + '<div class="text-xs text-base-content opacity-60">' + column.type + '</div>'
+            end
+            
+            set columnHtml to columnHtml + '</div>'
+            set columnHtml to columnHtml + '<div class="flex items-center gap-2">'
+            
+            -- Set as anchor button
+            if not isAnchor then
+                set columnHtml to columnHtml + '<button class="btn btn-xs btn-warning btn-outline" title="Set as anchor"'
+                set columnHtml to columnHtml + ' _="on click call setAnchorColumn(' + column.id + ')">'
+                set columnHtml to columnHtml + '<svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">'
+                set columnHtml to columnHtml + '<path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>'
+                set columnHtml to columnHtml + '</svg></button>'
+            end
+            
+            -- Remove button
+            set columnHtml to columnHtml + '<button class="btn btn-xs btn-ghost btn-circle text-error" title="Remove column"'
+            set columnHtml to columnHtml + ' _="on click call removeColumn(' + column.id + ')">'
+            set columnHtml to columnHtml + '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">'
+            set columnHtml to columnHtml + '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>'
+            set columnHtml to columnHtml + '</svg></button>'
+            
+            set columnHtml to columnHtml + '</div></div></div>'
+            
+            set html to html + columnHtml
         end
         
-        call updateLinkButton()
+                 if #column-workspace exists then put html into #column-workspace end
+         if #selected-columns-count exists then put $selectedColumns.length into #selected-columns-count end
+         
+         -- Update anchor display
+         if #anchor-selection exists then
+             if $anchorColumn then
+                 put $anchorColumn.dataset + '.' + $anchorColumn.name + ' (Primary)' into #anchor-selection
+             else
+                 put 'Select a column as anchor first' into #anchor-selection
+             end
+         end
     end
 
-    -- Function to update loaded datasets display
-    def updateLoadedDatasetsList()
-        if $loadedDatasets and $loadedDatasets.length > 0 then
-            set html to ''
-            repeat for datasetKey in $loadedDatasets
-                js(datasetKey) return datasetKey.split('::'); end
-                set parts to the result
-                set source to parts[0]
-                set dataset to parts[1]
-                
-                set datasetHtml to '<div class="flex items-center gap-2 p-2 bg-base-100 rounded border border-base-300">'
-                set datasetHtml to datasetHtml + '<div class="avatar placeholder">'
-                set datasetHtml to datasetHtml + '<div class="bg-primary text-primary-content rounded w-6 h-6">'
-                set datasetHtml to datasetHtml + '<svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">'
-                set datasetHtml to datasetHtml + '<path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4z"/>'
-                set datasetHtml to datasetHtml + '</svg></div></div>'
-                set datasetHtml to datasetHtml + '<div class="flex-1 min-w-0">'
-                set datasetHtml to datasetHtml + '<div class="text-sm font-medium truncate">' + dataset + '</div>'
-                set datasetHtml to datasetHtml + '<div class="text-xs text-base-content opacity-60 truncate">' + source + '</div>'
-                set datasetHtml to datasetHtml + '</div></div>'
-                
-                set html to html + datasetHtml
+    -- Function to set anchor column
+    def setAnchorColumn(columnId)
+        repeat for column in $selectedColumns
+            if column.id is columnId then
+                set $anchorColumn to column
+                log 'Anchor set to:', column
             end
-            put html into #loaded-datasets-list
-            put $loadedDatasets.length into #loaded-dataset-count
-        else
-            put '<div class="text-center py-4 text-base-content opacity-50 text-sm">No datasets loaded yet</div>' into #loaded-datasets-list
-            put '0' into #loaded-dataset-count
         end
+        call updateColumnWorkspace()
+    end
+
+    -- Function to remove column
+    def removeColumn(columnId)
+        js(columnId, $selectedColumns, $anchorColumn)
+            const index = $selectedColumns.findIndex(col => col.id === columnId);
+            if (index > -1) {
+                const removedColumn = $selectedColumns[index];
+                $selectedColumns.splice(index, 1);
+                
+                // Clear anchor if removing anchor column
+                if ($anchorColumn && $anchorColumn.id === columnId) {
+                    $anchorColumn = null;
+                }
+                
+                return removedColumn;
+            }
+            return null;
+        end
+        set removedColumn to the result
+        
+                 if removedColumn then
+             call updateColumnWorkspace()
+             
+             -- Update action panel visibility
+             call showActionPanelIfNeeded()
+             
+             send showToast(message: 'Removed ' + removedColumn.dataset + '.' + removedColumn.name, type: 'info') to body
+         end
+    end
+
+         -- Function to clear all selections
+     def clearAllSelections()
+         set $selectedColumns to []
+         set $anchorColumn to null
+         if #selected-columns-count exists then put '0' into #selected-columns-count end
+         if #column-workspace exists then put '' into #column-workspace end
+         
+         -- Update action panel visibility
+         call showActionPanelIfNeeded()
+     end
+
+    -- Function to create column mapping
+    def createColumnMapping()
+        if $selectedColumns.length < 2 then
+            send showToast(message: 'Need at least 2 columns to create a mapping', type: 'warning') to body
+            exit
+        end
+        
+        if not $anchorColumn then
+            send showToast(message: 'Please set an anchor column first', type: 'warning') to body
+            exit
+        end
+        
+        js(me, $selectedColumns, $anchorColumn, $createdMappings, $mappingDirection)
+            const relationshipType = document.getElementById('relationship-type-selector').value;
+            const direction = $mappingDirection || 'unidirectional';
+            
+            const mapping = {
+                id: Date.now(),
+                anchor: $anchorColumn,
+                columns: [...$selectedColumns],
+                type: relationshipType,
+                direction: direction,
+                created: new Date().toLocaleTimeString()
+            };
+            
+            $createdMappings.push(mapping);
+            return mapping;
+        end
+        set newMapping to the result
+        
+                 log 'Created mapping:', newMapping
+         
+         -- Clear selections after creating mapping
+         call clearAllSelections()
+         
+         -- Update mappings display
+         call updateMappingsList()
+         
+         -- Ensure action panel is properly hidden after clearing
+         call showActionPanelIfNeeded()
+         
+         -- Show success message
+         set toastMsg to 'Created mapping: ' + newMapping.anchor.dataset + '.' + newMapping.anchor.name + ' + ' + (newMapping.columns.length - 1) + ' other columns'
+         send showToast(message: toastMsg, type: 'success') to body
+    end
+
+    -- Function to update mappings list
+    def updateMappingsList()
+        if $createdMappings.length > 0 then
+            set html to ''
+            repeat for mapping in $createdMappings
+                set mappingHtml to '<div class="card bg-base-100 border border-success p-2">'
+                set mappingHtml to mappingHtml + '<div class="flex items-start justify-between">'
+                set mappingHtml to mappingHtml + '<div class="flex-1 min-w-0">'
+                
+                -- Anchor column
+                set mappingHtml to mappingHtml + '<div class="text-sm font-medium mb-1">'
+                set mappingHtml to mappingHtml + '<span class="badge badge-warning badge-xs mr-1">ANCHOR</span>'
+                set mappingHtml to mappingHtml + '<span class="text-primary">' + mapping.anchor.dataset + '</span>'
+                set mappingHtml to mappingHtml + '.<span class="text-info">' + mapping.anchor.name + '</span>'
+                set mappingHtml to mappingHtml + '</div>'
+                
+                -- Other columns
+                set mappingHtml to mappingHtml + '<div class="text-xs text-base-content opacity-70 mb-1">'
+                repeat for column in mapping.columns
+                    if column.id != mapping.anchor.id then
+                        set mappingHtml to mappingHtml + column.dataset + '.' + column.name + ' • '
+                    end
+                end
+                set mappingHtml to mappingHtml + '</div>'
+                
+                -- Metadata
+                set mappingHtml to mappingHtml + '<div class="flex gap-2 text-xs">'
+                set mappingHtml to mappingHtml + '<span class="badge badge-success badge-xs">' + mapping.type + '</span>'
+                if mapping.direction is 'bidirectional' then
+                    set mappingHtml to mappingHtml + '<span class="badge badge-info badge-xs">↔</span>'
+                else
+                    set mappingHtml to mappingHtml + '<span class="badge badge-info badge-xs">→</span>'
+                end
+                set mappingHtml to mappingHtml + '</div>'
+                
+                set mappingHtml to mappingHtml + '</div>'
+                
+                -- Remove button
+                set mappingHtml to mappingHtml + '<button class="btn btn-xs btn-ghost btn-circle text-error" data-mapping-id="' + mapping.id + '"'
+                set mappingHtml to mappingHtml + ' _="on click call removeMapping(' + mapping.id + ')">'
+                set mappingHtml to mappingHtml + '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">'
+                set mappingHtml to mappingHtml + '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>'
+                set mappingHtml to mappingHtml + '</svg></button></div></div>'
+                
+                set html to html + mappingHtml
+            end
+                         if #mappings-list exists then put html into #mappings-list end
+             if #mappings-count exists then put $createdMappings.length into #mappings-count end
+         else
+             if #mappings-list exists then put '<div class="text-center py-4 text-base-content opacity-50 text-xs">No mappings created yet</div>' into #mappings-list end
+             if #mappings-count exists then put '0' into #mappings-count end
+         end
+    end
+
+    -- Function to remove mapping
+    def removeMapping(mappingId)
+        js(mappingId, $createdMappings)
+            const index = $createdMappings.findIndex(m => m.id === mappingId);
+            if (index > -1) {
+                $createdMappings.splice(index, 1);
+            }
+        end
+        call updateMappingsList()
+        send showToast(message: 'Mapping removed', type: 'info') to body
     end
 </script> 
