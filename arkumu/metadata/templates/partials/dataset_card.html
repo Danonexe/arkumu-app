@@ -227,21 +227,30 @@
                               log 'ERROR: Table column not found for:', columnIndex, datasetName
                           end
                           
-                          -- Show loading indicator directly
+                          -- Pass column selection to relationship builder
                           set columnName to @data-column-name
                           set datasetName to @data-dataset-name
-                          log 'Analyzing column:', columnName, 'from dataset:', datasetName
+                          log 'Column selected for relationship building:', columnName, 'from dataset:', datasetName
                           
-                          get #analysis-container
-                          set it.innerHTML to `
-                            <div class='flex justify-center items-center h-full'>
-                              <div class='loading loading-spinner loading-lg text-info'></div>
-                              <span class='ml-3'>Analyzing column data...</span>
-                            </div>
-                          `
+                          -- Create column data object
+                          js(me, columnName, datasetName)
+                              const columnData = {
+                                  name: columnName,
+                                  dataset: datasetName,
+                                  index: me.getAttribute('data-column-index')
+                              };
+                              return columnData;
+                          end
+                          set columnData to the result
+                          
+                          -- Send to relationship builder
+                          call handleColumnSelection(columnData)
+                          
+                          -- Update loaded datasets list
+                          call updateLoadedDatasetsList()
                           
                           -- Trigger success toast
-                          send showToast(message: `Analyzing column '${columnName}' from ${datasetName}`, type: 'info') to body"
+                          send showToast(message: `Selected column '${columnName}' from ${datasetName}`, type: 'info') to body"
                       hx-get="{% url 'metadata:direct_analyze_column' %}?source={{ dataset.source|urlencode }}&dataset={{ dataset.name|urlencode }}&column={{ column|urlencode }}{% if organization_id %}&organization={{ organization_id }}{% endif %}"
                       hx-target="#analysis-container"
                       hx-swap="innerHTML"
@@ -315,19 +324,28 @@
                                             end
                                         end
                                         
-                                        -- Show loading indicator directly
-                                        log 'Analyzing column:', columnName, 'from dataset:', datasetName
+                                        -- Pass column selection to relationship builder
+                                        log 'Column selected for relationship building:', columnName, 'from dataset:', datasetName
                                         
-                                        get #analysis-container
-                                        set it.innerHTML to `
-                                          <div class='flex justify-center items-center h-full'>
-                                            <div class='loading loading-spinner loading-lg text-info'></div>
-                                            <span class='ml-3'>Analyzing column data...</span>
-                                          </div>
-                                        `
+                                        -- Create column data object
+                                        js(me, columnName, datasetName, columnIndex)
+                                            const columnData = {
+                                                name: columnName,
+                                                dataset: datasetName,
+                                                index: columnIndex
+                                            };
+                                            return columnData;
+                                        end
+                                        set columnData to the result
+                                        
+                                        -- Send to relationship builder
+                                        call handleColumnSelection(columnData)
+                                        
+                                        -- Update loaded datasets list
+                                        call updateLoadedDatasetsList()
                                         
                                         -- Trigger success toast
-                                        send showToast(message: `Analyzing column '${columnName}' from ${datasetName}`, type: 'info') to body"
+                                        send showToast(message: `Selected column '${columnName}' from ${datasetName}`, type: 'info') to body"
                                     hx-get="{% url 'metadata:direct_analyze_column' %}?source={{ dataset.source|urlencode }}&dataset={{ dataset.name|urlencode }}&column={{ header|urlencode }}{% if organization_id %}&organization={{ organization_id }}{% endif %}"
                                     hx-target="#analysis-container"
                                     hx-swap="innerHTML"
