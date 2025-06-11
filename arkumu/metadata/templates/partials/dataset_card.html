@@ -101,7 +101,10 @@
                             
                             -- Update dataset count badge and UI elements
                             if remainingCount > 0
-                                put remainingCount into #dataset-count-badge
+                                -- Only update if the element exists
+                                if #dataset-count-badge exists
+                                    put remainingCount into #dataset-count-badge
+                                end
                                 if #loaded-count exists
                                     put remainingCount into #loaded-count
                                 end
@@ -115,8 +118,12 @@
                                     end
                                 end
                             else
-                                hide #dataset-count-badge
-                                hide #clear-datasets-btn
+                                if #dataset-count-badge exists
+                                    hide #dataset-count-badge
+                                end
+                                if #clear-datasets-btn exists
+                                    hide #clear-datasets-btn
+                                end
                                 if #loaded-datasets-analysis exists
                                     hide #loaded-datasets-analysis
                                 end
@@ -124,6 +131,9 @@
                                     hide #quick-analyze-btn
                                 end
                             end
+                            
+                            -- Update relationship builder
+                            call updateLoadedDatasetsList()
                             
                             -- Remove the dataset card with smooth animation
                             add .opacity-0 to closest .card
