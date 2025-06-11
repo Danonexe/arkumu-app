@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 
-@login_required
+
 def find_matching_resources(request):
     """HTMX endpoint for finding existing resources that match a pattern in selected fields."""
     if request.method != 'POST':
@@ -191,7 +191,7 @@ def _pattern_matches(pattern_type, pattern_value, test_string):
         # Invalid regex pattern
         return False
 
-@login_required
+
 def add_mapping_rule(request):
     """HTMX endpoint for adding a new type mapping rule."""
     if request.method != 'POST':
@@ -242,7 +242,7 @@ def add_mapping_rule(request):
 
 
 
-@login_required
+
 def list_datasets(request):
     """HTMX endpoint for listing available datasets for transformation."""
     institution_filter = request.GET.get('institution', '').strip()
@@ -276,7 +276,7 @@ def list_datasets(request):
 
 
 
-@login_required
+
 def preview_dataset_transformation(request):
     """HTMX endpoint for previewing how mapping rules would transform a dataset."""
     if request.method != 'POST':
@@ -375,7 +375,7 @@ def preview_dataset_transformation(request):
             'error': f'Error previewing transformation: {str(e)}'
         })
 
-@login_required
+
 def execute_dataset_transformation(request):
     """HTMX endpoint for executing the transformation on a dataset."""
     if request.method != 'POST':
@@ -552,7 +552,7 @@ def execute_dataset_transformation(request):
             'error': f'Error executing transformation: {str(e)}'
         })
 
-@login_required
+
 def list_s3_csv_files(request):
     """HTMX endpoint for listing available CSV files in S3."""
     from arkumu.storage.services.bucket_service import BucketService
@@ -616,7 +616,7 @@ def list_s3_csv_files(request):
             'selected_organization': organization,
         })
 
-@login_required
+
 def auto_analyze_csv(request):
     """HTMX endpoint for auto-analyzing a CSV file from S3 and generating mapping suggestions."""
     logger.info(f"auto_analyze_csv called - Method: {request.method}")
@@ -764,7 +764,7 @@ def _get_quality_badge_class(score):
     else:
         return 'badge-error'
 
-@login_required
+
 def smart_mapping_suggestions(request):
     """Generate intelligent mapping suggestions based on data analysis."""
     if request.method != 'POST':
@@ -776,7 +776,7 @@ def smart_mapping_suggestions(request):
         'message': 'Smart mapping suggestions feature is not available in this configuration'
     })
 
-@login_required
+
 def apply_smart_suggestions(request):
     """Apply selected smart mapping suggestions to session."""
     if request.method != 'POST':
@@ -788,7 +788,7 @@ def apply_smart_suggestions(request):
         'mapping_rules': request.session.get('mapping_rules', [])
     })
 
-@login_required
+
 def enhanced_validation_preview(request):
     """Enhanced validation preview using ValidationService."""
     if request.method != 'POST':
@@ -799,7 +799,7 @@ def enhanced_validation_preview(request):
         'error': 'Enhanced validation feature is not available in this configuration'
     })
 
-@login_required
+
 def cross_dataset_resolution(request):
     """Handle cross-dataset entity resolution using ReferenceResolutionService."""
     if request.method != 'POST':
@@ -810,7 +810,7 @@ def cross_dataset_resolution(request):
         'error': 'Cross-dataset resolution feature is not available in this configuration'
     })
 
-@login_required
+
 def enhanced_dataset_preview(request):
     """Enhanced dataset preview using all services for comprehensive analysis."""
     if request.method != 'POST':
@@ -821,7 +821,7 @@ def enhanced_dataset_preview(request):
         'error': 'Enhanced dataset preview feature is not available in this configuration'
     })
 
-@login_required
+
 def service_powered_execution(request):
     """Execute transformation using the ProcessingPipelineService for full service integration."""
     if request.method != 'POST':
@@ -832,14 +832,14 @@ def service_powered_execution(request):
         'error': 'Service-powered execution feature is not available in this configuration'
     })
 
-@login_required
+
 def semantic_graph_editor(request):
     """Dataset table explorer with interactive table view and relationship connections"""
     return render(request, 'dataset_table_explorer.html', {
         'page_title': 'Dataset Table Explorer'
     })
 
-@login_required
+
 def graph_table_data(request):
     """API endpoint for dataset tree view data."""
     if request.method != 'GET':
@@ -1271,7 +1271,7 @@ def _handle_node_properties_request(request, node_id):
             'error': f'Error loading properties: {str(e)}'
         })
 
-@login_required
+
 def service_powered_csv_import(request):
     """Import CSV files using the modern table-based service architecture."""
     if request.method != 'POST':
@@ -1359,12 +1359,12 @@ def service_powered_csv_import(request):
             'error': f'Import error: {str(e)}'
         })
 
-@login_required
+
 def graph_connections_view(request):
     """Simple graph viewer showing actual database connections."""
     return render(request, 'graph_connections.html')
 
-@login_required
+
 def get_datasets_htmx(request):
     """Get all datasets with actual hasPart connections."""
     from arkumu.metadata.models.triples import Triple
@@ -1408,7 +1408,7 @@ def get_datasets_htmx(request):
         'datasets': datasets_with_counts
     })
 
-@login_required  
+  
 def get_dataset_columns_htmx(request, dataset_id):
     """Get columns for a specific dataset by analyzing cell URIs."""
     from arkumu.metadata.models.triples import Triple
@@ -1483,7 +1483,7 @@ def get_dataset_columns_htmx(request, dataset_id):
         logger.error(f"DEBUG: Dataset not found with ID: {dataset_id}")
         return HttpResponse('<p class="text-red-500">Dataset not found</p>')
 
-@login_required
+
 def get_column_cells_htmx(request, column_id):
     """Get cells for a specific column via hasPart relationships."""
     from arkumu.metadata.models.triples import Triple
@@ -1591,7 +1591,7 @@ def get_column_cells_htmx(request, column_id):
     except Resource.DoesNotExist:
         return HttpResponse('<p class="text-red-500">Column not found</p>')
 
-@login_required
+
 def get_cell_connections_htmx(request, cell_id):
     """Get all connections for a specific cell."""
     from arkumu.metadata.models.triples import Triple

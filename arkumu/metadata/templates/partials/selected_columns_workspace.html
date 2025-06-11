@@ -1,0 +1,54 @@
+<!-- Selected Columns Workspace -->
+<div id="selected-columns-workspace" class="flex-1 flex flex-col">
+    
+    <!-- Header with count and controls -->
+    <div class="flex items-center justify-between mb-3">
+        <h4 class="text-sm font-medium flex items-center gap-2">
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            Selected Columns
+            <span id="workspace-counter" class="badge badge-xs badge-warning">{{ selected_columns|length }}</span>
+        </h4>
+        
+        <div id="workspace-actions" class="flex gap-2" style="{% if not selected_columns %}display: none;{% endif %}">
+            <button class="btn btn-xs btn-ghost opacity-60" 
+                    hx-post="{% url 'metadata:clear_workspace' %}"
+                    hx-vals='{"csrfmiddlewaretoken": "{{ csrf_token }}"}'
+                    hx-target="#selected-columns-workspace"
+                    hx-swap="innerHTML">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+                Clear All
+            </button>
+        </div>
+    </div>
+
+    <!-- Column Selection Area -->
+    <div class="flex-1 overflow-y-auto">
+        <div id="column-workspace" class="space-y-3">
+            
+            {% if selected_columns %}
+                <!-- Render each selected column -->
+                {% for column in selected_columns %}
+                    {% include 'partials/column_item.html' with column=column %}
+                {% endfor %}
+            {% else %}
+                <!-- Empty state -->
+                <div id="workspace-empty-state" class="text-center py-8">
+                    <svg class="w-16 h-16 mx-auto mb-4 text-base-content opacity-20" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <p class="text-sm text-base-content opacity-50">Click columns to add them here</p>
+                    <p class="text-xs text-base-content opacity-30 mt-1">Build relationships visually</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Action Panel (shown when columns are selected) -->
+    {% if selected_columns %}
+        {% include 'partials/column_mapping_form.html' with selected_columns=selected_columns anchor_column=anchor_column %}
+    {% endif %}
+</div> 

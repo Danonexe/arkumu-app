@@ -22,7 +22,7 @@ from django.core.cache import cache
 logger = logging.getLogger(__name__)
 
 
-@login_required
+
 def organization_dashboard(request):
     """
     Display a dashboard of all organizations and their buckets.
@@ -91,7 +91,7 @@ def organization_dashboard(request):
         return redirect("home")
 
 
-@login_required
+
 def organization_contents(request, organization=None):
     """
     Display the contents of an organization's bucket.
@@ -207,7 +207,7 @@ def organization_contents(request, organization=None):
 
 
 
-@login_required
+
 def file_content(request, bucket_type, file_path):
     """
     Retrieve and display the content of a file from a bucket.
@@ -256,7 +256,7 @@ def file_content(request, bucket_type, file_path):
         return HttpResponse(error_message, status=500)
 
 
-@login_required
+
 def delete_object(request, bucket_type, object_type, object_path):
     """
     Delete a file or folder from a bucket.
@@ -332,7 +332,7 @@ def delete_object(request, bucket_type, object_type, object_path):
         return JsonResponse({"success": False, "error": error_message})
 
 
-@login_required
+
 def csv_preview(request, bucket_type, file_path):
     """
     Preview CSV file content from S3 bucket.

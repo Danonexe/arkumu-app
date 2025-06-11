@@ -1,0 +1,102 @@
+<!-- Individual Mapping Item -->
+<div class="card bg-base-100 border border-success p-3" id="mapping-{{ mapping.id }}">
+    <div class="flex items-start justify-between">
+        <div class="flex-1 min-w-0">
+            
+            <!-- Anchor column -->
+            <div class="text-sm font-medium mb-2">
+                <span class="badge badge-warning badge-xs mr-2">ANCHOR</span>
+                <span class="text-primary">{{ mapping.anchor_column.dataset }}</span>
+                <span class="text-base-content opacity-50">.</span>
+                <span class="text-info">{{ mapping.anchor_column.name }}</span>
+                {% if mapping.anchor_column.type %}
+                <span class="text-xs text-base-content opacity-40 ml-1">({{ mapping.anchor_column.type }})</span>
+                {% endif %}
+            </div>
+            
+            <!-- Related columns -->
+            <div class="text-xs text-base-content opacity-70 mb-2">
+                <div class="flex flex-wrap gap-1">
+                    {% for column in mapping.related_columns %}
+                    <span class="badge badge-ghost badge-xs">
+                        {{ column.dataset }}.{{ column.name }}
+                    </span>
+                    {% endfor %}
+                </div>
+            </div>
+            
+            <!-- Mapping metadata -->
+            <div class="flex flex-wrap gap-2 text-xs">
+                <span class="badge badge-success badge-xs">{{ mapping.relationship_type|title }}</span>
+                
+                {% if mapping.direction == 'bidirectional' %}
+                <span class="badge badge-info badge-xs" title="Bidirectional">↔</span>
+                {% else %}
+                <span class="badge badge-info badge-xs" title="Unidirectional">→</span>
+                {% endif %}
+                
+                {% if mapping.confidence %}
+                <span class="badge badge-xs 
+                    {% if mapping.confidence == 'high' %}badge-success
+                    {% elif mapping.confidence == 'medium' %}badge-warning  
+                    {% else %}badge-error{% endif %}">
+                    {{ mapping.confidence|title }}
+                </span>
+                {% endif %}
+                
+                {% if mapping.created_at %}
+                <span class="text-base-content opacity-40">{{ mapping.created_at|date:"H:i" }}</span>
+                {% endif %}
+            </div>
+            
+            <!-- Additional details if available -->
+            {% if mapping.description %}
+            <div class="mt-2 text-xs text-base-content opacity-60">
+                {{ mapping.description }}
+            </div>
+            {% endif %}
+            
+            {% if mapping.sample_matches %}
+            <div class="mt-2 text-xs">
+                <span class="text-base-content opacity-50">Sample matches: </span>
+                <span class="text-base-content opacity-70">{{ mapping.sample_matches|join:", " }}</span>
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Actions -->
+        <div class="flex items-start gap-1 ml-3">
+            
+            <!-- Edit/View button -->
+            <button class="btn btn-xs btn-ghost btn-circle" 
+                    title="View details feature coming soon"
+                    disabled>
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                </svg>
+            </button>
+            
+            <!-- Test/Validate button -->
+            <button class="btn btn-xs btn-ghost btn-circle text-info" 
+                    title="Test mapping feature coming soon"
+                    disabled>
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+            </button>
+            
+            <!-- Delete button -->
+            <button class="btn btn-xs btn-ghost btn-circle text-error" 
+                    title="Remove mapping feature coming soon"
+                    disabled>
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+    
+    <!-- Test results area (hidden by default) -->
+    <div id="test-results-{{ mapping.id }}" class="mt-2"></div>
+</div> 

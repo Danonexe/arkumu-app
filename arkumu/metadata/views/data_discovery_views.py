@@ -145,7 +145,7 @@ class DataDiscoveryView(LoginRequiredMixin, View):
         return render(request, self.template_name, context)
 
 
-@login_required
+
 @require_http_methods(["GET"])
 def search_resources(request):
     """Search for resources that could be linked to files."""
@@ -168,7 +168,7 @@ def search_resources(request):
     })
 
 
-@login_required
+
 @require_http_methods(["POST"])
 def link_file_to_resource(request):
     """Link a single file to a resource."""
@@ -213,7 +213,7 @@ def link_file_to_resource(request):
         return HttpResponse(f"Error linking file: {str(e)}", status=500)
 
 
-@login_required
+
 @require_http_methods(["POST"])
 def batch_link_files(request):
     """Batch link multiple files using the automated service."""
@@ -264,7 +264,7 @@ def batch_link_files(request):
         return HttpResponse(error_msg, status=500)
 
 
-@login_required
+
 @require_http_methods(["POST"])  
 def unlink_file(request):
     """Unlink a file from its resource."""
@@ -313,7 +313,7 @@ def unlink_file(request):
         return HttpResponse(error_msg, status=500)
 
 
-@login_required
+
 @require_http_methods(["POST"])
 def auto_link_all(request):
     """Automatically link all unlinked files."""
@@ -364,7 +364,7 @@ def auto_link_all(request):
         return HttpResponse(error_msg, status=500)
 
 
-@login_required
+
 @require_http_methods(["POST"])
 def rescan_s3_files(request):
     """Rescan S3 buckets for new files and sync them to the database."""

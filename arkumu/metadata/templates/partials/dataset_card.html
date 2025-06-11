@@ -253,8 +253,21 @@
                           end
                           set columnData to the result
                           
-                          -- Send to relationship builder
-                          call handleColumnSelection(columnData)
+                          -- Send to relationship builder via HTMX
+                          js(columnData)
+                              // Make HTMX request with column data
+                              htmx.ajax('POST', '/metadata/add-column-to-workspace/', {
+                                  values: {
+                                      'dataset_name': columnData.dataset,
+                                      'source_name': '{{ dataset.source|escapejs }}',
+                                      'column_name': columnData.name,
+                                      'column_index': columnData.index,
+                                      'csrfmiddlewaretoken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                                  },
+                                  target: '#selected-columns-workspace',
+                                  swap: 'innerHTML'
+                              });
+                          end
                           
                           -- Update loaded datasets list
                           call updateLoadedDatasetsList()
@@ -348,8 +361,21 @@
                                         end
                                         set columnData to the result
                                         
-                                        -- Send to relationship builder
-                                        call handleColumnSelection(columnData)
+                                        -- Send to relationship builder via HTMX
+                                        js(columnData)
+                                            // Make HTMX request with column data
+                                            htmx.ajax('POST', '/metadata/add-column-to-workspace/', {
+                                                values: {
+                                                    'dataset_name': columnData.dataset,
+                                                    'source_name': '{{ dataset.source|escapejs }}',
+                                                    'column_name': columnData.name,
+                                                    'column_index': columnData.index,
+                                                    'csrfmiddlewaretoken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                                                },
+                                                target: '#selected-columns-workspace',
+                                                swap: 'innerHTML'
+                                            });
+                                        end
                                         
                                         -- Update loaded datasets list
                                         call updateLoadedDatasetsList()

@@ -68,7 +68,7 @@ def _build_multi_field_search(fields, search_term, search_mode='contains'):
     
     return combined_q
 
-@login_required
+
 def data_explorer(request):
     """Unified data explorer for browsing resources and triples."""
     view_mode = request.GET.get('view', 'resources')

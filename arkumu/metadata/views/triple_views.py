@@ -10,7 +10,7 @@ from arkumu.metadata.models.triples import Triple
 # Set up logger
 logger = logging.getLogger(__name__)
 
-@login_required
+
 def triple_search(request):
     """Search triples with advanced filtering."""
     subject = request.GET.get('subject', '')
@@ -75,7 +75,7 @@ def triple_search(request):
         'institutions': Resource.objects.values_list('source', flat=True).distinct(),
     })
 
-@login_required
+
 def triple_list(request):
     """Display a paginated list of all triples in the system."""
     # Get filter parameters

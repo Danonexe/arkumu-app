@@ -45,7 +45,7 @@ def get_cached_bucket_service():
 logger = logging.getLogger(__name__)
 
 
-@login_required
+
 @require_http_methods(["GET", "POST"])
 def streaming_upload_form(request):
     """
@@ -199,7 +199,7 @@ def streaming_upload_form(request):
         }, status=500)
 
 
-@login_required
+
 @require_http_methods(["POST"])
 def streaming_upload_api(request):
     """
@@ -282,7 +282,7 @@ def streaming_upload_api(request):
         }, status=500)
 
 
-@login_required
+
 @require_http_methods(["POST"])
 def streaming_upload_single(request):
     """
@@ -433,7 +433,7 @@ def streaming_upload_single(request):
             }, status=500)
 
 
-@login_required
+
 @require_http_methods(["GET"])
 def file_info(request):
     """

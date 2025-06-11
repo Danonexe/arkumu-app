@@ -14,7 +14,7 @@ from arkumu.importer.models import IngestSession
 logger = logging.getLogger(__name__)
 
 
-@login_required
+
 def ingest_file(request):
     """
     Ingest a CSV file using the ImportWorkflowService
@@ -117,7 +117,7 @@ def ingest_file(request):
     return JsonResponse({'error': 'Invalid request method'}, status=405)
 
 
-@login_required
+
 def reset_database(request):
     """
     Reset the database by deleting all Resource and Triple records.
@@ -174,7 +174,7 @@ def reset_database(request):
         }, status=500)
 
 
-@login_required
+
 def task_status_view(request, task_id):
     """
     Provides the status of a background task for HTMX polling.
@@ -209,7 +209,7 @@ def task_status_view(request, task_id):
     })
 
 
-@login_required
+
 def clear_upload_sessions(request):
     """
     Clear all UploadSession records.
@@ -260,7 +260,7 @@ def clear_upload_sessions(request):
         }, status=500)
 
 
-@login_required
+
 def clear_ingest_sessions(request):
     """
     Clear all IngestSession records.
@@ -311,7 +311,7 @@ def clear_ingest_sessions(request):
         }, status=500)
 
 
-@login_required
+
 def start_directory_import(request):
     """
     Start a directory import for all CSV files in an S3 folder using the directory import Huey task

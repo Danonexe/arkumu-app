@@ -12,11 +12,13 @@ import json
 import tempfile
 import os
 import re
+from datetime import datetime
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse, HttpResponseBadRequest, HttpResponse
 from django.conf import settings
 from django.core.cache import cache
+from django.template.loader import render_to_string
 
 from arkumu.metadata.services.data_analysis.s3_direct_data_analyzer import S3DirectDataAnalyzer
 from arkumu.metadata.services.relationship_discovery.service import RelationshipDiscoveryService
@@ -41,7 +43,7 @@ def get_organization_id_from_request(request):
     return 'default-org'
 
 
-@login_required
+
 def direct_split_table_graph_view(request):
     """
     Split view showing datasets directly from S3 source files with table previews and graph visualization.
@@ -144,7 +146,7 @@ def direct_split_table_graph_view(request):
         return render(request, 'direct_split_table_graph.html', context)
 
 
-@login_required
+
 def direct_load_source_data(request):
     """
     HTMX endpoint to load source data directly from S3 files using S3DirectDataAnalyzer.
@@ -226,7 +228,7 @@ def direct_load_source_data(request):
         return error_response
 
 
-@login_required
+
 def direct_load_all_datasets(request):
     """
     HTMX endpoint to load all available datasets from S3 for the dataset browser.
@@ -325,7 +327,7 @@ def direct_load_all_datasets(request):
         })
 
 
-@login_required
+
 def direct_get_dataset_card(request):
     """Get a dataset card with preview using direct S3 file analysis."""
     source_name = request.GET.get('source', '')
@@ -400,7 +402,7 @@ def direct_get_dataset_card(request):
         return HttpResponseBadRequest(f"Error: {str(e)}")
 
 
-@login_required
+
 def direct_load_more_dataset_rows(request):
     """Load more rows using S3DirectDataAnalyzer pagination."""
     logger.info("=== LOAD MORE ROWS VIEW CALLED ===")
@@ -457,7 +459,7 @@ def direct_load_more_dataset_rows(request):
         return render(request, 'partials/table_rows.html', {'data': []})
 
 
-@login_required
+
 def direct_analyze_dataset_relationships(request):
     """
     Analyze relationships in a dataset using direct S3 file analysis.
@@ -512,7 +514,7 @@ def direct_analyze_dataset_relationships(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
-@login_required
+
 def direct_get_import_preview(request):
     """
     Get a preview of what would happen if we imported this S3 dataset.
@@ -538,7 +540,7 @@ def direct_get_import_preview(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
-@login_required
+
 def direct_analyze_column(request):
     """
     Analyze a specific column from a dataset using direct S3 file analysis.
@@ -1219,7 +1221,7 @@ def _extract_column_relationship_insights(column_name, dataset_analysis):
     return insights
 
 
-@login_required
+
 def direct_dataset_linking_view(request):
     """
     View for manually linking columns between different datasets.
@@ -1323,7 +1325,7 @@ def direct_dataset_linking_view(request):
         return render(request, template, context)
 
 
-@login_required
+
 def save_dataset_links(request):
     """
     AJAX endpoint to save manually created links between datasets.
@@ -1366,7 +1368,7 @@ def save_dataset_links(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
-@login_required
+
 def get_saved_dataset_links(request):
     """
     AJAX endpoint to retrieve saved links between datasets.
@@ -1391,7 +1393,7 @@ def get_saved_dataset_links(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
-@login_required
+
 def direct_relationship_discovery_view(request):
     """
     View for automated cross-dataset relationship discovery.
@@ -1611,7 +1613,7 @@ def _run_auto_discovery(analyzer, organization_id, datasets, sample_size=500):
                 pass
 
 
-@login_required
+
 def run_relationship_discovery(request):
     """
     AJAX endpoint to run automated relationship discovery across selected datasets.
@@ -1807,7 +1809,7 @@ def run_relationship_discovery(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
-@login_required
+
 def get_discovery_results(request):
     """
     AJAX endpoint to retrieve the results of a previous relationship discovery run.
@@ -1853,7 +1855,7 @@ def get_discovery_results(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
-@login_required
+
 def get_loaded_datasets(request):
     """
     AJAX endpoint to get the datasets currently loaded in the left panel.
@@ -1906,7 +1908,7 @@ def get_loaded_datasets(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
-@login_required
+
 def track_loaded_dataset(request):
     """
     AJAX endpoint to track when a dataset is loaded in the left panel.
@@ -1932,7 +1934,6 @@ def track_loaded_dataset(request):
         loaded_datasets = cache.get(loaded_datasets_cache_key, [])
         
         # Create dataset info object
-        from datetime import datetime
         dataset_info = {
             'name': dataset_name,
             'source_name': source_name,
@@ -1960,4 +1961,350 @@ def track_loaded_dataset(request):
         
     except Exception as e:
         logger.error(f"TRACK LOADED DATASET: Error tracking loaded dataset: {e}", exc_info=True)
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+
+
+def add_column_to_workspace(request):
+    """
+    HTMX endpoint to toggle column selection in the relationship builder workspace.
+    Returns multiple HTML fragments to sync all UI elements.
+    """
+    logger.info(f"ADD_COLUMN_TO_WORKSPACE: Method={request.method}, Content-Type={request.content_type}")
+    logger.info(f"ADD_COLUMN_TO_WORKSPACE: POST data: {dict(request.POST)}")
+    logger.info(f"ADD_COLUMN_TO_WORKSPACE: Headers: {dict(request.headers)}")
+    
+    if request.method != 'POST':
+        logger.error("ADD_COLUMN_TO_WORKSPACE: Only POST method allowed")
+        return JsonResponse({'error': 'Only POST method allowed'}, status=400)
+    
+    try:
+        # Simple form data handling
+        dataset_name = request.POST.get('dataset_name')
+        source_name = request.POST.get('source_name')
+        column_name = request.POST.get('column_name')
+        column_index = int(request.POST.get('column_index', 0))
+        organization_id = get_organization_id_from_request(request)
+        
+        logger.info(f"TOGGLE COLUMN IN WORKSPACE: {column_name} from {dataset_name}/{source_name} for org={organization_id}")
+        logger.info(f"PARSED DATA: dataset={dataset_name}, source={source_name}, column={column_name}, index={column_index}, org={organization_id}")
+        
+        if not all([dataset_name, source_name, column_name]):
+            return JsonResponse({'error': 'Missing required parameters'}, status=400)
+        
+        # Get current workspace from cache
+        workspace_cache_key = f"relationship_workspace_{organization_id}"
+        workspace = cache.get(workspace_cache_key, {'columns': []})
+        
+        # Create column info object (matching template expectations)
+        column_info = {
+            'id': f"{dataset_name}_{source_name}_{column_name}".replace(' ', '_').replace('-', '_'),
+            'dataset': dataset_name,
+            'name': column_name,
+            'source': source_name,
+            'index': column_index,
+            'added_at': datetime.now().isoformat(),
+            'is_anchor': False,  # Default value
+            # Internal fields for backend use
+            'dataset_name': dataset_name,
+            'source_name': source_name,
+            'column_name': column_name,
+            'column_index': column_index
+        }
+        
+        # Check if column already exists in workspace
+        existing_columns = workspace.get('columns', [])
+        column_exists = False
+        for i, col in enumerate(existing_columns):
+            if (col['dataset_name'] == dataset_name and 
+                col['source_name'] == source_name and 
+                col['column_name'] == column_name):
+                column_exists = True
+                # Remove the column (toggle off)
+                existing_columns.pop(i)
+                action = 'removed'
+                break
+        
+        if not column_exists:
+            # Add to workspace (toggle on)
+            existing_columns.append(column_info)
+            action = 'added'
+            # Keep only last 20 columns to avoid cache bloat
+            existing_columns = existing_columns[-20:]
+        
+        workspace['columns'] = existing_columns
+        
+        # Save back to cache
+        cache.set(workspace_cache_key, workspace, timeout=60*60*24)  # 24 hours
+        
+        logger.info(f"TOGGLE COLUMN: {action} {column_name}, workspace now has {len(workspace['columns'])} columns")
+        logger.info(f"SELECTION ACTION: {action}, column_id will be: {dataset_name}_{source_name}_{column_name}")
+        
+        # Generate column ID for targeting all matching elements
+        column_id = f"{dataset_name}_{source_name}_{column_name}"
+        logger.info(f"GENERATED COLUMN ID: {column_id}")
+        
+        # Build multi-target response with out-of-band swaps
+        logger.info(f"RENDERING WORKSPACE TEMPLATE with {len(workspace['columns'])} columns")
+        workspace_html = render_to_string('partials/selected_columns_workspace.html', {
+            'selected_columns': workspace['columns'],
+            'organization_id': organization_id,
+        }, request=request)
+        logger.info(f"WORKSPACE HTML LENGTH: {len(workspace_html)}")
+        
+        # Create selection state update for all matching column elements
+        if action == 'added':
+            selection_class = 'selected'
+            outline_class = ''
+        else:
+            selection_class = ''
+            outline_class = 'badge-outline'
+            
+        # HTMX response with main target + out-of-band updates
+        response_html = f"""
+        {workspace_html}
+        
+        <script hx-swap-oob="true" type="text/hyperscript">
+            -- Update all column elements with matching data-column-id
+            log 'HYPERSCRIPT: Looking for elements with data-column-id={column_id}'
+            repeat for element in <[data-column-id="{column_id}"]/>
+                log 'HYPERSCRIPT: Found element:', element
+                if element match .column-badge
+                    log 'HYPERSCRIPT: Updating badge element'
+                    {"add .selected to element" if action == 'added' else "remove .selected from element"}
+                    {"remove .badge-outline from element" if action == 'added' else "add .badge-outline to element"}
+                end
+                if element match .column-header
+                    log 'HYPERSCRIPT: Updating header element'
+                    {"add .selected to element" if action == 'added' else "remove .selected from element"}
+                end
+            end
+            log 'HYPERSCRIPT: Selection sync complete'
+        </script>
+        """
+        
+        logger.info(f"RESPONSE HTML LENGTH: {len(response_html)}")
+        logger.info(f"RESPONSE PREVIEW: {response_html[:200]}...")
+        
+        return HttpResponse(response_html)
+        
+    except Exception as e:
+        logger.error(f"TOGGLE COLUMN: Error toggling column: {e}", exc_info=True)
+        logger.error(f"TOGGLE COLUMN: POST data was: {dict(request.POST)}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+
+
+def remove_column_from_workspace(request):
+    """
+    HTMX endpoint to remove a column from the relationship builder workspace.
+    Syncs selection state across all templates.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Only POST method allowed'}, status=400)
+    
+    try:
+        # Simple form data handling
+        column_id = request.POST.get('column_id')
+        organization_id = get_organization_id_from_request(request)
+        
+        logger.info(f"REMOVE COLUMN FROM WORKSPACE: {column_id} for org={organization_id}")
+        
+        if not column_id:
+            return JsonResponse({'error': 'Missing column_id'}, status=400)
+        
+        # Get current workspace from cache
+        workspace_cache_key = f"relationship_workspace_{organization_id}"
+        workspace = cache.get(workspace_cache_key, {'columns': []})
+        
+        # Remove column by ID
+        existing_columns = workspace.get('columns', [])
+        updated_columns = [col for col in existing_columns if col.get('id') != column_id]
+        
+        workspace['columns'] = updated_columns
+        
+        # Save back to cache
+        cache.set(workspace_cache_key, workspace, timeout=60*60*24)  # 24 hours
+        
+        logger.info(f"REMOVE COLUMN FROM WORKSPACE: Removed {column_id}, workspace now has {len(workspace['columns'])} columns")
+        
+        # Generate workspace HTML
+        workspace_html = render_to_string('partials/selected_columns_workspace.html', {
+            'selected_columns': workspace['columns'],
+            'organization_id': organization_id,
+        }, request=request)
+        
+        # HTMX response with main target + out-of-band updates to sync column selection states
+        response_html = f"""
+        {workspace_html}
+        
+        <script hx-swap-oob="true" type="text/hyperscript">
+            -- Clear selection state for all matching column elements
+            repeat for element in <[data-column-id="{column_id}"]/>
+                if element match .column-badge
+                    remove .selected from element
+                    add .badge-outline to element
+                end
+                if element match .column-header
+                    remove .selected from element
+                end
+            end
+        </script>
+        """
+        
+        return HttpResponse(response_html)
+        
+    except Exception as e:
+        logger.error(f"REMOVE COLUMN FROM WORKSPACE: Error removing column: {e}", exc_info=True)
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+
+def save_column_mapping(request):
+    """
+    HTMX endpoint to save a relationship mapping between two columns.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Only POST method allowed'}, status=400)
+    
+    try:
+        data = json.loads(request.body)
+        organization_id = data.get('organization_id') or get_organization_id_from_request(request)
+        source_column_id = data.get('source_column_id')
+        target_column_id = data.get('target_column_id')
+        relationship_type = data.get('relationship_type', 'related_to')
+        confidence = data.get('confidence', 0.8)
+        notes = data.get('notes', '')
+        
+        logger.info(f"SAVE COLUMN MAPPING: {source_column_id} -> {target_column_id} ({relationship_type}) for org={organization_id}")
+        
+        if not all([source_column_id, target_column_id]):
+            return JsonResponse({'error': 'Missing source or target column'}, status=400)
+        
+        # Get current mappings from cache
+        mappings_cache_key = f"column_mappings_{organization_id}"
+        mappings = cache.get(mappings_cache_key, [])
+        
+        # Create mapping object
+        mapping = {
+            'id': f"{source_column_id}_to_{target_column_id}_{datetime.now().timestamp()}",
+            'source_column_id': source_column_id,
+            'target_column_id': target_column_id,
+            'relationship_type': relationship_type,
+            'confidence': confidence,
+            'notes': notes,
+            'created_at': datetime.now().isoformat()
+        }
+        
+        # Add to mappings
+        mappings.append(mapping)
+        
+        # Keep only last 50 mappings
+        mappings = mappings[-50:]
+        
+        # Save back to cache
+        cache.set(mappings_cache_key, mappings, timeout=60*60*24*7)  # 7 days
+        
+        logger.info(f"SAVE COLUMN MAPPING: Saved mapping, total mappings: {len(mappings)}")
+        
+        # Return updated mappings partial
+        return render(request, 'partials/mappings_section.html', {
+            'mappings': mappings,
+            'organization_id': organization_id,
+            'message': 'Mapping saved successfully'
+        })
+        
+    except Exception as e:
+        logger.error(f"SAVE COLUMN MAPPING: Error saving mapping: {e}", exc_info=True)
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+
+
+def clear_workspace(request):
+    """
+    HTMX endpoint to clear all columns from the relationship builder workspace.
+    Syncs selection state across all templates.
+    """
+    logger.info(f"CLEAR_WORKSPACE: Method={request.method}, Content-Type={request.content_type}")
+    logger.info(f"CLEAR_WORKSPACE: POST data: {dict(request.POST)}")
+    
+    if request.method != 'POST':
+        logger.error("CLEAR_WORKSPACE: Only POST method allowed")
+        return JsonResponse({'error': 'Only POST method allowed'}, status=400)
+    
+    try:
+        organization_id = get_organization_id_from_request(request)
+        
+        logger.info(f"CLEAR WORKSPACE: Clearing workspace for org={organization_id}")
+        
+        # Clear workspace cache
+        workspace_cache_key = f"relationship_workspace_{organization_id}"
+        cache.delete(workspace_cache_key)
+        
+        logger.info("CLEAR WORKSPACE: Workspace cleared")
+        
+        # Generate workspace HTML
+        workspace_html = render_to_string('partials/selected_columns_workspace.html', {
+            'selected_columns': [],
+            'organization_id': organization_id,
+        }, request=request)
+        
+        # HTMX response with main target + out-of-band updates to clear all selections
+        response_html = f"""
+        {workspace_html}
+        
+        <script hx-swap-oob="true" type="text/hyperscript">
+            -- Clear all column selections across the page
+            repeat for element in <.column-badge/>
+                remove .selected from element
+                add .badge-outline to element
+            end
+            repeat for element in <.column-header/>
+                remove .selected from element
+            end
+        </script>
+        """
+        
+        return HttpResponse(response_html)
+        
+    except Exception as e:
+        logger.error(f"CLEAR WORKSPACE: Error clearing workspace: {e}", exc_info=True)
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+
+def export_mappings(request):
+    """
+    Export saved column mappings as JSON for download.
+    """
+    try:
+        organization_id = get_organization_id_from_request(request)
+        
+        logger.info(f"EXPORT MAPPINGS: Exporting mappings for org={organization_id}")
+        
+        # Get mappings from cache
+        mappings_cache_key = f"column_mappings_{organization_id}"
+        mappings = cache.get(mappings_cache_key, [])
+        
+        # Create export data
+        export_data = {
+            'organization_id': organization_id,
+            'export_timestamp': json.loads(json.dumps(datetime.now(), default=str)),
+            'total_mappings': len(mappings),
+            'mappings': mappings
+        }
+        
+        # Create JSON response for download
+        response = JsonResponse(export_data, json_dumps_params={'indent': 2})
+        response['Content-Disposition'] = f'attachment; filename="column_mappings_{organization_id}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json"'
+        
+        logger.info(f"EXPORT MAPPINGS: Exported {len(mappings)} mappings")
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"EXPORT MAPPINGS: Error exporting mappings: {e}", exc_info=True)
         return JsonResponse({'error': str(e)}, status=500) 

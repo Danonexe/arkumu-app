@@ -12,7 +12,7 @@ from arkumu.metadata.models.triples import Triple
 # Set up logger
 logger = logging.getLogger(__name__)
 
-@login_required
+
 def full_graph_view(request):
     """Display a hierarchical tree + graph view for exploring RDF data structure."""
     
@@ -212,7 +212,7 @@ def full_graph_view(request):
         })
     })
 
-@login_required
+
 def graph_data_view(request):
     """Handle HTMX requests for graph data and return HTML content with embedded visualization."""
     
@@ -475,7 +475,7 @@ def get_cell_graph(cell_id, rdf_value_predicate):
     except Resource.DoesNotExist:
         return {'nodes': [], 'links': [], 'error': 'Cell not found'}
 
-@login_required
+
 def tree_cell_details_view(request, cell_id):
     """HTMX view for getting cell details and graph data."""
     logger.info(f"tree_cell_details_view called for cell_id: {cell_id}")
@@ -591,12 +591,12 @@ def tree_cell_details_view(request, cell_id):
             'error': 'Cell not found'
         })
 
-@login_required
+
 def dataset_viewer_view(request):
     """Display a hierarchical tree + graph view for exploring RDF data structure."""
     return render(request, 'dataset_viewer.html')
 
-@login_required
+
 def tree_data_view(request):
     """HTMX endpoint for loading tree data organized by buckets."""
     
@@ -688,7 +688,7 @@ def tree_data_view(request):
         'buckets': bucket_list_for_template
     })
 
-@login_required
+
 def tree_bucket_content_view(request, bucket_name):
     logger.info(f"=== tree_bucket_content_view called for bucket: '{bucket_name}' ===")
     logger.info(f"Request method: {request.method}")
@@ -809,7 +809,7 @@ def tree_bucket_content_view(request, bucket_name):
         'is_pagination': offset > 0  # Flag to determine if this is a paginated request
     })
 
-@login_required
+
 def tree_bucket_more_view(request, bucket_name):
     """HTMX endpoint for loading more datasets in a bucket."""
     logger.info(f"=== tree_bucket_more_view called for bucket: '{bucket_name}' ===")
@@ -909,7 +909,7 @@ def tree_bucket_more_view(request, bucket_name):
         'next_offset': next_offset
     })
 
-@login_required
+
 def tree_dataset_view(request, dataset_id):
     """HTMX endpoint for loading dataset rows."""
     
@@ -1022,7 +1022,7 @@ def tree_dataset_view(request, dataset_id):
             'error': f'Error loading dataset: {str(e)}'
         })
 
-@login_required  
+  
 def tree_row_view(request, dataset_id, row_id):
     """HTMX endpoint for loading row cells."""
     
@@ -1115,7 +1115,7 @@ def tree_row_view(request, dataset_id, row_id):
             'error': 'Dataset or row not found'
         })
 
-@login_required
+
 def tree_dataset_more_view(request, dataset_id):
     """HTMX endpoint for loading more rows in a dataset."""
     logger.info(f"tree_dataset_more_view called with dataset_id: {dataset_id}")
@@ -1215,7 +1215,7 @@ def tree_dataset_more_view(request, dataset_id):
             'error': f'Error loading more rows: {str(e)}'
         })
 
-@login_required
+
 def tree_dataset_details_view(request, dataset_id):
     """HTMX view for getting dataset details to display in the details panel."""
     logger.info(f"tree_dataset_details_view called for dataset_id: {dataset_id}")
@@ -1366,7 +1366,7 @@ def tree_dataset_details_view(request, dataset_id):
             'error': 'Dataset not found'
         }) 
 
-@login_required
+
 def tree_row_details_view(request, row_id):
     """HTMX view for getting row details to display in the details panel."""
     logger.info(f"tree_row_details_view called for row_id: {row_id}")

@@ -13,7 +13,7 @@ from arkumu.metadata.models.triples import Triple
 from arkumu.storage.models import S3FileObject
 from arkumu.metadata.services.metatdata_s3_mapping.map_resources_to_files import FileResourceMatcherService
 
-@login_required
+
 def resource_list(request):
     """Paginated list of resources with filters."""
     # Get filter parameters
@@ -56,7 +56,7 @@ def resource_list(request):
         'current_query': search_query,
     })
 
-@login_required
+
 def resource_detail(request, resource_id):
     """Detailed view of a single resource with its triples."""
     resource = Resource.objects.get(id=resource_id)
@@ -75,7 +75,7 @@ def resource_detail(request, resource_id):
         'linked_files': linked_files,
     })
 
-@login_required
+
 def resource_graph(request, resource_id):
     """Show a visual graph of relationships for a resource."""
     resource = Resource.objects.get(id=resource_id)

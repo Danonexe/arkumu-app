@@ -96,4 +96,11 @@ urlpatterns = [
     # Cross-Dataset Relationship Discovery
     path('direct-analysis/relationship-discovery/', direct_data_views.direct_relationship_discovery_view, name='direct_relationship_discovery'),
     path('direct-analysis/dataset-linking/', direct_data_views.direct_dataset_linking_view, name='direct_dataset_linking'),
+    
+    # Manual Relationship Builder
+    path('add-column-to-workspace/', direct_data_views.add_column_to_workspace, name='add_column_to_workspace'),
+    path('remove-column-from-workspace/', direct_data_views.remove_column_from_workspace, name='remove_column_from_workspace'),
+    path('save-column-mapping/', direct_data_views.save_column_mapping, name='save_column_mapping'),
+    path('clear-workspace/', direct_data_views.clear_workspace, name='clear_workspace'),
+    path('export-mappings/', direct_data_views.export_mappings, name='export_mappings'),
     ]

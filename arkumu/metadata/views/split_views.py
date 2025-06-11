@@ -16,7 +16,7 @@ from arkumu.metadata.services.relationship_discovery import RelationshipDiscover
 logger = logging.getLogger(__name__)
 
 
-@login_required
+
 def split_table_graph_view(request):
     """Split view showing all datasets from a source with table previews and graph visualization."""
     
@@ -313,7 +313,7 @@ def _build_single_dataset_graph_data_optimized(source, dataset_name):
         }
 
 
-@login_required
+
 def load_source_data(request):
     """HTMX endpoint to load source data with comprehensive graph."""
     source = request.GET.get('source', '')
@@ -369,7 +369,7 @@ def load_source_data(request):
         return error_response
 
 
-@login_required
+
 def get_dataset_card(request):
     """Get a single dataset card with preview."""
     source = request.GET.get('source', '')
@@ -405,7 +405,7 @@ def get_dataset_card(request):
     })
 
 
-@login_required
+
 def get_graph_data(request):
     """Generate graph data for visualization."""
     source = request.GET.get('source')
@@ -441,7 +441,7 @@ def get_graph_data(request):
         })
 
 
-@login_required
+
 def load_more_dataset_rows(request):
     """Load more rows using optimized preview function."""
     source = request.GET.get('source')
@@ -472,7 +472,7 @@ def load_more_dataset_rows(request):
         return render(request, 'partials/table_rows.html', {'data': []})
 
 
-@login_required
+
 def debug_database(request):
     """Debug endpoint to inspect database contents."""
     logger.info("DEBUG: Inspecting database contents")
@@ -494,7 +494,7 @@ def debug_database(request):
     return JsonResponse(debug_info, indent=2)
 
 
-@login_required
+
 def highlight_column_in_graph(request):
     """
     HTMX endpoint to return updated graph visualization with highlighted column.
@@ -554,7 +554,7 @@ def highlight_column_in_graph(request):
         })
 
 
-@login_required
+
 def highlight_cell_in_graph(request):
     """
     HTMX endpoint to update the graph visualization with a highlighted cell,
@@ -807,7 +807,7 @@ def _build_graph_with_highlight(source, dataset_name, highlight_column=None, hig
         }
 
 
-@login_required
+
 def refresh_graph(request):
     """Refresh the graph data for a dataset."""
     source = request.POST.get('source', '')
@@ -828,7 +828,7 @@ def refresh_graph(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
-@login_required
+
 def toggle_layout(request):
     """Toggle between different graph layout options."""
     source = request.POST.get('source', '')
@@ -983,7 +983,7 @@ def _build_comprehensive_source_graph(source, datasets_data):
         }
 
 
-@login_required  
+  
 def analyze_dataset_relationships(request):
     """Analyze relationships within a dataset and return relationship matrix."""
     source = request.GET.get('source', '')

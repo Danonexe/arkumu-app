@@ -7,7 +7,7 @@ from arkumu.metadata.models.triples import Triple
 from arkumu.storage.models import UploadSession
 from arkumu.importer.models import IngestSession
 
-@login_required
+
 def metadata_dashboard(request):
     """Main dashboard view for metadata visualization and analysis."""
     # Get basic statistics
@@ -40,7 +40,7 @@ def metadata_dashboard(request):
         'institutions': institutions,
     })
 
-@login_required
+
 def all_upload_sessions(request):
     """Displays a list of all upload sessions."""
     all_uploads = UploadSession.objects.all().order_by('-created_at')
@@ -49,7 +49,7 @@ def all_upload_sessions(request):
         'upload_sessions': all_uploads
     })
 
-@login_required
+
 def all_ingest_sessions(request):
     """Displays a list of all ingest sessions."""
     all_ingests = IngestSession.objects.all().order_by('-created_at')

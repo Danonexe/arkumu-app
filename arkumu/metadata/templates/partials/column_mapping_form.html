@@ -1,0 +1,116 @@
+<!-- Column Mapping Form -->
+<div class="border-t border-base-300 pt-4 mt-4" id="column-mapping-form">
+    
+    <!-- Anchor Selection Display -->
+    <div class="mb-3">
+        <h5 class="text-xs font-medium mb-2 text-base-content opacity-70">Primary/Anchor Column:</h5>
+        <div class="text-sm">
+            {% if anchor_column %}
+                <span class="text-primary">{{ anchor_column.dataset }}</span>.<span class="text-info">{{ anchor_column.name }}</span>
+                <span class="badge badge-warning badge-xs ml-2">ANCHOR</span>
+            {% else %}
+                <span class="text-base-content opacity-50">Select a column as anchor first</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Relationship Configuration Form -->
+    <form hx-post="{% url 'metadata:save_column_mapping' %}"
+          hx-target="#mappings-section"
+          hx-swap="outerHTML">
+        
+        <!-- Relationship Type -->
+        <div class="mb-3">
+            <h5 class="text-xs font-medium mb-2 text-base-content opacity-70">Relationship Type:</h5>
+            <select class="select select-bordered select-xs w-full" name="relationship_type">
+                <option value="join">Join/Link</option>
+                <option value="foreign_key">Foreign Key</option>
+                <option value="derived">Derived From</option>
+                <option value="calculated">Calculated Field</option>
+                <option value="lookup">Lookup Reference</option>
+                <option value="grouping">Grouping Key</option>
+                <option value="transformation">Data Transformation</option>
+            </select>
+        </div>
+
+        <!-- Direction/Flow -->
+        <div class="mb-3">
+            <h5 class="text-xs font-medium mb-2 text-base-content opacity-70">Direction:</h5>
+            <div class="grid grid-cols-2 gap-2">
+                <label class="btn btn-xs btn-outline cursor-pointer">
+                    <input type="radio" name="direction" value="bidirectional" class="sr-only">
+                    <span>↔ Both Ways</span>
+                </label>
+                <label class="btn btn-xs btn-outline btn-active cursor-pointer">
+                    <input type="radio" name="direction" value="unidirectional" checked class="sr-only">
+                    <span>→ One Way</span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Optional: Mapping Strength/Confidence -->
+        <div class="mb-3">
+            <h5 class="text-xs font-medium mb-2 text-base-content opacity-70">Confidence:</h5>
+            <select class="select select-bordered select-xs w-full" name="confidence">
+                <option value="high">High - Direct relationship</option>
+                <option value="medium" selected>Medium - Likely relationship</option>
+                <option value="low">Low - Possible relationship</option>
+            </select>
+        </div>
+
+        <!-- Hidden fields for selected columns -->
+        {% for column in selected_columns %}
+        <input type="hidden" name="selected_columns" value="{{ column.id }}">
+        {% endfor %}
+        
+        {% if anchor_column %}
+        <input type="hidden" name="anchor_column" value="{{ anchor_column.id }}">
+        {% endif %}
+
+        <!-- Create Mapping Button -->
+        <button type="submit" 
+                class="btn btn-sm btn-success w-full gap-2"
+                {% if not anchor_column or selected_columns|length < 2 %}disabled{% endif %}>
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+            </svg>
+            Create Mapping
+            {% if selected_columns|length < 2 %}
+                <span class="text-xs opacity-60">(need 2+ columns)</span>
+            {% elif not anchor_column %}
+                <span class="text-xs opacity-60">(set anchor first)</span>
+            {% endif %}
+        </button>
+    </form>
+
+    <!-- Quick Actions -->
+    <div class="mt-3 pt-3 border-t border-base-300">
+        <div class="flex gap-2 text-xs">
+            <button class="btn btn-xs btn-ghost"
+                    disabled
+                    title="Auto-detect feature coming soon">
+                🤖 Auto-detect
+            </button>
+            <button class="btn btn-xs btn-ghost"
+                    disabled
+                    title="Suggestions feature coming soon">
+                💡 Suggestions
+            </button>
+        </div>
+        <div id="suggestions-area" class="mt-2"></div>
+    </div>
+</div>
+
+<script type="text/hyperscript">
+    -- Handle radio button styling for direction selection
+    on change from body
+        if target's name is 'direction' then
+            -- Remove active class from all direction buttons
+            repeat for input in <input[name='direction']/> in the document
+                remove .btn-active from input's closest(<label/>)
+            end
+            -- Add active class to selected button
+            add .btn-active to target's closest(<label/>)
+        end
+    end
+</script> 

@@ -7,7 +7,7 @@ from django.views.decorators.http import require_http_methods
 
 logger = logging.getLogger(__name__)
 
-@login_required
+
 def storage_dashboard(request):
     """
     Main storage dashboard - redirects to the archivist dashboard 
@@ -16,7 +16,7 @@ def storage_dashboard(request):
     from django.shortcuts import redirect
     return redirect('storage:archivist_dashboard')
 
-@login_required
+
 def archivist_dashboard(request):
     """
     Dashboard for archivists to manage organization buckets.
@@ -79,7 +79,7 @@ def archivist_dashboard(request):
             "selected_org_slug": request.GET.get('org') 
         })
 
-@login_required
+
 def load_folder_contents(request, bucket_type, folder_path):
     """
     Load contents of a specific folder when expanded.
@@ -111,7 +111,7 @@ def load_folder_contents(request, bucket_type, folder_path):
         },
     )
 
-@login_required
+
 def dashboard_content(request, bucket_type):
     """
     Return only the structure content for a specific bucket type.
@@ -145,7 +145,7 @@ def dashboard_content(request, bucket_type):
         logger.exception(f"Error loading dashboard content for {bucket_type}: {str(e)}")
         return HttpResponse(f"Error: {str(e)}", status=500)
 
-@login_required
+
 @require_http_methods(["POST"])
 def view_organization_bucket(request):
     """

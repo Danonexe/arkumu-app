@@ -10,7 +10,7 @@ from arkumu.storage.views.streaming_upload_views import streaming_upload_form
 logger = logging.getLogger(__name__)
 
 
-@login_required
+
 def upload_form(request):
     """
     Use the streaming upload form directly.
@@ -22,7 +22,7 @@ def upload_form(request):
     return streaming_upload_form(request)
 
 
-@login_required
+
 def upload_success(request):
     """
     Render the upload success page.

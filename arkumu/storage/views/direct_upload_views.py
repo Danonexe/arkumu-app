@@ -14,7 +14,7 @@ import requests
 logger = logging.getLogger(__name__)
 
 
-@login_required
+
 def direct_upload(request):
     """Handle direct S3 uploads from the browser."""
     # If GET request, just show the form
@@ -222,7 +222,7 @@ def direct_upload(request):
         })
 
 
-@login_required
+
 @require_http_methods(["POST"])
 def process_upload(request):
     """Process folder uploads using presigned URLs."""
@@ -398,7 +398,7 @@ def format_file_size(size_bytes):
     return f"{size_bytes:.2f} {size_name[i]}"
 
 
-@login_required
+
 @require_http_methods(["POST"])
 def upload_complete(request):
     """Handle notification that all uploads are complete."""
@@ -450,7 +450,7 @@ def upload_complete(request):
 
 
 # Add a debug view to test presigned URL generation
-@login_required
+
 @require_http_methods(["GET"])
 def debug_presigned_url(request):
     """Debug endpoint to test presigned URL generation."""
@@ -577,7 +577,7 @@ def debug_presigned_url(request):
     return HttpResponse(html_content)
 
 
-@login_required
+
 @require_http_methods(["POST"])
 @csrf_exempt  # This is needed because some browsers may not include CSRF token in these requests
 def debug_upload_error(request):
