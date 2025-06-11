@@ -9,26 +9,26 @@
 
 <!-- Updated Load More Button (out-of-band swap) -->
 {% if preview.has_more %}
-<div class="border-t border-base-300 bg-base-50 p-3" id="load-more-{{ dataset }}" hx-swap-oob="true">
-    <button class="btn btn-sm btn-ghost btn-outline w-full gap-2 hover:btn-primary"
+<div class="border-t border-base-300 bg-base-50 p-3" id="load-more-{{ dataset|slugify }}" hx-swap-oob="true">
+    <button class="btn btn-sm btn-ghost btn-outline w-full gap-2 hover:btn-info"
             {% if is_direct_mode %}
             hx-get="{% url 'metadata:direct_load_more_dataset_rows' %}?source={{ source|urlencode }}&dataset={{ dataset|urlencode }}&offset={{ preview.offset }}&limit=10{% if organization_id %}&organization={{ organization_id }}{% endif %}"
             {% else %}
             hx-get="{% url 'metadata:load_more_dataset_rows' %}?source={{ source|urlencode }}&dataset={{ dataset|urlencode }}&offset={{ preview.offset }}&limit=10"
             {% endif %}
-            hx-target="#table-body-{{ dataset }}"
+            hx-target="#table-body-{{ dataset|slugify }}"
             hx-swap="beforeend">
         <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
             <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/>
         </svg>
-        <span>Load 10 more rows{% if is_direct_mode %} {% endif %}</span>
+        <span>Load 10 more rows</span>
         <span class="badge badge-sm ml-1">{{ preview.showing_rows }} of {{ preview.total_rows }}</span>
         <span class="htmx-indicator loading loading-spinner loading-sm ml-2"></span>
     </button>
 </div>
 {% else %}
 <!-- No more rows message (out-of-band swap) -->
-<div class="border-t border-base-300 bg-base-50 p-3 text-center text-sm text-base-content/60" id="load-more-{{ dataset }}" hx-swap-oob="true">
+<div class="border-t border-base-300 bg-base-50 p-3 text-center text-sm text-base-content/60" id="load-more-{{ dataset|slugify }}" hx-swap-oob="true">
     All {{ preview.total_rows }} rows loaded
 </div>
 {% endif %} 

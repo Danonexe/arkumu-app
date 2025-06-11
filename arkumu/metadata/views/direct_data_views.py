@@ -420,25 +420,33 @@ def direct_load_more_dataset_rows(request):
     logger.info(f"Parsed params - source: {source_name}, dataset: {dataset_name}, offset: {offset}, limit: {limit}, org: {organization_id}")
     
     if not source_name or not dataset_name:
+        logger.error("Missing source_name or dataset_name parameters")
         return render(request, 'partials/table_rows.html', {'data': []})
     
     if not organization_id or organization_id == 'default-org':
+        logger.error(f"Invalid organization_id: {organization_id}")
         return render(request, 'partials/table_rows.html', {'data': []})
     
     try:
         analyzer = S3DirectDataAnalyzer()
         
         # Find the source in S3
+        logger.info(f"Discovering S3 data sources for org: {organization_id}")
         sources = analyzer.discover_s3_data_sources(organization_id)
         source_info = next((s for s in sources if s.name == source_name), None)
         
         if not source_info:
+            logger.error(f"Source '{source_name}' not found in discovered sources: {[s.name for s in sources]}")
             return render(request, 'partials/table_rows.html', {'data': []})
+        
+        logger.info(f"Found source: {source_info.name}, getting preview with offset: {offset}, limit: {limit}")
         
         # Get the requested slice from S3
         preview = analyzer.get_s3_table_preview(source_info, dataset_name, offset=offset, limit=limit)
         
-        return render(request, 'partials/load_more_response.html', {
+        logger.info(f"Preview retrieved - data_rows: {len(preview.data_rows)}, has_more: {preview.has_more}, total_rows: {preview.total_rows}")
+        
+        response_context = {
             'data': preview.data_rows,
             'colHeaders': preview.column_headers,
             'rowIds': [f"row_{offset + i}" for i in range(len(preview.data_rows))],
@@ -452,10 +460,14 @@ def direct_load_more_dataset_rows(request):
             },
             'is_direct_mode': True,
             'organization_id': organization_id  # Add organization to context
-        })
+        }
+        
+        logger.info(f"Rendering response with context: {response_context['preview']}")
+        
+        return render(request, 'partials/load_more_response.html', response_context)
         
     except Exception as e:
-        logger.error(f"Error loading more rows: {e}")
+        logger.error(f"Error loading more rows: {e}", exc_info=True)
         return render(request, 'partials/table_rows.html', {'data': []})
 
 

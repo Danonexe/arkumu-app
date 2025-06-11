@@ -292,18 +292,36 @@ document.addEventListener('htmx:afterSwap', function(event) {
     const targetId = event.detail.target ? event.detail.target.id : 'unknown';
     console.log('HTMX afterSwap for target:', targetId);
     
-
-    
     // Only handle expected targets, prevent interference
     if (targetId === 'analysis-container') {
         console.log('Analysis container updated - safe to proceed');
         // Initialize any analysis-specific components here
     } else if (targetId === 'table-content') {
         console.log('Table content updated - expected behavior');
+        
+        // Re-process HTMX elements in the new content (dataset cards)
+        console.log('Re-processing HTMX elements in loaded dataset cards...');
+        htmx.process(event.detail.target);
+        console.log('HTMX elements re-processed');
+        
     } else if (targetId === 'selected-columns-workspace') {
         console.log('Workspace updated - expected behavior');
+    } else if (targetId.startsWith('dataset-')) {
+        console.log('Individual dataset card loaded:', targetId);
+        
+        // Re-process HTMX elements in the new dataset card
+        console.log('Re-processing HTMX elements in dataset card...');
+        htmx.process(event.detail.target);
+        console.log('Dataset card HTMX elements re-processed');
+        
     } else {
         console.warn('HTMX updated unexpected target:', targetId);
+        
+        // For any other dynamically loaded content, try to re-process HTMX
+        if (event.detail.target) {
+            console.log('Re-processing HTMX elements for unknown target:', targetId);
+            htmx.process(event.detail.target);
+        }
     }
 });
 
@@ -382,6 +400,14 @@ document.addEventListener('htmx:sendError', function(event) {
 
 document.addEventListener('htmx:swapError', function(event) {
     console.error('HTMX Swap Error:', event.detail);
+});
+
+document.addEventListener('htmx:load', function(event) {
+    console.log('HTMX Load event triggered for:', event.target);
+    if (event.target && event.target.id && event.target.id.startsWith('dataset-')) {
+        console.log('Dataset card loaded via htmx:load, ensuring HTMX processing...');
+        htmx.process(event.target);
+    }
 });
 </script>
 
