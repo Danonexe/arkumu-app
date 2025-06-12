@@ -77,9 +77,8 @@
                        -- Reset all dataset badges to original state
                        remove .bg-success from <.badge/>
                        remove .text-success-content from <.badge/>
-                       remove .font-bold from <.badge/>
-                       add .badge-success to <.badge/>
-                       add .hover:bg-success-focus to <.badge/>
+                       add .badge-outline to <.badge/>
+                       add .hover:bg-success to <.badge/>
                        put '' into #table-content
                        show #empty-state
                        -- Update relationship builder
@@ -94,7 +93,7 @@
         <div class="flex flex-wrap gap-2">
             {% if datasets %}
                 {% for dataset in datasets %}
-                    <div class="badge badge-success px-3 py-1 cursor-pointer hover:bg-success-focus hover:text-success-content transition-colors"
+                    <div class="badge badge-outline badge-success badge-sm px-3 py-2 cursor-pointer hover:bg-success hover:text-success-content transition-all duration-200 rounded-full text-xs font-medium border-2 hover:shadow-md hover:scale-105"
                          id="badge-{{ dataset.name|slugify }}"
                          data-source="{{ dataset.source }}"
                          data-dataset="{{ dataset.name }}"
@@ -125,9 +124,8 @@
                                  -- Reset badge to unloaded state
                                  remove .bg-success from me
                                  remove .text-success-content from me
-                                 remove .font-bold from me
-                                 add .badge-success to me
-                                 add .hover:bg-success-focus to me
+                                 add .badge-outline to me
+                                 add .hover:bg-success to me
                                  
                                  -- Find and remove the dataset card using data attributes
                                  get .card in #table-content
@@ -177,11 +175,9 @@
                                  append datasetKey to $loadedDatasets
                                  
                                  -- Update badge to loaded state
-                                 remove .badge-success from me
-                                 remove .hover:bg-success-focus from me
+                                 remove .badge-outline from me
                                  add .bg-success to me
                                  add .text-success-content to me
-                                 add .font-bold to me
                                  
                                  -- Update relationship builder
                                  call updateLoadedDatasetsList()
@@ -201,7 +197,7 @@
                     </div>
                 {% endfor %}
             {% else %}
-                <div class="badge badge-ghost px-3 py-1">No datasets found</div>
+                <div class="badge badge-outline badge-ghost badge-sm px-3 py-2 text-xs font-medium border-2 rounded-full">No datasets found</div>
             {% endif %}
         </div>
     </div>
@@ -423,14 +419,14 @@ document.addEventListener('htmx:load', function(event) {
                 set dataset to parts[1]
                 
                 -- Build display HTML
-                set datasetHtml to '<div class="flex items-center gap-2 p-2 bg-base-100 rounded border border-base-300">'
+                set datasetHtml to '<div class="flex items-center gap-2 p-2 bg-base-100 rounded border border-success/30 hover:border-success transition-colors">'
                 set datasetHtml to datasetHtml + '<div class="avatar placeholder">'
-                set datasetHtml to datasetHtml + '<div class="bg-primary text-primary-content rounded w-6 h-6">'
+                set datasetHtml to datasetHtml + '<div class="bg-success text-success-content rounded w-6 h-6">'
                 set datasetHtml to datasetHtml + '<svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">'
                 set datasetHtml to datasetHtml + '<path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4z"/>'
                 set datasetHtml to datasetHtml + '</svg></div></div>'
                 set datasetHtml to datasetHtml + '<div class="flex-1 min-w-0">'
-                set datasetHtml to datasetHtml + '<div class="text-sm font-medium truncate">' + dataset + '</div>'
+                set datasetHtml to datasetHtml + '<div class="text-sm font-medium text-success truncate">' + dataset + '</div>'
                 set datasetHtml to datasetHtml + '<div class="text-xs text-base-content opacity-60 truncate">' + source + '</div>'
                 set datasetHtml to datasetHtml + '</div></div>'
                 
@@ -455,7 +451,7 @@ document.addEventListener('htmx:load', function(event) {
         else
             -- Update elements if they exist (defensive checks)
             if #loaded-datasets-list exists
-                put '<div class="text-center py-4 text-base-content opacity-50 text-sm">No datasets loaded yet</div>' into #loaded-datasets-list
+                put '<div class="text-center py-4 border border-dashed border-success/20 rounded-lg p-4"><span class="text-success/60 text-sm">No datasets loaded yet</span><p class="text-xs mt-1 text-base-content opacity-50">Click dataset badges above to load data</p></div>' into #loaded-datasets-list
             end
             if #loaded-dataset-count exists
                 put '0' into #loaded-dataset-count
