@@ -95,12 +95,16 @@
                             
                             log 'Found badge for dataset:', datasetName, targetBadge
                             if targetBadge exists
+                                -- Reset badge to unselected state (consistent with direct_split_table_graph.html)
                                 remove .badge-primary from targetBadge
                                 remove .bg-primary-focus from targetBadge
                                 remove .text-primary-content from targetBadge
                                 remove .font-bold from targetBadge
-                                add .badge-success to targetBadge
-                                add .hover:bg-success-focus to targetBadge
+                                remove .bg-success from targetBadge
+                                remove .text-success-content from targetBadge
+                                remove .dataset-active from targetBadge
+                                add .badge-outline to targetBadge
+                                add .hover:bg-success to targetBadge
                                 log 'Restored badge state for: ' + datasetName
                             else
                                 log 'ERROR: Badge not found for dataset:', datasetName

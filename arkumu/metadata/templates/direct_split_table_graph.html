@@ -73,16 +73,44 @@
             <button class="btn btn-xs btn-ghost opacity-60" 
                     id="clear-datasets-btn"
                     _="on click
+                       -- Reset global state
                        set $loadedDatasets to []
-                       -- Reset all dataset badges to original state
-                       remove .bg-success from <.badge/>
-                       remove .text-success-content from <.badge/>
-                       add .badge-outline to <.badge/>
-                       add .hover:bg-success to <.badge/>
+                       
+                       -- Reset badges (with existence check)
+                       get .dataset-active
+                       if it then
+                         repeat for badge in it
+                           remove .bg-success from badge
+                           remove .text-success-content from badge
+                           remove .dataset-active from badge
+                           add .badge-outline to badge
+                           add .hover:bg-success to badge
+                         end
+                       end
+                       
+                       -- Clear content and restore empty state
                        put '' into #table-content
-                       show #empty-state
-                       -- Update relationship builder
-                       call updateLoadedDatasetsList()"
+                       get #empty-state-template
+                       if it then
+                         put it.innerHTML into #table-content
+                       end
+                       
+                       -- Clear workspace via HTMX
+                       js
+                         htmx.ajax('POST', '/metadata/clear-workspace/', {
+                           values: { 'csrfmiddlewaretoken': document.querySelector('[name=csrfmiddlewaretoken]').value },
+                           target: '#selected-columns-workspace',
+                           swap: 'innerHTML'
+                         });
+                       end
+                       
+                       -- Clear the loaded datasets list
+                       if #loaded-datasets-list exists
+                         put '' into #loaded-datasets-list
+                       end
+                       
+                       -- Hide button
+                       hide me"
                     style="display: none;">
                 <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
@@ -178,6 +206,7 @@
                                  remove .badge-outline from me
                                  add .bg-success to me
                                  add .text-success-content to me
+                                 add .dataset-active to me
                                  
                                  -- Update relationship builder
                                  call updateLoadedDatasetsList()
@@ -255,6 +284,21 @@
         </div>
     </div>
 </div>
+
+<!-- Hidden template for empty state -->
+<template id="empty-state-template">
+    <div class="hero h-40" id="empty-state">
+        <div class="hero-content text-center">
+            <div class="max-w-md">
+                <svg class="w-16 h-16 mx-auto mb-4 text-base-content opacity-30" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+                </svg>
+                <p class="text-base-content opacity-50">Click dataset labels to add them here</p>
+                <p class="text-xs text-base-content opacity-30 mt-2">Multiple datasets stack vertically • Latest on top</p>
+            </div>
+        </div>
+    </div>
+</template>
 
 <!-- Status Toast -->
 <div id="status-toast" class="toast toast-top toast-end z-50" style="display: none;">
@@ -405,7 +449,7 @@ document.addEventListener('htmx:load', function(event) {
 <!-- Global Hyperscript Functions -->
 <script type="text/hyperscript">
     -- Global function to update loaded datasets display
-    def updateLoadedDatasetsList()
+    def updateLoadedDatasetsList
         if $loadedDatasets and $loadedDatasets.length > 0 then
             set html to ''
             set optionsHtml to '<option value="">Choose dataset...</option>'
@@ -460,5 +504,6 @@ document.addEventListener('htmx:load', function(event) {
         end
     end
 </script>
+
 
 {% endblock %} 
