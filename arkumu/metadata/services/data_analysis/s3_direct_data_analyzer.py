@@ -381,6 +381,56 @@ class S3DirectDataAnalyzer:
             except:
                 pass
     
+    def _get_total_row_count_safe(self, 
+                                 source_info: S3DataSourceInfo,
+                                 dataset_name: Optional[str] = None) -> int:
+        """
+        Safely get total row count using temporary file with proper cleanup.
+        Only used for very large datasets where sampling isn't sufficient.
+        """
+        with tempfile.NamedTemporaryFile(suffix=f'.{source_info.format}', delete=False) as temp_file:
+            temp_file_path = temp_file.name
+            
+        try:
+            # Download the file from S3
+            self.bucket_service.base_s3_service.s3_client.download_file(
+                source_info.bucket_name, 
+                source_info.object_key, 
+                temp_file_path
+            )
+            
+            if source_info.format == 'csv':
+                # Create lazy frame and immediately collect the count
+                lazy_df = pl.scan_csv(
+                    temp_file_path, 
+                    separator=';',
+                    ignore_errors=True
+                )
+                return lazy_df.select(pl.count()).collect().item()
+            
+            elif source_info.format == 'parquet':
+                lazy_df = pl.scan_parquet(temp_file_path)
+                return lazy_df.select(pl.count()).collect().item()
+            
+            elif source_info.format == 'excel':
+                sheet_name = dataset_name if dataset_name else 0
+                df = pl.read_excel(temp_file_path, sheet_name=sheet_name)
+                return len(df)
+            
+            elif source_info.format in ['json', 'jsonl']:
+                lazy_df = pl.scan_ndjson(temp_file_path)
+                return lazy_df.select(pl.count()).collect().item()
+            
+            else:
+                raise ValueError(f"Unsupported file format: {source_info.format}")
+                
+        finally:
+            # Always clean up temp file
+            try:
+                os.unlink(temp_file_path)
+            except:
+                pass
+    
     def get_s3_table_preview(self, 
                            source_info: S3DataSourceInfo,
                            dataset_name: Optional[str] = None,
@@ -402,12 +452,18 @@ class S3DirectDataAnalyzer:
             limit = self.default_preview_rows
         
         try:
-            # For previews, use eager reading to avoid temp file issues
-            # Read a reasonable sample to get schema and row count
-            sample_df = self._read_s3_source_eager_sample(source_info, dataset_name, n_rows=limit + offset + 100)
+            # Read a larger sample to get accurate total row count and schema
+            # Use a larger sample size that's likely to capture the full dataset
+            large_sample_size = max(10000, limit + offset + 1000)  # Read more to get accurate count
+            sample_df = self._read_s3_source_eager_sample(source_info, dataset_name, n_rows=large_sample_size)
             
-            # Get total row count and schema from the sample
-            total_rows = len(sample_df)
+            # If we got fewer rows than requested, we have the full dataset
+            if len(sample_df) < large_sample_size:
+                total_rows = len(sample_df)  # This is the actual total
+            else:
+                # For very large datasets, fall back to lazy count with proper temp file handling
+                total_rows = self._get_total_row_count_safe(source_info, dataset_name)
+            
             column_headers = list(sample_df.columns)
             column_types = {col: str(dtype) for col, dtype in sample_df.schema.items()}
             
