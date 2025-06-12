@@ -75,9 +75,8 @@
                     _="on click
                        set $loadedDatasets to []
                        -- Reset all dataset badges to original state
-                       remove .badge-info from <.badge/>
-                       remove .bg-info-focus from <.badge/>
-                       remove .text-info-content from <.badge/>
+                       remove .bg-success from <.badge/>
+                       remove .text-success-content from <.badge/>
                        remove .font-bold from <.badge/>
                        add .badge-success to <.badge/>
                        add .hover:bg-success-focus to <.badge/>
@@ -95,7 +94,7 @@
         <div class="flex flex-wrap gap-2">
             {% if datasets %}
                 {% for dataset in datasets %}
-                    <div class="badge badge-success badge-sm cursor-pointer hover:bg-success-focus hover:text-success-content transition-colors"
+                    <div class="badge badge-success px-3 py-1 cursor-pointer hover:bg-success-focus hover:text-success-content transition-colors"
                          id="badge-{{ dataset.name|slugify }}"
                          data-source="{{ dataset.source }}"
                          data-dataset="{{ dataset.name }}"
@@ -124,9 +123,8 @@
                                  set remainingCount to the result
                                  
                                  -- Reset badge to unloaded state
-                                 remove .badge-info from me
-                                 remove .bg-info-focus from me
-                                 remove .text-info-content from me
+                                 remove .bg-success from me
+                                 remove .text-success-content from me
                                  remove .font-bold from me
                                  add .badge-success to me
                                  add .hover:bg-success-focus to me
@@ -181,9 +179,8 @@
                                  -- Update badge to loaded state
                                  remove .badge-success from me
                                  remove .hover:bg-success-focus from me
-                                 add .badge-info to me
-                                 add .bg-info-focus to me
-                                 add .text-info-content to me
+                                 add .bg-success to me
+                                 add .text-success-content to me
                                  add .font-bold to me
                                  
                                  -- Update relationship builder
@@ -204,7 +201,7 @@
                     </div>
                 {% endfor %}
             {% else %}
-                <div class="badge badge-ghost badge-sm">No datasets found</div>
+                <div class="badge badge-ghost px-3 py-1">No datasets found</div>
             {% endif %}
         </div>
     </div>
@@ -250,7 +247,7 @@
                         <!-- Header -->
                         <div class="flex justify-between items-center mb-4">
                             <h3 class="text-lg font-medium">Dataset Information</h3>
-                            <div class="badge badge-info badge-outline badge-sm">Direct Access</div>
+                            <div class="badge badge-primary badge-outline px-3 py-1">Direct Access</div>
                         </div>
                         <div class="divider my-0"></div>
                         

@@ -41,13 +41,13 @@
             <div class="flex items-center gap-2">
                 <div class="flex flex-col gap-1 items-end">
                     {% if dataset.preview %}
-                        <div class="badge badge-sm bg-success-content/20 border-success text-success-content">
+                        <div class="badge px-3 py-1 bg-success-content/20 border-success text-success-content">
                             {{ dataset.preview.showing_rows }} of {{ dataset.preview.total_rows|default:"?" }} rows
                         </div>
                     {% else %}
-                        <div class="badge badge-sm badge-ghost">Loading...</div>
+                        <div class="badge px-3 py-1 badge-ghost">Loading...</div>
                     {% endif %}
-                    <div class="badge badge-sm bg-success-content/20 border-success text-success-content">
+                    <div class="badge px-3 py-1 bg-success-content/20 border-success text-success-content">
                         {{ dataset.cell_count|default:0 }} cells
                     </div>
                 </div>
@@ -92,9 +92,9 @@
                             
                             log 'Found badge for dataset:', datasetName, targetBadge
                             if targetBadge exists
-                                remove .badge-info from targetBadge
-                                remove .bg-info-focus from targetBadge
-                                remove .text-info-content from targetBadge
+                                remove .badge-primary from targetBadge
+                                remove .bg-primary-focus from targetBadge
+                                remove .text-primary-content from targetBadge
                                 remove .font-bold from targetBadge
                                 add .badge-success to targetBadge
                                 add .hover:bg-success-focus to targetBadge
@@ -177,79 +177,36 @@
         
         <!-- Column Names Display - Right below dataset name -->
         {% if dataset.preview.colHeaders %}
-        <div class="alert bg-base-100 border border-info p-1 mt-2">
-            <!-- Select All Columns Button -->
-            <div class="flex items-center justify-between mb-2">
-                <span class="text-xs font-medium text-base-content opacity-70">Columns ({{ dataset.preview.colHeaders|length }})</span>
-                <div>
-                    <input type="hidden" name="dataset_name" value="{{ dataset.name }}" id="dataset-name-{{ dataset.name|slugify }}">
-                    <input type="hidden" name="source_name" value="{{ dataset.source }}" id="source-name-{{ dataset.name|slugify }}">
-                    <input type="hidden" name="column_names" value="{{ dataset.preview.colHeaders|join:',' }}" id="column-names-{{ dataset.name|slugify }}">
-                    {% csrf_token %}
-                    
-                    <button class="btn btn-xs btn-outline btn-info" 
-                            id="select-all-{{ dataset.name|slugify }}"
-                            data-dataset="{{ dataset.name }}"
-                            data-source="{{ dataset.source }}"
-                            data-columns="{{ dataset.preview.colHeaders|join:',' }}"
-                            _="on click
-                                log '=== SELECT ALL BUTTON CLICKED ==='
-                                log 'Dataset: {{ dataset.name }}'
-                                
-                                -- Check if target workspace exists
-                                if #selected-columns-workspace exists
-                                    log 'Target workspace found - proceeding with HTMX request'
-                                    
-                                    -- Use HTMX to toggle all columns
-                                    js(me)
-                                        const dataset = me.getAttribute('data-dataset');
-                                        const source = me.getAttribute('data-source');
-                                        const columns = me.getAttribute('data-columns');
-                                        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-                                        
-                                        console.log('Making HTMX request with data:', {dataset, source, columns});
-                                        
-                                        htmx.ajax('POST', '{% url "metadata:toggle_all_columns" %}', {
-                                            values: {
-                                                'dataset_name': dataset,
-                                                'source_name': source, 
-                                                'column_names': columns,
-                                                'csrfmiddlewaretoken': csrfToken
-                                            },
-                                            target: '#selected-columns-workspace',
-                                            swap: 'innerHTML'
-                                        });
-                                    end
-                                else
-                                    log 'ERROR: #selected-columns-workspace not found!'
-                                    js
-                                        alert('Column workspace not ready. Please scroll down to view the relationship builder panel first, or reload the page.');
-                                        return false;
-                                    end
-                                    halt
-                                end">
-                        Select All
-                    </button>
-                </div>
+        <div class="alert bg-base-100 border border-primary p-1 mt-2 flex flex-col">
+            <!-- Hidden inputs and Select All Button -->
+            <div class="mb-2 order-1">
+                <input type="hidden" name="dataset_name" value="{{ dataset.name }}" id="dataset-name-{{ dataset.name|slugify }}">
+                <input type="hidden" name="source_name" value="{{ dataset.source }}" id="source-name-{{ dataset.name|slugify }}">
+                <input type="hidden" name="column_names" value="{{ dataset.preview.colHeaders|join:',' }}" id="column-names-{{ dataset.name|slugify }}">
+                {% csrf_token %}
+                
+
+                
+
             </div>
-            <div class="flex flex-wrap gap-1">
+            <div class="flex flex-wrap gap-3 order-2">
                 {% for column in dataset.preview.colHeaders %}
-                <div class="badge badge-outline badge-info badge-xs cursor-pointer hover:bg-info-focus hover:text-info-content"
+                <div class="badge badge-outline badge-primary badge-sm px-3 py-2 cursor-pointer hover:bg-primary hover:text-primary-content transition-all duration-200 rounded-full text-xs font-medium border-2 hover:shadow-md hover:scale-105"
                       data-column-name="{{ column }}"
                       data-dataset-name="{{ dataset.name }}"
                       data-column-index="{{ forloop.counter0 }}"
                       _="on click 
                           log 'Column badge clicked:', @data-column-name
                           
-                          -- Reset all column highlights first
-                          remove .bg-info from .badge in me.parentElement
-                          remove .text-info-content from .badge in me.parentElement
-                          add .badge-outline to .badge in me.parentElement
-                          
-                          -- Highlight this column badge
-                          remove .badge-outline from me
-                          add .bg-info to me
-                          add .text-info-content to me
+                                                      -- Reset all column highlights first
+                            remove .bg-primary from .badge in me.parentElement
+                            remove .text-primary-content from .badge in me.parentElement
+                            add .badge-outline to .badge in me.parentElement
+                            
+                            -- Highlight this column badge
+                            remove .badge-outline from me
+                            add .bg-primary to me
+                            add .text-primary-content to me
                           log 'Badge highlight updated for:', @data-column-name
                           
                           -- Find and highlight the table column
@@ -274,15 +231,15 @@
                               log 'Table container:', tableContainer
                               
                               -- Reset all table column highlights first
-                              remove .bg-info from .column-header in tableContainer
-                              remove .bg-info-focus from .column-header in tableContainer
-                              remove .text-info-content from .column-header in tableContainer
+                              remove .bg-primary from .column-header in tableContainer
+                              remove .bg-primary-focus from .column-header in tableContainer
+                              remove .text-primary-content from .column-header in tableContainer
                               remove .font-bold from .column-header in tableContainer
                               log 'Reset other column highlights'
                               
                               -- Highlight the table column
-                              add .bg-info to tableColumn
-                              add .text-info-content to tableColumn
+                              add .bg-primary to tableColumn
+                              add .text-primary-content to tableColumn
                               add .font-bold to tableColumn
                               log 'Added highlighting classes to column'
                               
@@ -340,6 +297,51 @@
                     {{ column }}
                 </div>
                 {% endfor %}
+                
+                <!-- Select All Button as last item -->
+                <button class="badge badge-outline badge-accent badge-sm px-3 py-2 cursor-pointer hover:bg-accent hover:text-accent-content transition-all duration-200 rounded-full text-xs font-medium border-2 hover:shadow-md hover:scale-105 bg-orange-100 text-orange-700 border-orange-300" 
+                        id="select-all-{{ dataset.name|slugify }}"
+                        data-dataset="{{ dataset.name }}"
+                        data-source="{{ dataset.source }}"
+                        data-columns="{{ dataset.preview.colHeaders|join:',' }}"
+                        _="on click
+                            log '=== SELECT ALL BUTTON CLICKED ==='
+                            log 'Dataset: {{ dataset.name }}'
+                            
+                            -- Check if target workspace exists
+                            if #selected-columns-workspace exists
+                                log 'Target workspace found - proceeding with HTMX request'
+                                
+                                -- Use HTMX to toggle all columns
+                                js(me)
+                                    const dataset = me.getAttribute('data-dataset');
+                                    const source = me.getAttribute('data-source');
+                                    const columns = me.getAttribute('data-columns');
+                                    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+                                    
+                                    console.log('Making HTMX request with data:', {dataset, source, columns});
+                                    
+                                    htmx.ajax('POST', '{% url "metadata:toggle_all_columns" %}', {
+                                        values: {
+                                            'dataset_name': dataset,
+                                            'source_name': source, 
+                                            'column_names': columns,
+                                            'csrfmiddlewaretoken': csrfToken
+                                        },
+                                        target: '#selected-columns-workspace',
+                                        swap: 'innerHTML'
+                                    });
+                                end
+                            else
+                                log 'ERROR: #selected-columns-workspace not found!'
+                                js
+                                    alert('Column workspace not ready. Please scroll down to view the relationship builder panel first, or reload the page.');
+                                    return false;
+                                end
+                                halt
+                            end">
+                    Select All ({{ dataset.preview.colHeaders|length }})
+                </button>
             </div>
         </div>
         {% endif %}
@@ -356,7 +358,7 @@
                         <thead class="bg-base-200">
                             <tr>
                                 {% for header in dataset.preview.colHeaders %}
-                                <th class="p-2 border border-base-300 font-medium cursor-pointer hover:bg-info-focus hover:bg-opacity-50 min-w-[120px] whitespace-nowrap column-header"
+                                <th class="p-2 border border-base-300 font-medium cursor-pointer hover:bg-primary-focus hover:bg-opacity-50 min-w-[120px] whitespace-nowrap column-header"
                                     id="column-{{ forloop.counter0 }}-{{ dataset.name|slugify }}"
                                     data-column-name="{{ header }}"
                                     data-column-index="{{ forloop.counter0 }}"
@@ -364,15 +366,15 @@
                                     _="on click 
                                         log 'Column clicked:', @data-column-name
                                         
-                                        -- Reset all column highlights first
-                                        remove .bg-info from .column-header in closest .table-container
-                                        remove .bg-info-focus from .column-header in closest .table-container
-                                        remove .text-info-content from .column-header in closest .table-container
-                                        remove .font-bold from .column-header in closest .table-container
-                                        
-                                        -- Highlight this column
-                                        add .bg-info to me
-                                        add .text-info-content to me
+                                                                -- Reset all column highlights first
+                        remove .bg-primary from .column-header in closest .table-container
+                        remove .bg-primary-focus from .column-header in closest .table-container
+                        remove .text-primary-content from .column-header in closest .table-container
+                        remove .font-bold from .column-header in closest .table-container
+                        
+                        -- Highlight this column
+                        add .bg-primary to me
+                        add .text-primary-content to me
                                         add .font-bold to me
                                         
                                         -- Find and highlight the corresponding badge
@@ -384,23 +386,23 @@
                                         -- Find the dataset card container
                                         set datasetCard to closest .card
                                         
-                                        -- Reset all badge highlights in this dataset first
-                                        remove .bg-info from .badge in datasetCard
-                                        remove .text-info-content from .badge in datasetCard
-                                        add .badge-outline to .badge in datasetCard
-                                        log 'Reset all badge highlights'
-                                        
-                                        -- Find all badges in the dataset card and match by data attributes
-                                        get .badge in datasetCard
-                                        set allBadges to it
-                                        
-                                        repeat for badge in allBadges
-                                            if @data-column-name of badge is columnName and @data-dataset-name of badge is datasetName
-                                                set targetBadge to badge
-                                                log 'Found matching badge for:', columnName
-                                                remove .badge-outline from targetBadge
-                                                add .bg-info to targetBadge
-                                                add .text-info-content to targetBadge
+                                                                -- Reset all badge highlights in this dataset first
+                        remove .bg-primary from .badge in datasetCard
+                        remove .text-primary-content from .badge in datasetCard
+                        add .badge-outline to .badge in datasetCard
+                        log 'Reset all badge highlights'
+                        
+                        -- Find all badges in the dataset card and match by data attributes
+                        get .badge in datasetCard
+                        set allBadges to it
+                        
+                        repeat for badge in allBadges
+                            if @data-column-name of badge is columnName and @data-dataset-name of badge is datasetName
+                                set targetBadge to badge
+                                log 'Found matching badge for:', columnName
+                                remove .badge-outline from targetBadge
+                                add .bg-primary to targetBadge
+                                add .text-primary-content to targetBadge
                                                 log 'Badge highlight updated for:', columnName
                                             end
                                         end
