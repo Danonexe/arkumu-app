@@ -1,11 +1,7 @@
 <!-- Created Mappings Section -->
-<div id="mappings-section" class="border-t border-base-300 pt-4 mt-4">
+<div id="mappings-section" class="pt-2 mt-2">
     <h4 class="text-sm font-medium mb-3 flex items-center gap-2">
-        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-            <path d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
-        </svg>
-        Created Mappings
-        <span class="badge badge-xs badge-success">{{ mappings|length }}</span>
+    
         
         {% if mappings %}
         <div class="ml-auto flex gap-2">
@@ -31,7 +27,7 @@
         {% endif %}
     </h4>
     
-    <!-- Mappings List -->
+    <!-- Mappings List 
     <div class="space-y-3 max-h-60 overflow-y-auto">
         {% if mappings %}
             {% for mapping in mappings %}
@@ -46,7 +42,7 @@
                 <p class="text-xs mt-1 opacity-70">Select columns and create relationships</p>
             </div>
         {% endif %}
-    </div>
+    </div> -->
     
     <!-- Quick Stats (if mappings exist) -->
     {% if mappings %}

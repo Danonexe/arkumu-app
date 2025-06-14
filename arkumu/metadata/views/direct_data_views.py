@@ -2624,3 +2624,59 @@ def toggle_multi_value_column(request):
     except Exception as e:
         logger.error(f"TOGGLE MULTI-VALUE: Error toggling multi-value status: {e}", exc_info=True)
         return JsonResponse({'error': str(e)}, status=500)
+
+
+def mapping_config(request):
+    """
+    Simple view that loads mapping configuration based on type.
+    Uses template-driven logic to include the appropriate configuration partial.
+    """
+    mapping_type = request.GET.get('type')
+    anchor_column_id = request.GET.get('anchor_column')
+    organization_id = get_organization_id_from_request(request)
+    
+    logger.info(f"MAPPING CONFIG: Loading config for type={mapping_type}, anchor_column={anchor_column_id}, org={organization_id}")
+    
+    # Handle reset type - return empty state
+    if mapping_type == 'reset':
+        logger.info("MAPPING CONFIG: Resetting to empty state")
+        return HttpResponse('''
+            <div class="text-center py-4 text-base-content opacity-50">
+                <svg class="w-8 h-8 mx-auto mb-2 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <p class="text-sm">Select a mapping type above to configure</p>
+            </div>
+        ''')
+    
+    # Validate mapping type
+    if mapping_type not in ['entity', 'lookup', 'vocabulary', 'junction']:
+        logger.error(f"MAPPING CONFIG: Invalid mapping type: {mapping_type}")
+        return HttpResponseBadRequest("Invalid mapping type")
+    
+    # Get current workspace from cache for context
+    workspace_cache_key = f"relationship_workspace_{organization_id}"
+    workspace = cache.get(workspace_cache_key, {'columns': []})
+    selected_columns = workspace.get('columns', [])
+    
+    # Find anchor column if provided
+    anchor_column = None
+    if anchor_column_id:
+        anchor_column = next((col for col in selected_columns if col.get('id') == anchor_column_id), None)
+        logger.info(f"MAPPING CONFIG: Found anchor column: {anchor_column.get('name') if anchor_column else 'None'}")
+    
+    # Get active datasets from cache (loaded datasets)
+    loaded_datasets_cache_key = f"loaded_datasets_{organization_id}"
+    active_datasets = cache.get(loaded_datasets_cache_key, [])
+    
+    context = {
+        'mapping_type': mapping_type,
+        'selected_columns': selected_columns,
+        'anchor_column': anchor_column,
+        'active_datasets': active_datasets,
+        'organization_id': organization_id,
+    }
+    
+    logger.info(f"MAPPING CONFIG: Rendering config for {mapping_type} with {len(selected_columns)} selected columns")
+    
+    return render(request, 'partials/mapping_config_loader.html', context)
