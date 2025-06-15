@@ -82,6 +82,7 @@ urlpatterns = [
     path('split-view/refresh-graph/', split_views.refresh_graph, name='refresh_graph'),
     path('split-view/toggle-layout/', split_views.toggle_layout, name='toggle_layout'),
     path('split-view/analyze-relationships/', split_views.analyze_dataset_relationships, name='analyze_dataset_relationships'),
+    path('split-view/clear-all-datasets/', split_views.clear_all_datasets, name='split_clear_all_datasets'),
     
     # Direct Data Analysis (File-based, faster)
     path('direct-analysis/', direct_data_views.direct_split_table_graph_view, name='direct_split_table_graph'),
@@ -106,6 +107,7 @@ urlpatterns = [
     path('preview-mapping/', direct_data_views.preview_mapping, name='preview_mapping'),
     path('mapping-config/', direct_data_views.mapping_config, name='mapping_config'),
     path('clear-workspace/', direct_data_views.clear_workspace, name='clear_workspace'),
+    path('clear-all-datasets/', direct_data_views.clear_all_datasets, name='clear_all_datasets'),
     path('set-anchor-column/', direct_data_views.set_anchor_column, name='set_anchor_column'),
     path('toggle-multi-value-column/', direct_data_views.toggle_multi_value_column, name='toggle_multi_value_column'),
     path('toggle-fk-column/', direct_data_views.toggle_fk_column, name='toggle_fk_column'),

@@ -2225,7 +2225,64 @@ def add_column_to_workspace(request):
         }
         
         logger.info(f"TOGGLE COLUMN: Rendering selected columns workspace with {len(state['selected_columns'])} selected columns")
-        return render(request, 'partials/selected_columns_workspace.html', context)
+        
+        # Render the updated selected columns workspace
+        workspace_html = render_to_string('partials/selected_columns_workspace.html', context, request=request)
+        
+        # Also render updated relationship builder to sync the Active Datasets section
+        relationship_builder_html = render_to_string('partials/relationship_builder.html', {
+            'datasets': state['all_datasets'],
+            'organization_id': organization_id,
+            'selected_columns': state['selected_columns'],
+            'active_datasets': state['active_datasets'],
+            'mappings': state.get('mappings', []),
+            'anchor_column': context['anchor_column']
+        }, request=request)
+        
+        # Create visual feedback for the selected column
+        dataset_slug = dataset_name.replace(' ', '-').replace('_', '-').lower()
+        column_badge_id = f"column-badge-{dataset_slug}-{column_index}"
+        table_header_id = f"column-{column_index}-{dataset_slug}"
+        
+        # Generate out-of-band updates for visual state
+        column_state_script = f"""
+        <script hx-swap-oob="true" type="text/hyperscript">
+            -- Update column badge state
+            if #{column_badge_id} then
+                if "{action}" is "added" then
+                    remove .badge-outline from #{column_badge_id}
+                    add .badge-primary to #{column_badge_id}
+                    add .selected to #{column_badge_id}
+                else
+                    add .badge-outline to #{column_badge_id}
+                    remove .badge-primary from #{column_badge_id}
+                    remove .selected from #{column_badge_id}
+                end
+            end
+            
+            -- Update table header state
+            if #{table_header_id} then
+                if "{action}" is "added" then
+                    add .bg-primary/20 to #{table_header_id}
+                    add .selected to #{table_header_id}
+                else
+                    remove .bg-primary/20 from #{table_header_id}
+                    remove .selected from #{table_header_id}
+                end
+            end
+        </script>
+        """
+        
+        # Return workspace HTML as main response + relationship builder + visual state updates
+        response_html = f"""
+        {workspace_html}
+        <div hx-swap-oob="innerHTML:#relationship-builder">
+            {relationship_builder_html}
+        </div>
+        {column_state_script}
+        """
+        
+        return HttpResponse(response_html)
         
     except Exception as e:
         logger.error(f"TOGGLE COLUMN: Error: {e}", exc_info=True)
@@ -2274,6 +2331,9 @@ def remove_column_from_workspace(request):
         except json.JSONDecodeError:
             datasets = []
 
+        # Get updated state for relationship builder
+        state = get_organization_state(request, organization_id)
+        
         # Generate workspace HTML
         workspace_html = render_to_string('partials/selected_columns_workspace.html', {
             'selected_columns': workspace['columns'],
@@ -2282,9 +2342,22 @@ def remove_column_from_workspace(request):
             'datasets': datasets,
         }, request=request)
         
+        # Also render updated relationship builder to sync the Active Datasets section
+        relationship_builder_html = render_to_string('partials/relationship_builder.html', {
+            'datasets': state['all_datasets'],
+            'organization_id': organization_id,
+            'selected_columns': state['selected_columns'],
+            'active_datasets': state['active_datasets'],
+            'mappings': state.get('mappings', []),
+            'anchor_column': next((col for col in workspace['columns'] if col.get('is_anchor')), None)
+        }, request=request)
+        
         # HTMX response with main target + out-of-band updates to sync column selection states
         response_html = f"""
         {workspace_html}
+        <div hx-swap-oob="innerHTML:#relationship-builder">
+            {relationship_builder_html}
+        </div>
         
         <script hx-swap-oob="true" type="text/hyperscript">
             -- Clear selection state for all matching column elements
@@ -2662,6 +2735,92 @@ def clear_workspace(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
+def clear_all_datasets(request):
+    """
+    HTMX endpoint to clear all selected datasets from active state.
+    Keeps all datasets visible but unselected, clears left/right panes.
+    """
+    logger.info(f"CLEAR_ALL_DATASETS: Method={request.method}, Content-Type={request.content_type}")
+    logger.info(f"CLEAR_ALL_DATASETS: POST data: {dict(request.POST)}")
+    
+    if request.method != 'POST':
+        logger.error("CLEAR_ALL_DATASETS: Only POST method allowed")
+        return JsonResponse({'error': 'Only POST method allowed'}, status=400)
+    
+    try:
+        organization_id = get_organization_id_from_request(request)
+        
+        logger.info(f"CLEAR ALL DATASETS: Clearing all datasets for org={organization_id}")
+        
+        # Clear selected datasets from session
+        session_key = f"selected_datasets_{organization_id}"
+        request.session[session_key] = []
+        
+        # Clear workspace columns from cache
+        workspace_cache_key = f"relationship_workspace_{organization_id}"
+        if cache.get(workspace_cache_key):
+            logger.info(f"CLEAR_ALL_DATASETS: Clearing workspace cache {workspace_cache_key}")
+            cache.delete(workspace_cache_key)
+        
+        logger.info("CLEAR ALL DATASETS: Dataset selection and workspace cleared")
+        
+        # Try to get datasets from the request (passed from template) first
+        datasets_json = request.POST.get('datasets', '[]')
+        try:
+            all_datasets = json.loads(datasets_json) if datasets_json != '[]' else []
+            logger.info(f"CLEAR_ALL_DATASETS: Got {len(all_datasets)} datasets from request")
+        except json.JSONDecodeError:
+            logger.warning("CLEAR_ALL_DATASETS: Failed to parse datasets from request, falling back to state discovery")
+            all_datasets = []
+        
+        # If no datasets from request, try to get from state (fallback)
+        if not all_datasets:
+            state = get_organization_state(request, organization_id)
+            all_datasets = state['all_datasets']
+            logger.info(f"CLEAR_ALL_DATASETS: Retrieved {len(all_datasets)} datasets from state")
+        
+        # Generate empty table content
+        table_content_html = render_to_string('partials/table_empty_state.html', {
+            'organization_id': organization_id,
+        }, request=request)
+        
+        # Generate updated dataset badges (all unselected)
+        badges_html = render_to_string('partials/dataset_badges.html', {
+            'datasets': all_datasets,
+            'selected_datasets': [],
+            'organization_id': organization_id,
+            'csrf_token': request.META.get('CSRF_COOKIE'),
+            'datasets_json': json.dumps(all_datasets, cls=DjangoJSONEncoder) if all_datasets else '[]'
+        }, request=request)
+        
+        # Generate updated relationship builder (no active datasets)
+        relationship_builder_html = render_to_string('partials/relationship_builder.html', {
+            'datasets': all_datasets,
+            'organization_id': organization_id,
+            'selected_columns': [],
+            'active_datasets': [],
+            'mappings': [],
+            'anchor_column': None
+        }, request=request)
+        
+        # HTMX response with badges as main target (since button targets #dataset-badges) + out-of-band updates
+        response_html = f"""
+        {badges_html}
+        <div hx-swap-oob="innerHTML:#table-content">
+            {table_content_html}
+        </div>
+        <div hx-swap-oob="innerHTML:#relationship-builder">
+            {relationship_builder_html}
+        </div>
+        """
+        
+        return HttpResponse(response_html)
+        
+    except Exception as e:
+        logger.error(f"CLEAR ALL DATASETS: Error clearing datasets: {e}", exc_info=True)
+        return JsonResponse({'error': str(e)}, status=500)
+
+
 @login_required
 def set_anchor_column(request):
     """
@@ -2827,7 +2986,29 @@ def toggle_all_columns(request):
         }
         
         logger.info(f"TOGGLE ALL: Rendering selected columns workspace with {len(state['selected_columns'])} selected columns")
-        return render(request, 'partials/selected_columns_workspace.html', context)
+        
+        # Render the updated selected columns workspace
+        workspace_html = render_to_string('partials/selected_columns_workspace.html', context, request=request)
+        
+        # Also render updated relationship builder to sync the Active Datasets section
+        relationship_builder_html = render_to_string('partials/relationship_builder.html', {
+            'datasets': state['all_datasets'],
+            'organization_id': organization_id,
+            'selected_columns': state['selected_columns'],
+            'active_datasets': state['active_datasets'],
+            'mappings': state.get('mappings', []),
+            'anchor_column': context['anchor_column']
+        }, request=request)
+        
+        # Return workspace HTML as main response + relationship builder as out-of-band swap
+        response_html = f"""
+        {workspace_html}
+        <div hx-swap-oob="innerHTML:#relationship-builder">
+            {relationship_builder_html}
+        </div>
+        """
+        
+        return HttpResponse(response_html)
         
     except Exception as e:
         logger.error(f"TOGGLE ALL: Error toggling all columns: {e}", exc_info=True)

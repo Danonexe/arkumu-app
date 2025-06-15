@@ -58,6 +58,17 @@ def split_table_graph_view(request):
     return render(request, 'split_table_graph.html', context)
 
 
+def clear_all_datasets(request):
+    """
+    Clears all selected datasets and returns the empty state for the table panel.
+    """
+    # If you store selected datasets in the session, clear them here:
+    if 'selected_datasets' in request.session:
+        del request.session['selected_datasets']
+    # Return the empty state partial
+    return render(request, 'partials/table_empty_state.html')
+
+
 def _get_all_datasets_for_source_optimized(source):
     """Get all datasets for a source using efficient database queries."""
     from django.db import connection

@@ -73,7 +73,7 @@
             </button>
         </div>
         <div class="flex flex-wrap gap-2" id="dataset-badges">
-            {% include 'partials/dataset_badges.html' with datasets=datasets selected_datasets=selected_datasets organization_id=organization_id csrf_token=csrf_token %}
+            {% include 'partials/dataset_badges.html' with datasets=datasets selected_datasets=selected_datasets organization_id=organization_id csrf_token=csrf_token datasets_json=datasets_json %}
         </div>
     </div>
     {% endif %}
