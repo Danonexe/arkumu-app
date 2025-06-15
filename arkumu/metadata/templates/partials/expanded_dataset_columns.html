@@ -1,0 +1,92 @@
+<!-- Expanded Dataset Columns -->
+{% if columns %}
+<div class="p-2 bg-base-50">
+    <div class="space-y-1 max-h-48 overflow-y-auto">
+        {% for column in columns %}
+        <div class="flex items-center justify-between p-1 hover:bg-base-200 rounded text-xs border border-base-300 bg-base-100">
+            <!-- Column info -->
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-1">
+                    <!-- Selection indicator -->
+                    {% if column.is_selected %}
+                    <div class="badge badge-primary badge-xs">✓</div>
+                    {% endif %}
+                    
+                    <!-- Column name and type -->
+                    <span class="font-medium text-primary truncate">{{ column.name }}</span>
+                    {% if column.type %}
+                    <span class="badge badge-ghost badge-xs">{{ column.type }}</span>
+                    {% endif %}
+                </div>
+                
+                <!-- Sample values (if available) -->
+                {% if column.sample_values %}
+                <div class="text-xs text-base-content opacity-50 truncate mt-0.5">
+                    {{ column.sample_values.0|default:'' }}{% if column.sample_values|length > 1 %}, ...{% endif %}
+                </div>
+                {% endif %}
+            </div>
+            
+            <!-- Add/Remove button -->
+            <div class="flex-shrink-0 ml-2">
+                {% if column.is_selected %}
+                <!-- Remove from workspace -->
+                <button class="btn btn-xs btn-square btn-ghost text-error hover:bg-error/10" 
+                        title="Remove from workspace"
+                        hx-post="{% url 'metadata:remove_column_from_workspace' %}"
+                        hx-vals='{"column_id": "{{ column.id }}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
+                        hx-target="#selected-columns-workspace"
+                        hx-swap="innerHTML">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+                {% else %}
+                <!-- Add to workspace -->
+                <button class="btn btn-xs btn-square btn-ghost text-success hover:bg-success/10" 
+                        title="Add to workspace"
+                        hx-post="{% url 'metadata:add_column_to_workspace' %}"
+                        hx-vals='{"column_id": "{{ column.id }}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
+                        hx-target="#selected-columns-workspace"
+                        hx-swap="innerHTML">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                    </svg>
+                </button>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    
+    <!-- Quick actions -->
+    <div class="flex justify-between items-center mt-2 pt-2 border-t border-base-300">
+        <div class="text-xs text-base-content opacity-60">
+            {{ columns|length }} columns
+        </div>
+        <div class="flex gap-1">
+            <!-- Add all columns -->
+            <button class="btn btn-xs btn-outline btn-success" 
+                    title="Add all columns to workspace"
+                    hx-post="{% url 'metadata:toggle_all_columns' %}"
+                    hx-vals='{"dataset": "{{ dataset.name }}", "action": "add", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
+                    hx-target="#selected-columns-workspace"
+                    hx-swap="innerHTML">
+                + All
+            </button>
+            <!-- Collapse -->
+            <button class="btn btn-xs btn-ghost" 
+                    title="Collapse"
+                    hx-get="{% url 'metadata:collapse_dataset' %}?dataset={{ dataset.name }}"
+                    hx-target="#dataset-columns-{{ dataset.name }}"
+                    hx-swap="innerHTML">
+                ↑
+            </button>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="p-2 text-center text-xs text-base-content opacity-50">
+    No columns available
+</div>
+{% endif %} 

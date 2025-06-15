@@ -24,26 +24,34 @@
             </button>
         </div>
     </div>
+    
+    <!-- Dataset Filter (show if multiple datasets) -->
+    {% regroup selected_columns by dataset as columns_by_dataset %}
+    {% if columns_by_dataset|length > 1 %}
+    <div class="mb-2 flex-shrink-0">
+        <div class="flex flex-wrap gap-1">
+            <button class="btn btn-xs {% if not request.GET.filter_dataset %}btn-primary{% else %}btn-outline{% endif %}" 
+                    hx-get="{% url 'metadata:filter_workspace' %}?filter_dataset=all"
+                    hx-target="#column-workspace"
+                    hx-swap="innerHTML">
+                All ({{ selected_columns|length }})
+            </button>
+            {% for dataset_group in columns_by_dataset %}
+            <button class="btn btn-xs {% if request.GET.filter_dataset == dataset_group.grouper %}btn-primary{% else %}btn-outline{% endif %}" 
+                    hx-get="{% url 'metadata:filter_workspace' %}?filter_dataset={{ dataset_group.grouper }}"
+                    hx-target="#column-workspace"
+                    hx-swap="innerHTML">
+                {{ dataset_group.grouper }} ({{ dataset_group.list|length }})
+            </button>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
 
     <!-- Column Selection Area - This is the scrollable section -->
     <div class="flex-1 overflow-y-auto min-h-0">
-        <div id="column-workspace" class="space-y-1 pr-1">
-            
-            {% if selected_columns %}
-                <!-- Render each selected column -->
-                {% for column in selected_columns %}
-                    {% include 'partials/column_item.html' with column=column %}
-                {% endfor %}
-            {% else %}
-                <!-- Empty state -->
-                <div id="workspace-empty-state" class="text-center py-8">
-                    <svg class="w-16 h-16 mx-auto mb-4 text-base-content opacity-20" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
-                    <p class="text-sm text-base-content opacity-50">Click columns to add them here</p>
-                    <p class="text-xs text-base-content opacity-30 mt-1">Build relationships visually</p>
-                </div>
-            {% endif %}
+        <div id="column-workspace" class="space-y-2 pr-1">
+            {% include 'partials/filtered_column_workspace.html' with selected_columns=selected_columns filter_dataset=filter_dataset %}
         </div>
     </div>
 
@@ -52,4 +60,6 @@
         {% include 'partials/mapping_creation_form.html' with active_datasets=active_datasets anchor_column=anchor_column %}
     </div>
     
-</div> 
+</div>
+
+ 

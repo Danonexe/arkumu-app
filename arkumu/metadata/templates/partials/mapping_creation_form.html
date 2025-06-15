@@ -148,24 +148,66 @@
                     </div>
                     <div id="fk-tooltip" class="mb-2"></div>
                     
-                    <div class="space-y-2">
+                    <div class="space-y-3">
                         {% for column in selected_columns %}
-                            <label class="flex items-center gap-2">
-                                <input type="checkbox" 
-                                       name="fk_columns" 
-                                       value="{{ column.name }}" 
-                                       class="checkbox checkbox-warning checkbox-sm"
-                                       {% if column.is_fk %}checked{% endif %}>
-                                <span class="text-sm">
-                                    {{ column.name }}
-                                    {% if column.is_fk %}
-                                        <span class="badge badge-warning badge-xs ml-1">currently FK</span>
-                                    {% endif %}
-                                </span>
-                            </label>
+                            <div class="border border-base-300 rounded p-3 bg-base-50">
+                                <div class="flex items-center gap-2 mb-2">
+                                    <input type="checkbox" 
+                                           name="fk_columns" 
+                                           value="{{ column.name }}" 
+                                           class="checkbox checkbox-warning checkbox-sm"
+                                           {% if column.is_fk %}checked{% endif %}
+                                           onchange="toggleFkDirection(this, '{{ column.name }}')">
+                                    <span class="text-sm font-medium">
+                                        {{ column.name }}
+                                        {% if column.is_fk %}
+                                            <span class="badge badge-warning badge-xs ml-1">currently FK</span>
+                                        {% endif %}
+                                    </span>
+                                </div>
+                                
+                                <!-- FK Direction Selection (hidden by default) -->
+                                <div id="fk-direction-{{ column.name }}" class="ml-6 mt-2 space-y-2" style="display: {% if column.is_fk %}block{% else %}none{% endif %};">
+                                    <div class="text-xs font-medium text-base-content/70 mb-1">FK Direction:</div>
+                                    <div class="flex gap-4">
+                                        <label class="flex items-center gap-2">
+                                            <input type="radio" 
+                                                   name="fk_direction_{{ column.name }}" 
+                                                   value="outbound" 
+                                                   class="radio radio-warning radio-xs"
+                                                   checked>
+                                            <span class="text-xs">
+                                                <span class="badge badge-outline badge-xs">→</span>
+                                                Outbound: This column points TO another dataset
+                                            </span>
+                                        </label>
+                                    </div>
+                                    <div class="flex gap-4">
+                                        <label class="flex items-center gap-2">
+                                            <input type="radio" 
+                                                   name="fk_direction_{{ column.name }}" 
+                                                   value="inbound" 
+                                                   class="radio radio-warning radio-xs">
+                                            <span class="text-xs">
+                                                <span class="badge badge-outline badge-xs">←</span>
+                                                Inbound: Another dataset's column points TO this column
+                                            </span>
+                                        </label>
+                                    </div>
+                                    
+                                    <!-- Example text -->
+                                    <div class="text-xs text-base-content/50 mt-1 italic">
+                                        <span id="fk-example-{{ column.name }}">
+                                            e.g., orders.user_id → users.id
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
                         {% endfor %}
                     </div>
                 </div>
+                
+
                 
                 <!-- Multi-value Columns -->
                 <div class="mb-4 p-3 border border-info/20 rounded-lg bg-info/5">
@@ -281,12 +323,26 @@
             <!-- Configuration sections will be loaded here via HTMX -->
         </div>
 
+            <!-- Preview Section -->
+            <div id="mapping-preview-container" class="mb-4">
+                <!-- JSON preview will be loaded here -->
+            </div>
+
             <!-- Submit Button -->
             <div class="flex justify-end gap-2 pt-2">
                 <button type="button" 
                         class="btn btn-sm btn-ghost"
-                        onclick="this.closest('form').reset(); document.getElementById('mapping-config-container').innerHTML = '';">
+                        onclick="this.closest('form').reset(); document.getElementById('mapping-config-container').innerHTML = ''; document.getElementById('mapping-preview-container').innerHTML = '';">
                     Cancel
+                </button>
+                <button type="button" 
+                        class="btn btn-sm btn-secondary"
+                        hx-post="{% url 'metadata:preview_mapping' %}"
+                        hx-target="#mapping-preview-container"
+                        hx-include="closest form"
+                        hx-indicator="#preview-spinner">
+                    <span id="preview-spinner" class="loading loading-spinner loading-xs htmx-indicator"></span>
+                    📋 Preview Mapping
                 </button>
                 <button type="submit" 
                         class="btn btn-sm btn-primary">
@@ -303,4 +359,35 @@
             <p class="text-sm">Select columns above to create mappings</p>
         </div>
     {% endif %}
-</div> 
+</div>
+
+<script>
+function toggleFkDirection(checkbox, columnName) {
+    const directionDiv = document.getElementById('fk-direction-' + columnName);
+    
+    if (checkbox.checked) {
+        directionDiv.style.display = 'block';
+    } else {
+        directionDiv.style.display = 'none';
+    }
+}
+
+function updateFkExample(radio, columnName) {
+    const exampleSpan = document.getElementById('fk-example-' + columnName);
+    if (radio.value === 'outbound') {
+        exampleSpan.textContent = `e.g., current_dataset.${columnName} → other_dataset.id`;
+    } else {
+        exampleSpan.textContent = `e.g., other_dataset.${columnName} → current_dataset.${columnName}`;
+    }
+}
+
+// Add event listeners for radio buttons to update examples
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('input[type="radio"][name^="fk_direction_"]').forEach(radio => {
+        radio.addEventListener('change', function() {
+            const columnName = this.name.replace('fk_direction_', '');
+            updateFkExample(this, columnName);
+        });
+    });
+});
+</script> 

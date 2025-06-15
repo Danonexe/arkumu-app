@@ -2312,6 +2312,163 @@ def create_mapping(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
+def preview_mapping(request):
+    """
+    HTMX endpoint to generate a JSON preview of the mapping configuration.
+    Shows what the mapping would look like before creation.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Only POST method allowed'}, status=400)
+    
+    try:
+        organization_id = get_organization_id_from_request(request)
+        
+        # Get form data
+        mapping_name = request.POST.get('mapping_name', '').strip()
+        anchor_column = request.POST.get('anchor_column', '').strip()
+        fk_columns = request.POST.getlist('fk_columns')
+        multi_value_columns = request.POST.getlist('multi_value_columns')
+        
+        logger.info(f"PREVIEW MAPPING: {mapping_name} with anchor={anchor_column}, fk={fk_columns}, multi={multi_value_columns}")
+        
+        # Get current workspace from cache for context
+        workspace_cache_key = f"relationship_workspace_{organization_id}"
+        workspace = cache.get(workspace_cache_key, {'columns': []})
+        selected_columns = workspace.get('columns', [])
+        
+        # Get current dataset name from selected columns
+        current_dataset = selected_columns[0].get('dataset') if selected_columns else 'current_dataset'
+        
+        # Build preview mapping structure
+        preview_mapping = {
+            "mapping_name": mapping_name or "Untitled Mapping",
+            "organization_id": organization_id,
+            "created_at": datetime.now().isoformat(),
+            "column_configuration": {
+                "anchor_column": {
+                    "name": anchor_column,
+                    "role": "entity_creator",
+                    "description": "Creates unique entities/resources from this column's values"
+                } if anchor_column else None,
+                "foreign_key_columns": [],
+                "multi_value_columns": [],
+                "regular_columns": []
+            },
+            "relationship_mappings": [],
+            "import_strategy": {
+                "dependency_order": [],
+                "validation_rules": []
+            }
+        }
+        
+        # Process FK columns and their targets
+        for fk_col in fk_columns:
+            fk_direction = request.POST.get(f'fk_direction_{fk_col}', 'outbound')
+            fk_target_dataset = request.POST.get(f'fk_target_dataset_{fk_col}', '')
+            fk_target_column = request.POST.get(f'fk_target_column_{fk_col}', '')
+            
+            if fk_direction == 'outbound':
+                description = f"This column '{fk_col}' points TO {fk_target_dataset}.{fk_target_column}" if fk_target_dataset and fk_target_column else "Target not specified - this column will reference another dataset"
+                role = "source_foreign_key"
+            else:  # inbound
+                description = f"Another dataset's column points TO this column '{fk_col}'" if fk_target_dataset and fk_target_column else "Source not specified - another dataset will reference this column"
+                role = "target_foreign_key"
+            
+            fk_config = {
+                "name": fk_col,
+                "role": role,
+                "direction": fk_direction,
+                "target_dataset": fk_target_dataset,
+                "target_column": fk_target_column,
+                "description": description
+            }
+            preview_mapping["column_configuration"]["foreign_key_columns"].append(fk_config)
+            
+            # Add relationship mapping
+            if fk_target_dataset and fk_target_column:
+                if fk_direction == 'outbound':
+                    relationship = {
+                        "source_column": fk_col,
+                        "source_dataset": current_dataset,
+                        "target_dataset": fk_target_dataset,
+                        "target_column": fk_target_column,
+                        "relationship_type": "outbound_reference",
+                        "direction": "source_to_target",
+                        "dependency": f"Requires {fk_target_dataset} to be imported first",
+                        "description": f"{current_dataset}.{fk_col} → {fk_target_dataset}.{fk_target_column}"
+                    }
+                    # Add to dependency order - target must be imported first
+                    if fk_target_dataset not in preview_mapping["import_strategy"]["dependency_order"]:
+                        preview_mapping["import_strategy"]["dependency_order"].append(fk_target_dataset)
+                else:  # inbound
+                    relationship = {
+                        "source_column": fk_col,
+                        "source_dataset": current_dataset,
+                        "target_dataset": fk_target_dataset,
+                        "target_column": fk_target_column,
+                        "relationship_type": "inbound_reference",
+                        "direction": "target_to_source",
+                        "dependency": f"This dataset must be imported before {fk_target_dataset}",
+                        "description": f"{fk_target_dataset}.{fk_target_column} → {current_dataset}.{fk_col}"
+                    }
+                    # For inbound, current dataset should be imported first
+                    # Don't add target to dependency order as it depends on us
+                
+                preview_mapping["relationship_mappings"].append(relationship)
+        
+        # Process multi-value columns
+        for mv_col in multi_value_columns:
+            mv_config = {
+                "name": mv_col,
+                "role": "multi_value",
+                "split_strategy": "comma_separated",
+                "description": "Will be split into multiple values/relationships"
+            }
+            preview_mapping["column_configuration"]["multi_value_columns"].append(mv_config)
+        
+        # Process regular columns (not anchor, FK, or multi-value)
+        for col in selected_columns:
+            col_name = col.get('name')
+            if (col_name != anchor_column and 
+                col_name not in fk_columns and 
+                col_name not in multi_value_columns):
+                
+                regular_config = {
+                    "name": col_name,
+                    "role": "property",
+                    "description": "Will be added as a property of the entity"
+                }
+                preview_mapping["column_configuration"]["regular_columns"].append(regular_config)
+        
+        # Add validation rules
+        if anchor_column:
+            preview_mapping["import_strategy"]["validation_rules"].append(
+                f"Anchor column '{anchor_column}' must have unique values"
+            )
+        
+        for fk_config in preview_mapping["column_configuration"]["foreign_key_columns"]:
+            if fk_config["target_dataset"] and fk_config["target_column"]:
+                preview_mapping["import_strategy"]["validation_rules"].append(
+                    f"FK column '{fk_config['name']}' values must exist in {fk_config['target_dataset']}.{fk_config['target_column']}"
+                )
+        
+        # Add current dataset to end of dependency order
+        current_dataset = selected_columns[0].get('dataset') if selected_columns else 'current_dataset'
+        preview_mapping["import_strategy"]["dependency_order"].append(current_dataset)
+        
+        # Render the preview template
+        return render(request, 'partials/mapping_preview.html', {
+            'preview_mapping': preview_mapping,
+            'preview_json': json.dumps(preview_mapping, indent=2),
+            'organization_id': organization_id,
+        })
+        
+    except Exception as e:
+        logger.error(f"PREVIEW MAPPING: Error generating preview: {e}", exc_info=True)
+        return render(request, 'partials/mapping_preview.html', {
+            'error': str(e),
+            'organization_id': organization_id,
+        })
 
 
 def clear_workspace(request):
@@ -2624,6 +2781,90 @@ def toggle_multi_value_column(request):
     except Exception as e:
         logger.error(f"TOGGLE MULTI-VALUE: Error toggling multi-value status: {e}", exc_info=True)
         return JsonResponse({'error': str(e)}, status=500)
+
+
+def filter_workspace(request):
+    """
+    HTMX endpoint to filter workspace columns by dataset.
+    """
+    try:
+        organization_id = get_organization_id_from_request(request)
+        filter_dataset = request.GET.get('filter_dataset', 'all')
+        
+        logger.info(f"FILTER WORKSPACE: Filtering by dataset={filter_dataset}, org={organization_id}")
+        
+        # Get current workspace from cache
+        workspace_cache_key = f"relationship_workspace_{organization_id}"
+        workspace = cache.get(workspace_cache_key, {'columns': []})
+        selected_columns = workspace.get('columns', [])
+        
+        # Filter columns if needed
+        if filter_dataset and filter_dataset != 'all':
+            filtered_columns = [col for col in selected_columns if col.get('dataset') == filter_dataset]
+        else:
+            filtered_columns = selected_columns
+        
+        logger.info(f"FILTER WORKSPACE: Showing {len(filtered_columns)} columns (filtered from {len(selected_columns)})")
+        
+        # Render the filtered workspace
+        return render(request, 'partials/filtered_column_workspace.html', {
+            'selected_columns': filtered_columns,
+            'filter_dataset': filter_dataset,
+            'organization_id': organization_id,
+        })
+        
+    except Exception as e:
+        logger.error(f"FILTER WORKSPACE: Error filtering workspace: {e}", exc_info=True)
+        return HttpResponse('<div class="text-error text-sm">Error filtering workspace</div>')
+
+
+def expand_dataset(request):
+    """
+    HTMX endpoint to expand/collapse dataset columns in the Active Datasets panel.
+    """
+    try:
+        organization_id = get_organization_id_from_request(request)
+        dataset_name = request.GET.get('dataset', '')
+        
+        logger.info(f"EXPAND DATASET: Expanding dataset={dataset_name}, org={organization_id}")
+        
+        if not dataset_name:
+            return HttpResponse('<div class="text-error text-xs p-2">Dataset name required</div>')
+        
+        # Get loaded datasets from cache
+        loaded_datasets_cache_key = f"loaded_datasets_{organization_id}"
+        active_datasets = cache.get(loaded_datasets_cache_key, [])
+        
+        # Find the specific dataset
+        target_dataset = None
+        for dataset in active_datasets:
+            if dataset.get('name') == dataset_name:
+                target_dataset = dataset
+                break
+        
+        if not target_dataset:
+            return HttpResponse('<div class="text-error text-xs p-2">Dataset not found</div>')
+        
+        # Get current workspace columns
+        workspace_cache_key = f"relationship_workspace_{organization_id}"
+        workspace = cache.get(workspace_cache_key, {'columns': []})
+        all_selected_columns = workspace.get('columns', [])
+        
+        # Filter to only show columns from this specific dataset that are already in workspace
+        dataset_workspace_columns = [col for col in all_selected_columns if col.get('dataset') == dataset_name]
+        
+        logger.info(f"EXPAND DATASET: Found {len(dataset_workspace_columns)} workspace columns for {dataset_name} (out of {len(all_selected_columns)} total)")
+        
+        # Render only the workspace columns from this dataset
+        return render(request, 'partials/filtered_column_workspace.html', {
+            'selected_columns': dataset_workspace_columns,
+            'filter_dataset': dataset_name,
+            'organization_id': organization_id,
+        })
+        
+    except Exception as e:
+        logger.error(f"EXPAND DATASET: Error expanding dataset: {e}", exc_info=True)
+        return HttpResponse('<div class="text-error text-xs p-2">Error loading dataset columns</div>')
 
 
 def mapping_config(request):

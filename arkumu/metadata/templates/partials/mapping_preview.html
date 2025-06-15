@@ -11,6 +11,155 @@
         </div>
     {% endif %}
     
+    {% if error %}
+    <div class="alert alert-error">
+        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+        </svg>
+        <div>
+            <div class="font-bold">Preview Error</div>
+            <div class="text-sm">{{ error }}</div>
+        </div>
+    </div>
+    {% else %}
+    <div class="border border-info/20 rounded-lg bg-info/5 p-4 mb-4">
+        <div class="flex items-center gap-2 mb-3">
+            <div class="badge badge-info badge-sm">📋</div>
+            <span class="text-sm font-medium">Mapping Preview</span>
+            <span class="text-xs text-base-content/60">{{ preview_mapping.mapping_name }}</span>
+            <button type="button" 
+                    class="btn btn-ghost btn-xs ml-auto"
+                    onclick="document.getElementById('mapping-preview-container').innerHTML = ''">
+                ✕
+            </button>
+        </div>
+        
+        <!-- Summary Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+            <!-- Anchor Column Card -->
+            {% if preview_mapping.column_configuration.anchor_column %}
+            <div class="card card-compact bg-success/10 border border-success/20">
+                <div class="card-body">
+                    <div class="flex items-center gap-2">
+                        <div class="badge badge-success badge-sm">🔑</div>
+                        <span class="text-xs font-medium">Anchor Column</span>
+                    </div>
+                    <div class="text-sm font-mono">{{ preview_mapping.column_configuration.anchor_column.name }}</div>
+                    <div class="text-xs text-base-content/60">Creates entities</div>
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- FK Columns Card -->
+            {% if preview_mapping.column_configuration.foreign_key_columns %}
+            <div class="card card-compact bg-warning/10 border border-warning/20">
+                <div class="card-body">
+                    <div class="flex items-center gap-2">
+                        <div class="badge badge-warning badge-sm">🔗</div>
+                        <span class="text-xs font-medium">Outbound FKs</span>
+                    </div>
+                    <div class="text-sm">{{ preview_mapping.column_configuration.foreign_key_columns|length }} column{{ preview_mapping.column_configuration.foreign_key_columns|length|pluralize }}</div>
+                    <div class="text-xs text-base-content/60">Points to other datasets</div>
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Multi-value Columns Card -->
+            {% if preview_mapping.column_configuration.multi_value_columns %}
+            <div class="card card-compact bg-info/10 border border-info/20">
+                <div class="card-body">
+                    <div class="flex items-center gap-2">
+                        <div class="badge badge-info badge-sm">📚</div>
+                        <span class="text-xs font-medium">Multi-value</span>
+                    </div>
+                    <div class="text-sm">{{ preview_mapping.column_configuration.multi_value_columns|length }} column{{ preview_mapping.column_configuration.multi_value_columns|length|pluralize }}</div>
+                    <div class="text-xs text-base-content/60">Will be split</div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Dependency Order -->
+        {% if preview_mapping.import_strategy.dependency_order %}
+        <div class="mb-4">
+            <div class="text-sm font-medium mb-2">📋 Import Order</div>
+            <div class="flex flex-wrap gap-2">
+                {% for dataset in preview_mapping.import_strategy.dependency_order %}
+                    <div class="badge badge-outline badge-sm">
+                        {{ forloop.counter }}. {{ dataset }}
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Validation Rules -->
+        {% if preview_mapping.import_strategy.validation_rules %}
+        <div class="mb-4">
+            <div class="text-sm font-medium mb-2">✅ Validation Rules</div>
+            <div class="space-y-1">
+                {% for rule in preview_mapping.import_strategy.validation_rules %}
+                    <div class="text-xs bg-base-200 rounded px-2 py-1">{{ rule }}</div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Collapsible JSON View -->
+        <div class="collapse collapse-arrow bg-base-100 border border-base-300">
+            <input type="checkbox" class="peer" /> 
+            <div class="collapse-title text-sm font-medium">
+                📄 Full JSON Configuration
+            </div>
+            <div class="collapse-content"> 
+                <div class="mockup-code text-xs">
+                    <pre><code>{{ preview_json }}</code></pre>
+                </div>
+                
+                <!-- Copy to Clipboard Button -->
+                <div class="mt-2">
+                    <button type="button" 
+                            class="btn btn-ghost btn-xs"
+                            onclick="navigator.clipboard.writeText({{ preview_json|escapejs }}).then(() => { 
+                                this.innerHTML = '✅ Copied!'; 
+                                setTimeout(() => this.innerHTML = '📋 Copy JSON', 2000); 
+                            })">
+                        📋 Copy JSON
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Relationship Details -->
+        {% if preview_mapping.relationship_mappings %}
+        <div class="mt-4">
+            <div class="text-sm font-medium mb-2">🔗 Relationship Mappings</div>
+            <div class="space-y-2">
+                {% for rel in preview_mapping.relationship_mappings %}
+                <div class="bg-base-200 rounded p-2">
+                    <div class="text-xs font-mono">
+                        <span class="text-primary">{{ rel.source_column }}</span> 
+                        → 
+                        <span class="text-secondary">{{ rel.target_dataset }}.{{ rel.target_column }}</span>
+                    </div>
+                    <div class="text-xs text-base-content/60 mt-1">{{ rel.dependency }}</div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        
+        <div class="alert alert-info alert-sm mt-4">
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+            </svg>
+            <div class="text-xs">
+                This preview shows how your mapping will be structured. Review the configuration and dependency order before creating the mapping.
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
     <div class="modal-action">
         <form method="dialog">
             <button class="btn">Close</button>

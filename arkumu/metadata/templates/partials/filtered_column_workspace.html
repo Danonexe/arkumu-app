@@ -1,0 +1,60 @@
+<!-- Filtered Column Workspace Content -->
+{% if selected_columns %}
+    <!-- Group columns by dataset -->
+    {% regroup selected_columns by dataset as columns_by_dataset %}
+    
+    {% if filter_dataset and filter_dataset != 'all' %}
+        <!-- Show only the filtered dataset -->
+        {% for dataset_group in columns_by_dataset %}
+            {% if dataset_group.grouper == filter_dataset %}
+            <div class="dataset-group" data-dataset="{{ dataset_group.grouper }}">
+                <!-- Dataset header -->
+                <div class="flex items-center gap-2 mb-1 px-2 py-1 bg-base-200 rounded-lg">
+                    <svg class="w-4 h-4 text-success" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/>
+                    </svg>
+                    <span class="text-sm font-medium text-success">{{ dataset_group.grouper }}</span>
+                    <span class="badge badge-success badge-xs">{{ dataset_group.list|length }}</span>
+                </div>
+                
+                <!-- Columns from this dataset -->
+                <div class="space-y-1 ml-2">
+                    {% for column in dataset_group.list %}
+                        {% include 'partials/column_item.html' with column=column %}
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        {% endfor %}
+    {% else %}
+        <!-- Show all datasets -->
+        {% for dataset_group in columns_by_dataset %}
+        <div class="dataset-group" data-dataset="{{ dataset_group.grouper }}">
+            <!-- Dataset header -->
+            <div class="flex items-center gap-2 mb-1 px-2 py-1 bg-base-200 rounded-lg">
+                <svg class="w-4 h-4 text-success" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/>
+                </svg>
+                <span class="text-sm font-medium text-success">{{ dataset_group.grouper }}</span>
+                <span class="badge badge-success badge-xs">{{ dataset_group.list|length }}</span>
+            </div>
+            
+            <!-- Columns from this dataset -->
+            <div class="space-y-1 ml-2">
+                {% for column in dataset_group.list %}
+                    {% include 'partials/column_item.html' with column=column %}
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    {% endif %}
+{% else %}
+    <!-- Empty state -->
+    <div id="workspace-empty-state" class="text-center py-8">
+        <svg class="w-16 h-16 mx-auto mb-4 text-base-content opacity-20" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <p class="text-sm text-base-content opacity-50">Click columns to add them here</p>
+        <p class="text-xs text-base-content opacity-30 mt-1">Build relationships visually</p>
+    </div>
+{% endif %} 
