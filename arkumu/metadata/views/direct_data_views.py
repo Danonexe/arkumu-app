@@ -666,11 +666,24 @@ def toggle_dataset_card(request):
             'csrf_token': request.META.get('CSRF_COOKIE')
         }, request=request)
         
-        # Return both updates using out-of-band swaps
+        # Render updated relationship builder with active datasets
+        relationship_builder_html = render_to_string('partials/relationship_builder.html', {
+            'datasets': state['all_datasets'],
+            'organization_id': organization_id,
+            'selected_columns': state.get('selected_columns', []),
+            'active_datasets': state['active_datasets'],
+            'mappings': state.get('mappings', []),
+            'anchor_column': state.get('anchor_column')
+        }, request=request)
+        
+        # Return all updates using out-of-band swaps
         response_html = f"""
         {table_content_html}
         <div hx-swap-oob="innerHTML:#dataset-badges">
             {badges_html}
+        </div>
+        <div hx-swap-oob="innerHTML:#relationship-builder">
+            {relationship_builder_html}
         </div>
         """
         
@@ -2586,7 +2599,14 @@ def clear_workspace(request):
         workspace_cache_key = f"relationship_workspace_{organization_id}"
         cache.delete(workspace_cache_key)
         
-        logger.info("CLEAR WORKSPACE: Workspace cleared")
+        # Also clear selected datasets from session
+        session_key = f"selected_datasets_{organization_id}"
+        request.session[session_key] = []
+        
+        logger.info("CLEAR WORKSPACE: Workspace and dataset selection cleared")
+        
+        # Get updated state to render all partials with empty state
+        state = get_organization_state(request, organization_id)
         
         # Generate workspace HTML
         workspace_html = render_to_string('partials/selected_columns_workspace.html', {
@@ -2595,9 +2615,33 @@ def clear_workspace(request):
             'organization_id': organization_id,
         }, request=request)
         
+        # Generate updated dataset badges (all unselected)
+        badges_html = render_to_string('partials/dataset_badges.html', {
+            'datasets': state['all_datasets'],
+            'selected_datasets': [],
+            'organization_id': organization_id,
+            'csrf_token': request.META.get('CSRF_COOKIE')
+        }, request=request)
+        
+        # Generate updated relationship builder (no active datasets)
+        relationship_builder_html = render_to_string('partials/relationship_builder.html', {
+            'datasets': state['all_datasets'],
+            'organization_id': organization_id,
+            'selected_columns': [],
+            'active_datasets': [],
+            'mappings': [],
+            'anchor_column': None
+        }, request=request)
+        
         # HTMX response with main target + out-of-band updates to clear all selections
         response_html = f"""
         {workspace_html}
+        <div hx-swap-oob="innerHTML:#dataset-badges">
+            {badges_html}
+        </div>
+        <div hx-swap-oob="innerHTML:#relationship-builder">
+            {relationship_builder_html}
+        </div>
         
         <script hx-swap-oob="true" type="text/hyperscript">
             -- Clear all column selections across the page
