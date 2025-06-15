@@ -14,9 +14,12 @@ Shows column badges with proper selection state based on server state
                  data-column-id="{{ dataset.name }}_{{ dataset.source }}_{{ column }}"
                  hx-post="{% url 'metadata:add_column_to_workspace' %}"
                  hx-vals='{"dataset_name": "{{ dataset.name|escapejs }}", "source_name": "{{ dataset.source|escapejs }}", "column_name": "{{ column|escapejs }}", "column_index": "{{ forloop.counter0 }}", "organization": "{{ organization_id }}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
-                 hx-target="#selected-columns-workspace"
+                                  hx-target="#selected-columns-workspace"
                  hx-swap="innerHTML"
-                 hx-indicator=".loading-indicator">
+                 hx-indicator=".loading-indicator"
+                 _="on click 
+                    get #column-header-{{ dataset.name|slugify }}-{{ forloop.counter0 }} 
+                    if it exists then call it.scrollIntoView({'behavior': 'smooth', 'block': 'center', 'inline': 'center'})">
                 {{ column }}
             </div>
         {% endfor %}
