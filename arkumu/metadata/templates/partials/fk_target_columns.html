@@ -1,0 +1,22 @@
+<!-- FK Target Columns Selection -->
+
+<select name="target_column" class="select select-bordered w-full">
+    <option value="">Select target column in {{ target_dataset }}</option>
+    {% for col in target_columns %}
+    <option value="{{ col.name }}" {% if col.name == target_column %}selected{% endif %}>
+        {{ col.name }}
+        {% if col.type %} ({{ col.type }}){% endif %}
+        {% if col.sample_values %} - {{ col.sample_values.0|default:'' }}{% if col.sample_values|length > 1 %}...{% endif %}{% endif %}
+    </option>
+    {% endfor %}
+</select>
+
+{% if target_dataset and target_columns %}
+<div class="text-xs text-base-content opacity-60 mt-2">
+    {{ target_columns|length }} columns available in {{ target_dataset }}
+</div>
+{% elif target_dataset %}
+<div class="text-xs text-warning mt-2">
+    No columns found in {{ target_dataset }}
+</div>
+{% endif %} 

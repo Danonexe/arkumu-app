@@ -276,7 +276,7 @@
                         
                         <!-- Relationship Builder Content -->
                         <div class="flex-1 overflow-y-auto">
-                            {% include 'partials/relationship_builder.html' %}
+                            {% include 'partials/relationship_builder.html' with datasets=datasets organization_id=organization_id %}
                         </div>
                     </div>
                 </div>

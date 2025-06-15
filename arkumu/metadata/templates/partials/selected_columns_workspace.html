@@ -51,7 +51,7 @@
     <!-- Column Selection Area - This is the scrollable section -->
     <div class="flex-1 overflow-y-auto min-h-0">
         <div id="column-workspace" class="space-y-2 pr-1">
-            {% include 'partials/filtered_column_workspace.html' with selected_columns=selected_columns filter_dataset=filter_dataset %}
+            {% include 'partials/filtered_column_workspace.html' with selected_columns=selected_columns filter_dataset=filter_dataset datasets=datasets organization_id=organization_id %}
         </div>
     </div>
 

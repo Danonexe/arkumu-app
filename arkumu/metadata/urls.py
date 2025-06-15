@@ -108,6 +108,19 @@ urlpatterns = [
     path('set-anchor-column/', direct_data_views.set_anchor_column, name='set_anchor_column'),
     path('toggle-multi-value-column/', direct_data_views.toggle_multi_value_column, name='toggle_multi_value_column'),
     path('toggle-fk-column/', direct_data_views.toggle_fk_column, name='toggle_fk_column'),
+    path('configure-fk/', direct_data_views.configure_fk, name='configure_fk'),
+    path('update-fk-targets/', direct_data_views.update_fk_targets, name='update_fk_targets'),
+    path('update-fk-columns/', direct_data_views.update_fk_columns, name='update_fk_columns'),
+    path('save-fk-config/', direct_data_views.save_fk_config, name='save_fk_config'),
+    path('remove-fk-config/', direct_data_views.remove_fk_config, name='remove_fk_config'),
+    path('close-fk-modal/', direct_data_views.close_fk_modal, name='close_fk_modal'),
+    
+    # Inline FK Configuration (replacement for modal approach)
+    path('toggle-fk-form/', direct_data_views.toggle_fk_form, name='toggle_fk_form'),
+    path('hide-fk-form/', direct_data_views.hide_fk_form, name='hide_fk_form'),
+    path('update-fk-target-columns/', direct_data_views.update_fk_target_columns, name='update_fk_target_columns'),
+    path('save-inline-fk-config/', direct_data_views.save_inline_fk_config, name='save_inline_fk_config'),
+    
     path('export-mappings/', direct_data_views.export_mappings, name='export_mappings'),
     path('filter-workspace/', direct_data_views.filter_workspace, name='filter_workspace'),
     path('expand-dataset/', direct_data_views.expand_dataset, name='expand_dataset'),

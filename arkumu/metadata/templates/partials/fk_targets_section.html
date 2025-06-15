@@ -1,0 +1,55 @@
+<!-- FK Targets Section -->
+{% if direction %}
+<div class="form-control mb-4">
+    <label class="label">
+        <span class="label-text font-medium">
+            {% if direction == 'outbound' %}
+                Target Dataset & Column (where this column points to)
+            {% else %}
+                Source Dataset & Column (that points to this column)
+            {% endif %}
+        </span>
+    </label>
+    
+    {% if available_datasets %}
+    <div class="space-y-3">
+        <!-- Dataset Selection -->
+        <select name="target_dataset" class="select select-bordered w-full"
+                hx-post="{% url 'metadata:update_fk_columns' %}"
+                hx-vals='{"column_id": "{{ column.id }}", "direction": "{{ direction }}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
+                hx-target="#target-columns-list"
+                hx-swap="innerHTML"
+                hx-include="[name='target_dataset']">
+            <option value="">Select target dataset</option>
+            {% for dataset in available_datasets %}
+            <option value="{{ dataset.name }}" {% if dataset.name == target_dataset %}selected{% endif %}>
+                {{ dataset.name }}{% if dataset.source %} ({{ dataset.source }}){% endif %}
+            </option>
+            {% endfor %}
+        </select>
+        
+        <!-- Column Selection (populated by HTMX) -->
+        <div id="target-columns-list">
+            {% if target_dataset %}
+                {% include 'partials/fk_target_columns.html' with column=column target_dataset=target_dataset target_column=target_column direction=direction target_columns=target_columns %}
+            {% else %}
+                <div class="text-sm text-base-content opacity-60 p-3 bg-base-200 rounded">
+                    Select a dataset first to see available columns
+                </div>
+            {% endif %}
+        </div>
+    </div>
+    {% else %}
+    <div class="alert alert-warning">
+        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.728-.833-2.498 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
+        </svg>
+        <span>No other datasets available for FK relationships. Load more datasets first.</span>
+    </div>
+    {% endif %}
+</div>
+{% else %}
+<div class="text-sm text-base-content opacity-60 p-3 bg-base-200 rounded">
+    Select a direction first to configure the target
+</div>
+{% endif %} 

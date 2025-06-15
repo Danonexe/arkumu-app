@@ -1,0 +1,85 @@
+<!-- FK Configuration Modal -->
+<div class="modal modal-open">
+    <div class="modal-box max-w-2xl">
+        <h3 class="font-bold text-lg mb-4">
+            Configure Foreign Key: 
+            <span class="text-success">{{ column.dataset }}</span>.<span class="text-primary">{{ column.name }}</span>
+        </h3>
+        
+        <form hx-post="{% url 'metadata:save_fk_config' %}" 
+              hx-target="#selected-columns-workspace"
+              hx-swap="innerHTML">
+            
+            {% csrf_token %}
+            <input type="hidden" name="column_id" value="{{ column.id }}">
+            
+            <!-- FK Direction Selection -->
+            <div class="form-control mb-6">
+                <label class="label">
+                    <span class="label-text font-medium">Foreign Key Direction</span>
+                </label>
+                <div class="space-y-3">
+                    <label class="label cursor-pointer justify-start gap-3 p-3 border rounded-lg {% if current_direction == 'outbound' %}border-primary bg-primary/10{% else %}border-base-300{% endif %}">
+                        <input type="radio" name="fk_direction" value="outbound" class="radio radio-primary" 
+                               {% if current_direction == 'outbound' or not current_direction %}checked{% endif %}
+                               hx-get="{% url 'metadata:update_fk_targets' %}?column_id={{ column.id }}&direction=outbound"
+                               hx-target="#fk-targets-section"
+                               hx-swap="innerHTML">
+                        <div>
+                            <div class="font-medium">Outbound (This column → Target dataset)</div>
+                            <div class="text-sm opacity-70">This column contains values that reference another dataset</div>
+                            <div class="text-xs text-primary mt-1">Example: customer_id → customers.id</div>
+                        </div>
+                    </label>
+                    
+                    <label class="label cursor-pointer justify-start gap-3 p-3 border rounded-lg {% if current_direction == 'inbound' %}border-primary bg-primary/10{% else %}border-base-300{% endif %}">
+                        <input type="radio" name="fk_direction" value="inbound" class="radio radio-primary" 
+                               {% if current_direction == 'inbound' %}checked{% endif %}
+                               hx-get="{% url 'metadata:update_fk_targets' %}?column_id={{ column.id }}&direction=inbound"
+                               hx-target="#fk-targets-section"
+                               hx-swap="innerHTML">
+                        <div>
+                            <div class="font-medium">Inbound (Target dataset → This column)</div>
+                            <div class="text-sm opacity-70">Another dataset has values that reference this column</div>
+                            <div class="text-xs text-primary mt-1">Example: orders.customer_id → customers.id (this column)</div>
+                        </div>
+                    </label>
+                </div>
+            </div>
+            
+            <!-- Target Selection Section -->
+            <div id="fk-targets-section">
+                {% include 'partials/fk_targets_section.html' with column=column direction=current_direction target_dataset=target_dataset target_column=target_column available_datasets=available_datasets %}
+            </div>
+            
+            <!-- Actions -->
+            <div class="modal-action">
+                <button type="button" class="btn btn-ghost" 
+                        hx-get="{% url 'metadata:close_fk_modal' %}"
+                        hx-target="#fk-config-modal"
+                        hx-swap="innerHTML">
+                    Cancel
+                </button>
+                
+                {% if column.is_fk %}
+                <button type="button" class="btn btn-error" 
+                        hx-post="{% url 'metadata:remove_fk_config' %}"
+                        hx-vals='{"column_id": "{{ column.id }}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
+                        hx-target="#selected-columns-workspace"
+                        hx-swap="innerHTML">
+                    Remove FK
+                </button>
+                {% endif %}
+                
+                <button type="submit" class="btn btn-primary">
+                    {% if column.is_fk %}Update FK{% else %}Set as FK{% endif %}
+                </button>
+            </div>
+        </form>
+    </div>
+    <div class="modal-backdrop" 
+         hx-get="{% url 'metadata:close_fk_modal' %}"
+         hx-target="#fk-config-modal"
+         hx-swap="innerHTML">
+    </div>
+</div> 

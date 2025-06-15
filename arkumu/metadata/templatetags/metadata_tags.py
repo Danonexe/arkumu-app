@@ -1,4 +1,5 @@
 from django import template
+from django.core.cache import cache
 
 register = template.Library()
 
@@ -20,4 +21,42 @@ def get_row_id(index, row_ids):
             return row_ids[index]
         return f"row_{index}"
     except:
-        return f"row_{index}" 
+        return f"row_{index}"
+
+@register.simple_tag(takes_context=True)
+def get_dataset_columns(context, dataset_name):
+    """Get columns for a specific dataset from cache."""
+    try:
+        # Get organization_id from context (should be available in request)
+        request = context.get('request')
+        if request and hasattr(request, 'user') and hasattr(request.user, 'organization_id'):
+            organization_id = request.user.organization_id
+        else:
+            # Fallback - try to get from context
+            organization_id = context.get('organization_id', 'default')
+        
+        # Get loaded datasets from cache (it's a list, not a dict)
+        loaded_datasets_cache_key = f"loaded_datasets_{organization_id}"
+        loaded_datasets = cache.get(loaded_datasets_cache_key, [])
+        
+        # Find the dataset by name
+        for dataset in loaded_datasets:
+            if dataset.get('name') == dataset_name:
+                columns = dataset.get('columns', [])
+                
+                # Convert to list of dicts if needed
+                column_list = []
+                for col in columns:
+                    if isinstance(col, dict):
+                        column_list.append(col)
+                    else:
+                        # Handle string column names
+                        column_list.append({
+                            'name': str(col),
+                            'type': None,
+                            'sample_values': []
+                        })
+                return column_list
+        return []
+    except Exception as e:
+        return [] 
