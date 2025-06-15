@@ -106,5 +106,9 @@ urlpatterns = [
     path('clear-workspace/', direct_data_views.clear_workspace, name='clear_workspace'),
     path('set-anchor-column/', direct_data_views.set_anchor_column, name='set_anchor_column'),
     path('toggle-multi-value-column/', direct_data_views.toggle_multi_value_column, name='toggle_multi_value_column'),
+    path('toggle-fk-column/', direct_data_views.toggle_fk_column, name='toggle_fk_column'),
     path('export-mappings/', direct_data_views.export_mappings, name='export_mappings'),
+    
+    # Tooltip helpers for HTMX
+    path('tooltip/', direct_data_views.tooltip_view, name='tooltip'),
     ]

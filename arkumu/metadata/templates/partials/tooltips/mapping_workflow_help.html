@@ -1,0 +1,69 @@
+<!-- Mapping Workflow Tooltip -->
+<div class="tooltip-content bg-base-100 border border-base-300 rounded-lg p-4 shadow-lg max-w-lg">
+    <div class="flex items-start gap-3">
+        <div class="badge badge-primary badge-lg">📋</div>
+        <div>
+            <h4 class="font-semibold text-base-content mb-3">Mapping Workflow</h4>
+            
+            <div class="space-y-3">
+                <!-- Step 1 -->
+                <div class="flex items-start gap-2">
+                    <div class="badge badge-success badge-sm">1</div>
+                    <div>
+                        <div class="font-medium text-sm">Set Anchor Columns</div>
+                        <div class="text-xs text-base-content/70">
+                            For each dataset, mark the column that creates entities (usually 'id')
+                        </div>
+                        <div class="text-xs font-mono text-success mt-1">
+                            users.id, products.product_id, orders.order_number
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Step 2 -->
+                <div class="flex items-start gap-2">
+                    <div class="badge badge-warning badge-sm">2</div>
+                    <div>
+                        <div class="font-medium text-sm">Mark FK Columns</div>
+                        <div class="text-xs text-base-content/70">
+                            Identify columns that reference other datasets
+                        </div>
+                        <div class="text-xs font-mono text-warning mt-1">
+                            orders.user_id → users.id
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Step 3 -->
+                <div class="flex items-start gap-2">
+                    <div class="badge badge-info badge-sm">3</div>
+                    <div>
+                        <div class="font-medium text-sm">Handle Multi-Values</div>
+                        <div class="text-xs text-base-content/70">
+                            Split comma-separated values if needed
+                        </div>
+                        <div class="text-xs font-mono text-info mt-1">
+                            "skill1, skill2, skill3" → separate entities
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Step 4 -->
+                <div class="flex items-start gap-2">
+                    <div class="badge badge-accent badge-sm">4</div>
+                    <div>
+                        <div class="font-medium text-sm">Execute in Order</div>
+                        <div class="text-xs text-base-content/70">
+                            System processes anchor columns first, then FKs
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-4 p-2 bg-base-200 rounded text-xs">
+                <span class="font-medium">💡 Pro Tip:</span> 
+                Start with datasets that don't reference others (pure entities)
+            </div>
+        </div>
+    </div>
+</div> 

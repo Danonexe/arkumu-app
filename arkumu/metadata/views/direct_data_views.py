@@ -2665,6 +2665,10 @@ def mapping_config(request):
         anchor_column = next((col for col in selected_columns if col.get('id') == anchor_column_id), None)
         logger.info(f"MAPPING CONFIG: Found anchor column: {anchor_column.get('name') if anchor_column else 'None'}")
     
+    # Extract FK columns for target specification
+    fk_columns = [col for col in selected_columns if col.get('is_fk', False)]
+    logger.info(f"MAPPING CONFIG: Found {len(fk_columns)} FK columns: {[col.get('name') for col in fk_columns]}")
+    
     # Get active datasets from cache (loaded datasets)
     loaded_datasets_cache_key = f"loaded_datasets_{organization_id}"
     active_datasets = cache.get(loaded_datasets_cache_key, [])
@@ -2673,6 +2677,7 @@ def mapping_config(request):
         'mapping_type': mapping_type,
         'selected_columns': selected_columns,
         'anchor_column': anchor_column,
+        'fk_columns': fk_columns,
         'active_datasets': active_datasets,
         'organization_id': organization_id,
     }
@@ -2680,3 +2685,94 @@ def mapping_config(request):
     logger.info(f"MAPPING CONFIG: Rendering config for {mapping_type} with {len(selected_columns)} selected columns")
     
     return render(request, 'partials/mapping_config_loader.html', context)
+
+
+def tooltip_view(request):
+    """
+    Simple HTMX view to serve tooltip content based on type parameter.
+    """
+    tooltip_type = request.GET.get('type')
+    
+    logger.info(f"TOOLTIP: Serving tooltip for type={tooltip_type}")
+    
+    # Map tooltip types to template names
+    tooltip_templates = {
+        'workflow': 'partials/tooltips/mapping_workflow_help.html',
+        'anchor_column': 'partials/tooltips/anchor_column_help.html', 
+        'fk_column': 'partials/tooltips/fk_column_help.html',
+        'fk_target': 'partials/tooltips/fk_target_help.html',
+        'column_role': 'partials/tooltips/column_role_help.html',
+    }
+    
+    template_name = tooltip_templates.get(tooltip_type)
+    if not template_name:
+        logger.error(f"TOOLTIP: Unknown tooltip type: {tooltip_type}")
+        return HttpResponse('<div class="text-error text-xs">Unknown tooltip type</div>')
+    
+    try:
+        return render(request, template_name)
+    except Exception as e:
+        logger.error(f"TOOLTIP: Error rendering tooltip {tooltip_type}: {e}", exc_info=True)
+        return HttpResponse('<div class="text-error text-xs">Error loading tooltip</div>')
+
+
+def toggle_fk_column(request):
+    """
+    HTMX endpoint to toggle the FK (foreign key) status of a column.
+    FK columns will need target specification during mapping creation.
+    """
+    logger.info(f"TOGGLE_FK: Method={request.method}, Content-Type={request.content_type}")
+    logger.info(f"TOGGLE_FK: POST data: {dict(request.POST)}")
+    
+    if request.method != 'POST':
+        logger.error("TOGGLE_FK: Only POST method allowed")
+        return JsonResponse({'error': 'Only POST method allowed'}, status=400)
+    
+    try:
+        column_id = request.POST.get('column_id')
+        organization_id = get_organization_id_from_request(request)
+        
+        logger.info(f"TOGGLE FK: {column_id} for org={organization_id}")
+        
+        if not column_id:
+            return JsonResponse({'error': 'Missing column_id'}, status=400)
+        
+        # Get current workspace from cache
+        workspace_cache_key = f"relationship_workspace_{organization_id}"
+        workspace = cache.get(workspace_cache_key, {'columns': []})
+        
+        # Update FK status
+        existing_columns = workspace.get('columns', [])
+        column_found = False
+        
+        for col in existing_columns:
+            if col.get('id') == column_id:
+                # Toggle FK status
+                current_status = col.get('is_fk', False)
+                col['is_fk'] = not current_status
+                column_found = True
+                logger.info(f"TOGGLE FK: Column {column_id} FK status: {col['is_fk']}")
+                break
+        
+        if not column_found:
+            return JsonResponse({'error': 'Column not found in workspace'}, status=400)
+        
+        workspace['columns'] = existing_columns
+        
+        # Save back to cache
+        cache.set(workspace_cache_key, workspace, timeout=60*60*24)  # 24 hours
+        
+        logger.info(f"TOGGLE FK: Updated workspace")
+        
+        # Generate workspace HTML with updated FK status
+        workspace_html = render_to_string('partials/selected_columns_workspace.html', {
+            'selected_columns': workspace['columns'],
+            'anchor_column': next((col for col in workspace['columns'] if col.get('is_anchor')), None),
+            'organization_id': organization_id,
+        }, request=request)
+        
+        return HttpResponse(workspace_html)
+        
+    except Exception as e:
+        logger.error(f"TOGGLE FK: Error toggling FK status: {e}", exc_info=True)
+        return JsonResponse({'error': str(e)}, status=500)

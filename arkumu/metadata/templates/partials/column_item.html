@@ -12,6 +12,9 @@
             {% if column.is_multi_value %}
             <div class="badge badge-accent badge-xs flex-shrink-0" title="Multi-value column (will be split)">🔀</div>
             {% endif %}
+            {% if column.is_fk %}
+            <div class="badge badge-secondary badge-xs flex-shrink-0" title="Foreign key column (references another dataset)">🔗</div>
+            {% endif %}
             
             <!-- Column info in compact format -->
             <div class="min-w-0 flex-1">
@@ -35,6 +38,17 @@
     <!-- Compact action buttons -->
     <div class="flex items-center gap-1 flex-shrink-0 ml-2">
         
+        <!-- Toggle FK button -->
+        <div class="tooltip tooltip-left" data-tip="{% if column.is_fk %}Mark as regular column{% else %}Mark as foreign key{% endif %}">
+            <button class="btn btn-xs btn-square {% if column.is_fk %}btn-secondary{% else %}btn-secondary btn-outline{% endif %}" 
+                    hx-post="{% url 'metadata:toggle_fk_column' %}"
+                    hx-vals='{"column_id": "{{ column.id }}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
+                    hx-target="#selected-columns-workspace"
+                    hx-swap="innerHTML">
+                🔗
+            </button>
+        </div>
+
         <!-- Toggle multi-value button -->
         <div class="tooltip tooltip-left" data-tip="{% if column.is_multi_value %}Mark as single value{% else %}Mark as multi-value (will be split){% endif %}">
             <button class="btn btn-xs btn-square {% if column.is_multi_value %}btn-accent{% else %}btn-accent btn-outline{% endif %}" 
