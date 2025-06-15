@@ -95,34 +95,8 @@
                 
 
             </div>
-            <div class="flex flex-wrap gap-3 order-2">
-                {% for column in dataset.preview.colHeaders %}
-                <div class="badge badge-outline badge-primary badge-sm px-3 py-2 cursor-pointer hover:bg-primary hover:text-primary-content transition-all duration-200 rounded-full text-xs font-medium border-2 hover:shadow-md hover:scale-105 column-badge"
-                      data-column-name="{{ column }}"
-                      data-dataset-name="{{ dataset.name }}"
-                      data-column-index="{{ forloop.counter0 }}"
-                      data-column-id="{{ dataset.name }}_{{ dataset.source }}_{{ column }}"
-                      hx-post="{% url 'metadata:add_column_to_workspace' %}"
-                      hx-vals='{"dataset_name": "{{ dataset.name|escapejs }}", "source_name": "{{ dataset.source|escapejs }}", "column_name": "{{ column|escapejs }}", "column_index": "{{ forloop.counter0 }}", "datasets": {{ datasets_json|default:"[]"|escapejs }}, "csrfmiddlewaretoken": "{{ csrf_token }}"}'
-                      hx-target="#selected-columns-workspace"
-                      hx-swap="innerHTML"
-                      hx-indicator=".loading-indicator">
-                    {{ column }}
-                </div>
-                {% endfor %}
-                
-                <!-- Select All Button as last item -->
-                <button class="btn btn-xs btn-outline btn-accent hover:btn-accent transition-all duration-200 text-xs font-medium" 
-                        id="select-all-{{ dataset.name|slugify }}"
-                        data-dataset="{{ dataset.name }}"
-                        data-source="{{ dataset.source }}"
-                        data-columns="{{ dataset.preview.colHeaders|join:',' }}"
-                        hx-post="{% url 'metadata:toggle_all_columns' %}"
-                        hx-vals='{"dataset_name": "{{ dataset.name|escapejs }}", "source_name": "{{ dataset.source|escapejs }}", "column_names": "{{ dataset.preview.colHeaders|join:',' }}", "datasets": {{ datasets_json|default:"[]"|escapejs }}, "csrfmiddlewaretoken": "{{ csrf_token }}"}'
-                        hx-target="#selected-columns-workspace"
-                        hx-swap="innerHTML">
-                    Select All ({{ dataset.preview.colHeaders|length }})
-                </button>
+            <div class="flex flex-wrap gap-3 order-2" id="column-badges-{{ dataset.name|slugify }}">
+                {% include 'partials/column_badges.html' with dataset=dataset organization_id=organization_id datasets_json=datasets_json selected_columns=selected_columns dataset_selected_columns=dataset_selected_columns csrf_token=csrf_token %}
             </div>
         </div>
         {% endif %}
@@ -139,8 +113,9 @@
                         <thead class="bg-base-200">
                             <tr>
                                 {% for header in dataset.preview.colHeaders %}
-                                <th class="p-2 border border-base-300 font-medium cursor-pointer hover:bg-primary-focus hover:bg-opacity-50 min-w-[120px] whitespace-nowrap column-header"
-                                    id="column-{{ forloop.counter0 }}-{{ dataset.name|slugify }}"
+                                {% if header in dataset_selected_columns|default_if_none:'' %}
+                                <th class="p-2 border border-base-300 font-medium cursor-pointer bg-primary text-primary-content min-w-[120px] whitespace-nowrap column-header selected"
+                                    id="column-header-{{ dataset.name|slugify }}-{{ forloop.counter0 }}"
                                     data-column-name="{{ header }}"
                                     data-column-index="{{ forloop.counter0 }}"
                                     data-dataset-name="{{ dataset.name }}"
@@ -151,6 +126,20 @@
                                     hx-swap="innerHTML">
                                     {{ header }}
                                 </th>
+                                {% else %}
+                                <th class="p-2 border border-base-300 font-medium cursor-pointer hover:bg-primary-focus hover:bg-opacity-50 min-w-[120px] whitespace-nowrap column-header"
+                                    id="column-header-{{ dataset.name|slugify }}-{{ forloop.counter0 }}"
+                                    data-column-name="{{ header }}"
+                                    data-column-index="{{ forloop.counter0 }}"
+                                    data-dataset-name="{{ dataset.name }}"
+                                    data-column-id="{{ dataset.name }}_{{ dataset.source }}_{{ header }}"
+                                    hx-post="{% url 'metadata:add_column_to_workspace' %}"
+                                    hx-vals='{"dataset_name": "{{ dataset.name|escapejs }}", "source_name": "{{ dataset.source|escapejs }}", "column_name": "{{ header|escapejs }}", "column_index": "{{ forloop.counter0 }}", "datasets": {{ datasets_json|default:"[]"|escapejs }}, "csrfmiddlewaretoken": "{{ csrf_token }}"}'
+                                    hx-target="#selected-columns-workspace"
+                                    hx-swap="innerHTML">
+                                    {{ header }}
+                                </th>
+                                {% endif %}
                                 {% endfor %}
                             </tr>
                         </thead>
@@ -200,6 +189,8 @@
         
     </div>
 </div>
+
+
 
  
  

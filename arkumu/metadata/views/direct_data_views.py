@@ -472,6 +472,11 @@ def direct_get_dataset_card(request):
         # Get consolidated state for proper context
         state = get_organization_state(request, organization_id)
         
+        # Get selected column names for this dataset to pass to template
+        dataset_selected_columns = [col['column_name'] for col in state['selected_columns'] 
+                                   if col.get('dataset_name') == dataset_name and col.get('source_name') == source_name]
+        
+        logger.info(f"🎯 DATASET CARD: Dataset {dataset_name} has {len(dataset_selected_columns)} selected columns: {dataset_selected_columns}")
         logger.info(f"🎯 DATASET CARD: Rendering template with dataset {dataset_name}")
         response = render(request, 'partials/dataset_card.html', {
             'dataset': dataset,
@@ -482,7 +487,8 @@ def direct_get_dataset_card(request):
             'organization_id': organization_id,
             'datasets_json': json.dumps(state['all_datasets'], cls=DjangoJSONEncoder) if state['all_datasets'] else '[]',
             'selected_columns': state['selected_columns'],
-            'selected_datasets': state['active_dataset_names']
+            'selected_datasets': state['active_dataset_names'],
+            'dataset_selected_columns': dataset_selected_columns  # Pass selected columns for this dataset
         })
         logger.info(f"🎯 DATASET CARD SUCCESS: Template rendered for {dataset_name} with {len(state['all_datasets'])} datasets, {len(state['selected_columns'])} selected columns")
         return response
@@ -2213,76 +2219,73 @@ def add_column_to_workspace(request):
         
         logger.info(f"TOGGLE COLUMN: {action} {column_name}, workspace now has {len(workspace['columns'])} columns")
         
-        # Get consolidated state and render just the selected columns workspace
+        # Get consolidated state and render workspace + dataset card updates
         state = get_organization_state(request, organization_id)
         
-        context = {
+        # Get selected column names for this dataset to pass to template
+        dataset_selected_columns = [col['column_name'] for col in state['selected_columns'] 
+                                   if col.get('dataset_name') == dataset_name and col.get('source_name') == source_name]
+        
+        logger.info(f"TOGGLE COLUMN: Dataset {dataset_name} has {len(dataset_selected_columns)} selected columns: {dataset_selected_columns}")
+        
+        # Render the updated selected columns workspace
+        workspace_html = render_to_string('partials/selected_columns_workspace.html', {
             'selected_columns': state['selected_columns'],
             'anchor_column': next((col for col in state['selected_columns'] if col.get('is_anchor')), None),
             'organization_id': organization_id,
             'datasets': state['all_datasets'],
             'active_datasets': state['active_datasets']
-        }
-        
-        logger.info(f"TOGGLE COLUMN: Rendering selected columns workspace with {len(state['selected_columns'])} selected columns")
-        
-        # Render the updated selected columns workspace
-        workspace_html = render_to_string('partials/selected_columns_workspace.html', context, request=request)
-        
-        # Also render updated relationship builder to sync the Active Datasets section
-        relationship_builder_html = render_to_string('partials/relationship_builder.html', {
-            'datasets': state['all_datasets'],
-            'organization_id': organization_id,
-            'selected_columns': state['selected_columns'],
-            'active_datasets': state['active_datasets'],
-            'mappings': state.get('mappings', []),
-            'anchor_column': context['anchor_column']
         }, request=request)
         
-        # Create visual feedback for the selected column
-        dataset_slug = dataset_name.replace(' ', '-').replace('_', '-').lower()
-        column_badge_id = f"column-badge-{dataset_slug}-{column_index}"
-        table_header_id = f"column-{column_index}-{dataset_slug}"
-        
-        # Generate out-of-band updates for visual state
-        column_state_script = f"""
-        <script hx-swap-oob="true" type="text/hyperscript">
-            -- Update column badge state
-            if #{column_badge_id} then
-                if "{action}" is "added" then
-                    remove .badge-outline from #{column_badge_id}
-                    add .badge-primary to #{column_badge_id}
-                    add .selected to #{column_badge_id}
-                else
-                    add .badge-outline to #{column_badge_id}
-                    remove .badge-primary from #{column_badge_id}
-                    remove .selected from #{column_badge_id}
-                end
-            end
+        # Render updated column badges for this dataset
+        try:
+            analyzer = S3DirectDataAnalyzer()
+            sources = analyzer.discover_s3_data_sources(organization_id)
+            source_info = next((s for s in sources if s.name == source_name), None)
             
-            -- Update table header state
-            if #{table_header_id} then
-                if "{action}" is "added" then
-                    add .bg-primary/20 to #{table_header_id}
-                    add .selected to #{table_header_id}
-                else
-                    remove .bg-primary/20 from #{table_header_id}
-                    remove .selected from #{table_header_id}
-                end
-            end
-        </script>
-        """
+            if source_info:
+                # Get dataset preview to re-render the column badges
+                preview = analyzer.get_s3_table_preview(source_info, dataset_name, limit=10)
+                
+                dataset = {
+                    'name': dataset_name,
+                    'source': source_name,
+                    'preview': {
+                        'colHeaders': preview.column_headers,
+                    }
+                }
+                
+                # Render updated column badges with selection state
+                column_badges_html = render_to_string('partials/column_badges.html', {
+                    'dataset': dataset,
+                    'organization_id': organization_id,
+                    'datasets_json': json.dumps(state['all_datasets'], cls=DjangoJSONEncoder) if state['all_datasets'] else '[]',
+                    'selected_columns': state['selected_columns'],
+                    'dataset_selected_columns': dataset_selected_columns,  # Pass selected columns for this dataset
+                    'csrf_token': request.META.get('CSRF_COOKIE')
+                }, request=request)
+                
+                # Create slugified dataset name for the ID
+                import re
+                dataset_slug = re.sub(r'[^a-zA-Z0-9\-_]', '-', dataset_name.lower())
+                
+                # Return workspace + out-of-band column badges update
+                response_html = f"""
+                {workspace_html}
+                <div hx-swap-oob="innerHTML:#column-badges-{dataset_slug}">
+                    {column_badges_html}
+                </div>
+                """
+                
+                logger.info(f"TOGGLE COLUMN: Rendering workspace + column badges update for {dataset_name}")
+                return HttpResponse(response_html)
+                
+        except Exception as badges_error:
+            logger.warning(f"TOGGLE COLUMN: Could not update column badges: {badges_error}")
         
-        # Return workspace HTML as main response + relationship builder + visual state updates
-        response_html = f"""
-        {workspace_html}
-        <div hx-swap-oob="innerHTML:#relationship-builder">
-            {relationship_builder_html}
-        </div>
-        {column_state_script}
-        """
-        
-        return HttpResponse(response_html)
+        # Fallback: just return workspace update
+        logger.info(f"TOGGLE COLUMN: Rendering workspace only with {len(state['selected_columns'])} selected columns")
+        return HttpResponse(workspace_html)
         
     except Exception as e:
         logger.error(f"TOGGLE COLUMN: Error: {e}", exc_info=True)
@@ -2974,21 +2977,23 @@ def toggle_all_columns(request):
         
         logger.info(f"TOGGLE ALL: {action}, workspace now has {len(workspace['columns'])} columns")
         
-        # Get consolidated state and render just the selected columns workspace
+        # Get consolidated state and render workspace + dataset card updates
         state = get_organization_state(request, organization_id)
         
-        context = {
+        # Get selected column names for this dataset to pass to template
+        dataset_selected_columns = [col['column_name'] for col in state['selected_columns'] 
+                                   if col.get('dataset_name') == dataset_name and col.get('source_name') == source_name]
+        
+        logger.info(f"TOGGLE ALL: Dataset {dataset_name} has {len(dataset_selected_columns)} selected columns: {dataset_selected_columns}")
+        
+        # Render the updated selected columns workspace
+        workspace_html = render_to_string('partials/selected_columns_workspace.html', {
             'selected_columns': state['selected_columns'],
             'anchor_column': next((col for col in state['selected_columns'] if col.get('is_anchor')), None),
             'organization_id': organization_id,
             'datasets': state['all_datasets'],
             'active_datasets': state['active_datasets']
-        }
-        
-        logger.info(f"TOGGLE ALL: Rendering selected columns workspace with {len(state['selected_columns'])} selected columns")
-        
-        # Render the updated selected columns workspace
-        workspace_html = render_to_string('partials/selected_columns_workspace.html', context, request=request)
+        }, request=request)
         
         # Also render updated relationship builder to sync the Active Datasets section
         relationship_builder_html = render_to_string('partials/relationship_builder.html', {
@@ -2997,10 +3002,59 @@ def toggle_all_columns(request):
             'selected_columns': state['selected_columns'],
             'active_datasets': state['active_datasets'],
             'mappings': state.get('mappings', []),
-            'anchor_column': context['anchor_column']
+            'anchor_column': next((col for col in state['selected_columns'] if col.get('is_anchor')), None)
         }, request=request)
         
-        # Return workspace HTML as main response + relationship builder as out-of-band swap
+        # Render updated column badges for this dataset
+        try:
+            analyzer = S3DirectDataAnalyzer()
+            sources = analyzer.discover_s3_data_sources(organization_id)
+            source_info = next((s for s in sources if s.name == source_name), None)
+            
+            if source_info:
+                # Get dataset preview to re-render the column badges
+                preview = analyzer.get_s3_table_preview(source_info, dataset_name, limit=10)
+                
+                dataset = {
+                    'name': dataset_name,
+                    'source': source_name,
+                    'preview': {
+                        'colHeaders': preview.column_headers,
+                    }
+                }
+                
+                # Render updated column badges with selection state
+                column_badges_html = render_to_string('partials/column_badges.html', {
+                    'dataset': dataset,
+                    'organization_id': organization_id,
+                    'datasets_json': json.dumps(state['all_datasets'], cls=DjangoJSONEncoder) if state['all_datasets'] else '[]',
+                    'selected_columns': state['selected_columns'],
+                    'dataset_selected_columns': dataset_selected_columns,  # Pass selected columns for this dataset
+                    'csrf_token': request.META.get('CSRF_COOKIE')
+                }, request=request)
+                
+                # Create slugified dataset name for the ID
+                import re
+                dataset_slug = re.sub(r'[^a-zA-Z0-9\-_]', '-', dataset_name.lower())
+                
+                # Return workspace + relationship builder + column badges updates
+                response_html = f"""
+                {workspace_html}
+                <div hx-swap-oob="innerHTML:#relationship-builder">
+                    {relationship_builder_html}
+                </div>
+                <div hx-swap-oob="innerHTML:#column-badges-{dataset_slug}">
+                    {column_badges_html}
+                </div>
+                """
+                
+                logger.info(f"TOGGLE ALL: Rendering workspace + relationship builder + column badges update for {dataset_name}")
+                return HttpResponse(response_html)
+                
+        except Exception as badges_error:
+            logger.warning(f"TOGGLE ALL: Could not update column badges: {badges_error}")
+        
+        # Fallback: return workspace + relationship builder updates only
         response_html = f"""
         {workspace_html}
         <div hx-swap-oob="innerHTML:#relationship-builder">
@@ -3008,6 +3062,7 @@ def toggle_all_columns(request):
         </div>
         """
         
+        logger.info(f"TOGGLE ALL: Rendering workspace + relationship builder only with {len(state['selected_columns'])} selected columns")
         return HttpResponse(response_html)
         
     except Exception as e:
