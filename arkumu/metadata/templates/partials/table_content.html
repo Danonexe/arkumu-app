@@ -1,0 +1,28 @@
+{% if selected_datasets_with_details %}
+    {% for dataset in selected_datasets_with_details %}
+        <div id="dataset-{{ dataset.name|slugify }}" 
+             hx-get="{% url 'metadata:direct_dataset_card' %}?source={{ dataset.source|urlencode }}&dataset_name={{ dataset.name|urlencode }}&organization={{ organization_id }}"
+             hx-trigger="load once"
+             hx-swap="outerHTML">
+            <div class="card bg-base-100 shadow-lg border border-base-300 p-4">
+                <div class="flex items-center gap-2">
+                    <div class="loading loading-spinner loading-sm"></div>
+                    <span>Loading {{ dataset.name }}...</span>
+                </div>
+            </div>
+        </div>
+    {% endfor %}
+{% else %}
+    <!-- Initial state - multi-dataset accumulation view -->
+    <div class="hero h-40" id="empty-state">
+        <div class="hero-content text-center">
+            <div class="max-w-md">
+                <svg class="w-16 h-16 mx-auto mb-4 text-base-content opacity-30" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+                </svg>
+                <p class="text-base-content opacity-50">Click dataset labels to add them here</p>
+                <p class="text-xs text-base-content opacity-30 mt-2">Multiple datasets stack vertically • Latest on top</p>
+            </div>
+        </div>
+    </div>
+{% endif %} 

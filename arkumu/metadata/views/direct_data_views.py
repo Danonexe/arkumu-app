@@ -19,6 +19,7 @@ from django.http import JsonResponse, HttpResponseBadRequest, HttpResponse
 from django.conf import settings
 from django.core.cache import cache
 from django.template.loader import render_to_string
+from django.core.serializers.json import DjangoJSONEncoder
 
 from arkumu.metadata.services.data_analysis.s3_direct_data_analyzer import S3DirectDataAnalyzer
 from arkumu.metadata.services.relationship_discovery.service import RelationshipDiscoveryService
@@ -70,14 +71,31 @@ def direct_split_table_graph_view(request):
     Uses S3DirectDataAnalyzer for efficient S3-based analysis.
     """
     try:
+        # Log the incoming request details  
+        logger.warning(f"🚀🚀🚀 DIRECT_SPLIT_VIEW CALLED - NEW CODE IS RUNNING! 🚀🚀🚀")
+        logger.warning(f"DIRECT_SPLIT_VIEW: Method={request.method}, GET params={dict(request.GET)}")
+        
         organization_id = get_organization_id_from_request(request)
+        logger.info(f"DIRECT_SPLIT_VIEW: Extracted organization_id={organization_id}")
         
         # Discover available organizations from S3 buckets (like archivist dashboard)
         analyzer = S3DirectDataAnalyzer()
-        available_organizations = _discover_available_organizations(analyzer)
+        
+        # Cache the organization discovery to avoid checking all orgs every time
+        cache_key = "available_organizations_s3"
+        available_organizations = cache.get(cache_key)
+        if available_organizations is None:
+            logger.info(f"DIRECT_SPLIT_VIEW: Discovering available organizations (not cached)")
+            available_organizations = _discover_available_organizations(analyzer)
+            cache.set(cache_key, available_organizations, timeout=300)  # Cache for 5 minutes
+        else:
+            logger.info(f"DIRECT_SPLIT_VIEW: Using cached organization list")
+        
+        logger.info(f"DIRECT_SPLIT_VIEW: Found {len(available_organizations)} available organizations: {[org['id'] for org in available_organizations]}")
         
         # If no organization is provided, show helpful instructions with available orgs
         if not organization_id or organization_id == 'default-org':
+            logger.warning(f"DIRECT_SPLIT_VIEW: No valid organization provided (organization_id={organization_id})")
             context = {
                 'sources': [],
                 'selected_source': '',
@@ -90,6 +108,7 @@ def direct_split_table_graph_view(request):
         
         # Check if the selected organization actually exists in S3
         org_exists = any(org['id'] == organization_id for org in available_organizations)
+        logger.info(f"DIRECT_SPLIT_VIEW: Organization '{organization_id}' exists in S3: {org_exists}")
         if not org_exists:
             context = {
                 'sources': [],
@@ -102,23 +121,33 @@ def direct_split_table_graph_view(request):
             return render(request, 'direct_split_table_graph.html', context)
         
         # Discover available data sources from S3 for this organization
+        logger.info(f"DIRECT_SPLIT_VIEW: Discovering data sources for organization '{organization_id}'")
         sources = analyzer.discover_s3_data_sources(organization_id)
+        logger.info(f"DIRECT_SPLIT_VIEW: Found {len(sources)} data sources for organization '{organization_id}'")
         
         # Format sources for dropdown and collect CSV datasets
         sources_info = []
         csv_datasets = []
         
+        logger.info(f"DIRECT_SPLIT_VIEW: Processing {len(sources)} sources to find CSV datasets...")
+        
         for source in sources:
             dataset_names = analyzer.get_dataset_names_from_s3_source(source)
-            logger.info(f"Source: {source.name}, Format: {source.format}, Datasets: {dataset_names}")
+            logger.info(f"DIRECT_SPLIT_VIEW: Source={source.name}, Format={source.format}, Dataset_names={dataset_names}")
             
             # Collect CSV/parseable datasets from this source
             source_csv_datasets = []
             for dataset_name in dataset_names:
                 dataset_lower = dataset_name.lower()
-                if (dataset_lower.endswith(('.csv', '.tsv', '.txt')) or 
-                    'csv' in dataset_lower or 
-                    (source.format and source.format.lower() in ['csv', 'tsv', 'text'])):
+                logger.info(f"DIRECT_SPLIT_VIEW: Checking dataset '{dataset_name}' (lower: '{dataset_lower}')")
+                
+                is_csv = (dataset_lower.endswith(('.csv', '.tsv', '.txt')) or 
+                         'csv' in dataset_lower or 
+                         (source.format and source.format.lower() in ['csv', 'tsv', 'text']))
+                
+                logger.info(f"DIRECT_SPLIT_VIEW: Dataset '{dataset_name}' is_csv={is_csv}")
+                
+                if is_csv:
                     csv_dataset = {
                         'name': dataset_name,
                         'source': source.name,
@@ -126,7 +155,9 @@ def direct_split_table_graph_view(request):
                     }
                     csv_datasets.append(csv_dataset)
                     source_csv_datasets.append(csv_dataset)
-                    logger.info(f"Added CSV dataset: {dataset_name} from source {source.name} (format: {source.format})")
+                    logger.info(f"DIRECT_SPLIT_VIEW: ✅ Added CSV dataset: {dataset_name} from source {source.name} (format: {source.format})")
+                else:
+                    logger.info(f"DIRECT_SPLIT_VIEW: ❌ Skipped non-CSV dataset: {dataset_name}")
             
             # Only add source to dropdown if it has CSV datasets
             if source_csv_datasets:
@@ -138,6 +169,9 @@ def direct_split_table_graph_view(request):
                     'size_mb': round(source.size_bytes / (1024 * 1024), 2) if source.size_bytes else 0,
                     'modified_date': source.modified_date.strftime('%Y-%m-%d %H:%M') if source.modified_date else None
                 })
+                logger.info(f"DIRECT_SPLIT_VIEW: ✅ Added source '{source.name}' to dropdown with {len(source_csv_datasets)} CSV datasets")
+            else:
+                logger.info(f"DIRECT_SPLIT_VIEW: ❌ Skipped source '{source.name}' - no CSV datasets found")
         
         logger.info(f"Found {len(csv_datasets)} CSV datasets total: {[d['name'] for d in csv_datasets]}")
         
@@ -162,16 +196,24 @@ def direct_split_table_graph_view(request):
             }
             mappings_data.append(mapping_info)
         
+        # Get consolidated state
+        state = get_organization_state(request, organization_id)
+        
         context = {
             'sources': sources_info,
-            'datasets': csv_datasets,  # Add CSV datasets to context
+            'datasets': state['all_datasets'],
+            'selected_datasets': state['active_dataset_names'],
+            'selected_datasets_with_details': state['active_datasets'],
+            'selected_columns': state['selected_columns'],
             'selected_source': request.GET.get('source', ''),
-            'is_direct_mode': True,  # Flag to indicate we're using direct mode
+            'is_direct_mode': True,
             'organizations': available_organizations,
-            'organization_id': organization_id,  # Include organization in context
-            'mappings': mappings_data,  # Add mappings to context
+            'organization_id': organization_id,
+            'mappings': mappings_data,
+            'datasets_json': json.dumps(state['all_datasets'], cls=DjangoJSONEncoder) if state['all_datasets'] else '[]',
         }
         
+        logger.info(f"DIRECT_SPLIT_VIEW: Rendering template with {len(csv_datasets)} datasets for organization '{organization_id}'")
         return render(request, 'direct_split_table_graph.html', context)
         
     except Exception as e:
@@ -427,16 +469,22 @@ def direct_get_dataset_card(request):
         # Track that this dataset is now loaded
         _track_dataset_loading(organization_id, dataset_name, source_name, preview.column_headers)
         
+        # Get consolidated state for proper context
+        state = get_organization_state(request, organization_id)
+        
         logger.info(f"🎯 DATASET CARD: Rendering template with dataset {dataset_name}")
         response = render(request, 'partials/dataset_card.html', {
             'dataset': dataset,
             'colHeaders': preview.column_headers,
-            'rowIds': [f"row_{i}" for i in range(len(preview.data_rows))],  # Generate row IDs
+            'rowIds': [f"row_{i}" for i in range(len(preview.data_rows))],
             'source': source_name,
             'is_direct_mode': True,
-            'organization_id': organization_id  # Add organization to context
+            'organization_id': organization_id,
+            'datasets_json': json.dumps(state['all_datasets'], cls=DjangoJSONEncoder) if state['all_datasets'] else '[]',
+            'selected_columns': state['selected_columns'],
+            'selected_datasets': state['active_dataset_names']
         })
-        logger.info(f"🎯 DATASET CARD SUCCESS: Template rendered for {dataset_name}")
+        logger.info(f"🎯 DATASET CARD SUCCESS: Template rendered for {dataset_name} with {len(state['all_datasets'])} datasets, {len(state['selected_columns'])} selected columns")
         return response
         
     except Exception as e:
@@ -567,6 +615,71 @@ def direct_analyze_dataset_relationships(request):
         logger.error(f"Error analyzing dataset relationships: {e}")
         return JsonResponse({'error': str(e)}, status=500)
 
+
+def toggle_dataset_card(request):
+    """
+    Server-side toggle for dataset cards. Manages state in session.
+    """
+    if request.method != 'POST':
+        return HttpResponseBadRequest("POST required")
+    
+    source_name = request.POST.get('source', '')
+    dataset_name = request.POST.get('dataset_name', '')
+    organization_id = request.POST.get('organization', '')
+    
+    logger.info(f"TOGGLE DATASET CARD: source={source_name}, dataset={dataset_name}, org={organization_id}")
+    
+    if not all([source_name, dataset_name, organization_id]):
+        return HttpResponseBadRequest("Missing required parameters")
+    
+    try:
+        # Get session state for selected datasets
+        session_key = f"selected_datasets_{organization_id}"
+        selected_datasets = request.session.get(session_key, [])
+        
+        # Toggle the dataset
+        if dataset_name in selected_datasets:
+            selected_datasets.remove(dataset_name)
+            logger.info(f"TOGGLE: Removed {dataset_name} from selection")
+        else:
+            # Add to the beginning of the list to show it at the top
+            selected_datasets.insert(0, dataset_name)
+            logger.info(f"TOGGLE: Added {dataset_name} to selection (added to top)")
+        
+        # Save back to session
+        request.session[session_key] = selected_datasets
+        
+        # Get consolidated state using the helper function
+        state = get_organization_state(request, organization_id)
+        
+        # Render table content
+        table_content_html = render_to_string('partials/table_content.html', {
+            'selected_datasets_with_details': state['active_datasets'],
+            'organization_id': organization_id,
+        }, request=request)
+        
+        # Render updated dataset badges
+        badges_html = render_to_string('partials/dataset_badges.html', {
+            'datasets': state['all_datasets'],
+            'selected_datasets': state['active_dataset_names'],
+            'organization_id': organization_id,
+            'csrf_token': request.META.get('CSRF_COOKIE')
+        }, request=request)
+        
+        # Return both updates using out-of-band swaps
+        response_html = f"""
+        {table_content_html}
+        <div hx-swap-oob="innerHTML:#dataset-badges">
+            {badges_html}
+        </div>
+        """
+        
+        logger.info(f"TOGGLE: Rendering table content with {len(state['active_datasets'])} active datasets and updated badges")
+        return HttpResponse(response_html)
+        
+    except Exception as e:
+        logger.error(f"TOGGLE DATASET CARD ERROR: {e}", exc_info=True)
+        return HttpResponseBadRequest(f"Error: {str(e)}")
 
 
 def direct_get_import_preview(request):
@@ -2023,35 +2136,33 @@ def track_loaded_dataset(request):
 def add_column_to_workspace(request):
     """
     HTMX endpoint to toggle column selection in the relationship builder workspace.
-    Returns multiple HTML fragments to sync all UI elements.
+    Returns the full dataset workspace to maintain consistency.
     """
-    logger.info(f"ADD_COLUMN_TO_WORKSPACE: Method={request.method}, Content-Type={request.content_type}")
+    logger.info(f"ADD_COLUMN_TO_WORKSPACE: Method={request.method}")
     logger.info(f"ADD_COLUMN_TO_WORKSPACE: POST data: {dict(request.POST)}")
-    logger.info(f"ADD_COLUMN_TO_WORKSPACE: Headers: {dict(request.headers)}")
     
     if request.method != 'POST':
         logger.error("ADD_COLUMN_TO_WORKSPACE: Only POST method allowed")
         return JsonResponse({'error': 'Only POST method allowed'}, status=400)
     
     try:
-        # Simple form data handling
+        # Parse form data
         dataset_name = request.POST.get('dataset_name')
         source_name = request.POST.get('source_name')
         column_name = request.POST.get('column_name')
         column_index = int(request.POST.get('column_index', 0))
         organization_id = get_organization_id_from_request(request)
         
-        logger.info(f"TOGGLE COLUMN IN WORKSPACE: {column_name} from {dataset_name}/{source_name} for org={organization_id}")
-        logger.info(f"PARSED DATA: dataset={dataset_name}, source={source_name}, column={column_name}, index={column_index}, org={organization_id}")
+        logger.info(f"TOGGLE COLUMN: {column_name} from {dataset_name}/{source_name} for org={organization_id}")
         
-        if not all([dataset_name, source_name, column_name]):
+        if not all([dataset_name, source_name, column_name, organization_id]):
             return JsonResponse({'error': 'Missing required parameters'}, status=400)
         
-        # Get current workspace from cache
+        # Get current workspace state
         workspace_cache_key = f"relationship_workspace_{organization_id}"
         workspace = cache.get(workspace_cache_key, {'columns': []})
         
-        # Create column info object (matching template expectations)
+        # Create column info object
         column_info = {
             'id': f"{dataset_name}_{source_name}_{column_name}".replace(' ', '_').replace('-', '_'),
             'dataset': dataset_name,
@@ -2059,16 +2170,15 @@ def add_column_to_workspace(request):
             'source': source_name,
             'index': column_index,
             'added_at': datetime.now().isoformat(),
-            'is_anchor': False,  # Default value
-            'is_multi_value': False,  # Default multi-value status
-            # Internal fields for backend use
+            'is_anchor': False,
+            'is_multi_value': False,
             'dataset_name': dataset_name,
             'source_name': source_name,
             'column_name': column_name,
             'column_index': column_index
         }
         
-        # Check if column already exists in workspace
+        # Toggle column in workspace
         existing_columns = workspace.get('columns', [])
         column_exists = False
         for i, col in enumerate(existing_columns):
@@ -2076,89 +2186,36 @@ def add_column_to_workspace(request):
                 col['source_name'] == source_name and 
                 col['column_name'] == column_name):
                 column_exists = True
-                # Remove the column (toggle off)
                 existing_columns.pop(i)
                 action = 'removed'
                 break
         
         if not column_exists:
-            # Add to workspace (toggle on)
             existing_columns.append(column_info)
             action = 'added'
-            # Keep only last 100 columns to avoid cache bloat while allowing larger datasets
-            existing_columns = existing_columns[-100:]
+            existing_columns = existing_columns[-100:]  # Keep last 100
         
         workspace['columns'] = existing_columns
-        
-        # Save back to cache
-        cache.set(workspace_cache_key, workspace, timeout=60*60*24)  # 24 hours
+        cache.set(workspace_cache_key, workspace, timeout=60*60*24)
         
         logger.info(f"TOGGLE COLUMN: {action} {column_name}, workspace now has {len(workspace['columns'])} columns")
-        logger.info(f"SELECTION ACTION: {action}, column_id will be: {dataset_name}_{source_name}_{column_name}")
         
-        # Generate column ID for targeting all matching elements
-        column_id = f"{dataset_name}_{source_name}_{column_name}"
-        logger.info(f"GENERATED COLUMN ID: {column_id}")
+        # Get consolidated state and render just the selected columns workspace
+        state = get_organization_state(request, organization_id)
         
-        # Get datasets from request (passed from main template context)
-        datasets_json = request.POST.get('datasets', '[]')
-        try:
-            datasets = json.loads(datasets_json)
-        except json.JSONDecodeError:
-            datasets = []
-        
-        logger.info(f"RECEIVED DATASETS FROM TEMPLATE: {len(datasets)} datasets: {[d.get('name', 'unknown') for d in datasets]}")
-
-        # Build multi-target response with out-of-band swaps
-        logger.info(f"RENDERING WORKSPACE TEMPLATE with {len(workspace['columns'])} columns")
-        workspace_html = render_to_string('partials/selected_columns_workspace.html', {
-            'selected_columns': workspace['columns'],
-            'anchor_column': next((col for col in workspace['columns'] if col.get('is_anchor')), None),
+        context = {
+            'selected_columns': state['selected_columns'],
+            'anchor_column': next((col for col in state['selected_columns'] if col.get('is_anchor')), None),
             'organization_id': organization_id,
-            'datasets': datasets,
-            'datasets_json': datasets_json,
-        }, request=request)
-        logger.info(f"WORKSPACE HTML LENGTH: {len(workspace_html)}")
+            'datasets': state['all_datasets'],
+            'active_datasets': state['active_datasets']
+        }
         
-        # Create selection state update for all matching column elements
-        if action == 'added':
-            selection_class = 'selected'
-            outline_class = ''
-        else:
-            selection_class = ''
-            outline_class = 'badge-outline'
-            
-        # HTMX response with main target + out-of-band updates
-        response_html = f"""
-        {workspace_html}
-        
-        <script hx-swap-oob="true" type="text/hyperscript">
-            -- Update all column elements with matching data-column-id
-            log 'HYPERSCRIPT: Looking for elements with data-column-id={column_id}'
-            repeat for element in <[data-column-id="{column_id}"]/>
-                log 'HYPERSCRIPT: Found element:', element
-                if element match .column-badge
-                    log 'HYPERSCRIPT: Updating badge element'
-                    {"add .selected to element" if action == 'added' else "remove .selected from element"}
-                    {"remove .badge-outline from element" if action == 'added' else "add .badge-outline to element"}
-                end
-                if element match .column-header
-                    log 'HYPERSCRIPT: Updating header element'
-                    {"add .selected to element" if action == 'added' else "remove .selected from element"}
-                end
-            end
-            log 'HYPERSCRIPT: Selection sync complete'
-        </script>
-        """
-        
-        logger.info(f"RESPONSE HTML LENGTH: {len(response_html)}")
-        logger.info(f"RESPONSE PREVIEW: {response_html[:200]}...")
-        
-        return HttpResponse(response_html)
+        logger.info(f"TOGGLE COLUMN: Rendering selected columns workspace with {len(state['selected_columns'])} selected columns")
+        return render(request, 'partials/selected_columns_workspace.html', context)
         
     except Exception as e:
-        logger.error(f"TOGGLE COLUMN: Error toggling column: {e}", exc_info=True)
-        logger.error(f"TOGGLE COLUMN: POST data was: {dict(request.POST)}")
+        logger.error(f"TOGGLE COLUMN: Error: {e}", exc_info=True)
         return JsonResponse({'error': str(e)}, status=500)
 
 
@@ -2714,22 +2771,19 @@ def toggle_all_columns(request):
         
         logger.info(f"TOGGLE ALL: {action}, workspace now has {len(workspace['columns'])} columns")
         
-        # Get datasets from request data (passed via HTMX)
-        datasets_json = request.POST.get('datasets', '[]')
-        try:
-            datasets = json.loads(datasets_json)
-        except json.JSONDecodeError:
-            datasets = []
-
-        # Generate workspace HTML
-        workspace_html = render_to_string('partials/selected_columns_workspace.html', {
-            'selected_columns': workspace['columns'],
-            'anchor_column': next((col for col in workspace['columns'] if col.get('is_anchor')), None),
-            'organization_id': organization_id,
-            'datasets': datasets,
-        }, request=request)
+        # Get consolidated state and render just the selected columns workspace
+        state = get_organization_state(request, organization_id)
         
-        return HttpResponse(workspace_html)
+        context = {
+            'selected_columns': state['selected_columns'],
+            'anchor_column': next((col for col in state['selected_columns'] if col.get('is_anchor')), None),
+            'organization_id': organization_id,
+            'datasets': state['all_datasets'],
+            'active_datasets': state['active_datasets']
+        }
+        
+        logger.info(f"TOGGLE ALL: Rendering selected columns workspace with {len(state['selected_columns'])} selected columns")
+        return render(request, 'partials/selected_columns_workspace.html', context)
         
     except Exception as e:
         logger.error(f"TOGGLE ALL: Error toggling all columns: {e}", exc_info=True)
@@ -3711,3 +3765,64 @@ def save_inline_fk_config(request):
     except Exception as e:
         logger.error(f"SAVE INLINE FK CONFIG: Error saving configuration: {e}", exc_info=True)
         return HttpResponse('<div class="text-error text-xs p-2">Error saving FK configuration</div>')
+
+
+def get_organization_state(request, organization_id):
+    """
+    Helper function to get consolidated state for an organization.
+    Returns all datasets, active datasets, and selected columns.
+    """
+    try:
+        # Get all available datasets
+        analyzer = S3DirectDataAnalyzer()
+        sources = analyzer.discover_s3_data_sources(organization_id)
+        
+        all_datasets = []
+        for source in sources:
+            dataset_names = analyzer.get_dataset_names_from_s3_source(source)
+            for dataset_name in dataset_names:
+                dataset_lower = dataset_name.lower()
+                is_csv = (dataset_lower.endswith(('.csv', '.tsv', '.txt')) or 
+                         'csv' in dataset_lower or 
+                         (source.format and source.format.lower() in ['csv', 'tsv', 'text']))
+                
+                if is_csv:
+                    all_datasets.append({
+                        'name': dataset_name,
+                        'source': source.name,
+                        'format': source.format or 'csv'
+                    })
+        
+        # Get active datasets from session
+        session_key = f"selected_datasets_{organization_id}"
+        active_dataset_names = request.session.get(session_key, [])
+        
+        # Create active datasets with details
+        active_datasets = []
+        for dataset_name in active_dataset_names:
+            for dataset in all_datasets:
+                if dataset['name'] == dataset_name:
+                    active_datasets.append(dataset)
+                    break
+        
+        # Get selected columns from cache
+        workspace_cache_key = f"relationship_workspace_{organization_id}"
+        workspace = cache.get(workspace_cache_key, {'columns': []})
+        selected_columns = workspace.get('columns', [])
+        
+        return {
+            'all_datasets': all_datasets,
+            'active_datasets': active_datasets,
+            'active_dataset_names': active_dataset_names,
+            'selected_columns': selected_columns,
+            'organization_id': organization_id
+        }
+    except Exception as e:
+        logger.error(f"Error getting organization state: {e}", exc_info=True)
+        return {
+            'all_datasets': [],
+            'active_datasets': [],
+            'active_dataset_names': [],
+            'selected_columns': [],
+            'organization_id': organization_id
+        }

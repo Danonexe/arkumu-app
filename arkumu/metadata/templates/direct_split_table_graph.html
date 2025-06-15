@@ -3,15 +3,6 @@
 
 {% block title %}Direct S3 Dataset Explorer{% endblock %}
 
-{% block extrahead %}
-<!-- Column analysis styling -->
-<style>
-.column-analysis {
-    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-}
-</style>
-{% endblock %}
-
 {% block content %}
 <!-- CSRF token for HTMX requests -->
 {% csrf_token %}
@@ -33,21 +24,18 @@
                 <select name="organization" 
                         class="select select-bordered select-sm"
                         id="organization-selector"
-                        _="on change
-                            if my value !== ''
-                              log 'Organization selected:', my value
-                              set newUrl to '/metadata/direct-analysis/?organization=' + my value
-                              set window.location.href to newUrl
-                            else
-                              set newUrl to '/metadata/direct-analysis/'
-                              set window.location.href to newUrl
-                            end">
-                    <option value="">Choose organization...</option>
-                    {% for org in organizations %}
-                        <option value="{{ org.id }}" {% if org.id == organization_id %}selected{% endif %}>
-                            {{ org.name }}{% if org.status == 'active' %} ✓{% endif %}
-                        </option>
-                    {% endfor %}
+                        hx-get="{% url 'metadata:direct_split_table_graph' %}"
+                        hx-target="body"
+                        hx-swap="outerHTML"
+                        hx-trigger="change"
+                        hx-indicator=".loading-indicator"
+                        hx-include="this">
+                <option value="">Choose organization...</option>
+                {% for org in organizations %}
+                    <option value="{{ org.id }}" {% if org.id == organization_id %}selected{% endif %}>
+                        {{ org.name }}{% if org.status == 'active' %} ✓{% endif %}
+                    </option>
+                {% endfor %}
                 </select>
                 {% if organization_id %}
                 <span class="text-sm text-base-content opacity-70">{{ organization_id }}</span>
@@ -58,181 +46,38 @@
             
 
             
-            <div class="loading-indicator htmx-indicator flex items-center gap-2 ml-auto">
+            <div class="loading-indicator htmx-indicator flex items-center gap-2 ml-auto" style="display: none;">
                 <span class="loading loading-spinner loading-sm"></span>
                 <span class="text-sm">Loading...</span>
             </div>
         </div>
     </div>
     
-    <!-- Dataset Labels -->
+    <!-- Dataset Workspace - Keep all state in main template -->
     {% if organization_id %}
+    <!-- Dataset Labels -->
     <div class="bg-base-100 px-4 py-3 border-b border-base-300">
         <div class="flex items-center gap-3 mb-2">
             <span class="text-sm font-medium">Datasets:</span>
             <button class="btn btn-xs btn-ghost opacity-60" 
                     id="clear-datasets-btn"
-                    _="on click
-                       -- Reset global state
-                       set $loadedDatasets to []
-                       
-                       -- Reset badges (with existence check)
-                       get .dataset-active
-                       if it then
-                         repeat for badge in it
-                           remove .bg-success from badge
-                           remove .text-success-content from badge
-                           remove .dataset-active from badge
-                           add .badge-outline to badge
-                           add .hover:bg-success to badge
-                         end
-                       end
-                       
-                       -- Clear content and restore empty state
-                       put '' into #table-content
-                       get #empty-state-template
-                       if it then
-                         put it.innerHTML into #table-content
-                       end
-                       
-                       -- Clear workspace via HTMX
-                       js
-                         htmx.ajax('POST', '/metadata/clear-workspace/', {
-                           values: { 'csrfmiddlewaretoken': document.querySelector('[name=csrfmiddlewaretoken]').value },
-                           target: '#selected-columns-workspace',
-                           swap: 'innerHTML'
-                         });
-                       end
-                       
-                       -- Clear the loaded datasets list
-                       if #loaded-datasets-list exists
-                         put '' into #loaded-datasets-list
-                       end
-                       
-                       -- Hide button
-                       hide me"
-                    style="display: none;">
+                    hx-post="{% url 'metadata:clear_workspace' %}"
+                    hx-vals='{"organization": "{{ organization_id }}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
+                    hx-target="#dataset-badges"
+                    hx-swap="innerHTML"
+                    {% if not selected_datasets %}style="display: none;"{% endif %}>
                 <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                 </svg>
                 Clear All
             </button>
         </div>
-        <div class="flex flex-wrap gap-2">
-            {% if datasets %}
-                {% for dataset in datasets %}
-                    <div class="badge badge-outline badge-success badge-sm px-3 py-2 cursor-pointer hover:bg-success hover:text-success-content transition-all duration-200 rounded-full text-xs font-medium border-2 hover:shadow-md hover:scale-105"
-                         id="badge-{{ dataset.name|slugify }}"
-                         data-source="{{ dataset.source }}"
-                         data-dataset="{{ dataset.name }}"
-                         _="on click
-                             set datasetName to my @data-dataset
-                             set sourceName to my @data-source
-                             set datasetKey to sourceName + '::' + datasetName
-                             
-                             -- Initialize loaded datasets array if needed
-                             if $loadedDatasets is undefined
-                                 set $loadedDatasets to []
-                             end
-                             
-                             -- Check if dataset is already loaded (toggle behavior)
-                             if datasetKey is in $loadedDatasets
-                                 log 'Dataset already loaded, removing:', datasetName
-                                 
-                                 -- Remove from loaded datasets array
-                                 js($loadedDatasets, datasetKey) 
-                                     const index = $loadedDatasets.indexOf(datasetKey);
-                                     if (index > -1) {
-                                         $loadedDatasets.splice(index, 1);
-                                     }
-                                     return $loadedDatasets.length;
-                                 end
-                                 set remainingCount to the result
-                                 
-                                 -- Reset badge to unloaded state
-                                 remove .bg-success from me
-                                 remove .text-success-content from me
-                                 add .badge-outline to me
-                                 add .hover:bg-success to me
-                                 
-                                 -- Find and remove the dataset card using data attributes
-                                 get .card in #table-content
-                                 set allCards to it
-                                 set datasetCard to null
-                                 
-                                 repeat for card in allCards
-                                     if @data-dataset of card is datasetName and @data-source of card is sourceName
-                                         set datasetCard to card
-                                     end
-                                 end
-                                 
-                                 log 'Found dataset card:', datasetCard
-                                 if datasetCard exists
-                                     add .opacity-0 to datasetCard
-                                     add .scale-95 to datasetCard
-                                     wait 300ms
-                                     remove datasetCard
-                                     log 'Removed dataset card for:', datasetName
-                                 else
-                                     log 'ERROR: Dataset card not found for removal:', datasetName
-                                 end
-                                 
-                                 -- Update UI elements based on remaining count
-                                 if remainingCount > 0
-                                     -- Update loaded-count if it exists (defensive check)
-                                     if #loaded-count exists
-                                         put remainingCount into #loaded-count
-                                     end
-                                 else
-                                     hide #clear-datasets-btn
-                                     show #empty-state
-                                 end
-                                 
-                                 -- Update relationship builder
-                                 call updateLoadedDatasetsList()
-                                 
-                             else
-                                 log 'Loading new dataset:', datasetName
-                                 
-                                 -- Load the dataset
-                                 hide #empty-state
-                                 fetch `/metadata/direct-analysis/dataset-card/?source=${encodeURIComponent(sourceName)}&dataset_name=${encodeURIComponent(datasetName)}&organization={{ organization_id }}`
-                                 put it at the start of #table-content
-                                 
-                                 -- Add to loaded datasets array
-                                 append datasetKey to $loadedDatasets
-                                 
-                                 -- Update badge to loaded state
-                                 remove .badge-outline from me
-                                 add .bg-success to me
-                                 add .text-success-content to me
-                                 add .dataset-active to me
-                                 
-                                 -- Update relationship builder
-                                 call updateLoadedDatasetsList()
-                             end
-                             
-                             -- Update dataset count and clear button
-                             if $loadedDatasets.length > 0
-                                 show #clear-datasets-btn
-                                 -- Update loaded-count if it exists (defensive check)
-                                 if #loaded-count exists
-                                     put $loadedDatasets.length into #loaded-count
-                                 end
-                             else
-                                 hide #clear-datasets-btn
-                             end">
-                        {{ dataset.name }}
-                    </div>
-                {% endfor %}
-            {% else %}
-                <div class="badge badge-outline badge-ghost badge-sm px-3 py-2 text-xs font-medium border-2 rounded-full">No datasets found</div>
-            {% endif %}
+        <div class="flex flex-wrap gap-2" id="dataset-badges">
+            {% include 'partials/dataset_badges.html' with datasets=datasets selected_datasets=selected_datasets organization_id=organization_id csrf_token=csrf_token %}
         </div>
     </div>
     {% endif %}
 
-    
     <!-- Split Content Area with Fixed Graph Panel -->
     <div class="container mx-auto max-w-none p-4">
         <div id="split-content" class="relative grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -249,18 +94,34 @@
                     </div>
                 </div>
                 <div class="card-body p-4 overflow-y-auto" id="table-content">
-                    <!-- Initial state - multi-dataset accumulation view -->
-                    <div class="hero h-40" id="empty-state">
-                        <div class="hero-content text-center">
-                            <div class="max-w-md">
-                                <svg class="w-16 h-16 mx-auto mb-4 text-base-content opacity-30" fill="currentColor" viewBox="0 0 20 20">
-                                    <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
-                                </svg>
-                                <p class="text-base-content opacity-50">Click dataset labels to add them here</p>
-                                <p class="text-xs text-base-content opacity-30 mt-2">Multiple datasets stack vertically • Latest on top</p>
+                    {% if selected_datasets_with_details %}
+                        {% for dataset in selected_datasets_with_details %}
+                            <div id="dataset-{{ dataset.name|slugify }}" 
+                                 hx-get="{% url 'metadata:direct_dataset_card' %}?source={{ dataset.source|urlencode }}&dataset_name={{ dataset.name|urlencode }}&organization={{ organization_id }}"
+                                 hx-trigger="load once"
+                                 hx-swap="outerHTML">
+                                <div class="card bg-base-100 shadow-lg border border-base-300 p-4">
+                                    <div class="flex items-center gap-2">
+                                        <div class="loading loading-spinner loading-sm"></div>
+                                        <span>Loading {{ dataset.name }}...</span>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    {% else %}
+                        <!-- Initial state - multi-dataset accumulation view -->
+                        <div class="hero h-40" id="empty-state">
+                            <div class="hero-content text-center">
+                                <div class="max-w-md">
+                                    <svg class="w-16 h-16 mx-auto mb-4 text-base-content opacity-30" fill="currentColor" viewBox="0 0 20 20">
+                                        <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+                                    </svg>
+                                    <p class="text-base-content opacity-50">Click dataset labels to add them here</p>
+                                    <p class="text-xs text-base-content opacity-30 mt-2">Multiple datasets stack vertically • Latest added on top</p>
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    {% endif %}
                 </div>
             </div>
             
@@ -276,7 +137,7 @@
                         
                         <!-- Relationship Builder Content -->
                         <div class="flex-1 overflow-y-auto">
-                            {% include 'partials/relationship_builder.html' with datasets=datasets organization_id=organization_id %}
+                            {% include 'partials/relationship_builder.html' with datasets=datasets organization_id=organization_id selected_columns=selected_columns active_datasets=selected_datasets_with_details %}
                         </div>
                     </div>
                 </div>
@@ -294,7 +155,7 @@
                     <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
                 </svg>
                 <p class="text-base-content opacity-50">Click dataset labels to add them here</p>
-                <p class="text-xs text-base-content opacity-30 mt-2">Multiple datasets stack vertically • Latest on top</p>
+                <p class="text-xs text-base-content opacity-30 mt-2">Multiple datasets stack vertically • Latest added on top</p>
             </div>
         </div>
     </div>
@@ -319,191 +180,5 @@
 
 {% block inline_javascript %}
 {{ block.super }}
-
-<script>
-
-// SAFE coordination between HTMX and hyperscript - only handle specific targets
-document.addEventListener('htmx:afterSwap', function(event) {
-    const targetId = event.detail.target ? event.detail.target.id : 'unknown';
-    console.log('HTMX afterSwap for target:', targetId);
-    
-    // Only handle expected targets, prevent interference
-    if (targetId === 'analysis-container') {
-        console.log('Analysis container updated - safe to proceed');
-        // Initialize any analysis-specific components here
-    } else if (targetId === 'table-content') {
-        console.log('Table content updated - expected behavior');
-        
-        // Re-process HTMX elements in the new content (dataset cards)
-        console.log('Re-processing HTMX elements in loaded dataset cards...');
-        htmx.process(event.detail.target);
-        console.log('HTMX elements re-processed');
-        
-    } else if (targetId === 'selected-columns-workspace') {
-        console.log('Workspace updated - expected behavior');
-    } else if (targetId.startsWith('dataset-')) {
-        console.log('Individual dataset card loaded:', targetId);
-        
-        // Re-process HTMX elements in the new dataset card
-        console.log('Re-processing HTMX elements in dataset card...');
-        htmx.process(event.detail.target);
-        console.log('Dataset card HTMX elements re-processed');
-        
-    } else {
-        console.warn('HTMX updated unexpected target:', targetId);
-        
-        // For any other dynamically loaded content, try to re-process HTMX
-        if (event.detail.target) {
-            console.log('Re-processing HTMX elements for unknown target:', targetId);
-            htmx.process(event.detail.target);
-        }
-    }
-});
-
-// DOM Readiness Check for Workspace
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('=== DOM CONTENT LOADED ===');
-    const workspaceExists = !!document.getElementById('selected-columns-workspace');
-    console.log('Workspace element exists at DOMContentLoaded:', workspaceExists);
-    
-    if (workspaceExists) {
-        console.log('✅ Workspace ready for Select All buttons');
-    } else {
-        console.log('⚠️ Workspace not ready - Select All buttons may fail');
-        
-        // Set up a mutation observer to detect when workspace is added
-        const observer = new MutationObserver(function(mutations) {
-            mutations.forEach(function(mutation) {
-                if (mutation.type === 'childList') {
-                    const workspace = document.getElementById('selected-columns-workspace');
-                    if (workspace) {
-                        console.log('✅ Workspace element detected via MutationObserver');
-                        observer.disconnect();
-                    }
-                }
-            });
-        });
-        observer.observe(document.body, { childList: true, subtree: true });
-    }
-});
-
-// Column analysis functionality is now implemented directly in the HTML elements using _hyperscript
-// This improves maintainability by keeping behavior with the elements
-
-
-
-// Enhanced HTMX logging for debugging
-document.addEventListener('htmx:beforeRequest', function(event) {
-    const url = event.detail.requestConfig ? event.detail.requestConfig.path : 'unknown';
-    const target = event.detail.target ? event.detail.target.id : 'unknown';
-    const method = event.detail.requestConfig ? event.detail.requestConfig.verb : 'unknown';
-    console.log(`HTMX ${method} Request: ${url} → #${target}`);
-    console.log('HTMX Request details:', event.detail);
-});
-
-document.addEventListener('htmx:afterRequest', function(event) {
-    const url = event.detail.requestConfig ? event.detail.requestConfig.path : 'unknown';
-    const status = event.detail.xhr ? event.detail.xhr.status : 'unknown';
-    console.log(`HTMX Response: ${status} for ${url}`);
-    console.log('HTMX Response details:', event.detail);
-});
-
-document.addEventListener('htmx:responseError', function(event) {
-    console.error('HTMX Error:', event.detail.xhr.status, event.detail.requestConfig.path);
-    console.error('HTMX Error details:', event.detail);
-    
-    // Show user-friendly error in target element
-    if (event.detail.target) {
-        event.detail.target.innerHTML = `
-            <div class="alert alert-error">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                </svg>
-                <div>
-                    <h3 class="font-bold">HTMX Request Failed</h3>
-                    <div class="text-xs">Status: ${event.detail.xhr.status}</div>
-                    <div class="text-xs">URL: ${event.detail.requestConfig.path}</div>
-                </div>
-            </div>
-        `;
-    }
-});
-
-document.addEventListener('htmx:sendError', function(event) {
-    console.error('HTMX Send Error:', event.detail);
-});
-
-document.addEventListener('htmx:swapError', function(event) {
-    console.error('HTMX Swap Error:', event.detail);
-});
-
-document.addEventListener('htmx:load', function(event) {
-    console.log('HTMX Load event triggered for:', event.target);
-    if (event.target && event.target.id && event.target.id.startsWith('dataset-')) {
-        console.log('Dataset card loaded via htmx:load, ensuring HTMX processing...');
-        htmx.process(event.target);
-    }
-});
-</script>
-
-<!-- Global Hyperscript Functions -->
-<script type="text/hyperscript">
-    -- Global function to update loaded datasets display
-    def updateLoadedDatasetsList
-        if $loadedDatasets and $loadedDatasets.length > 0 then
-            set html to ''
-            set optionsHtml to '<option value="">Choose dataset...</option>'
-            
-            repeat for datasetKey in $loadedDatasets
-                js(datasetKey) return datasetKey.split('::'); end
-                set parts to the result
-                set source to parts[0]
-                set dataset to parts[1]
-                
-                -- Build display HTML
-                set datasetHtml to '<div class="flex items-center gap-2 p-2 bg-base-100 rounded border border-success/30 hover:border-success transition-colors">'
-                set datasetHtml to datasetHtml + '<div class="avatar placeholder">'
-                set datasetHtml to datasetHtml + '<div class="bg-success text-success-content rounded w-6 h-6">'
-                set datasetHtml to datasetHtml + '<svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">'
-                set datasetHtml to datasetHtml + '<path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4z"/>'
-                set datasetHtml to datasetHtml + '</svg></div></div>'
-                set datasetHtml to datasetHtml + '<div class="flex-1 min-w-0">'
-                set datasetHtml to datasetHtml + '<div class="text-sm font-medium text-success truncate">' + dataset + '</div>'
-                set datasetHtml to datasetHtml + '<div class="text-xs text-base-content opacity-60 truncate">' + source + '</div>'
-                set datasetHtml to datasetHtml + '</div></div>'
-                
-                set html to html + datasetHtml
-                
-                -- Build option HTML
-                set optionsHtml to optionsHtml + '<option value="' + dataset + '">' + dataset + ' (' + source + ')</option>'
-            end
-            
-            -- Update elements if they exist (defensive checks)
-            if #loaded-datasets-list exists
-                put html into #loaded-datasets-list
-            end
-            if #loaded-dataset-count exists
-                put $loadedDatasets.length into #loaded-dataset-count
-            end
-            
-            -- Update intra-dataset selector if it exists
-            if #intra-dataset-selector exists
-                put optionsHtml into #intra-dataset-selector
-            end
-        else
-            -- Update elements if they exist (defensive checks)
-            if #loaded-datasets-list exists
-                put '<div class="text-center py-4 border border-dashed border-success/20 rounded-lg p-4"><span class="text-success/60 text-sm">No datasets loaded yet</span><p class="text-xs mt-1 text-base-content opacity-50">Click dataset badges above to load data</p></div>' into #loaded-datasets-list
-            end
-            if #loaded-dataset-count exists
-                put '0' into #loaded-dataset-count
-            end
-            if #intra-dataset-selector exists
-                put '<option value="">Choose dataset...</option>' into #intra-dataset-selector
-            end
-        end
-    end
-</script>
-
-
-{% endblock %} 
+<!-- Pure HTMX - no JavaScript needed! -->
+{% endblock %} o

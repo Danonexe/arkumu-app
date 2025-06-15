@@ -1,0 +1,16 @@
+{% if datasets %}
+    {% for dataset in datasets %}
+        <div class="badge {% if dataset.name in selected_datasets %}badge-success{% else %}badge-outline badge-success{% endif %} badge-sm px-3 py-2 cursor-pointer hover:bg-success hover:text-success-content transition-all duration-200 rounded-full text-xs font-medium border-2 hover:shadow-md hover:scale-105"
+             id="badge-{{ dataset.name|slugify }}"
+             data-source="{{ dataset.source }}"
+             data-dataset="{{ dataset.name }}"
+             hx-post="{% url 'metadata:toggle_dataset_card' %}"
+             hx-vals='{"source": "{{ dataset.source }}", "dataset_name": "{{ dataset.name }}", "organization": "{{ organization_id }}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
+             hx-target="#table-content"
+             hx-swap="innerHTML">
+            {{ dataset.name }}
+        </div>
+    {% endfor %}
+{% else %}
+    <div class="badge badge-outline badge-ghost badge-sm px-3 py-2 text-xs font-medium border-2 rounded-full">No datasets found</div>
+{% endif %} 

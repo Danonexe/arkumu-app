@@ -53,126 +53,27 @@
                     {% endif %}
                 </div>
                 
-                <!-- Close Button -->
+                <!-- Close Button (Simple removal) -->
                 <button class="btn btn-ghost btn-sm btn-circle text-error hover:bg-error hover:text-error-content"
                         title="Close dataset"
-                        _="on click
-                            -- Get dataset name and source to restore badge state
-                            get @data-dataset of closest .card
-                            set datasetName to it
-                            get @data-source of closest .card
-                            set sourceName to it
-                            log 'Closing dataset: ' + datasetName
-                            
-                            -- Update the global loadedDatasets array to remove this dataset
-                            if $loadedDatasets is undefined
-                                set $loadedDatasets to []
-                            end
-                            set datasetKey to sourceName + '::' + datasetName
-                            -- Remove this dataset from the loaded datasets array
-                            js($loadedDatasets, datasetKey) 
-                                const index = $loadedDatasets.indexOf(datasetKey);
-                                if (index > -1) {
-                                    $loadedDatasets.splice(index, 1);
-                                }
-                                return $loadedDatasets.length;
-                            end
-                            set remainingCount to the result
-                            log 'Removed dataset from loaded list. Remaining count:', remainingCount
-                            
-                            -- Find the corresponding badge by data attributes (more reliable than ID construction)
-                            get .badge
-                            set allBadges to it
-                            set targetBadge to null
-                            
-                            repeat for badge in allBadges
-                                if @data-dataset of badge is datasetName and @data-source of badge is sourceName
-                                    set targetBadge to badge
-                                end
-                            end
-                            
-                            log 'Found badge for dataset:', datasetName, targetBadge
-                            if targetBadge exists
-                                -- Reset badge to unselected state (consistent with direct_split_table_graph.html)
-                                remove .badge-primary from targetBadge
-                                remove .bg-primary-focus from targetBadge
-                                remove .text-primary-content from targetBadge
-                                remove .font-bold from targetBadge
-                                remove .bg-success from targetBadge
-                                remove .text-success-content from targetBadge
-                                remove .dataset-active from targetBadge
-                                add .badge-outline to targetBadge
-                                add .hover:bg-success to targetBadge
-                                log 'Restored badge state for: ' + datasetName
-                            else
-                                log 'ERROR: Badge not found for dataset:', datasetName
-                            end
-                            
-                            -- Update dataset count badge and UI elements
-                            if remainingCount > 0
-                                -- Only update if the element exists
-                                if #dataset-count-badge exists
-                                    put remainingCount into #dataset-count-badge
-                                end
-                                if #loaded-count exists
-                                    put remainingCount into #loaded-count
-                                end
-                                -- Hide relationship analysis elements if less than 2 datasets
-                                if remainingCount < 2
-                                    if #loaded-datasets-analysis exists
-                                        hide #loaded-datasets-analysis
-                                    end
-                                    if #quick-analyze-btn exists
-                                        hide #quick-analyze-btn
-                                    end
-                                end
-                            else
-                                if #dataset-count-badge exists
-                                    hide #dataset-count-badge
-                                end
-                                if #clear-datasets-btn exists
-                                    hide #clear-datasets-btn
-                                end
-                                if #loaded-datasets-analysis exists
-                                    hide #loaded-datasets-analysis
-                                end
-                                if #quick-analyze-btn exists
-                                    hide #quick-analyze-btn
-                                end
-                            end
-                            
-                            -- Update relationship builder
-                            call updateLoadedDatasetsList()
-                            
-                            -- Remove the dataset card with smooth animation
-                            add .opacity-0 to closest .card
-                            add .scale-95 to closest .card
-                            wait 300ms
-                            remove closest .card
-                            
-                            -- Check if table-content is empty and show empty state
-                            get #table-content
-                            get children of it
-                            if the length of it is 0
-                                show #empty-state
-                                log 'All datasets closed - showing empty state'
-                            end">
+                        onclick="
+                            const badge = document.getElementById('badge-{{ dataset.name|slugify }}');
+                            if (badge) {
+                                badge.classList.remove('badge-success');
+                                badge.classList.add('badge-outline', 'badge-success');
+                                badge.setAttribute('data-state', 'closed');
+                            }
+                            this.closest('.card').remove();
+                        ">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                     </svg>
                 </button>
                 
-                <!-- Collapse Button using HTMX -->
+                <!-- Collapse Button -->
                 <button class="btn btn-ghost btn-sm btn-circle"
                         title="Collapse/Expand dataset"
-                        hx-trigger="click"
-                        hx-target="#card-body-{{ dataset.name|slugify }}"
-                        hx-swap="none"
-                        data-target-id="card-body-{{ dataset.name|slugify }}"
-                        _="on click 
-                            set targetId to @data-target-id
-                            set target to #{targetId}
-                            toggle .hidden on target">
+                        onclick="document.getElementById('card-body-{{ dataset.name|slugify }}').classList.toggle('hidden');">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                     </svg>
@@ -196,109 +97,16 @@
             </div>
             <div class="flex flex-wrap gap-3 order-2">
                 {% for column in dataset.preview.colHeaders %}
-                <div class="badge badge-outline badge-primary badge-sm px-3 py-2 cursor-pointer hover:bg-primary hover:text-primary-content transition-all duration-200 rounded-full text-xs font-medium border-2 hover:shadow-md hover:scale-105"
+                <div class="badge badge-outline badge-primary badge-sm px-3 py-2 cursor-pointer hover:bg-primary hover:text-primary-content transition-all duration-200 rounded-full text-xs font-medium border-2 hover:shadow-md hover:scale-105 column-badge"
                       data-column-name="{{ column }}"
                       data-dataset-name="{{ dataset.name }}"
                       data-column-index="{{ forloop.counter0 }}"
-                      _="on click 
-                          log 'Column badge clicked:', @data-column-name
-                          
-                            -- Reset all column highlights first
-                            remove .bg-primary from .badge in me.parentElement
-                            remove .text-primary-content from .badge in me.parentElement
-                            add .badge-outline to .badge in me.parentElement
-                            
-                            -- Highlight this column badge
-                            remove .badge-outline from me
-                            add .bg-primary to me
-                            add .text-primary-content to me
-                          log 'Badge highlight updated for:', @data-column-name
-                          
-                          -- Find and highlight the table column
-                          set columnIndex to @data-column-index
-                          set datasetName to @data-dataset-name
-                          -- Use data attributes to find the matching column instead of constructing ID
-                          get .column-header in closest .card
-                          set allColumns to it
-                          
-                          repeat for column in allColumns
-                              if @data-column-index of column is columnIndex and @data-dataset-name of column is datasetName
-                                  set tableColumn to column
-                              end
-                          end
-                          log 'Found table column element:', tableColumn
-                          
-                          if tableColumn exists
-                              log 'Table column found, highlighting it'
-                              
-                              -- Find the table container
-                              set tableContainer to closest .table-container to tableColumn
-                              log 'Table container:', tableContainer
-                              
-                              -- Reset all table column highlights first
-                              remove .bg-primary from .column-header in tableContainer
-                              remove .bg-primary-focus from .column-header in tableContainer
-                              remove .text-primary-content from .column-header in tableContainer
-                              remove .font-bold from .column-header in tableContainer
-                              log 'Reset other column highlights'
-                              
-                              -- Highlight the table column
-                              add .bg-primary to tableColumn
-                              add .text-primary-content to tableColumn
-                              add .font-bold to tableColumn
-                              log 'Added highlighting classes to column'
-                              
-                              -- Scroll the table column into view
-                              js(tableColumn)
-                                  console.log('Scrolling column into view:', tableColumn);
-                                  tableColumn.scrollIntoView({behavior: 'smooth', block: 'nearest', inline: 'center'});
-                              end
-                          else
-                              log 'ERROR: Table column not found for:', columnIndex, datasetName
-                          end
-                          
-                          -- Pass column selection to relationship builder
-                          set columnName to @data-column-name
-                          set datasetName to @data-dataset-name
-                          log 'Column selected for relationship building:', columnName, 'from dataset:', datasetName
-                          
-                          -- Create column data object
-                          js(me, columnName, datasetName)
-                              const columnData = {
-                                  name: columnName,
-                                  dataset: datasetName,
-                                  index: me.getAttribute('data-column-index')
-                              };
-                              return columnData;
-                          end
-                          set columnData to the result
-                          
-                          -- Send to relationship builder via HTMX
-                          js(columnData)
-                              // Make HTMX request with column data
-                              htmx.ajax('POST', '/metadata/add-column-to-workspace/', {
-                                  values: {
-                                      'dataset_name': columnData.dataset,
-                                      'source_name': '{{ dataset.source|escapejs }}',
-                                      'column_name': columnData.name,
-                                      'column_index': columnData.index,
-                                      'csrfmiddlewaretoken': document.querySelector('[name=csrfmiddlewaretoken]').value
-                                  },
-                                  target: '#selected-columns-workspace',
-                                  swap: 'innerHTML'
-                              });
-                          end
-                          
-                          -- Update loaded datasets list
-                          call updateLoadedDatasetsList()
-                          
-                          -- Trigger success toast
-                          send showToast(message: `Selected column '${columnName}' from ${datasetName}`, type: 'info') to body"
-                      hx-get="{% url 'metadata:direct_analyze_column' %}?source={{ dataset.source|urlencode }}&dataset={{ dataset.name|urlencode }}&column={{ column|urlencode }}{% if organization_id %}&organization={{ organization_id }}{% endif %}"
-                      hx-target="#analysis-container"
+                      data-column-id="{{ dataset.name }}_{{ dataset.source }}_{{ column }}"
+                      hx-post="{% url 'metadata:add_column_to_workspace' %}"
+                      hx-vals='{"dataset_name": "{{ dataset.name|escapejs }}", "source_name": "{{ dataset.source|escapejs }}", "column_name": "{{ column|escapejs }}", "column_index": "{{ forloop.counter0 }}", "datasets": {{ datasets_json|default:"[]"|escapejs }}, "csrfmiddlewaretoken": "{{ csrf_token }}"}'
+                      hx-target="#selected-columns-workspace"
                       hx-swap="innerHTML"
-                      hx-trigger="click"
-                      hx-indicator="#analysis-loading-indicator">
+                      hx-indicator=".loading-indicator">
                     {{ column }}
                 </div>
                 {% endfor %}
@@ -309,42 +117,10 @@
                         data-dataset="{{ dataset.name }}"
                         data-source="{{ dataset.source }}"
                         data-columns="{{ dataset.preview.colHeaders|join:',' }}"
-                        _="on click
-                            log '=== SELECT ALL BUTTON CLICKED ==='
-                            log 'Dataset: {{ dataset.name }}'
-                            
-                            -- Check if target workspace exists
-                            if #selected-columns-workspace exists
-                                log 'Target workspace found - proceeding with HTMX request'
-                                
-                                -- Use HTMX to toggle all columns
-                                js(me)
-                                    const dataset = me.getAttribute('data-dataset');
-                                    const source = me.getAttribute('data-source');
-                                    const columns = me.getAttribute('data-columns');
-                                    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-                                    
-                                    console.log('Making HTMX request with data:', {dataset, source, columns});
-                                    
-                                    htmx.ajax('POST', '{% url "metadata:toggle_all_columns" %}', {
-                                        values: {
-                                            'dataset_name': dataset,
-                                            'source_name': source, 
-                                            'column_names': columns,
-                                            'csrfmiddlewaretoken': csrfToken
-                                        },
-                                        target: '#selected-columns-workspace',
-                                        swap: 'innerHTML'
-                                    });
-                                end
-                            else
-                                log 'ERROR: #selected-columns-workspace not found!'
-                                js
-                                    alert('Column workspace not ready. Please scroll down to view the relationship builder panel first, or reload the page.');
-                                    return false;
-                                end
-                                halt
-                            end">
+                        hx-post="{% url 'metadata:toggle_all_columns' %}"
+                        hx-vals='{"dataset_name": "{{ dataset.name|escapejs }}", "source_name": "{{ dataset.source|escapejs }}", "column_names": "{{ dataset.preview.colHeaders|join:',' }}", "datasets": {{ datasets_json|default:"[]"|escapejs }}, "csrfmiddlewaretoken": "{{ csrf_token }}"}'
+                        hx-target="#selected-columns-workspace"
+                        hx-swap="innerHTML">
                     Select All ({{ dataset.preview.colHeaders|length }})
                 </button>
             </div>
@@ -368,91 +144,11 @@
                                     data-column-name="{{ header }}"
                                     data-column-index="{{ forloop.counter0 }}"
                                     data-dataset-name="{{ dataset.name }}"
-                                    _="on click 
-                                        log 'Column clicked:', @data-column-name
-                                        
-                                                                -- Reset all column highlights first
-                        remove .bg-primary from .column-header in closest .table-container
-                        remove .bg-primary-focus from .column-header in closest .table-container
-                        remove .text-primary-content from .column-header in closest .table-container
-                        remove .font-bold from .column-header in closest .table-container
-                        
-                        -- Highlight this column
-                        add .bg-primary to me
-                        add .text-primary-content to me
-                                        add .font-bold to me
-                                        
-                                        -- Find and highlight the corresponding badge
-                                        set columnName to @data-column-name
-                                        set columnIndex to @data-column-index
-                                        set datasetName to @data-dataset-name
-                                        log 'Looking for badge with column name:', columnName, 'and index:', columnIndex
-                                        
-                                        -- Find the dataset card container
-                                        set datasetCard to closest .card
-                                        
-                                                                -- Reset all badge highlights in this dataset first
-                        remove .bg-primary from .badge in datasetCard
-                        remove .text-primary-content from .badge in datasetCard
-                        add .badge-outline to .badge in datasetCard
-                        log 'Reset all badge highlights'
-                        
-                        -- Find all badges in the dataset card and match by data attributes
-                        get .badge in datasetCard
-                        set allBadges to it
-                        
-                        repeat for badge in allBadges
-                            if @data-column-name of badge is columnName and @data-dataset-name of badge is datasetName
-                                set targetBadge to badge
-                                log 'Found matching badge for:', columnName
-                                remove .badge-outline from targetBadge
-                                add .bg-primary to targetBadge
-                                add .text-primary-content to targetBadge
-                                                log 'Badge highlight updated for:', columnName
-                                            end
-                                        end
-                                        
-                                        -- Pass column selection to relationship builder
-                                        log 'Column selected for relationship building:', columnName, 'from dataset:', datasetName
-                                        
-                                        -- Create column data object
-                                        js(me, columnName, datasetName, columnIndex)
-                                            const columnData = {
-                                                name: columnName,
-                                                dataset: datasetName,
-                                                index: columnIndex
-                                            };
-                                            return columnData;
-                                        end
-                                        set columnData to the result
-                                        
-                                        -- Send to relationship builder via HTMX
-                                        js(columnData)
-                                            // Make HTMX request with column data
-                                            htmx.ajax('POST', '/metadata/add-column-to-workspace/', {
-                                                values: {
-                                                    'dataset_name': columnData.dataset,
-                                                    'source_name': '{{ dataset.source|escapejs }}',
-                                                    'column_name': columnData.name,
-                                                    'column_index': columnData.index,
-
-                                                    'csrfmiddlewaretoken': document.querySelector('[name=csrfmiddlewaretoken]').value
-                                                },
-                                                target: '#selected-columns-workspace',
-                                                swap: 'innerHTML'
-                                            });
-                                        end
-                                        
-                                        -- Update loaded datasets list
-                                        call updateLoadedDatasetsList()
-                                        
-                                        -- Trigger success toast
-                                        send showToast(message: `Selected column '${columnName}' from ${datasetName}`, type: 'info') to body"
-                                    hx-get="{% url 'metadata:direct_analyze_column' %}?source={{ dataset.source|urlencode }}&dataset={{ dataset.name|urlencode }}&column={{ header|urlencode }}{% if organization_id %}&organization={{ organization_id }}{% endif %}"
-                                    hx-target="#analysis-container"
-                                    hx-swap="innerHTML"
-                                    hx-trigger="click"
-                                    hx-indicator="#analysis-loading-indicator">
+                                    data-column-id="{{ dataset.name }}_{{ dataset.source }}_{{ header }}"
+                                    hx-post="{% url 'metadata:add_column_to_workspace' %}"
+                                    hx-vals='{"dataset_name": "{{ dataset.name|escapejs }}", "source_name": "{{ dataset.source|escapejs }}", "column_name": "{{ header|escapejs }}", "column_index": "{{ forloop.counter0 }}", "datasets": {{ datasets_json|default:"[]"|escapejs }}, "csrfmiddlewaretoken": "{{ csrf_token }}"}'
+                                    hx-target="#selected-columns-workspace"
+                                    hx-swap="innerHTML">
                                     {{ header }}
                                 </th>
                                 {% endfor %}
@@ -505,4 +201,5 @@
     </div>
 </div>
 
+ 
  

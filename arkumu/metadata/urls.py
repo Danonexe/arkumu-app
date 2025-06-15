@@ -88,6 +88,7 @@ urlpatterns = [
     path('direct-analysis/load-source-data/', direct_data_views.direct_load_source_data, name='direct_load_source_data'),
     path('direct-analysis/load-all-datasets/', direct_data_views.direct_load_all_datasets, name='direct_load_all_datasets'),
     path('direct-analysis/dataset-card/', direct_data_views.direct_get_dataset_card, name='direct_dataset_card'),
+    path('direct-analysis/toggle-dataset-card/', direct_data_views.toggle_dataset_card, name='toggle_dataset_card'),
     path('direct-analysis/load-more-rows/', direct_data_views.direct_load_more_dataset_rows, name='direct_load_more_dataset_rows'),
     path('direct-analysis/analyze-relationships/', direct_data_views.direct_analyze_dataset_relationships, name='direct_analyze_dataset_relationships'),
     path('direct-analysis/import-preview/', direct_data_views.direct_get_import_preview, name='direct_import_preview'),
