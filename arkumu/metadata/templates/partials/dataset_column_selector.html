@@ -1,48 +1,24 @@
 <!-- Dataset Column Selector - Shows all columns from a dataset for selection -->
 <div class="p-2 space-y-1">
     {% if columns %}
-        <!-- Select All / Deselect All for this dataset -->
+        <!-- Dataset Header with Close Button -->
         <div class="flex justify-between items-center mb-2 pb-1 border-b border-base-200">
             <span class="text-xs text-base-content opacity-60">
-                {{ columns|length }} columns ({{ columns|length|add:0 }} available)
+                {{ columns|length }} columns available
             </span>
-            <div class="flex gap-1">
-                <!-- Select All Columns from Dataset -->
-                <form class="hidden" id="select-all-dataset-form-{{ dataset.name }}">
-                    <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
-                    <input type="hidden" name="datasets" value="{{ datasets_json }}">
-                    <input type="hidden" name="dataset" value="{{ dataset.name }}">
-                </form>
-                <button class="btn btn-xs btn-outline btn-success" 
-                        title="Select all columns from {{ dataset.name }}"
-                        hx-post="{% url 'metadata:select_all_dataset_columns' %}"
-                        hx-include="#select-all-dataset-form-{{ dataset.name }}"
-                        hx-target="#column-workspace"
-                        hx-swap="innerHTML">
-                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                    </svg>
-                    All
-                </button>
-                
-                <!-- Deselect All Columns from Dataset -->
-                <form class="hidden" id="deselect-all-dataset-form-{{ dataset.name }}">
-                    <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
-                    <input type="hidden" name="datasets" value="{{ datasets_json }}">
-                    <input type="hidden" name="dataset" value="{{ dataset.name }}">
-                </form>
-                <button class="btn btn-xs btn-outline btn-error" 
-                        title="Deselect all columns from {{ dataset.name }}"
-                        hx-post="{% url 'metadata:deselect_all_dataset_columns' %}"
-                        hx-include="#deselect-all-dataset-form-{{ dataset.name }}"
-                        hx-target="#column-workspace"
-                        hx-swap="innerHTML">
-                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                    </svg>
-                    None
-                </button>
-            </div>
+            
+            <!-- Close Dataset Button - Deselects entire dataset and syncs all UI -->
+            <button class="btn btn-xs btn-outline btn-error hover:btn-error" 
+                    title="Close {{ dataset.name }} (remove from workspace)"
+                    hx-post="{% url 'metadata:toggle_dataset_card' %}"
+                    hx-vals='{"source": "{{ dataset.source }}", "dataset_name": "{{ dataset.name }}", "organization": "{{ organization_id }}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
+                    hx-target="#table-content"
+                    hx-swap="innerHTML">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+                Close Dataset
+            </button>
         </div>
         
         <!-- Column List -->

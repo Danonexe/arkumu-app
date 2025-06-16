@@ -32,41 +32,23 @@
                      id="dataset-card-{{ dataset.name }}">
                     <!-- Dataset Header (always visible) -->
                     <div class="flex items-center justify-between p-2">
-                        <div class="flex-1 cursor-pointer"
-                             hx-get="{% url 'metadata:expand_dataset' %}?dataset={{ dataset.name }}"
-                             hx-target="#dataset-columns-{{ dataset.name }}"
-                             hx-swap="innerHTML">
+                        <div class="flex-1">
                             <span class="text-sm font-medium text-success">{{ dataset.name }}</span>
                             <span class="text-xs text-base-content opacity-60 ml-2">{{ dataset.columns|length }} columns</span>
                         </div>
-                        <div class="flex gap-1">
-                            <!-- Expand/Collapse Button -->
-                            <button class="btn btn-xs btn-ghost text-success hover:bg-success/10" 
-                                    title="Show/hide columns"
-                                    hx-get="{% url 'metadata:expand_dataset' %}?dataset={{ dataset.name }}"
-                                    hx-target="#dataset-columns-{{ dataset.name }}"
-                                    hx-swap="innerHTML">
-                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                                </svg>
-                            </button>
-                            <!-- Filter Workspace Button -->
-                            <button class="btn btn-xs btn-ghost text-success hover:bg-success/10" 
-                                    title="Filter workspace to this dataset"
-                                    hx-get="{% url 'metadata:filter_workspace' %}?filter_dataset={{ dataset.name }}"
-                                    hx-target="#column-workspace"
-                                    hx-swap="innerHTML">
-                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
-                                </svg>
-                            </button>
-                        </div>
+                        <!-- Close Dataset Button -->
+                        <button class="btn btn-xs btn-ghost text-error hover:bg-error/10" 
+                                title="Close {{ dataset.name }} (remove from workspace)"
+                                hx-post="{% url 'metadata:toggle_dataset_card' %}"
+                                hx-vals='{"source": "{{ dataset.source }}", "dataset_name": "{{ dataset.name }}", "organization": "{{ organization_id }}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
+                                hx-target="#table-content"
+                                hx-swap="innerHTML">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
                     </div>
-                    
-                    <!-- Expandable Columns Section -->
-                    <div id="dataset-columns-{{ dataset.name }}" class="border-t border-success/20">
-                        <!-- Columns will be loaded here via HTMX -->
-                    </div>
+
                 </div>
                 {% endfor %}
             {% else %}

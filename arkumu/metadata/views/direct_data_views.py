@@ -2923,12 +2923,8 @@ def set_anchor_column(request):
         if not column_id:
             return JsonResponse({'error': 'Missing column_id'}, status=400)
         
-        # Get current workspace from cache
-        workspace_cache_key = f"relationship_workspace_{organization_id}"
-        workspace = cache.get(workspace_cache_key, {'columns': []})
-        
-        # Update anchor status
-        existing_columns = workspace.get('columns', [])
+        # Get current workspace from session (consistent with other functions)
+        existing_columns = get_workspace_columns(request, organization_id)
         anchor_set = False
         
         for col in existing_columns:
@@ -2942,10 +2938,8 @@ def set_anchor_column(request):
                 if anchor_set:
                     col['is_anchor'] = False
         
-        workspace['columns'] = existing_columns
-        
-        # Save back to cache
-        cache.set(workspace_cache_key, workspace, timeout=60*60*24)  # 24 hours
+        # Save back to session
+        update_workspace_columns(request, organization_id, existing_columns)
         
         logger.info(f"SET ANCHOR: Updated workspace, anchor_set={anchor_set}")
         
@@ -2958,8 +2952,8 @@ def set_anchor_column(request):
 
         # Generate workspace HTML with updated anchor status
         workspace_html = render_to_string('partials/selected_columns_workspace.html', {
-            'selected_columns': workspace['columns'],
-            'anchor_column': next((col for col in workspace['columns'] if col.get('is_anchor')), None),
+            'selected_columns': existing_columns,
+            'anchor_column': next((col for col in existing_columns if col.get('is_anchor')), None),
             'organization_id': organization_id,
             'datasets': datasets,
             'datasets_json': datasets_json,
