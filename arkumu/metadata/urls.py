@@ -108,6 +108,7 @@ urlpatterns = [
     path('mapping-config/', direct_data_views.mapping_config, name='mapping_config'),
     path('clear-workspace/', direct_data_views.clear_workspace, name='clear_workspace'),
     path('clear-all-datasets/', direct_data_views.clear_all_datasets, name='clear_all_datasets'),
+    path('deselect-all-columns/', direct_data_views.deselect_all_columns, name='deselect_all_columns'),
     path('set-anchor-column/', direct_data_views.set_anchor_column, name='set_anchor_column'),
     path('toggle-multi-value-column/', direct_data_views.toggle_multi_value_column, name='toggle_multi_value_column'),
     path('toggle-fk-column/', direct_data_views.toggle_fk_column, name='toggle_fk_column'),

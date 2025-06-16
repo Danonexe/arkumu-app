@@ -13,8 +13,8 @@
         
         <div id="workspace-actions" class="flex gap-2" style="{% if not selected_columns %}display: none;{% endif %}">
             <button class="btn btn-xs btn-ghost opacity-60" 
-                    hx-post="{% url 'metadata:clear_workspace' %}"
-                    hx-vals='{"csrfmiddlewaretoken": "{{ csrf_token }}"}'
+                    hx-post="{% url 'metadata:deselect_all_columns' %}"
+                    hx-vals='{"datasets": {{ datasets_json|default:"[]"|escapejs }}, "csrfmiddlewaretoken": "{{ csrf_token }}"}'
                     hx-target="#selected-columns-workspace"
                     hx-swap="innerHTML">
                 <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">

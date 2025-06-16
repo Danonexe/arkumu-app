@@ -2738,6 +2738,71 @@ def clear_workspace(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
+def deselect_all_columns(request):
+    """
+    HTMX endpoint to deselect all columns from workspace without affecting dataset badges.
+    Only clears column selections and updates workspace.
+    """
+    logger.info(f"DESELECT_ALL_COLUMNS: Method={request.method}, Content-Type={request.content_type}")
+    logger.info(f"DESELECT_ALL_COLUMNS: POST data: {dict(request.POST)}")
+    
+    if request.method != 'POST':
+        logger.error("DESELECT_ALL_COLUMNS: Only POST method allowed")
+        return JsonResponse({'error': 'Only POST method allowed'}, status=400)
+    
+    try:
+        organization_id = get_organization_id_from_request(request)
+        
+        logger.info(f"DESELECT ALL COLUMNS: Clearing column selections for org={organization_id}")
+        
+        # Clear workspace cache
+        workspace_cache_key = f"relationship_workspace_{organization_id}"
+        cache.delete(workspace_cache_key)
+        
+        logger.info("DESELECT ALL COLUMNS: Column selections cleared")
+        
+        # Get datasets from request if available
+        datasets_json = request.POST.get('datasets', '[]')
+        try:
+            datasets = json.loads(datasets_json) if datasets_json != '[]' else []
+        except json.JSONDecodeError:
+            datasets = []
+        
+        # Generate updated workspace HTML with empty state
+        workspace_html = render_to_string('partials/selected_columns_workspace.html', {
+            'selected_columns': [],
+            'anchor_column': None,
+            'organization_id': organization_id,
+            'datasets': datasets,
+        }, request=request)
+        
+        # Generate script to update column visual states across all dataset cards
+        deselect_script = """
+        <script hx-swap-oob="true" type="text/hyperscript">
+            -- Deselect all column headers in all dataset cards
+            repeat for element in <.column-header.selected/>
+                remove .selected from element
+                remove .bg-primary from element
+                remove .text-primary-content from element
+            end
+            -- Deselect all column badges in all dataset cards  
+            repeat for element in <.column-badge.selected/>
+                remove .selected from element
+                add .badge-outline to element
+            end
+        </script>
+        """
+        
+        # Return workspace update with column deselection script
+        response_html = f"{workspace_html}{deselect_script}"
+        
+        return HttpResponse(response_html)
+        
+    except Exception as e:
+        logger.error(f"DESELECT ALL COLUMNS: Error deselecting columns: {e}", exc_info=True)
+        return JsonResponse({'error': str(e)}, status=500)
+
+
 def clear_all_datasets(request):
     """
     HTMX endpoint to clear all selected datasets from active state.
