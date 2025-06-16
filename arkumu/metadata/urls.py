@@ -129,6 +129,10 @@ urlpatterns = [
     path('filter-workspace/', direct_data_views.filter_workspace, name='filter_workspace'),
     path('expand-dataset/', direct_data_views.expand_dataset, name='expand_dataset'),
     
+    # Dataset column selection helpers
+    path('select-all-dataset-columns/', direct_data_views.select_all_dataset_columns, name='select_all_dataset_columns'),
+    path('deselect-all-dataset-columns/', direct_data_views.deselect_all_dataset_columns, name='deselect_all_dataset_columns'),
+    
     # Tooltip helpers for HTMX
     path('tooltip/', direct_data_views.tooltip_view, name='tooltip'),
     ]

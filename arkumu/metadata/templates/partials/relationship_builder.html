@@ -80,7 +80,7 @@
 
     <!-- Selected Columns Workspace - This should take MORE space and be scrollable -->
     <div class="flex-1 min-h-0" style="min-height: 300px;">
-        {% include 'partials/selected_columns_workspace.html' with selected_columns=selected_columns anchor_column=anchor_column active_datasets=active_datasets datasets=datasets organization_id=organization_id %}
+        {% include 'partials/selected_columns_workspace.html' with selected_columns=selected_columns anchor_column=anchor_column active_datasets=active_datasets datasets=datasets organization_id=organization_id datasets_json=datasets_json csrf_token=csrf_token %}
     </div>
 
     <!-- Include the Mappings Section partial - Make it smaller/collapsible -->

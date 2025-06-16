@@ -57,21 +57,6 @@
     {% if organization_id %}
     <!-- Dataset Labels -->
     <div class="bg-base-100 px-4 py-3 border-b border-base-300">
-        <div class="flex items-center gap-3 mb-2">
-            <span class="text-sm font-medium">Datasets:</span>
-            <button class="btn btn-xs btn-ghost opacity-60" 
-                    id="clear-datasets-btn"
-                    hx-post="{% url 'metadata:clear_all_datasets' %}"
-                    hx-vals='{"datasets": {{ datasets_json|default:"[]"|escapejs }}, "organization": "{{ organization_id }}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
-                    hx-target="#dataset-badges"
-                    hx-swap="innerHTML"
-                    {% if not selected_datasets %}style="display: none;"{% endif %}>
-                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                </svg>
-                Clear All
-            </button>
-        </div>
         <div class="flex flex-wrap gap-2" id="dataset-badges">
             {% include 'partials/dataset_badges.html' with datasets=datasets selected_datasets=selected_datasets organization_id=organization_id csrf_token=csrf_token datasets_json=datasets_json %}
         </div>
@@ -137,7 +122,7 @@
                         
                         <!-- Relationship Builder Content -->
                         <div class="flex-1 overflow-y-auto">
-                            {% include 'partials/relationship_builder.html' with datasets=datasets organization_id=organization_id selected_columns=selected_columns active_datasets=selected_datasets_with_details %}
+                            {% include 'partials/relationship_builder.html' with datasets=datasets organization_id=organization_id selected_columns=selected_columns active_datasets=selected_datasets_with_details datasets_json=datasets_json csrf_token=csrf_token %}
                         </div>
                     </div>
                 </div>

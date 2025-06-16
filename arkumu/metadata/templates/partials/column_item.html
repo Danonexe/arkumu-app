@@ -41,22 +41,37 @@
         <!-- Compact action buttons -->
         <div class="flex items-center gap-1 flex-shrink-0 ml-2">
             
+            <!-- Hidden form for FK configuration data -->
+            <form id="fk-data-form-{{ column.id }}" style="display: none;">
+                <input type="hidden" name="column_id" value="{{ column.id }}">
+                <input type="hidden" name="organization_id" value="{{ organization_id }}">
+                <textarea name="datasets">{{ datasets_json|default:"[]" }}</textarea>
+                <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+            </form>
+            
             <!-- Configure FK button - toggles inline form -->
             <div class="tooltip tooltip-left" data-tip="{% if column.is_fk %}Configure FK relationship{% else %}Set as foreign key{% endif %}">
                 <button class="btn btn-xs btn-square {% if column.is_fk %}btn-secondary{% else %}btn-secondary btn-outline{% endif %}" 
                         hx-post="{% url 'metadata:toggle_fk_form' %}"
-                        hx-vals='{"column_id": "{{ column.id }}", "organization_id": "{{ organization_id }}", "datasets": "{{ datasets_json|escapejs }}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
+                        hx-include="#fk-data-form-{{ column.id }}"
                         hx-target="#fk-form-{{ column.id }}"
                         hx-swap="outerHTML">
                     🔗
                 </button>
             </div>
 
+            <!-- Hidden form for multi-value toggle data -->
+            <form id="multi-value-data-form-{{ column.id }}" style="display: none;">
+                <input type="hidden" name="column_id" value="{{ column.id }}">
+                <textarea name="datasets">{{ datasets_json|default:"[]" }}</textarea>
+                <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+            </form>
+            
             <!-- Toggle multi-value button -->
             <div class="tooltip tooltip-left" data-tip="{% if column.is_multi_value %}Mark as single value{% else %}Mark as multi-value (will be split){% endif %}">
                 <button class="btn btn-xs btn-square {% if column.is_multi_value %}btn-accent{% else %}btn-accent btn-outline{% endif %}" 
                         hx-post="{% url 'metadata:toggle_multi_value_column' %}"
-                        hx-vals='{"column_id": "{{ column.id }}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
+                        hx-include="#multi-value-data-form-{{ column.id }}"
                         hx-target="#selected-columns-workspace"
                         hx-swap="innerHTML">
                     🔀
@@ -65,10 +80,17 @@
 
             <!-- Set as anchor button -->
             {% if not column.is_anchor %}
+            <!-- Hidden form for anchor column data -->
+            <form id="anchor-data-form-{{ column.id }}" style="display: none;">
+                <input type="hidden" name="column_id" value="{{ column.id }}">
+                <textarea name="datasets">{{ datasets_json|default:"[]" }}</textarea>
+                <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+            </form>
+            
             <div class="tooltip tooltip-left" data-tip="Set as anchor">
                 <button class="btn btn-xs btn-square btn-warning btn-outline" 
                         hx-post="{% url 'metadata:set_anchor_column' %}"
-                        hx-vals='{"column_id": "{{ column.id }}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
+                        hx-include="#anchor-data-form-{{ column.id }}"
                         hx-target="#selected-columns-workspace"
                         hx-swap="innerHTML">
                     <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
@@ -78,11 +100,18 @@
             </div>
             {% endif %}
             
+            <!-- Hidden form for remove column data -->
+            <form id="remove-data-form-{{ column.id }}" style="display: none;">
+                <input type="hidden" name="column_id" value="{{ column.id }}">
+                <textarea name="datasets">{{ datasets_json|default:"[]" }}</textarea>
+                <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+            </form>
+            
             <!-- Remove button -->
             <div class="tooltip tooltip-left" data-tip="Remove column">
                 <button class="btn btn-xs btn-square btn-ghost text-error" 
                         hx-post="{% url 'metadata:remove_column_from_workspace' %}"
-                        hx-vals='{"column_id": "{{ column.id }}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
+                        hx-include="#remove-data-form-{{ column.id }}"
                         hx-target="#selected-columns-workspace"
                         hx-swap="innerHTML">
                     <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">

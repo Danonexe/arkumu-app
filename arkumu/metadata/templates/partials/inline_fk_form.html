@@ -28,13 +28,20 @@
                 </div>
             </div>
             
+            <!-- Hidden form for target column update data -->
+            <form id="target-column-data-form-{{ column.id }}" style="display: none;">
+                <input type="hidden" name="column_id" value="{{ column.id }}">
+                <input type="hidden" name="organization_id" value="{{ organization_id }}">
+                <textarea name="datasets">{{ datasets_json|default:"[]" }}</textarea>
+                <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+            </form>
+            
             <!-- Target Dataset Selection -->
             <div class="form-control">
                 <label class="label label-text text-xs">Target Dataset:</label>
                 <select name="target_dataset" class="select select-xs select-bordered" 
                         hx-post="{% url 'metadata:update_fk_target_columns' %}"
-                        hx-vals='{"column_id": "{{ column.id }}", "organization_id": "{{ organization_id }}", "datasets": "{{ datasets|escapejs }}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
-                        hx-include="[name='target_dataset']"
+                        hx-include="#target-column-data-form-{{ column.id }}, [name='target_dataset']"
                         hx-target="#target-column-select-{{ column.id }}"
                         hx-swap="innerHTML"
                         hx-trigger="change">

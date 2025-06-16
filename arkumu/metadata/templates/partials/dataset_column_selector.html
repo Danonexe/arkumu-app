@@ -1,0 +1,151 @@
+<!-- Dataset Column Selector - Shows all columns from a dataset for selection -->
+<div class="p-2 space-y-1">
+    {% if columns %}
+        <!-- Select All / Deselect All for this dataset -->
+        <div class="flex justify-between items-center mb-2 pb-1 border-b border-base-200">
+            <span class="text-xs text-base-content opacity-60">
+                {{ columns|length }} columns ({{ columns|length|add:0 }} available)
+            </span>
+            <div class="flex gap-1">
+                <!-- Select All Columns from Dataset -->
+                <form class="hidden" id="select-all-dataset-form-{{ dataset.name }}">
+                    <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+                    <input type="hidden" name="datasets" value="{{ datasets_json }}">
+                    <input type="hidden" name="dataset" value="{{ dataset.name }}">
+                </form>
+                <button class="btn btn-xs btn-outline btn-success" 
+                        title="Select all columns from {{ dataset.name }}"
+                        hx-post="{% url 'metadata:select_all_dataset_columns' %}"
+                        hx-include="#select-all-dataset-form-{{ dataset.name }}"
+                        hx-target="#column-workspace"
+                        hx-swap="innerHTML">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    All
+                </button>
+                
+                <!-- Deselect All Columns from Dataset -->
+                <form class="hidden" id="deselect-all-dataset-form-{{ dataset.name }}">
+                    <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+                    <input type="hidden" name="datasets" value="{{ datasets_json }}">
+                    <input type="hidden" name="dataset" value="{{ dataset.name }}">
+                </form>
+                <button class="btn btn-xs btn-outline btn-error" 
+                        title="Deselect all columns from {{ dataset.name }}"
+                        hx-post="{% url 'metadata:deselect_all_dataset_columns' %}"
+                        hx-include="#deselect-all-dataset-form-{{ dataset.name }}"
+                        hx-target="#column-workspace"
+                        hx-swap="innerHTML">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                    None
+                </button>
+            </div>
+        </div>
+        
+        <!-- Column List -->
+        <div class="space-y-1 max-h-64 overflow-y-auto">
+            {% for column in columns %}
+            <div class="flex items-center justify-between p-2 rounded border 
+                        {% if column.is_selected %}bg-success/10 border-success/30{% else %}bg-base-100 border-base-200 hover:border-base-300{% endif %}
+                        transition-colors">
+                
+                <!-- Column Info -->
+                <div class="flex items-center gap-2 flex-1 min-w-0">
+                    <!-- Selection Checkbox -->
+                    <form class="hidden" id="toggle-column-form-{{ column.id }}">
+                        <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+                        <input type="hidden" name="datasets" value="{{ datasets_json }}">
+                        <input type="hidden" name="column_id" value="{{ column.id }}">
+                    </form>
+                    
+                    <label class="cursor-pointer flex items-center">
+                        <input type="checkbox" 
+                               class="checkbox checkbox-xs checkbox-success" 
+                               {% if column.is_selected %}checked{% endif %}
+                               hx-post="{% if column.is_selected %}{% url 'metadata:remove_column_from_workspace' %}{% else %}{% url 'metadata:add_column_to_workspace' %}{% endif %}"
+                               hx-include="#toggle-column-form-{{ column.id }}"
+                               hx-target="#column-workspace"
+                               hx-swap="innerHTML">
+                        <span class="ml-2 text-sm font-medium truncate">{{ column.name }}</span>
+                    </label>
+                    
+                    <!-- Column Status Badges -->
+                    <div class="flex gap-1 ml-auto">
+                        {% if column.is_anchor %}
+                        <span class="badge badge-warning badge-xs" title="Anchor Column">A</span>
+                        {% endif %}
+                        {% if column.is_fk %}
+                        <span class="badge badge-info badge-xs" title="Foreign Key">FK</span>
+                        {% endif %}
+                        {% if column.is_multi_value %}
+                        <span class="badge badge-secondary badge-xs" title="Multi-value">M</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <!-- Footer Summary -->
+        <div class="text-xs text-base-content opacity-50 pt-1 border-t border-base-200">
+            {% with selected_count=columns|length|add:0 %}
+                {% for column in columns %}
+                    {% if column.is_selected %}
+                        {% if forloop.first %}
+                            {% with selected_count=0 %}{% endwith %}
+                        {% endif %}
+                    {% endif %}
+                {% endfor %}
+            {% endwith %}
+            Click checkboxes to add/remove columns from workspace
+        </div>
+        
+    {% else %}
+        <!-- No Columns State -->
+        <div class="text-center py-4 text-base-content opacity-50">
+            <svg class="w-8 h-8 mx-auto mb-2 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+            <p class="text-sm">No columns found in this dataset</p>
+        </div>
+    {% endif %}
+</div>
+
+<!-- Visual feedback styles -->
+<style>
+.checkbox:checked + span {
+    color: oklch(var(--su));
+    font-weight: 600;
+}
+
+/* Smooth transitions for column state changes */
+[hx-target] {
+    transition: all 0.2s ease;
+}
+
+/* Loading states */
+.htmx-request {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+/* Better hover states */
+.checkbox:hover {
+    transform: scale(1.1);
+}
+
+/* Column row hover effects */
+div:has(.checkbox):hover {
+    background-color: oklch(var(--b2));
+    border-color: oklch(var(--bc) / 0.2);
+}
+
+/* Selected column highlighting */
+div:has(.checkbox:checked) {
+    background-color: oklch(var(--su) / 0.1) !important;
+    border-color: oklch(var(--su) / 0.3) !important;
+}
+</style> 

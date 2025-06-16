@@ -20,7 +20,7 @@
                 <!-- Columns from this dataset -->
                 <div class="space-y-1 ml-2">
                     {% for column in dataset_group.list %}
-                        {% include 'partials/column_item.html' with column=column datasets=datasets organization_id=organization_id %}
+                        {% include 'partials/column_item.html' with column=column datasets=datasets organization_id=organization_id datasets_json=datasets_json csrf_token=csrf_token %}
                     {% endfor %}
                 </div>
             </div>
@@ -42,7 +42,7 @@
             <!-- Columns from this dataset -->
             <div class="space-y-1 ml-2">
                 {% for column in dataset_group.list %}
-                    {% include 'partials/column_item.html' with column=column datasets=datasets organization_id=organization_id %}
+                    {% include 'partials/column_item.html' with column=column datasets=datasets organization_id=organization_id datasets_json=datasets_json csrf_token=csrf_token %}
                 {% endfor %}
             </div>
         </div>
