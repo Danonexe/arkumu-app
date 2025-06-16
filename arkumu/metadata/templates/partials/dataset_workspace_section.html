@@ -9,17 +9,10 @@
             <!-- Dataset Info -->
             <div class="flex items-center gap-2">
                 <span class="text-sm font-medium text-success">{{ dataset.name }}</span>
-                {% comment %} Count selected columns from this dataset {% endcomment %}
-                {% with dataset_selected_count=0 %}
-                    {% for column in selected_columns %}
-                        {% if column.dataset == dataset.name %}
-                            {% with dataset_selected_count=dataset_selected_count|add:1 %}{% endwith %}
-                        {% endif %}
-                    {% endfor %}
-                    {% if dataset_selected_count > 0 %}
-                    <span class="badge badge-success badge-xs">{{ dataset_selected_count }} selected</span>
-                    {% endif %}
-                {% endwith %}
+                {% comment %} Show badge if this dataset has selected columns {% endcomment %}
+                {% if dataset.selected_count %}
+                    <span class="badge badge-success badge-sm font-medium">{{ dataset.selected_count }} column{{ dataset.selected_count|pluralize }} selected</span>
+                {% endif %}
             </div>
         </div>
         
@@ -49,18 +42,11 @@
         {% endfor %}
         
         {% comment %} Show message if no columns selected from this dataset {% endcomment %}
-        {% with has_columns=False %}
-            {% for column in selected_columns %}
-                {% if column.dataset == dataset.name %}
-                    {% with has_columns=True %}{% endwith %}
-                {% endif %}
-            {% endfor %}
-            {% if not has_columns %}
+        {% if not dataset.selected_count %}
             <div class="p-3 text-center text-success/60 text-xs">
                 No columns selected from this dataset
                 <br><span class="opacity-50">Click columns in the table left to add them</span>
             </div>
-            {% endif %}
-        {% endwith %}
+        {% endif %}
     </div>
 </div> 

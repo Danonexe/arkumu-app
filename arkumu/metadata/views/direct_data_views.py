@@ -2331,9 +2331,15 @@ def add_column_to_workspace(request):
         # Calculate selected columns for this specific dataset
         dataset_selected_columns = [col['name'] for col in workspace_columns if col['dataset'] == dataset_name]
         
+        # Add selected_count to the target dataset (like in get_organization_state)
+        target_dataset_with_count = {
+            **target_dataset, 
+            'selected_count': len(dataset_selected_columns)
+        }
+        
         # Render the dataset workspace section
         dataset_section_html = render_to_string('partials/dataset_workspace_section.html', {
-            'dataset': target_dataset,
+            'dataset': target_dataset_with_count,
             'selected_columns': workspace_columns,
             'datasets': datasets,
             'organization_id': organization_id,
@@ -2459,9 +2465,15 @@ def remove_column_from_workspace(request):
         # Calculate selected columns for this specific dataset
         dataset_selected_columns = [col['name'] for col in updated_columns if col['dataset'] == dataset_name]
         
+        # Add selected_count to the target dataset (like in get_organization_state)
+        target_dataset_with_count = {
+            **target_dataset, 
+            'selected_count': len(dataset_selected_columns)
+        }
+        
         # Render the dataset workspace section
         dataset_section_html = render_to_string('partials/dataset_workspace_section.html', {
-            'dataset': target_dataset,
+            'dataset': target_dataset_with_count,
             'selected_columns': updated_columns,
             'datasets': datasets,
             'organization_id': organization_id,
@@ -3020,12 +3032,13 @@ def clear_all_datasets(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
-@login_required
+
 def set_anchor_column(request):
     """
     HTMX endpoint to set/unset a column as the anchor column.
     Only one column can be the anchor at a time.
     """
+    logger.error("🚨🚨🚨 NEW SET_ANCHOR_COLUMN FUNCTION CALLED! 🚨🚨🚨")
     logger.info(f"SET_ANCHOR_COLUMN: Method={request.method}, Content-Type={request.content_type}")
     logger.info(f"SET_ANCHOR_COLUMN: POST data: {dict(request.POST)}")
     
@@ -3067,27 +3080,36 @@ def set_anchor_column(request):
         
         logger.info(f"SET ANCHOR: Updated workspace, anchor_set={anchor_set}")
         
-        # Get datasets from request data (passed via HTMX)
+        # Get datasets from request data (passed via HTMX) - this contains all the data we need!
         datasets_json = request.POST.get('datasets', '[]')
         try:
             datasets = json.loads(datasets_json)
+            logger.info(f"SET ANCHOR: Using datasets from HTMX request: {len(datasets)} datasets")
         except json.JSONDecodeError:
+            logger.warning(f"SET ANCHOR: Failed to parse datasets JSON, using empty list")
             datasets = []
-            # If no datasets in request, get from state as fallback
-            state = get_organization_state(request, organization_id)
-            datasets = state['all_datasets']
-            datasets_json = json.dumps(datasets, cls=DjangoJSONEncoder) if datasets else '[]'
+            datasets_json = '[]'
 
-        # Find the target dataset object
+        # Find the target dataset object from the HTMX-provided data (no S3 lookup needed!)
         target_dataset = None
-        state = get_organization_state(request, organization_id)
-        for dataset in state.get('all_datasets', []):
+        for dataset in datasets:
             if dataset.get('name') == dataset_name:
                 target_dataset = dataset
+                logger.info(f"SET ANCHOR: Found target dataset {dataset_name} in HTMX data")
                 break
         
+        # If not found in HTMX data, create a minimal dataset object for rendering
         if not target_dataset:
-            return JsonResponse({'error': f'Dataset {dataset_name} not found'}, status=404)
+            logger.warning(f"SET ANCHOR: Dataset {dataset_name} not found in HTMX data, creating minimal dataset")
+            # Create minimal dataset object from workspace column data
+            target_dataset = {
+                'name': dataset_name,
+                'source': next((col.get('source') for col in existing_columns if col.get('dataset') == dataset_name), 'unknown'),
+                'preview': {
+                    'colHeaders': [col.get('name') for col in existing_columns if col.get('dataset') == dataset_name]
+                }
+            }
+            logger.info(f"SET ANCHOR: Created minimal dataset: {target_dataset}")
 
         # Generate CSRF token for the template
         from django.middleware.csrf import get_token
@@ -3096,9 +3118,20 @@ def set_anchor_column(request):
         # Calculate selected columns for this specific dataset
         dataset_selected_columns = [col['name'] for col in existing_columns if col['dataset'] == dataset_name]
         
+        # Add selected_count to the target dataset (like in get_organization_state)
+        # Add safety check for target_dataset
+        if target_dataset is None:
+            logger.error(f"SET ANCHOR: target_dataset is None, cannot create target_dataset_with_count")
+            return JsonResponse({'error': f'Dataset {dataset_name} not found for rendering'}, status=404)
+            
+        target_dataset_with_count = {
+            **target_dataset, 
+            'selected_count': len(dataset_selected_columns)
+        }
+        
         # Render the dataset workspace section
         dataset_section_html = render_to_string('partials/dataset_workspace_section.html', {
-            'dataset': target_dataset,
+            'dataset': target_dataset_with_count,
             'selected_columns': existing_columns,
             'datasets': datasets,
             'organization_id': organization_id,
@@ -3424,9 +3457,15 @@ def toggle_multi_value_column(request):
         # Calculate selected columns for this specific dataset
         dataset_selected_columns = [col['name'] for col in workspace_columns if col['dataset'] == dataset_name]
         
+        # Add selected_count to the target dataset (like in get_organization_state)
+        target_dataset_with_count = {
+            **target_dataset, 
+            'selected_count': len(dataset_selected_columns)
+        }
+        
         # Render the dataset workspace section
         dataset_section_html = render_to_string('partials/dataset_workspace_section.html', {
-            'dataset': target_dataset,
+            'dataset': target_dataset_with_count,
             'selected_columns': workspace_columns,
             'datasets': datasets,
             'organization_id': organization_id,
@@ -4502,16 +4541,21 @@ def get_organization_state(request, organization_id):
         session_key = f"selected_datasets_{organization_id}"
         active_dataset_names = request.session.get(session_key, [])
         
-        # Create active datasets with details
+        # Get selected columns from session (single source of truth)
+        selected_columns = get_workspace_columns(request, organization_id)
+        
+        # Create active datasets with details and selected column counts
         active_datasets = []
         for dataset_name in active_dataset_names:
             for dataset in all_datasets:
                 if dataset['name'] == dataset_name:
-                    active_datasets.append(dataset)
+                    # Calculate how many columns are selected for this dataset
+                    selected_count = len([col for col in selected_columns if col.get('dataset') == dataset_name])
+                    
+                    # Add selected_count to the dataset info
+                    dataset_with_count = {**dataset, 'selected_count': selected_count}
+                    active_datasets.append(dataset_with_count)
                     break
-        
-        # Get selected columns from session (single source of truth)
-        selected_columns = get_workspace_columns(request, organization_id)
         
         return {
             'all_datasets': all_datasets,
@@ -4624,9 +4668,15 @@ def select_all_dataset_columns(request):
         # Calculate selected columns for this specific dataset
         dataset_selected_columns = [col['name'] for col in all_columns if col['dataset'] == dataset_name]
         
+        # Add selected_count to the target dataset (like in get_organization_state)
+        target_dataset_with_count = {
+            **target_dataset, 
+            'selected_count': len(dataset_selected_columns)
+        }
+        
         # Render the dataset workspace section
         dataset_section_html = render_to_string('partials/dataset_workspace_section.html', {
-            'dataset': target_dataset,
+            'dataset': target_dataset_with_count,
             'selected_columns': all_columns,
             'datasets': datasets,
             'organization_id': organization_id,
@@ -4724,9 +4774,15 @@ def deselect_all_dataset_columns(request):
         # Calculate selected columns for this specific dataset (should be empty after deselecting all)
         dataset_selected_columns = [col['name'] for col in filtered_columns if col['dataset'] == dataset_name]
         
+        # Add selected_count to the target dataset (like in get_organization_state)
+        target_dataset_with_count = {
+            **target_dataset, 
+            'selected_count': len(dataset_selected_columns)
+        }
+        
         # Render the dataset workspace section
         dataset_section_html = render_to_string('partials/dataset_workspace_section.html', {
-            'dataset': target_dataset,
+            'dataset': target_dataset_with_count,
             'selected_columns': filtered_columns,
             'datasets': datasets,
             'organization_id': organization_id,
