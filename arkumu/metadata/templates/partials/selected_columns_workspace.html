@@ -30,42 +30,23 @@
             </button>
         </div>
     </div>
-    
-    <!-- Dataset Filter (show if multiple datasets) -->
-    {% regroup selected_columns by dataset as columns_by_dataset %}
-    {% if columns_by_dataset|length > 1 %}
-    <div class="mb-2 flex-shrink-0">
-        <div class="flex flex-wrap gap-1">
-            <button class="btn btn-xs {% if not request.GET.filter_dataset %}btn-primary{% else %}btn-outline{% endif %}" 
-                    hx-get="{% url 'metadata:filter_workspace' %}?filter_dataset=all"
-                    hx-target="#column-workspace"
-                    hx-swap="innerHTML">
-                All ({{ selected_columns|length }})
-            </button>
-            {% for dataset_group in columns_by_dataset %}
-            <button class="btn btn-xs {% if request.GET.filter_dataset == dataset_group.grouper %}btn-primary{% else %}btn-outline{% endif %}" 
-                    hx-get="{% url 'metadata:filter_workspace' %}?filter_dataset={{ dataset_group.grouper }}"
-                    hx-target="#column-workspace"
-                    hx-swap="innerHTML">
-                {{ dataset_group.grouper }} ({{ dataset_group.list|length }})
-            </button>
+
+    <!-- Active Datasets Container -->
+    <div id="workspace-datasets-container" class="flex-1 overflow-y-auto space-y-2">
+        {% if active_datasets %}
+            {% for dataset in active_datasets %}
+                <!-- Individual Dataset Container - This is what gets targeted by HTMX -->
+                <div id="dataset-workspace-{{ dataset.name|slugify }}">
+                    {% include 'partials/dataset_workspace_section.html' with dataset=dataset selected_columns=selected_columns datasets=datasets organization_id=organization_id datasets_json=datasets_json csrf_token=csrf_token %}
+                </div>
             {% endfor %}
-        </div>
+        {% else %}
+            <div class="text-center py-2 text-base-content opacity-50 text-sm border border-dashed border-success/20 rounded-lg p-4">
+                <span class="text-success/60">No datasets loaded yet</span>
+                <p class="text-xs mt-1">Click dataset badges above to load data</p>
+            </div>
+        {% endif %}
     </div>
-    {% endif %}
-
-    <!-- Column Selection Area - This is the scrollable section -->
-    <div class="flex-1 overflow-y-auto min-h-0">
-        <div id="column-workspace" class="space-y-2 pr-1">
-            {% include 'partials/filtered_column_workspace.html' with selected_columns=selected_columns filter_dataset=filter_dataset datasets=datasets organization_id=organization_id datasets_json=datasets_json csrf_token=csrf_token %}
-        </div>
-    </div>
-
-    <!-- Mapping Creation Panel -->
-    <div class="flex-shrink-0">
-        {% include 'partials/mapping_creation_form.html' with active_datasets=active_datasets anchor_column=anchor_column %}
-    </div>
-    
 </div>
 
  

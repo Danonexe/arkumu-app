@@ -2207,65 +2207,63 @@ def add_column_to_workspace(request):
         workspace_key = f"workspace_columns_{organization_id}"
         workspace_columns = request.session.get(workspace_key, [])
         
+        # Parse column info from ID (format: dataset_source_column) - needed for both cases
+        parts = column_id.split('_')
+        logger.info(f"ADD COLUMN: Parsing column_id {column_id} into parts: {parts}")
+        
+        if len(parts) < 3:
+            logger.error(f"ADD COLUMN: Invalid column_id format - expected at least 3 parts, got {len(parts)}: {parts}")
+            return JsonResponse({'error': 'Invalid column_id format'}, status=400)
+        
+        # Extract column name (last part)
+        column_name = parts[-1]
+        logger.info(f"ADD COLUMN: Extracted column_name: {column_name}")
+        
+        # Get dataset information from request data (no cache dependency!)
+        datasets_json = request.POST.get('datasets', '[]')
+        try:
+            available_datasets = json.loads(datasets_json) if datasets_json != '[]' else []
+            logger.info(f"ADD COLUMN: Found {len(available_datasets)} datasets from request data")
+        except json.JSONDecodeError as e:
+            logger.error(f"ADD COLUMN: Failed to parse datasets JSON: {e}")
+            return JsonResponse({'error': 'Invalid datasets data in request'}, status=400)
+        
+        # Debug: log all available datasets
+        for i, dataset in enumerate(available_datasets):
+            cols = dataset.get('preview', {}).get('colHeaders', [])
+            logger.info(f"ADD COLUMN: Dataset[{i}]: name='{dataset.get('name')}', source='{dataset.get('source')}', columns={len(cols)}")
+        
+        # Find the dataset and source for this column
+        dataset_name = None
+        source_name = None
+        for dataset in available_datasets:
+            dataset_cols = dataset.get('preview', {}).get('colHeaders', [])
+            logger.info(f"ADD COLUMN: Checking dataset '{dataset.get('name')}' with {len(dataset_cols)} columns")
+            
+            for col in dataset_cols:
+                # Reconstruct the column ID to match
+                test_id = f"{dataset.get('name')}_{dataset.get('source')}_{col}"
+                logger.debug(f"ADD COLUMN: Comparing test_id '{test_id}' with target '{column_id}'")
+                
+                if test_id == column_id:
+                    dataset_name = dataset.get('name')
+                    source_name = dataset.get('source')
+                    column_name = col
+                    logger.info(f"ADD COLUMN: ✅ Found match! dataset='{dataset_name}', source='{source_name}', column='{column_name}'")
+                    break
+            if dataset_name:
+                break
+        
+        if not dataset_name:
+            logger.error(f"ADD COLUMN: ❌ Could not find dataset info for column '{column_id}'")
+            logger.error(f"ADD COLUMN: Available datasets: {[d.get('name') for d in available_datasets]}")
+            logger.error(f"ADD COLUMN: Searched for pattern: dataset_source_{column_name}")
+            return JsonResponse({'error': f'Column not found in request datasets: {column_id}'}, status=400)
+
         # Check if column already exists
         if any(col.get('id') == column_id for col in workspace_columns):
             logger.info(f"ADD COLUMN: Column {column_id} already in workspace")
         else:
-            # Get column parts - either from form data or parse from column_id
-
-            # Parse column info from ID (format: dataset_source_column)
-            parts = column_id.split('_')
-            logger.info(f"ADD COLUMN: Parsing column_id {column_id} into parts: {parts}")
-            
-            if len(parts) < 3:
-                logger.error(f"ADD COLUMN: Invalid column_id format - expected at least 3 parts, got {len(parts)}: {parts}")
-                return JsonResponse({'error': 'Invalid column_id format'}, status=400)
-            
-            # Extract column name (last part)
-            column_name = parts[-1]
-            logger.info(f"ADD COLUMN: Extracted column_name: {column_name}")
-            
-            # Get dataset information from request data (no cache dependency!)
-            datasets_json = request.POST.get('datasets', '[]')
-            try:
-                available_datasets = json.loads(datasets_json) if datasets_json != '[]' else []
-                logger.info(f"ADD COLUMN: Found {len(available_datasets)} datasets from request data")
-            except json.JSONDecodeError as e:
-                logger.error(f"ADD COLUMN: Failed to parse datasets JSON: {e}")
-                return JsonResponse({'error': 'Invalid datasets data in request'}, status=400)
-            
-            # Debug: log all available datasets
-            for i, dataset in enumerate(available_datasets):
-                cols = dataset.get('preview', {}).get('colHeaders', [])
-                logger.info(f"ADD COLUMN: Dataset[{i}]: name='{dataset.get('name')}', source='{dataset.get('source')}', columns={len(cols)}")
-            
-            # Find the dataset and source for this column
-            dataset_name = None
-            source_name = None
-            for dataset in available_datasets:
-                dataset_cols = dataset.get('preview', {}).get('colHeaders', [])
-                logger.info(f"ADD COLUMN: Checking dataset '{dataset.get('name')}' with {len(dataset_cols)} columns")
-                
-                for col in dataset_cols:
-                    # Reconstruct the column ID to match
-                    test_id = f"{dataset.get('name')}_{dataset.get('source')}_{col}"
-                    logger.debug(f"ADD COLUMN: Comparing test_id '{test_id}' with target '{column_id}'")
-                    
-                    if test_id == column_id:
-                        dataset_name = dataset.get('name')
-                        source_name = dataset.get('source')
-                        column_name = col
-                        logger.info(f"ADD COLUMN: ✅ Found match! dataset='{dataset_name}', source='{source_name}', column='{column_name}'")
-                        break
-                if dataset_name:
-                    break
-            
-            if not dataset_name:
-                logger.error(f"ADD COLUMN: ❌ Could not find dataset info for column '{column_id}'")
-                logger.error(f"ADD COLUMN: Available datasets: {[d.get('name') for d in available_datasets]}")
-                logger.error(f"ADD COLUMN: Searched for pattern: dataset_source_{column_name}")
-                return JsonResponse({'error': f'Column not found in request datasets: {column_id}'}, status=400)
-            
             # Add column to workspace
             new_column = {
                 'id': column_id,
@@ -2306,17 +2304,64 @@ def add_column_to_workspace(request):
         from django.middleware.csrf import get_token
         csrf_token = get_token(request)
 
-        # Generate updated workspace HTML
-        workspace_html = render_to_string('partials/selected_columns_workspace.html', {
+        # Return only the specific dataset section for HTMX targeting
+        # Find the dataset object for the added column - try HTMX datasets first, then state
+        target_dataset = None
+        for dataset in datasets:
+            if dataset.get('name') == dataset_name:
+                target_dataset = dataset
+                break
+        
+        # If not found in HTMX datasets, try state as fallback
+        if not target_dataset:
+            state = get_organization_state(request, organization_id)
+            for dataset in state.get('all_datasets', []):
+                if dataset.get('name') == dataset_name:
+                    target_dataset = dataset
+                    break
+        
+        if not target_dataset:
+            logger.error(f"ADD COLUMN: Could not find dataset {dataset_name} in HTMX datasets or state")
+            return JsonResponse({'error': f'Dataset {dataset_name} not found'}, status=400)
+        
+        # Get the active datasets from the organization state (for the workspace container)
+        state = get_organization_state(request, organization_id)
+        active_datasets = state.get('active_datasets', [])
+        
+        # Calculate selected columns for this specific dataset
+        dataset_selected_columns = [col['name'] for col in workspace_columns if col['dataset'] == dataset_name]
+        
+        # Render the dataset workspace section
+        dataset_section_html = render_to_string('partials/dataset_workspace_section.html', {
+            'dataset': target_dataset,
             'selected_columns': workspace_columns,
-            'anchor_column': next((col for col in workspace_columns if col.get('is_anchor')), None),
-            'organization_id': organization_id,
             'datasets': datasets,
+            'organization_id': organization_id,
             'datasets_json': datasets_json,
             'csrf_token': csrf_token,
         }, request=request)
         
-        return HttpResponse(workspace_html)
+        # Render updated column badges with new selection state
+        column_badges_html = render_to_string('partials/column_badges.html', {
+            'dataset': target_dataset,
+            'dataset_selected_columns': dataset_selected_columns,
+            'datasets_json': datasets_json,
+            'selected_columns': workspace_columns,
+            'organization_id': organization_id,
+            'csrf_token': csrf_token,
+        }, request=request)
+        
+        # Return both updates using HTMX out-of-band swaps
+        from django.utils.text import slugify
+        dataset_slug = slugify(target_dataset['name'])
+        response_html = f"""
+        {dataset_section_html}
+        <div id="column-badges-{dataset_slug}" hx-swap-oob="innerHTML">
+            {column_badges_html}
+        </div>
+        """
+        
+        return HttpResponse(response_html)
         
     except Exception as e:
         logger.error(f"ADD COLUMN: Error adding column to workspace: {e}", exc_info=True)
@@ -2345,13 +2390,20 @@ def remove_column_from_workspace(request):
         # Get current workspace from session (single source of truth)
         workspace_columns = get_workspace_columns(request, organization_id)
         
+        # Find the dataset of the column being removed
+        removed_column = next((col for col in workspace_columns if col.get('id') == column_id), None)
+        if not removed_column:
+            return JsonResponse({'error': 'Column not found in workspace'}, status=404)
+        
+        dataset_name = removed_column.get('dataset')
+        
         # Remove column by ID
         updated_columns = [col for col in workspace_columns if col.get('id') != column_id]
         
         # Update workspace in session
         update_workspace_columns(request, organization_id, updated_columns)
         
-        logger.info(f"REMOVE COLUMN: Removed {column_id}, workspace now has {len(updated_columns)} columns")
+        logger.info(f"REMOVE COLUMN: Removed {column_id} from dataset {dataset_name}, workspace now has {len(updated_columns)} columns")
         
         # Get datasets from request data (passed via HTMX)
         datasets_json = request.POST.get('datasets', '[]')
@@ -2364,6 +2416,37 @@ def remove_column_from_workspace(request):
             datasets = state['all_datasets']
             datasets_json = json.dumps(datasets, cls=DjangoJSONEncoder) if datasets else '[]'
 
+        # Find the target dataset object - look in HTMX datasets first, then state
+        target_dataset = None
+        
+        # First, try to find in the datasets passed via HTMX (from current page)
+        for dataset in datasets:
+            if dataset.get('name') == dataset_name:
+                target_dataset = dataset
+                break
+        
+        # If not found, try state as fallback
+        if not target_dataset:
+            state = get_organization_state(request, organization_id)
+            for dataset in state.get('all_datasets', []):
+                if dataset.get('name') == dataset_name:
+                    target_dataset = dataset
+                    break
+        
+        # We can update column badges if we found the dataset in either location
+        update_column_badges = target_dataset is not None
+        
+        if not target_dataset:
+            # Create a minimal dataset object just for workspace rendering
+            target_dataset = {
+                'name': dataset_name,
+                'source': removed_column.get('source', 'unknown') if removed_column else 'unknown',
+                'preview': {
+                    'colHeaders': []  # Empty since we don't have the real dataset
+                }
+            }
+            logger.warning(f"REMOVE COLUMN: Dataset {dataset_name} not found in HTMX datasets or state, will not update column badges")
+
         # Debug logging for workspace state
         logger.info(f"REMOVE COLUMN: After removal, workspace columns:")
         for i, col in enumerate(updated_columns):
@@ -2373,17 +2456,53 @@ def remove_column_from_workspace(request):
         from django.middleware.csrf import get_token
         csrf_token = get_token(request)
         
-        # Generate workspace HTML using the updated workspace columns
-        workspace_html = render_to_string('partials/selected_columns_workspace.html', {
+        # Calculate selected columns for this specific dataset
+        dataset_selected_columns = [col['name'] for col in updated_columns if col['dataset'] == dataset_name]
+        
+        # Render the dataset workspace section
+        dataset_section_html = render_to_string('partials/dataset_workspace_section.html', {
+            'dataset': target_dataset,
             'selected_columns': updated_columns,
-            'anchor_column': next((col for col in updated_columns if col.get('is_anchor')), None),
-            'organization_id': organization_id,
             'datasets': datasets,
+            'organization_id': organization_id,
             'datasets_json': datasets_json,
-            'csrf_token': csrf_token
+            'csrf_token': csrf_token,
         }, request=request)
         
-        return HttpResponse(workspace_html)
+        # Only update column badges if we have the real dataset with all columns
+        if update_column_badges:
+            try:
+                column_badges_html = render_to_string('partials/column_badges.html', {
+                    'dataset': target_dataset,
+                    'dataset_selected_columns': dataset_selected_columns,
+                    'datasets_json': datasets_json,
+                    'selected_columns': updated_columns,
+                    'organization_id': organization_id,
+                    'csrf_token': csrf_token,
+                }, request=request)
+                
+                # Return both updates using HTMX out-of-band swaps
+                from django.utils.text import slugify
+                dataset_slug = slugify(target_dataset['name'])
+                
+                response_html = f"""
+                {dataset_section_html}
+                <div id="column-badges-{dataset_slug}" hx-swap-oob="innerHTML">
+                    {column_badges_html}
+                </div>
+                """
+                
+                logger.info(f"REMOVE COLUMN: Updated both workspace and column badges for {dataset_name}")
+                return HttpResponse(response_html)
+                
+            except Exception as template_error:
+                logger.error(f"REMOVE COLUMN: Error rendering column badges: {template_error}", exc_info=True)
+                # Fall through to return just workspace section
+        else:
+            logger.info(f"REMOVE COLUMN: Dataset not available, only updating workspace section")
+        
+        # Return only workspace section if dataset not available or badge rendering failed
+        return HttpResponse(dataset_section_html)
         
     except Exception as e:
         logger.error(f"REMOVE COLUMN: Error removing column: {e}", exc_info=True)
@@ -2926,17 +3045,22 @@ def set_anchor_column(request):
         # Get current workspace from session (consistent with other functions)
         existing_columns = get_workspace_columns(request, organization_id)
         anchor_set = False
+        dataset_name = None
         
         for col in existing_columns:
             if col.get('id') == column_id:
                 # Toggle anchor status for this column
                 col['is_anchor'] = not col.get('is_anchor', False)
                 anchor_set = col['is_anchor']
+                dataset_name = col.get('dataset')
                 logger.info(f"SET ANCHOR: Column {column_id} anchor status: {anchor_set}")
             else:
                 # Clear anchor status for all other columns (only one anchor allowed)
                 if anchor_set:
                     col['is_anchor'] = False
+        
+        if not dataset_name:
+            return JsonResponse({'error': 'Column not found in workspace'}, status=404)
         
         # Save back to session
         update_workspace_columns(request, organization_id, existing_columns)
@@ -2949,18 +3073,60 @@ def set_anchor_column(request):
             datasets = json.loads(datasets_json)
         except json.JSONDecodeError:
             datasets = []
+            # If no datasets in request, get from state as fallback
+            state = get_organization_state(request, organization_id)
+            datasets = state['all_datasets']
+            datasets_json = json.dumps(datasets, cls=DjangoJSONEncoder) if datasets else '[]'
 
-        # Generate workspace HTML with updated anchor status
-        workspace_html = render_to_string('partials/selected_columns_workspace.html', {
+        # Find the target dataset object
+        target_dataset = None
+        state = get_organization_state(request, organization_id)
+        for dataset in state.get('all_datasets', []):
+            if dataset.get('name') == dataset_name:
+                target_dataset = dataset
+                break
+        
+        if not target_dataset:
+            return JsonResponse({'error': f'Dataset {dataset_name} not found'}, status=404)
+
+        # Generate CSRF token for the template
+        from django.middleware.csrf import get_token
+        csrf_token = get_token(request)
+        
+        # Calculate selected columns for this specific dataset
+        dataset_selected_columns = [col['name'] for col in existing_columns if col['dataset'] == dataset_name]
+        
+        # Render the dataset workspace section
+        dataset_section_html = render_to_string('partials/dataset_workspace_section.html', {
+            'dataset': target_dataset,
             'selected_columns': existing_columns,
-            'anchor_column': next((col for col in existing_columns if col.get('is_anchor')), None),
-            'organization_id': organization_id,
             'datasets': datasets,
+            'organization_id': organization_id,
             'datasets_json': datasets_json,
-            'csrf_token': request.META.get('CSRF_COOKIE')
+            'csrf_token': csrf_token,
         }, request=request)
         
-        return HttpResponse(workspace_html)
+        # Render updated column badges with new selection state
+        column_badges_html = render_to_string('partials/column_badges.html', {
+            'dataset': target_dataset,
+            'dataset_selected_columns': dataset_selected_columns,
+            'datasets_json': datasets_json,
+            'selected_columns': existing_columns,
+            'organization_id': organization_id,
+            'csrf_token': csrf_token,
+        }, request=request)
+        
+        # Return both updates using HTMX out-of-band swaps
+        from django.utils.text import slugify
+        dataset_slug = slugify(target_dataset['name'])
+        response_html = f"""
+        {dataset_section_html}
+        <div id="column-badges-{dataset_slug}" hx-swap-oob="innerHTML">
+            {column_badges_html}
+        </div>
+        """
+        
+        return HttpResponse(response_html)
         
     except Exception as e:
         logger.error(f"SET ANCHOR: Error setting anchor column: {e}", exc_info=True)
@@ -3204,30 +3370,28 @@ def toggle_multi_value_column(request):
         if not column_id:
             return JsonResponse({'error': 'Missing column_id'}, status=400)
         
-        # Get current workspace from cache
-        workspace_cache_key = f"relationship_workspace_{organization_id}"
-        workspace = cache.get(workspace_cache_key, {'columns': []})
+        # Get current workspace from session (single source of truth)
+        workspace_columns = get_workspace_columns(request, organization_id)
         
-        # Update multi-value status
-        existing_columns = workspace.get('columns', [])
+        # Find the column and its dataset
         column_found = False
+        dataset_name = None
         
-        for col in existing_columns:
+        for col in workspace_columns:
             if col.get('id') == column_id:
                 # Toggle multi-value status
                 current_status = col.get('is_multi_value', False)
                 col['is_multi_value'] = not current_status
                 column_found = True
+                dataset_name = col.get('dataset')
                 logger.info(f"TOGGLE MULTI-VALUE: Column {column_id} multi-value status: {col['is_multi_value']}")
                 break
         
         if not column_found:
             return JsonResponse({'error': 'Column not found in workspace'}, status=400)
         
-        workspace['columns'] = existing_columns
-        
-        # Save back to cache
-        cache.set(workspace_cache_key, workspace, timeout=60*60*24)  # 24 hours
+        # Update workspace in session
+        update_workspace_columns(request, organization_id, workspace_columns)
         
         logger.info(f"TOGGLE MULTI-VALUE: Updated workspace")
         
@@ -3242,21 +3406,55 @@ def toggle_multi_value_column(request):
             datasets = state['all_datasets']
             datasets_json = json.dumps(datasets, cls=DjangoJSONEncoder) if datasets else '[]'
 
+        # Find the target dataset object
+        target_dataset = None
+        state = get_organization_state(request, organization_id)
+        for dataset in state.get('all_datasets', []):
+            if dataset.get('name') == dataset_name:
+                target_dataset = dataset
+                break
+        
+        if not target_dataset:
+            return JsonResponse({'error': f'Dataset {dataset_name} not found'}, status=404)
+
         # Generate CSRF token for the template
         from django.middleware.csrf import get_token
         csrf_token = get_token(request)
         
-        # Generate workspace HTML with updated multi-value status
-        workspace_html = render_to_string('partials/selected_columns_workspace.html', {
-            'selected_columns': workspace['columns'],
-            'anchor_column': next((col for col in workspace['columns'] if col.get('is_anchor')), None),
-            'organization_id': organization_id,
+        # Calculate selected columns for this specific dataset
+        dataset_selected_columns = [col['name'] for col in workspace_columns if col['dataset'] == dataset_name]
+        
+        # Render the dataset workspace section
+        dataset_section_html = render_to_string('partials/dataset_workspace_section.html', {
+            'dataset': target_dataset,
+            'selected_columns': workspace_columns,
             'datasets': datasets,
+            'organization_id': organization_id,
             'datasets_json': datasets_json,
             'csrf_token': csrf_token,
         }, request=request)
         
-        return HttpResponse(workspace_html)
+        # Render updated column badges with new selection state
+        column_badges_html = render_to_string('partials/column_badges.html', {
+            'dataset': target_dataset,
+            'dataset_selected_columns': dataset_selected_columns,
+            'datasets_json': datasets_json,
+            'selected_columns': workspace_columns,
+            'organization_id': organization_id,
+            'csrf_token': csrf_token,
+        }, request=request)
+        
+        # Return both updates using HTMX out-of-band swaps
+        from django.utils.text import slugify
+        dataset_slug = slugify(target_dataset['name'])
+        response_html = f"""
+        {dataset_section_html}
+        <div id="column-badges-{dataset_slug}" hx-swap-oob="innerHTML">
+            {column_badges_html}
+        </div>
+        """
+        
+        return HttpResponse(response_html)
         
     except Exception as e:
         logger.error(f"TOGGLE MULTI-VALUE: Error toggling multi-value status: {e}", exc_info=True)
@@ -3984,14 +4182,14 @@ def toggle_fk_form(request):
         if not column_id:
             return HttpResponse('<div class="text-error text-sm">Column ID required</div>')
         
-        # Get current workspace from cache
-        workspace_cache_key = f"relationship_workspace_{organization_id}"
-        workspace = cache.get(workspace_cache_key, {'columns': []})
-        selected_columns = workspace.get('columns', [])
+        # Get current workspace from session (consistent with other views)
+        selected_columns = get_workspace_columns(request, organization_id)
         
         # Find the specific column
         column = next((col for col in selected_columns if col.get('id') == column_id), None)
         if not column:
+            logger.error(f"TOGGLE FK FORM: Column '{column_id}' not found in workspace")
+            logger.error(f"TOGGLE FK FORM: Available columns: {[col.get('id') for col in selected_columns]}")
             return HttpResponse('<div class="text-error text-sm">Column not found in workspace</div>')
         
         # Parse datasets from the template context
@@ -4178,10 +4376,8 @@ def save_inline_fk_config(request):
             logger.error(f"SAVE INLINE FK CONFIG: VALIDATION FAILED - {error_msg}")
             return HttpResponse(f'<div class="text-error text-xs p-2">{error_msg}</div>')
         
-        # Get current workspace from cache
-        workspace_cache_key = f"relationship_workspace_{organization_id}"
-        workspace = cache.get(workspace_cache_key, {'columns': []})
-        existing_columns = workspace.get('columns', [])
+        # Get current workspace from session (consistent with other views)
+        existing_columns = get_workspace_columns(request, organization_id)
         
         # Debug: Log all column IDs in workspace
         logger.info(f"SAVE INLINE FK CONFIG: DEBUGGING WORKSPACE CONTENTS:")
@@ -4209,10 +4405,8 @@ def save_inline_fk_config(request):
             logger.error(f"SAVE INLINE FK CONFIG: Available column IDs: {[col.get('id') for col in existing_columns]}")
             return HttpResponse('<div class="text-error text-xs p-2">Column not found in workspace</div>')
         
-        workspace['columns'] = existing_columns
-        
-        # Save back to cache
-        cache.set(workspace_cache_key, workspace, timeout=60*60*24)  # 24 hours
+        # Save back to session (consistent with other views)
+        update_workspace_columns(request, organization_id, existing_columns)
         
         logger.info(f"SAVE INLINE FK CONFIG: Successfully updated FK configuration")
         
@@ -4229,8 +4423,8 @@ def save_inline_fk_config(request):
 
         # Refresh the entire workspace to show updated FK status
         workspace_html = render_to_string('partials/selected_columns_workspace.html', {
-            'selected_columns': workspace['columns'],
-            'anchor_column': next((col for col in workspace['columns'] if col.get('is_anchor')), None),
+            'selected_columns': existing_columns,
+            'anchor_column': next((col for col in existing_columns if col.get('is_anchor')), None),
             'organization_id': organization_id,
             'datasets': datasets,
             'datasets_json': datasets_json,
@@ -4357,17 +4551,27 @@ def select_all_dataset_columns(request):
         
         logger.info(f"SELECT ALL DATASET COLUMNS: {dataset_name} for org={organization_id}")
         
-        # Get active datasets to find the target dataset
-        loaded_datasets_cache_key = f"loaded_datasets_{organization_id}"
-        active_datasets = cache.get(loaded_datasets_cache_key, [])
+        # Get datasets from form data first, fallback to cache
+        datasets_json = request.POST.get('datasets', '[]')
+        try:
+            datasets = json.loads(datasets_json) if datasets_json != '[]' else []
+        except json.JSONDecodeError:
+            datasets = []
         
+        # If no datasets from form, try cache as fallback
+        if not datasets:
+            loaded_datasets_cache_key = f"loaded_datasets_{organization_id}"
+            datasets = cache.get(loaded_datasets_cache_key, [])
+        
+        # Find target dataset
         target_dataset = None
-        for dataset in active_datasets:
+        for dataset in datasets:
             if dataset.get('name') == dataset_name:
                 target_dataset = dataset
                 break
         
         if not target_dataset:
+            logger.error(f"SELECT ALL DATASET: Dataset '{dataset_name}' not found in available datasets")
             return JsonResponse({'error': 'Dataset not found'}, status=400)
         
         # Get current workspace from session
@@ -4375,7 +4579,8 @@ def select_all_dataset_columns(request):
         
         # Create column IDs for all columns in the dataset
         source_name = target_dataset.get('source', 'unknown')
-        dataset_columns = target_dataset.get('columns', [])
+        # Get columns from the correct location in the dataset structure
+        dataset_columns = target_dataset.get('preview', {}).get('colHeaders', [])
         
         # Get set of existing column IDs
         existing_column_ids = {col.get('id') for col in existing_columns}
@@ -4405,13 +4610,9 @@ def select_all_dataset_columns(request):
         
         logger.info(f"SELECT ALL DATASET: Added {len(new_columns)} new columns from {dataset_name}, total={len(all_columns)}")
         
-        # Get datasets for context
-        datasets_json = request.POST.get('datasets', '[]')
-        try:
-            datasets = json.loads(datasets_json)
-        except json.JSONDecodeError:
-            datasets = []
-            # Fallback to state discovery
+        # Use datasets already parsed from form data
+        # If still empty, fallback to state discovery
+        if not datasets:
             state = get_organization_state(request, organization_id)
             datasets = state['all_datasets']
             datasets_json = json.dumps(datasets, cls=DjangoJSONEncoder) if datasets else '[]'
@@ -4420,17 +4621,40 @@ def select_all_dataset_columns(request):
         from django.middleware.csrf import get_token
         csrf_token = get_token(request)
 
-        # Re-render workspace with all columns
-        workspace_html = render_to_string('partials/selected_columns_workspace.html', {
+        # Calculate selected columns for this specific dataset
+        dataset_selected_columns = [col['name'] for col in all_columns if col['dataset'] == dataset_name]
+        
+        # Render the dataset workspace section
+        dataset_section_html = render_to_string('partials/dataset_workspace_section.html', {
+            'dataset': target_dataset,
             'selected_columns': all_columns,
-            'anchor_column': next((col for col in all_columns if col.get('is_anchor')), None),
-            'organization_id': organization_id,
             'datasets': datasets,
+            'organization_id': organization_id,
             'datasets_json': datasets_json,
             'csrf_token': csrf_token,
         }, request=request)
         
-        return HttpResponse(workspace_html)
+        # Render updated column badges with new selection state
+        column_badges_html = render_to_string('partials/column_badges.html', {
+            'dataset': target_dataset,
+            'dataset_selected_columns': dataset_selected_columns,
+            'datasets_json': datasets_json,
+            'selected_columns': all_columns,
+            'organization_id': organization_id,
+            'csrf_token': csrf_token,
+        }, request=request)
+        
+        # Return both updates using HTMX out-of-band swaps
+        from django.utils.text import slugify
+        dataset_slug = slugify(target_dataset['name'])
+        response_html = f"""
+        {dataset_section_html}
+        <div id="column-badges-{dataset_slug}" hx-swap-oob="innerHTML">
+            {column_badges_html}
+        </div>
+        """
+        
+        return HttpResponse(response_html)
         
     except Exception as e:
         logger.error(f"SELECT ALL DATASET: Error selecting all columns: {e}", exc_info=True)
@@ -4469,13 +4693,15 @@ def deselect_all_dataset_columns(request):
         removed_count = len(existing_columns) - len(filtered_columns)
         logger.info(f"DESELECT ALL DATASET: Removed {removed_count} columns from {dataset_name}, remaining={len(filtered_columns)}")
         
-        # Get datasets for context
+        # Get datasets from form data first, fallback to state discovery
         datasets_json = request.POST.get('datasets', '[]')
         try:
-            datasets = json.loads(datasets_json)
+            datasets = json.loads(datasets_json) if datasets_json != '[]' else []
         except json.JSONDecodeError:
             datasets = []
-            # Fallback to state discovery
+            
+        # If no datasets from form, fallback to state discovery
+        if not datasets:
             state = get_organization_state(request, organization_id)
             datasets = state['all_datasets']
             datasets_json = json.dumps(datasets, cls=DjangoJSONEncoder) if datasets else '[]'
@@ -4484,17 +4710,51 @@ def deselect_all_dataset_columns(request):
         from django.middleware.csrf import get_token
         csrf_token = get_token(request)
 
-        # Re-render workspace without the dataset columns
-        workspace_html = render_to_string('partials/selected_columns_workspace.html', {
+        # Find the target dataset for rendering the updated section
+        target_dataset = None
+        for dataset in datasets:
+            if dataset.get('name') == dataset_name:
+                target_dataset = dataset
+                break
+        
+        if not target_dataset:
+            logger.error(f"DESELECT ALL DATASET: Dataset '{dataset_name}' not found for rendering")
+            return JsonResponse({'error': 'Dataset not found for rendering'}, status=400)
+        
+        # Calculate selected columns for this specific dataset (should be empty after deselecting all)
+        dataset_selected_columns = [col['name'] for col in filtered_columns if col['dataset'] == dataset_name]
+        
+        # Render the dataset workspace section
+        dataset_section_html = render_to_string('partials/dataset_workspace_section.html', {
+            'dataset': target_dataset,
             'selected_columns': filtered_columns,
-            'anchor_column': next((col for col in filtered_columns if col.get('is_anchor')), None),
-            'organization_id': organization_id,
             'datasets': datasets,
+            'organization_id': organization_id,
             'datasets_json': datasets_json,
             'csrf_token': csrf_token,
         }, request=request)
         
-        return HttpResponse(workspace_html)
+        # Render updated column badges with new selection state
+        column_badges_html = render_to_string('partials/column_badges.html', {
+            'dataset': target_dataset,
+            'dataset_selected_columns': dataset_selected_columns,
+            'datasets_json': datasets_json,
+            'selected_columns': filtered_columns,
+            'organization_id': organization_id,
+            'csrf_token': csrf_token,
+        }, request=request)
+        
+        # Return both updates using HTMX out-of-band swaps
+        from django.utils.text import slugify
+        dataset_slug = slugify(target_dataset['name'])
+        response_html = f"""
+        {dataset_section_html}
+        <div id="column-badges-{dataset_slug}" hx-swap-oob="innerHTML">
+            {column_badges_html}
+        </div>
+        """
+        
+        return HttpResponse(response_html)
         
     except Exception as e:
         logger.error(f"DESELECT ALL DATASET: Error deselecting all columns: {e}", exc_info=True)

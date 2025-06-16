@@ -1,0 +1,66 @@
+<!-- DaisyUI Collapse Component for Dataset -->
+<div class="collapse collapse-arrow bg-base-100 border border-success/30 hover:border-success transition-all hover:-translate-y-0.5 hover:shadow-sm overflow-hidden">
+    <!-- Hidden checkbox for DaisyUI collapse (checked = expanded by default) -->
+    <input type="checkbox" class="peer" checked /> 
+    
+    <!-- Collapse Title (Dataset Header) -->
+    <div class="collapse-title flex items-center justify-between p-3 min-h-0">
+        <div class="flex items-center gap-2 flex-1">
+            <!-- Dataset Info -->
+            <div class="flex items-center gap-2">
+                <span class="text-sm font-medium text-success">{{ dataset.name }}</span>
+                {% comment %} Count selected columns from this dataset {% endcomment %}
+                {% with dataset_selected_count=0 %}
+                    {% for column in selected_columns %}
+                        {% if column.dataset == dataset.name %}
+                            {% with dataset_selected_count=dataset_selected_count|add:1 %}{% endwith %}
+                        {% endif %}
+                    {% endfor %}
+                    {% if dataset_selected_count > 0 %}
+                    <span class="badge badge-success badge-xs">{{ dataset_selected_count }} selected</span>
+                    {% endif %}
+                {% endwith %}
+            </div>
+        </div>
+        
+        <!-- Close Dataset Button -->
+        <button class="btn btn-xs btn-ghost text-error hover:bg-error/10" 
+                title="Close {{ dataset.name }} (remove from workspace)"
+                hx-post="{% url 'metadata:toggle_dataset_card' %}"
+                hx-vals='{"source": "{{ dataset.source }}", "dataset_name": "{{ dataset.name }}", "organization": "{{ organization_id }}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
+                hx-target="#table-content"
+                hx-swap="innerHTML"
+                onclick="event.stopPropagation();">
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+        </button>
+    </div>
+
+    <!-- Collapse Content (Selected Columns) -->
+    <div class="collapse-content bg-success/5 border-t border-success/20">
+        {% comment %} Show columns from this dataset {% endcomment %}
+        {% for column in selected_columns %}
+            {% if column.dataset == dataset.name %}
+                <div class="p-2 border-b border-success/10 last:border-b-0">
+                    {% include 'partials/column_item.html' with column=column datasets=datasets organization_id=organization_id datasets_json=datasets_json csrf_token=csrf_token %}
+                </div>
+            {% endif %}
+        {% endfor %}
+        
+        {% comment %} Show message if no columns selected from this dataset {% endcomment %}
+        {% with has_columns=False %}
+            {% for column in selected_columns %}
+                {% if column.dataset == dataset.name %}
+                    {% with has_columns=True %}{% endwith %}
+                {% endif %}
+            {% endfor %}
+            {% if not has_columns %}
+            <div class="p-3 text-center text-success/60 text-xs">
+                No columns selected from this dataset
+                <br><span class="opacity-50">Click columns in the table left to add them</span>
+            </div>
+            {% endif %}
+        {% endwith %}
+    </div>
+</div> 

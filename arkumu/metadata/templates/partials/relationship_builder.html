@@ -1,12 +1,5 @@
 <!-- Pure HTMX Column-Centric Mapping Builder -->
-<div class="flex flex-col h-full" id="relationship-builder"
-     _="on htmx:afterRequest 
-        if detail.xhr.status is 200 then
-            make a <div.alert.alert-success.shadow-lg/>
-            put '<div><span>Action completed successfully</span></div>' into it
-            put it at the end of #toast-container
-            wait 3s then remove it
-        end">
+<div class="flex flex-col h-full" id="relationship-builder">
 
     <!-- Header -->
     <div class="flex justify-between items-center mb-2 flex-shrink-0">
@@ -16,58 +9,9 @@
     </div>
     <div class="divider my-1 flex-shrink-0"></div>
 
-    <!-- Loaded Datasets Section -->
-    <div class="mb-2 flex-shrink-0" id="loaded-datasets-section">
-        <h4 class="text-sm font-medium mb-1 flex items-center gap-2">
-            <svg class="w-4 h-4 text-success" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/>
-            </svg>
-            Active Datasets
-        </h4>
-        
-        <div id="loaded-datasets-list" class="space-y-1">
-            {% if active_datasets %}
-                {% for dataset in active_datasets %}
-                <div class="card bg-base-100 border border-success/30 hover:border-success transition-colors" 
-                     id="dataset-card-{{ dataset.name }}">
-                    <!-- Dataset Header (always visible) -->
-                    <div class="flex items-center justify-between p-2">
-                        <div class="flex-1">
-                            <span class="text-sm font-medium text-success">{{ dataset.name }}</span>
-                            <span class="text-xs text-base-content opacity-60 ml-2">{{ dataset.columns|length }} columns</span>
-                        </div>
-                        <!-- Close Dataset Button -->
-                        <button class="btn btn-xs btn-ghost text-error hover:bg-error/10" 
-                                title="Close {{ dataset.name }} (remove from workspace)"
-                                hx-post="{% url 'metadata:toggle_dataset_card' %}"
-                                hx-vals='{"source": "{{ dataset.source }}", "dataset_name": "{{ dataset.name }}", "organization": "{{ organization_id }}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
-                                hx-target="#table-content"
-                                hx-swap="innerHTML">
-                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                            </svg>
-                        </button>
-                    </div>
-
-                </div>
-                {% endfor %}
-            {% else %}
-                <div class="text-center py-2 text-base-content opacity-50 text-sm border border-dashed border-success/20 rounded-lg p-4">
-                    <span class="text-success/60">No datasets loaded yet</span>
-                    <p class="text-xs mt-1">Click dataset badges above to load data</p>
-                </div>
-            {% endif %}
-        </div>
-    </div>
-
-    <!-- Selected Columns Workspace - This should take MORE space and be scrollable -->
-    <div class="flex-1 min-h-0" style="min-height: 300px;">
-        {% include 'partials/selected_columns_workspace.html' with selected_columns=selected_columns anchor_column=anchor_column active_datasets=active_datasets datasets=datasets organization_id=organization_id datasets_json=datasets_json csrf_token=csrf_token %}
-    </div>
-
-    <!-- Include the Mappings Section partial - Make it smaller/collapsible -->
-    <div class="flex-shrink-0 mt-2">
-        {% include 'partials/mappings_section.html' with mappings=mappings anchor_column=anchor_column %}
+    <!-- Selected Columns Workspace - This will be updated by HTMX -->
+    <div id="selected-columns-workspace" class="flex-1 overflow-y-auto">
+        {% include 'partials/selected_columns_workspace.html' with selected_columns=selected_columns active_datasets=active_datasets datasets=datasets organization_id=organization_id datasets_json=datasets_json csrf_token=csrf_token %}
     </div>
 
 </div>
@@ -75,121 +19,14 @@
 <!-- Modal containers -->
 <div id="dataset-columns-modal"></div>
 
-
 <!-- Simplified Toast System -->
 <div id="toast-container" class="toast toast-top toast-end"></div>
 
-<!-- Simplified Helper Functions -->
-<script type="text/hyperscript">
-    def showSuccessToast(message)
-        make a <div.alert.alert-success.shadow-lg/>
-        put '<div><span>' + message + '</span></div>' into it
-        put it at the end of #toast-container
-        wait 3s then remove it
-    end
-</script>
-
-
-
-<!-- Enhanced CSS for better UX -->
+<!-- Minimal custom CSS -->
 <style>
-/* Smooth transitions for dynamic content */
-#relationship-builder [hx-target] {
-    transition: all 0.3s ease;
-}
-
-/* Loading states */
-.htmx-request {
-    opacity: 0.6;
-    pointer-events: none;
-}
-
-/* Better focus styles for accessibility */
-.btn:focus {
-    outline: 2px solid oklch(var(--p));
-    outline-offset: 2px;
-}
-
-/* Improved hover states */
-.card:hover {
-    transform: translateY(-1px);
-    transition: transform 0.2s ease;
-}
-
-/* Toast positioning */
-.toast {
-    z-index: 1000;
-}
-
-/* Column selection feedback */
-[data-column-select]:hover {
-    background-color: oklch(var(--p) / 0.1);
-}
-
-/* Selected column states */
-.badge.selected {
-    @apply bg-primary text-primary-content font-bold border-primary;
-}
-
-.column-header.selected {
-    @apply bg-primary text-primary-content;
-}
-
-.badge.selected:hover {
-    @apply bg-primary-focus;
-}
-
-/* Improved scrolling for selected columns workspace */
-#selected-columns-workspace {
-    /* Ensure proper height constraints */
-    max-height: 100%;
-    min-height: 300px; /* Ensure minimum visible area */
-}
-
-#column-workspace {
-    /* Smooth scrolling */
-    scroll-behavior: smooth;
-}
-
-/* Force the workspace to take more space */
-#relationship-builder > div:nth-child(4) {
-    flex-grow: 2; /* Give more weight to the workspace section */
-    min-height: 350px; /* Ensure minimum height */
-}
-
-/* Custom scrollbar styling for the column workspace */
-#selected-columns-workspace .overflow-y-auto::-webkit-scrollbar {
-    width: 6px;
-}
-
-#selected-columns-workspace .overflow-y-auto::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-#selected-columns-workspace .overflow-y-auto::-webkit-scrollbar-thumb {
-    background: oklch(var(--bc) / 0.2);
-    border-radius: 3px;
-}
-
-#selected-columns-workspace .overflow-y-auto::-webkit-scrollbar-thumb:hover {
-    background: oklch(var(--bc) / 0.3);
-}
-
-/* Ensure scrollable area has visible scrollbar when needed */
-#selected-columns-workspace .overflow-y-auto {
-    overflow-y: auto !important;
-    scrollbar-width: thin;
-    scrollbar-color: oklch(var(--bc) / 0.2) transparent;
-    min-height: 250px; /* Minimum scrollable height */
-}
-
-/* Visual indicator for scrollable content */
-#column-workspace::after {
-    content: '';
-    display: block;
-    height: 1px;
-    width: 100%;
-    background: transparent;
+/* Only essential custom styles that DaisyUI doesn't provide */
+.collapse-title .btn {
+    pointer-events: auto; /* Prevent close button from triggering collapse */
 }
 </style>
 

@@ -131,7 +131,7 @@
                                     data-column-id="{{ dataset.name }}_{{ dataset.source }}_{{ header }}"
                                     hx-post="{% url 'metadata:add_column_to_workspace' %}"
                                     hx-include="#column-data-form-{{ dataset.name|slugify }}-{{ forloop.counter0 }}"
-                                    hx-target="#selected-columns-workspace"
+                                    hx-target="#dataset-workspace-{{ dataset.name|slugify }}"
                                     hx-swap="innerHTML">
                                     {{ header }}
                                 </th>
@@ -144,7 +144,7 @@
                                     data-column-id="{{ dataset.name }}_{{ dataset.source }}_{{ header }}"
                                     hx-post="{% url 'metadata:add_column_to_workspace' %}"
                                     hx-include="#column-data-form-{{ dataset.name|slugify }}-{{ forloop.counter0 }}"
-                                    hx-target="#selected-columns-workspace"
+                                    hx-target="#dataset-workspace-{{ dataset.name|slugify }}"
                                     hx-swap="innerHTML">
                                     {{ header }}
                                 </th>

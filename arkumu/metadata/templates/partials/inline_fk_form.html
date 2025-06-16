@@ -7,26 +7,10 @@
         <input type="hidden" name="column_id" value="{{ column.id }}">
         
         <div class="space-y-3">
-            <div class="text-sm font-medium text-base-content">Configure Foreign Key for: {{ column.name }}</div>
+            <div class="text-sm font-medium text-base-content">🔗 Link {{ column.name }} to:</div>
             
-            <!-- Direction Selection -->
-            <div class="form-control">
-                <label class="label label-text text-xs">Relationship Direction:</label>
-                <div class="flex gap-2">
-                    <label class="label cursor-pointer">
-                        <span class="label-text text-xs mr-2">Outbound (this → target)</span>
-                        <input type="radio" name="fk_direction" value="outbound" 
-                               class="radio radio-xs radio-secondary" 
-                               {% if current_direction == 'outbound' or not current_direction %}checked{% endif %}>
-                    </label>
-                    <label class="label cursor-pointer">
-                        <span class="label-text text-xs mr-2">Inbound (target → this)</span>
-                        <input type="radio" name="fk_direction" value="inbound" 
-                               class="radio radio-xs radio-secondary"
-                               {% if current_direction == 'inbound' %}checked{% endif %}>
-                    </label>
-                </div>
-            </div>
+            <!-- Hidden input for direction (always outbound) -->
+            <input type="hidden" name="fk_direction" value="outbound">
             
             <!-- Hidden form for target column update data -->
             <form id="target-column-data-form-{{ column.id }}" style="display: none;">
@@ -38,18 +22,18 @@
             
             <!-- Target Dataset Selection -->
             <div class="form-control">
-                <label class="label label-text text-xs">Target Dataset:</label>
+                <label class="label label-text text-xs">📊 Dataset:</label>
                 <select name="target_dataset" class="select select-xs select-bordered" 
                         hx-post="{% url 'metadata:update_fk_target_columns' %}"
                         hx-include="#target-column-data-form-{{ column.id }}, [name='target_dataset']"
                         hx-target="#target-column-select-{{ column.id }}"
                         hx-swap="innerHTML"
                         hx-trigger="change">
-                    <option value="">Select target dataset...</option>
+                    <option value="">Choose dataset...</option>
                     {% for dataset in datasets %}
                         {% if dataset.name != column.dataset %}
                         <option value="{{ dataset.name }}" {% if dataset.name == target_dataset %}selected{% endif %}>
-                            {{ dataset.name }} ({{ dataset.source }})
+                            {{ dataset.name }}
                         </option>
                         {% endif %}
                     {% endfor %}
@@ -58,9 +42,9 @@
             
             <!-- Target Column Selection -->
             <div class="form-control">
-                <label class="label label-text text-xs">Target Column:</label>
+                <label class="label label-text text-xs">🎯 Column:</label>
                 <select name="target_column" id="target-column-select-{{ column.id }}" class="select select-xs select-bordered">
-                    <option value="">Select target column...</option>
+                    <option value="">Choose column...</option>
                     {% if target_dataset %}
                         {% for dataset in datasets %}
                             {% if dataset.name == target_dataset %}
@@ -89,10 +73,10 @@
                         hx-vals='{"column_id": "{{ column.id }}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
                         hx-target="#selected-columns-workspace"
                         hx-swap="innerHTML">
-                    Remove FK
+                    Remove
                 </button>
                 {% endif %}
-                <button type="submit" class="btn btn-xs btn-secondary">Save FK</button>
+                <button type="submit" class="btn btn-xs btn-secondary">Link</button>
             </div>
         </div>
     </form>
