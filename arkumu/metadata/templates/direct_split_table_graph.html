@@ -61,8 +61,8 @@
             <span class="text-sm font-medium">Datasets:</span>
             <button class="btn btn-xs btn-ghost opacity-60" 
                     id="clear-datasets-btn"
-                    hx-post="{% url 'metadata:clear_workspace' %}"
-                    hx-vals='{"organization": "{{ organization_id }}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
+                    hx-post="{% url 'metadata:clear_all_datasets' %}"
+                    hx-vals='{"datasets": {{ datasets_json|default:"[]"|escapejs }}, "organization": "{{ organization_id }}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
                     hx-target="#dataset-badges"
                     hx-swap="innerHTML"
                     {% if not selected_datasets %}style="display: none;"{% endif %}>
@@ -181,4 +181,4 @@
 {% block inline_javascript %}
 {{ block.super }}
 <!-- Pure HTMX - no JavaScript needed! -->
-{% endblock %} o
+{% endblock %} 
