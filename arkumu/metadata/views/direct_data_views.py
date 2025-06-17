@@ -2203,9 +2203,10 @@ def add_column_to_workspace(request):
         if not column_id:
             return JsonResponse({'error': 'Missing column_id'}, status=400)
         
-        # Session-based workspace storage (single source of truth)
-        workspace_key = f"workspace_columns_{organization_id}"
-        workspace_columns = request.session.get(workspace_key, [])
+        # Use coordinator for proper state management instead of direct session access
+        from arkumu.metadata.views.csv_mapping.mixins.coordinator import CSVMappingCoordinatorMixin
+        coordinator = CSVMappingCoordinatorMixin()
+        workspace_columns = coordinator.get_workspace_columns(request, organization_id)
         
         # Parse column info from ID (format: dataset_source_column) - needed for both cases
         parts = column_id.split('_')
@@ -2276,10 +2277,25 @@ def add_column_to_workspace(request):
             }
             
             workspace_columns.append(new_column)
-            request.session[workspace_key] = workspace_columns
-            request.session.modified = True
+            coordinator.update_workspace_columns(request, organization_id, workspace_columns)
             
             logger.info(f"ADD COLUMN: Added {column_id} to workspace, total columns: {len(workspace_columns)}")
+        
+        # Debug: Log FK configurations in workspace BEFORE rendering
+        logger.info(f"ADD COLUMN DEBUG: Workspace has {len(workspace_columns)} total columns")
+        fk_columns = [col for col in workspace_columns if col.get('is_fk')]
+        logger.info(f"ADD COLUMN DEBUG: Found {len(fk_columns)} FK columns in workspace:")
+        for col in fk_columns:
+            logger.info(f"  - Column {col.get('id')} (dataset: {col.get('dataset')}) has FK config: {col.get('fk_config')}")
+        
+        # Get columns for this specific dataset (should preserve FK configs)
+        dataset_columns_for_this_dataset = [col for col in workspace_columns if col.get('dataset') == dataset_name]
+        logger.info(f"ADD COLUMN DEBUG: Dataset '{dataset_name}' has {len(dataset_columns_for_this_dataset)} columns:")
+        for col in dataset_columns_for_this_dataset:
+            fk_status = "WITH FK" if col.get('is_fk') else "no FK"
+            logger.info(f"  - {col.get('id')} ({fk_status})")
+            if col.get('is_fk'):
+                logger.info(f"    FK config: {col.get('fk_config')}")
         
         # Get datasets from request data (we already parsed this above)
         try:
@@ -2328,22 +2344,26 @@ def add_column_to_workspace(request):
         state = get_organization_state(request, organization_id)
         active_datasets = state.get('active_datasets', [])
         
-        # Calculate selected columns for this specific dataset
-        dataset_selected_columns = [col['name'] for col in workspace_columns if col['dataset'] == dataset_name]
+        # Calculate selected columns for this specific dataset (already calculated above)
+        dataset_selected_columns = [col['name'] for col in dataset_columns_for_this_dataset]
         
-        # Add selected_count to the target dataset (like in get_organization_state)
-        target_dataset_with_count = {
-            **target_dataset, 
-            'selected_count': len(dataset_selected_columns)
-        }
+        # Final debug: Log what we're passing to the template
+        logger.info(f"ADD COLUMN DEBUG: TEMPLATE DATA for dataset '{dataset_name}':")
+        logger.info(f"  - selected_count: {len(dataset_selected_columns)}")
+        logger.info(f"  - columns passed to template: {len(dataset_columns_for_this_dataset)}")
+        for i, col in enumerate(dataset_columns_for_this_dataset):
+            fk_info = f"FK: {col.get('fk_config')}" if col.get('is_fk') else "no FK"
+            logger.info(f"    [{i}] {col.get('id')} ({fk_info})")
         
-        # Render the dataset workspace section
-        dataset_section_html = render_to_string('partials/dataset_workspace_section.html', {
-            'dataset': target_dataset_with_count,
-            'selected_columns': workspace_columns,
-            'datasets': datasets,
+        # Render the dataset workspace section with proper template and data structure
+        dataset_section_html = render_to_string('csv_mapping/partials/dataset_workspace_section.html', {
+            'dataset_group': {
+                'name': dataset_name,
+                'source': target_dataset.get('source'),
+                'selected_count': len(dataset_selected_columns),
+                'columns': dataset_columns_for_this_dataset  # Include FK configs from session
+            },
             'organization_id': organization_id,
-            'datasets_json': datasets_json,
             'csrf_token': csrf_token,
         }, request=request)
         
@@ -4195,68 +4215,58 @@ def toggle_fk_form(request):
     """
     HTMX endpoint to toggle inline FK configuration form for a column.
     Shows the form if hidden, hides it if shown.
+    Uses coordinator mixin to access workspace data from server state.
     """
     logger.info("="*80)
     logger.info("TOGGLE FK FORM: ENDPOINT HIT!")
     logger.info(f"TOGGLE FK FORM: Method={request.method}")
-    logger.info(f"TOGGLE FK FORM: Content-Type={request.content_type}")
-    logger.info(f"TOGGLE FK FORM: Headers={dict(request.headers)}")
-    logger.info(f"TOGGLE FK FORM: GET data: {dict(request.GET)}")
     logger.info(f"TOGGLE FK FORM: POST data: {dict(request.POST)}")
-    logger.info(f"TOGGLE FK FORM: POST keys: {list(request.POST.keys())}")
-    logger.info(f"TOGGLE FK FORM: POST values: {list(request.POST.values())}")
     
     try:
         column_id = request.POST.get('column_id') or request.GET.get('column_id')
         organization_id = request.POST.get('organization_id') or get_organization_id_from_request(request)
-        datasets_json = request.POST.get('datasets', '[]')
         
         logger.info(f"TOGGLE FK FORM: EXTRACTED PARAMETERS:")
-        logger.info(f"  - column_id: '{column_id}' (type: {type(column_id)})")
-        logger.info(f"  - organization_id: '{organization_id}' (type: {type(organization_id)})")
-        logger.info(f"  - datasets_json: '{datasets_json}' (type: {type(datasets_json)}, length: {len(datasets_json)})")
-        logger.info(f"  - datasets_json first 200 chars: '{datasets_json[:200]}...'")
-        logger.info("="*80)
+        logger.info(f"  - column_id: '{column_id}'")
+        logger.info(f"  - organization_id: '{organization_id}'")
         
         if not column_id:
             return HttpResponse('<div class="text-error text-sm">Column ID required</div>')
         
-        # Get current workspace from session (consistent with other views)
-        selected_columns = get_workspace_columns(request, organization_id)
+        # Create coordinator mixin instance to access workspace data
+        from arkumu.metadata.views.csv_mapping.mixins.coordinator import CSVMappingCoordinatorMixin
+        coordinator = CSVMappingCoordinatorMixin()
+        
+        # Get workspace columns from server state
+        workspace_columns = coordinator.get_workspace_columns(request, organization_id)
+        
+        logger.info(f"TOGGLE FK FORM: WORKSPACE LOOKUP:")
+        logger.info(f"  - Requesting column_id: '{column_id}'")
+        logger.info(f"  - Workspace has {len(workspace_columns)} columns:")
+        for i, col in enumerate(workspace_columns):
+            logger.info(f"    [{i}] ID: '{col.get('id')}' | Dataset: '{col.get('dataset')}' | Source: '{col.get('source')}' | Column: '{col.get('name')}'")
         
         # Find the specific column
-        column = next((col for col in selected_columns if col.get('id') == column_id), None)
+        column = next((col for col in workspace_columns if col.get('id') == column_id), None)
         if not column:
             logger.error(f"TOGGLE FK FORM: Column '{column_id}' not found in workspace")
-            logger.error(f"TOGGLE FK FORM: Available columns: {[col.get('id') for col in selected_columns]}")
+            logger.error(f"TOGGLE FK FORM: Available columns: {[col.get('id') for col in workspace_columns]}")
             return HttpResponse('<div class="text-error text-sm">Column not found in workspace</div>')
         
-        # Parse datasets from the template context
-        logger.info(f"TOGGLE FK FORM: PARSING JSON:")
-        logger.info(f"  - Raw datasets_json: '{datasets_json}'")
-        logger.info(f"  - datasets_json type: {type(datasets_json)}")
-        logger.info(f"  - datasets_json length: {len(datasets_json)}")
+        logger.info(f"TOGGLE FK FORM: FOUND COLUMN IN WORKSPACE:")
+        logger.info(f"  - Found column ID: '{column.get('id')}'")
+        logger.info(f"  - Column name: '{column.get('name')}'")
+        logger.info(f"  - Column dataset: '{column.get('dataset')}'")
+        logger.info(f"  - Column source: '{column.get('source')}'")
+        logger.info(f"  - This column object will be passed to template")
         
-        try:
-            import json
-            datasets = json.loads(datasets_json)
-            logger.info(f"TOGGLE FK FORM: JSON PARSING SUCCESS!")
-            logger.info(f"  - Parsed datasets type: {type(datasets)}")
-            logger.info(f"  - Parsed datasets length: {len(datasets)}")
-            logger.info(f"  - First dataset sample: {datasets[0] if datasets else 'No datasets'}")
-            if datasets:
-                for i, dataset in enumerate(datasets[:3]):  # Log first 3 datasets
-                    logger.info(f"  - Dataset {i}: name='{dataset.get('name')}', source='{dataset.get('source')}', preview_cols={len(dataset.get('preview', {}).get('colHeaders', []))}")
-        except json.JSONDecodeError as e:
-            logger.error(f"TOGGLE FK FORM: JSON PARSING FAILED!")
-            logger.error(f"  - JSONDecodeError: {str(e)}")
-            logger.error(f"  - Raw datasets_json: '{datasets_json}'")
-            datasets = []
-        except Exception as e:
-            logger.error(f"TOGGLE FK FORM: UNEXPECTED PARSING ERROR!")
-            logger.error(f"  - Exception type: {type(e)}")
-            logger.error(f"  - Exception message: {str(e)}")
-            datasets = []
+        # Get ALL available datasets with their columns for FK configuration (cached)
+        all_datasets_with_columns = coordinator.get_all_datasets_with_columns_for_fk(request, organization_id)
+        
+        logger.info(f"TOGGLE FK FORM: ALL DATASETS FOR FK CONFIG:")
+        logger.info(f"  - Total workspace columns: {len(workspace_columns)}")
+        logger.info(f"  - All available datasets: {len(all_datasets_with_columns)}")
+        logger.info(f"  - Available dataset names: {[d.get('name') for d in all_datasets_with_columns]}")
         
         # Get current FK configuration if exists
         fk_config = column.get('fk_config', {})
@@ -4264,18 +4274,17 @@ def toggle_fk_form(request):
         target_dataset = fk_config.get('target_dataset', '')
         target_column = fk_config.get('target_column', '')
         
-        logger.info(f"TOGGLE FK FORM: FINAL CONTEXT PREPARATION:")
+        logger.info(f"TOGGLE FK FORM: COLUMN FK CONFIG:")
         logger.info(f"  - Column name: '{column.get('name')}'")
+        logger.info(f"  - Dataset: '{column.get('dataset')}'")
         logger.info(f"  - Current direction: '{current_direction}'")
         logger.info(f"  - Target dataset: '{target_dataset}'")
         logger.info(f"  - Target column: '{target_column}'")
-        logger.info(f"  - Datasets count in context: {len(datasets)}")
-        logger.info(f"  - Organization ID: '{organization_id}'")
         
         context = {
             'column': column,
-            'datasets': datasets,
-            'datasets_json': json.dumps(datasets, cls=DjangoJSONEncoder) if datasets else '[]',
+            'datasets': all_datasets_with_columns,  # ALL available datasets for FK
+            'datasets_json': json.dumps(all_datasets_with_columns, cls=DjangoJSONEncoder),
             'current_direction': current_direction,
             'target_dataset': target_dataset,
             'target_column': target_column,
@@ -4283,10 +4292,10 @@ def toggle_fk_form(request):
             'csrf_token': request.META.get('CSRF_COOKIE')
         }
         
-        logger.info(f"TOGGLE FK FORM: RENDERING TEMPLATE with context keys: {list(context.keys())}")
-        logger.info(f"TOGGLE FK FORM: Context datasets sample: {[d.get('name') for d in datasets[:3]] if datasets else 'No datasets'}")
+        logger.info(f"TOGGLE FK FORM: RENDERING TEMPLATE")
+        logger.info(f"  - Available datasets for FK: {[d.get('name') for d in all_datasets_with_columns]}")
         
-        return render(request, 'partials/inline_fk_form.html', context)
+        return render(request, 'csv_mapping/partials/inline_fk_form.html', context)
         
     except Exception as e:
         logger.error(f"TOGGLE FK FORM: Error toggling form: {e}", exc_info=True)
@@ -4312,66 +4321,53 @@ def hide_fk_form(request):
 def update_fk_target_columns(request):
     """
     HTMX endpoint to update target columns when target dataset selection changes.
+    Uses coordinator mixin to access workspace data from server state.
     """
     logger.info("="*80)
     logger.info("UPDATE FK TARGET COLUMNS: ENDPOINT HIT!")
-    logger.info(f"UPDATE FK TARGET COLUMNS: Method={request.method}")
-    logger.info(f"UPDATE FK TARGET COLUMNS: Content-Type={request.content_type}")
-    logger.info(f"UPDATE FK TARGET COLUMNS: GET data: {dict(request.GET)}")
     logger.info(f"UPDATE FK TARGET COLUMNS: POST data: {dict(request.POST)}")
-    logger.info(f"UPDATE FK TARGET COLUMNS: POST keys: {list(request.POST.keys())}")
     
     try:
         column_id = request.POST.get('column_id') or request.GET.get('column_id')
         target_dataset = request.POST.get('target_dataset') or request.GET.get('target_dataset')
         organization_id = request.POST.get('organization_id') or get_organization_id_from_request(request)
-        datasets_json = request.POST.get('datasets', '[]')
         
         logger.info(f"UPDATE FK TARGET COLUMNS: EXTRACTED PARAMETERS:")
         logger.info(f"  - column_id: '{column_id}'")
         logger.info(f"  - target_dataset: '{target_dataset}'")
         logger.info(f"  - organization_id: '{organization_id}'")
-        logger.info(f"  - datasets_json length: {len(datasets_json)}")
-        logger.info(f"  - datasets_json first 100 chars: '{datasets_json[:100]}...'")
-        logger.info("="*80)
         
         if not column_id or not target_dataset:
             return HttpResponse('<option value="">Select target column...</option>')
         
-        # Parse datasets from the template context
-        try:
-            import json
-            datasets = json.loads(datasets_json)
-            logger.info(f"UPDATE FK TARGET COLUMNS: Received {len(datasets)} datasets from template")
-        except json.JSONDecodeError:
-            logger.error(f"UPDATE FK TARGET COLUMNS: Failed to parse datasets JSON: {datasets_json}")
-            return HttpResponse('<option value="">Error parsing datasets</option>')
+        # Create coordinator mixin instance to access workspace data
+        from arkumu.metadata.views.csv_mapping.mixins.coordinator import CSVMappingCoordinatorMixin
+        coordinator = CSVMappingCoordinatorMixin()
+        
+        # Get ALL available datasets with their columns for FK configuration (cached)
+        all_datasets_with_columns = coordinator.get_all_datasets_with_columns_for_fk(request, organization_id)
         
         # Find the target dataset and get its columns
         logger.info(f"UPDATE FK TARGET COLUMNS: SEARCHING FOR DATASET:")
         logger.info(f"  - Looking for dataset with name: '{target_dataset}'")
-        logger.info(f"  - Available datasets: {[d.get('name') for d in datasets]}")
+        logger.info(f"  - Available datasets: {[d.get('name') for d in all_datasets_with_columns]}")
         
-        target_dataset_obj = next((d for d in datasets if d.get('name') == target_dataset), None)
+        target_dataset_obj = next((d for d in all_datasets_with_columns if d.get('name') == target_dataset), None)
         
         if not target_dataset_obj:
             logger.error(f"UPDATE FK TARGET COLUMNS: DATASET NOT FOUND!")
             logger.error(f"  - Target dataset: '{target_dataset}'")
-            logger.error(f"  - Available datasets: {[d.get('name') for d in datasets]}")
+            logger.error(f"  - Available datasets: {[d.get('name') for d in all_datasets_with_columns]}")
             return HttpResponse('<option value="">Dataset not found</option>')
         
         logger.info(f"UPDATE FK TARGET COLUMNS: DATASET FOUND!")
-        logger.info(f"  - Dataset object keys: {list(target_dataset_obj.keys())}")
         logger.info(f"  - Dataset name: '{target_dataset_obj.get('name')}'")
         logger.info(f"  - Dataset has preview: {'preview' in target_dataset_obj}")
         
         # Get columns from the dataset preview
         preview = target_dataset_obj.get('preview', {})
-        logger.info(f"UPDATE FK TARGET COLUMNS: PREVIEW ANALYSIS:")
-        logger.info(f"  - Preview keys: {list(preview.keys())}")
-        logger.info(f"  - Has colHeaders: {'colHeaders' in preview}")
-        
         columns = preview.get('colHeaders', [])
+        
         logger.info(f"UPDATE FK TARGET COLUMNS: COLUMNS EXTRACTION:")
         logger.info(f"  - Found {len(columns)} columns for {target_dataset}")
         logger.info(f"  - Columns: {columns}")
@@ -4381,8 +4377,7 @@ def update_fk_target_columns(request):
         for column_name in columns:
             options_html += f'<option value="{column_name}">{column_name}</option>\n'
             
-        logger.info(f"UPDATE FK TARGET COLUMNS: GENERATED OPTIONS HTML (length: {len(options_html)})")
-        logger.info(f"UPDATE FK TARGET COLUMNS: First 200 chars of options: '{options_html[:200]}...')")
+        logger.info(f"UPDATE FK TARGET COLUMNS: GENERATED {len(columns)} OPTIONS")
         
         return HttpResponse(options_html)
         
@@ -4391,12 +4386,41 @@ def update_fk_target_columns(request):
         return HttpResponse('<option value="">Error loading columns</option>')
 
 
+def refresh_fk_datasets_cache(request):
+    """
+    HTMX endpoint to refresh the cached FK datasets data.
+    Useful when new datasets might have been added during the session.
+    """
+    try:
+        organization_id = get_organization_id_from_request(request)
+        
+        # Create coordinator mixin instance
+        from arkumu.metadata.views.csv_mapping.mixins.coordinator import CSVMappingCoordinatorMixin
+        coordinator = CSVMappingCoordinatorMixin()
+        
+        # Refresh the cache
+        refreshed_datasets = coordinator.refresh_fk_datasets_cache(request, organization_id)
+        
+        logger.info(f"REFRESH FK CACHE: Refreshed {len(refreshed_datasets)} datasets for org='{organization_id}'")
+        
+        return HttpResponse(f'<div class="text-success text-sm">Refreshed {len(refreshed_datasets)} datasets for FK configuration</div>')
+        
+    except Exception as e:
+        logger.error(f"REFRESH FK CACHE: Error refreshing cache: {e}", exc_info=True)
+        return HttpResponse('<div class="text-error text-sm">Error refreshing datasets cache</div>')
+
+
 def save_inline_fk_config(request):
     """
     HTMX endpoint to save FK configuration from the inline form.
     Similar to save_fk_config but designed for the inline form.
     """
+    logger.info(f"🔥🔥🔥 SAVE INLINE FK CONFIG CALLED! Method: {request.method}")
+    logger.info(f"🔥🔥🔥 POST data: {dict(request.POST)}")
+    logger.info(f"🔥🔥🔥 Path: {request.path}")
+    
     if request.method != 'POST':
+        logger.error(f"🔥🔥🔥 SAVE INLINE FK CONFIG: Wrong method {request.method}")
         return JsonResponse({'error': 'Only POST method allowed'}, status=400)
     
     try:
@@ -4407,6 +4431,12 @@ def save_inline_fk_config(request):
         target_column = request.POST.get('target_column')
         organization_id = get_organization_id_from_request(request)
         
+        logger.info(f"SAVE INLINE FK CONFIG: RECEIVED FROM TEMPLATE FORM:")
+        logger.info(f"  - column_id from form: '{column_id}' (type: {type(column_id)})")
+        logger.info(f"  - direction: '{fk_direction}'")
+        logger.info(f"  - target: '{target_dataset}.{target_column}'")
+        logger.info(f"  - org: '{organization_id}'")
+        
         logger.info(f"SAVE INLINE FK CONFIG: column={column_id}, direction={fk_direction}, target={target_dataset}.{target_column}, org={organization_id}")
         
         if not all([column_id, fk_direction, target_dataset, target_column]):
@@ -4415,8 +4445,12 @@ def save_inline_fk_config(request):
             logger.error(f"SAVE INLINE FK CONFIG: VALIDATION FAILED - {error_msg}")
             return HttpResponse(f'<div class="text-error text-xs p-2">{error_msg}</div>')
         
-        # Get current workspace from session (consistent with other views)
-        existing_columns = get_workspace_columns(request, organization_id)
+        # Create coordinator mixin instance first
+        from arkumu.metadata.views.csv_mapping.mixins.coordinator import CSVMappingCoordinatorMixin
+        coordinator = CSVMappingCoordinatorMixin()
+        
+        # Get current workspace using coordinator methods for consistency
+        existing_columns = coordinator.get_workspace_columns(request, organization_id)
         
         # Debug: Log all column IDs in workspace
         logger.info(f"SAVE INLINE FK CONFIG: DEBUGGING WORKSPACE CONTENTS:")
@@ -4425,52 +4459,112 @@ def save_inline_fk_config(request):
         for i, col in enumerate(existing_columns):
             logger.info(f"    [{i}] ID: '{col.get('id')}' | Dataset: '{col.get('dataset')}' | Source: '{col.get('source')}' | Column: '{col.get('name')}'")
         
-        # Update the column with FK configuration
-        column_found = False
+        # Get ALL available datasets to find the source column
+        all_datasets_with_columns = coordinator.get_all_datasets_with_columns_for_fk(request, organization_id)
+        
+        # If no datasets found, refresh the cache
+        if not all_datasets_with_columns:
+            logger.info(f"SAVE INLINE FK CONFIG: No datasets found in cache, refreshing...")
+            coordinator.refresh_fk_datasets_cache(request, organization_id)
+            all_datasets_with_columns = coordinator.get_all_datasets_with_columns_for_fk(request, organization_id)
+        
+        logger.info(f"SAVE INLINE FK CONFIG: LOOKING FOR SOURCE COLUMN IN ALL DATASETS:")
+        logger.info(f"  - Available datasets: {len(all_datasets_with_columns)}")
+        
+        # Parse the column_id to get source, dataset, and column components
+        parsed = coordinator.parse_column_id(column_id)
+        source_name = parsed.get('source')
+        dataset_name = parsed.get('dataset') 
+        column_name = parsed.get('column')
+        
+        logger.info(f"SAVE INLINE FK CONFIG: PARSED SOURCE COLUMN:")
+        logger.info(f"  - Source: '{source_name}'")
+        logger.info(f"  - Dataset: '{dataset_name}'")
+        logger.info(f"  - Column: '{column_name}'")
+        
+        # Note: We skip validation of source column existence because if the FK form opened successfully,
+        # the column obviously exists. This validation was causing failures due to caching issues.
+        
+        # Check if the source column is in the workspace (for updating FK config)
+        workspace_column = None
         for col in existing_columns:
-            if col.get('id') == column_id:
-                col['is_fk'] = True
-                col['fk_config'] = {
+            if (col.get('source') == source_name and 
+                col.get('dataset') == dataset_name and 
+                col.get('name') == column_name):
+                workspace_column = col
+                logger.info(f"SAVE INLINE FK CONFIG: ✅ Source column IS in workspace: {col.get('id')}")
+                break
+        
+        if not workspace_column:
+            # Source column exists but is not in workspace - we need to add it first
+            logger.info(f"SAVE INLINE FK CONFIG: Source column exists but not in workspace, adding it first")
+            
+            # Generate the proper workspace column ID format using coordinator format
+            workspace_column_id = coordinator.generate_column_id(dataset_name, column_name, source_name)
+            
+            # Add column to workspace
+            new_workspace_column = {
+                'id': workspace_column_id,
+                'name': column_name,
+                'dataset': dataset_name,
+                'source': source_name,
+                'is_anchor': False,
+                'is_fk': True,  # Set FK immediately
+                'is_multi_value': False,
+                'fk_config': {
                     'direction': fk_direction,
                     'target_dataset': target_dataset,
                     'target_column': target_column,
                 }
-                column_found = True
-                logger.info(f"SAVE INLINE FK CONFIG: ✅ FOUND and updated column {column_id} with FK config: {col['fk_config']}")
-                break
+            }
+            
+            existing_columns.append(new_workspace_column)
+            logger.info(f"SAVE INLINE FK CONFIG: ✅ Added source column to workspace with FK config")
+        else:
+            # Source column is already in workspace, just update FK config
+            workspace_column['is_fk'] = True
+            workspace_column['fk_config'] = {
+                'direction': fk_direction,
+                'target_dataset': target_dataset,
+                'target_column': target_column,
+            }
+            logger.info(f"SAVE INLINE FK CONFIG: ✅ Updated existing workspace column with FK config")
         
-        if not column_found:
-            logger.error(f"SAVE INLINE FK CONFIG: ❌ Column not found: '{column_id}'")
-            logger.error(f"SAVE INLINE FK CONFIG: Available column IDs: {[col.get('id') for col in existing_columns]}")
-            return HttpResponse('<div class="text-error text-xs p-2">Column not found in workspace</div>')
-        
-        # Save back to session (consistent with other views)
-        update_workspace_columns(request, organization_id, existing_columns)
+        # Save back to session using coordinator methods for consistency
+        coordinator.update_workspace_columns(request, organization_id, existing_columns)
         
         logger.info(f"SAVE INLINE FK CONFIG: Successfully updated FK configuration")
         
-        # Get datasets from request data (passed via HTMX)
-        datasets_json = request.POST.get('datasets', '[]')
-        try:
-            datasets = json.loads(datasets_json)
-        except json.JSONDecodeError:
-            datasets = []
+        # Find the updated column for rendering
+        updated_column = None
+        if workspace_column:
+            # Updated existing column
+            updated_column = workspace_column
+        else:
+            # Find the newly added column
+            for col in existing_columns:
+                if (col.get('source') == source_name and 
+                    col.get('dataset') == dataset_name and 
+                    col.get('name') == column_name):
+                    updated_column = col
+                    break
+
+        if not updated_column:
+            logger.error(f"SAVE INLINE FK CONFIG: Could not find updated column for rendering")
+            return HttpResponse('<div class="text-error text-xs p-2">Could not find updated column</div>')
 
         # Generate CSRF token for the template
         from django.middleware.csrf import get_token
         csrf_token = get_token(request)
 
-        # Refresh the entire workspace to show updated FK status
-        workspace_html = render_to_string('partials/selected_columns_workspace.html', {
-            'selected_columns': existing_columns,
-            'anchor_column': next((col for col in existing_columns if col.get('is_anchor')), None),
+        # Return just the updated column item (inline form behavior)
+        column_html = render_to_string('csv_mapping/partials/column_item.html', {
+            'column': updated_column,
             'organization_id': organization_id,
-            'datasets': datasets,
-            'datasets_json': datasets_json,
             'csrf_token': csrf_token,
         }, request=request)
         
-        return HttpResponse(workspace_html)
+        return HttpResponse(column_html)
         
     except Exception as e:
         logger.error(f"SAVE INLINE FK CONFIG: Error saving configuration: {e}", exc_info=True)

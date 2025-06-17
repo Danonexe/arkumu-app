@@ -8,52 +8,65 @@
             
             <!-- Column Info Section -->
             <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-2 mb-2">
+                <div class="flex flex-wrap items-center gap-1 mb-2">
                     <!-- Status Badges -->
                     {% if column.is_anchor %}
                     <div class="badge badge-warning badge-sm gap-1" title="Anchor Column: Primary column for building relationships">
-                        ⚓
-                        Anchor
+                        ⚓ Anchor
                     </div>
                     {% endif %}
                     {% if column.is_fk %}
                     <div class="badge badge-secondary badge-sm gap-1" 
                          title="Foreign Key: Links to {{ column.fk_config.target_dataset|default:'target dataset' }}.{{ column.fk_config.target_column|default:'target column' }}">
-                        🔗
-                        FK
+                        🔗 FK
                     </div>
                     {% endif %}
                     {% if column.is_multi_value %}
                     <div class="badge badge-accent badge-sm gap-1" title="Multi-value: Contains multiple values that will be split during processing">
-                        🔀
-                        Multi
+                        🔀 Multi
                     </div>
+                    {% endif %}
+                    {% if column.type %}
+                    <div class="badge badge-outline badge-xs">{{ column.type }}</div>
                     {% endif %}
                 </div>
                 
                 <!-- Column Name and Dataset -->
-                <div class="mb-1">
-                    <h4 class="font-semibold text-sm truncate">
-                        <span class="text-success">{{ column.dataset }}</span>
-                        <span class="text-base-content/40 mx-1">•</span>
-                        <span class="text-primary">{{ column.name }}</span>
+                <div class="mb-2">
+                    <h4 class="font-semibold text-sm mb-1">
+                        <span class="text-primary text-base">{{ column.name }}</span>
                     </h4>
+                    <div class="text-xs text-base-content/60">
+                        📊 <span class="font-medium">{{ column.dataset }}</span>
+                        {% if column.source and column.source != column.dataset %}
+                        <span class="text-base-content/40 mx-1">•</span>
+                        <span class="text-base-content/50">{{ column.source }}</span>
+                        {% endif %}
+                    </div>
                 </div>
                 
-                <!-- Column Metadata -->
-                {% if column.type or column.sample_values %}
-                <div class="flex items-center gap-2 text-xs">
-                    {% if column.type %}
-                    <div class="badge badge-outline badge-xs">{{ column.type }}</div>
-                    {% endif %}
-                    {% if column.sample_values %}
-                    <div class="flex items-center gap-1 text-base-content/60">
-                        💾
-                        <span class="truncate max-w-[120px]" title="Sample values: {{ column.sample_values|join:', ' }}">
-                            {{ column.sample_values.0|default:'' }}{% if column.sample_values|length > 1 %}...{% endif %}
-                        </span>
+                <!-- FK Relationship Info -->
+                {% if column.is_fk and column.fk_config %}
+                <div class="mb-2 p-2 bg-secondary/10 rounded border-l-2 border-secondary">
+                    <div class="text-xs font-medium text-secondary mb-1">🔗 Foreign Key Link:</div>
+                    <div class="text-xs text-base-content/80">
+                        <span class="font-mono bg-base-200 px-1 rounded">{{ column.name }}</span>
+                        <span class="mx-1">→</span>
+                        <span class="font-mono bg-base-200 px-1 rounded">{{ column.fk_config.target_dataset }}.{{ column.fk_config.target_column }}</span>
                     </div>
-                    {% endif %}
+                    <div class="text-xs text-base-content/50 mt-1">
+                        Direction: {{ column.fk_config.direction|default:'outbound'|capfirst }}
+                    </div>
+                </div>
+                {% endif %}
+                
+                <!-- Sample Values -->
+                {% if column.sample_values %}
+                <div class="flex items-center gap-1 text-xs text-base-content/60">
+                    💾
+                    <span class="truncate max-w-[150px]" title="Sample values: {{ column.sample_values|join:', ' }}">
+                        {{ column.sample_values.0|default:'' }}{% if column.sample_values|length > 1 %}, {{ column.sample_values.1|default:'' }}{% if column.sample_values|length > 2 %}...{% endif %}{% endif %}
+                    </span>
                 </div>
                 {% endif %}
             </div>
@@ -61,32 +74,21 @@
             <!-- Action Buttons -->
             <div class="flex items-center gap-1 flex-shrink-0">
             
-            <!-- Hidden form for FK configuration data -->
-            <form id="fk-data-form-{{ column.id|slugify }}" style="display: none;">
-                <input type="hidden" name="column_id" value="{{ column.id }}">
-                <input type="hidden" name="organization_id" value="{{ organization_id }}">
-                <textarea name="datasets">{{ datasets_json|default:"[]" }}</textarea>
-                <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
-            </form>
-            
                 <!-- Hidden Forms -->
                 <form id="fk-data-form-{{ column.id|slugify }}" style="display: none;">
                     <input type="hidden" name="column_id" value="{{ column.id }}">
-                    <input type="hidden" name="organization_id" value="{{ organization_id }}">
-                    <textarea name="datasets">{{ datasets_json|default:"[]" }}</textarea>
+                    <input type="hidden" name="organization" value="{{ organization_id }}">
                     <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
                 </form>
                 
                 <form id="multi-value-data-form-{{ column.id|slugify }}" style="display: none;">
                     <input type="hidden" name="column_id" value="{{ column.id }}">
-                    <textarea name="datasets">{{ datasets_json|default:"[]" }}</textarea>
                     <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
                 </form>
                 
                 {% if not column.is_anchor %}
                 <form id="anchor-data-form-{{ column.id|slugify }}" style="display: none;">
                     <input type="hidden" name="column_id" value="{{ column.id }}">
-                    <textarea name="datasets">{{ datasets_json|default:"[]" }}</textarea>
                     <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
                 </form>
                 {% endif %}
@@ -104,10 +106,14 @@
                     <!-- FK Configuration -->
                     <div class="tooltip tooltip-left" data-tip="{% if column.is_fk %}Edit Foreign Key{% else %}Create Foreign Key{% endif %}">
                         <button class="btn btn-sm {% if column.is_fk %}btn-secondary{% else %}btn-outline btn-secondary{% endif %}" 
-                                hx-post="{% url 'metadata:toggle_fk_form' %}"
+                                hx-post="{% url 'metadata:csv_toggle_fk_form' %}"
                                 hx-include="#fk-data-form-{{ column.id|slugify }}"
                                 hx-target="#fk-form-{{ column.id|slugify }}"
-                                hx-swap="outerHTML">
+                                hx-swap="outerHTML"
+                                hx-on::before-request="console.log('🔥 HTMX: Before request to {{ column.id|slugify }}')"
+                                hx-on::after-request="console.log('🔥 HTMX: After request to {{ column.id|slugify }}')"
+                                hx-on::response-error="console.log('🔥 HTMX: Response error for {{ column.id|slugify }}', event.detail)"
+                                onclick="console.log('🔥 FK Button clicked for column: {{ column.id|slugify }}'); console.log('🔥 Target URL:', '{% url 'metadata:csv_toggle_fk_form' %}');">
                             🔗
                         </button>
                     </div>

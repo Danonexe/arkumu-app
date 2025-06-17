@@ -24,7 +24,7 @@ from django.http import JsonResponse, HttpResponse
 from django.views import View
 from django.core.serializers.json import DjangoJSONEncoder
 from django.template.loader import render_to_string
-from arkumu.metadata.services.data_analysis.s3_direct_data_analyzer import S3DirectDataAnalyzer
+from arkumu.metadata.services.data_analysis.s3_direct_data_analyzer import S3DirectDataAnalyzer, S3DataSourceInfo
 
 from .mixins import OrganizationMixin, CSVDataMixin, MappingWorkspaceMixin, ImportStrategyMixin, CSVMappingCoordinatorMixin
 
@@ -160,7 +160,6 @@ class CSVDatasetCardView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
                 return HttpResponse('<div class="text-danger">Dataset and source parameters required</div>')
             
             # Use S3DirectDataAnalyzer to get the full dataset preview
-            from arkumu.metadata.services.data_analysis.s3_direct_data_analyzer import S3DirectDataAnalyzer
             analyzer = S3DirectDataAnalyzer()
             
             # Get the source summary which contains dataset previews
@@ -420,8 +419,19 @@ class AddColumnToWorkspaceView(OrganizationMixin, CSVMappingCoordinatorMixin, Vi
             # Return updated column badges HTML with workspace update via hx-swap-oob
             from django.template.loader import render_to_string
             
-            # Prepare workspace update data
+            # Prepare workspace update data with preserved FK configurations
             workspace_columns = self.get_workspace_columns(request, organization_id)
+            
+            # Debug: Log FK configurations before preparing datasets
+            fk_columns_after = [col for col in workspace_columns if col.get('is_fk', False)]
+            logger.info(f"🔥🔥🔥 ADD_COLUMN: AFTER adding column '{column_name}' from '{dataset_name}':")
+            logger.info(f"  - Updated workspace: {len(workspace_columns)} columns")
+            logger.info(f"  - FK columns after: {len(fk_columns_after)}")
+            
+            for col in workspace_columns:
+                if col.get('is_fk', False):
+                    logger.info(f"    - FK Column '{col.get('id')}': FK_config={col.get('fk_config', {})}")
+            
             datasets_with_columns = self._prepare_datasets_with_columns(workspace_columns)
             
             workspace_context = {
@@ -433,7 +443,7 @@ class AddColumnToWorkspaceView(OrganizationMixin, CSVMappingCoordinatorMixin, Vi
             # Render column badges
             column_badges_html = render_to_string('csv_mapping/partials/column_badges.html', context, request=request)
             
-            # Render workspace update
+            # Render workspace update (back to original working approach)
             workspace_html = render_to_string('csv_mapping/partials/selected_columns_workspace.html', workspace_context, request=request)
             
             # Combine both updates using hx-swap-oob
@@ -529,7 +539,23 @@ class RemoveColumnFromWorkspaceView(OrganizationMixin, CSVMappingCoordinatorMixi
             
             # Prepare workspace update data
             workspace_columns = self.get_workspace_columns(request, organization_id)
+            
+            # DEBUG: Log FK configurations before preparing datasets
+            logger.info(f"🔥 ADD_COLUMN DEBUG: Workspace has {len(workspace_columns)} columns before rendering:")
+            fk_columns = [col for col in workspace_columns if col.get('is_fk')]
+            logger.info(f"🔥 ADD_COLUMN DEBUG: Found {len(fk_columns)} FK columns:")
+            for col in fk_columns:
+                logger.info(f"  - {col.get('id')} has FK config: {col.get('fk_config')}")
+            
             datasets_with_columns = self._prepare_datasets_with_columns(workspace_columns)
+            
+            # DEBUG: Log FK configurations after preparing datasets
+            logger.info(f"🔥 ADD_COLUMN DEBUG: After preparing datasets, found {len(datasets_with_columns)} dataset groups:")
+            for dataset_group in datasets_with_columns:
+                fk_columns_in_group = [col for col in dataset_group['columns'] if col.get('is_fk')]
+                logger.info(f"  - Dataset '{dataset_group['name']}' has {len(fk_columns_in_group)} FK columns:")
+                for col in fk_columns_in_group:
+                    logger.info(f"    - {col.get('id')} has FK config: {col.get('fk_config')}")
             
             workspace_context = {
                 'datasets_with_columns': datasets_with_columns,
@@ -537,67 +563,8 @@ class RemoveColumnFromWorkspaceView(OrganizationMixin, CSVMappingCoordinatorMixi
                 'csrf_token': request.META.get('CSRF_COOKIE'),
             }
             
-            # For individual column removal: return empty (removes the column) + update badges and header via OOB
-            from django.template.loader import render_to_string
-            
-            # Get updated workspace data for header count
-            workspace_columns = self.get_workspace_columns(request, organization_id)
-            datasets_with_columns = self._prepare_datasets_with_columns(workspace_columns)
-            
-            # Find the updated dataset group for header
-            dataset_group = None
-            for group in datasets_with_columns:
-                if group['name'] == dataset_name and group['source'] == source_name:
-                    dataset_group = group
-                    break
-            
-            # Render updated column badges
+            # Render column badges
             column_badges_html = render_to_string('csv_mapping/partials/column_badges.html', context, request=request)
-            
-            # DEBUG: Check what we're rendering
-            logger.info(f"🔥 REMOVE_COLUMN DEBUG: dataset_selected_columns={dataset_selected_columns}")
-            logger.info(f"🔥 REMOVE_COLUMN DEBUG: colHeaders={dataset_preview.get('columns', [])}")
-            logger.info(f"🔥 REMOVE_COLUMN DEBUG: column_badges_html length={len(column_badges_html)}")
-            logger.info(f"🔥 REMOVE_COLUMN DEBUG: column_badges_html={column_badges_html[:200]}...")
-            
-            # Render updated dataset header
-            if dataset_group:
-                dataset_header_html = f'''
-                    <div class="flex items-center gap-2 flex-1">
-                        <!-- Dataset Info -->
-                        <div class="flex items-center gap-2">
-                            <span class="text-sm font-medium text-success">{dataset_group['name']}</span>
-                            <span class="badge badge-success badge-sm font-medium">
-                                {dataset_group['selected_count']} column{'s' if dataset_group['selected_count'] != 1 else ''} selected
-                            </span>
-                            <span class="text-xs text-base-content opacity-50">from {dataset_group['source']}</span>
-                        </div>
-                    </div>
-                '''
-            else:
-                # No columns left in dataset
-                dataset_header_html = f'''
-                    <div class="flex items-center gap-2 flex-1">
-                        <div class="flex items-center gap-2">
-                            <span class="text-sm font-medium text-success">{dataset_name}</span>
-                            <span class="badge badge-success badge-sm font-medium">0 columns selected</span>
-                            <span class="text-xs text-base-content opacity-50">from {source_name}</span>
-                        </div>
-                    </div>
-                '''
-            
-            # Return updated column badges as main response + workspace update via OOB
-            from django.template.loader import render_to_string
-            
-            # Prepare workspace update data
-            workspace_columns = self.get_workspace_columns(request, organization_id)
-            datasets_with_columns = self._prepare_datasets_with_columns(workspace_columns)
-            
-            workspace_context = {
-                'datasets_with_columns': datasets_with_columns,
-                'organization_id': organization_id,
-                'csrf_token': request.META.get('CSRF_COOKIE'),
-            }
             
             # Render workspace update
             workspace_html = render_to_string('csv_mapping/partials/selected_columns_workspace.html', workspace_context, request=request)
@@ -693,7 +660,23 @@ class SelectAllDatasetColumnsView(OrganizationMixin, CSVMappingCoordinatorMixin,
             
             # Prepare workspace update data
             workspace_columns = self.get_workspace_columns(request, organization_id)
+            
+            # DEBUG: Log FK configurations before preparing datasets
+            logger.info(f"🔥 ADD_COLUMN DEBUG: Workspace has {len(workspace_columns)} columns before rendering:")
+            fk_columns = [col for col in workspace_columns if col.get('is_fk')]
+            logger.info(f"🔥 ADD_COLUMN DEBUG: Found {len(fk_columns)} FK columns:")
+            for col in fk_columns:
+                logger.info(f"  - {col.get('id')} has FK config: {col.get('fk_config')}")
+            
             datasets_with_columns = self._prepare_datasets_with_columns(workspace_columns)
+            
+            # DEBUG: Log FK configurations after preparing datasets
+            logger.info(f"🔥 ADD_COLUMN DEBUG: After preparing datasets, found {len(datasets_with_columns)} dataset groups:")
+            for dataset_group in datasets_with_columns:
+                fk_columns_in_group = [col for col in dataset_group['columns'] if col.get('is_fk')]
+                logger.info(f"  - Dataset '{dataset_group['name']}' has {len(fk_columns_in_group)} FK columns:")
+                for col in fk_columns_in_group:
+                    logger.info(f"    - {col.get('id')} has FK config: {col.get('fk_config')}")
             
             workspace_context = {
                 'datasets_with_columns': datasets_with_columns,
@@ -704,11 +687,32 @@ class SelectAllDatasetColumnsView(OrganizationMixin, CSVMappingCoordinatorMixin,
             # Render column badges
             column_badges_html = render_to_string('csv_mapping/partials/column_badges.html', context, request=request)
             
-            # Render workspace update
-            workspace_html = render_to_string('csv_mapping/partials/selected_columns_workspace.html', workspace_context, request=request)
+            # Only update the specific dataset workspace section instead of the entire workspace
+            # This preserves open FK forms in other dataset sections
+            specific_dataset_group = None
+            for group in datasets_with_columns:
+                if group['name'] == dataset_name and group['source'] == source_name:
+                    specific_dataset_group = group
+                    break
             
-            # Combine both updates using hx-swap-oob
-            combined_response = f'{column_badges_html}<div id="selected-columns-workspace" hx-swap-oob="innerHTML">{workspace_html}</div>'
+            if specific_dataset_group:
+                # Render only the specific dataset section
+                dataset_section_context = {
+                    'dataset_group': specific_dataset_group,
+                    'organization_id': organization_id,
+                    'csrf_token': request.META.get('CSRF_COOKIE'),
+                }
+                dataset_section_html = render_to_string('csv_mapping/partials/dataset_workspace_section.html', dataset_section_context, request=request)
+                
+                # Update both the column badges and the specific dataset section via hx-swap-oob
+                from django.utils.text import slugify
+                dataset_section_update = f'<div id="dataset-workspace-{slugify(dataset_name)}" hx-swap-oob="outerHTML">{dataset_section_html}</div>'
+                combined_response = f'{column_badges_html}{dataset_section_update}'
+            else:
+                # Fallback: update entire workspace if dataset group not found
+                workspace_html = render_to_string('csv_mapping/partials/selected_columns_workspace.html', workspace_context, request=request)
+                combined_response = f'{column_badges_html}<div id="selected-columns-workspace" hx-swap-oob="innerHTML">{workspace_html}</div>'
+            
             return HttpResponse(combined_response)
             
         except Exception as e:
@@ -797,7 +801,23 @@ class DeselectAllDatasetColumnsView(OrganizationMixin, CSVMappingCoordinatorMixi
             
             # Prepare workspace update data
             workspace_columns = self.get_workspace_columns(request, organization_id)
+            
+            # DEBUG: Log FK configurations before preparing datasets
+            logger.info(f"🔥 ADD_COLUMN DEBUG: Workspace has {len(workspace_columns)} columns before rendering:")
+            fk_columns = [col for col in workspace_columns if col.get('is_fk')]
+            logger.info(f"🔥 ADD_COLUMN DEBUG: Found {len(fk_columns)} FK columns:")
+            for col in fk_columns:
+                logger.info(f"  - {col.get('id')} has FK config: {col.get('fk_config')}")
+            
             datasets_with_columns = self._prepare_datasets_with_columns(workspace_columns)
+            
+            # DEBUG: Log FK configurations after preparing datasets
+            logger.info(f"🔥 ADD_COLUMN DEBUG: After preparing datasets, found {len(datasets_with_columns)} dataset groups:")
+            for dataset_group in datasets_with_columns:
+                fk_columns_in_group = [col for col in dataset_group['columns'] if col.get('is_fk')]
+                logger.info(f"  - Dataset '{dataset_group['name']}' has {len(fk_columns_in_group)} FK columns:")
+                for col in fk_columns_in_group:
+                    logger.info(f"    - {col.get('id')} has FK config: {col.get('fk_config')}")
             
             workspace_context = {
                 'datasets_with_columns': datasets_with_columns,
@@ -808,11 +828,39 @@ class DeselectAllDatasetColumnsView(OrganizationMixin, CSVMappingCoordinatorMixi
             # Render column badges
             column_badges_html = render_to_string('csv_mapping/partials/column_badges.html', context, request=request)
             
-            # Render workspace update
-            workspace_html = render_to_string('csv_mapping/partials/selected_columns_workspace.html', workspace_context, request=request)
+            # For deselect all: if no columns left, remove the entire dataset section
+            # Otherwise, update the specific dataset section to preserve FK forms in other sections
+            if not dataset_selected_columns:
+                # Dataset section should be removed entirely
+                from django.utils.text import slugify
+                dataset_section_remove = f'<div id="dataset-workspace-{slugify(dataset_name)}" hx-swap-oob="delete"></div>'
+                combined_response = f'{column_badges_html}{dataset_section_remove}'
+            else:
+                # Update the specific dataset section instead of the entire workspace
+                specific_dataset_group = None
+                for group in datasets_with_columns:
+                    if group['name'] == dataset_name and group['source'] == source_name:
+                        specific_dataset_group = group
+                        break
+                
+                if specific_dataset_group:
+                    # Render only the specific dataset section
+                    dataset_section_context = {
+                        'dataset_group': specific_dataset_group,
+                        'organization_id': organization_id,
+                        'csrf_token': request.META.get('CSRF_COOKIE'),
+                    }
+                    dataset_section_html = render_to_string('csv_mapping/partials/dataset_workspace_section.html', dataset_section_context, request=request)
+                    
+                    # Update both the column badges and the specific dataset section via hx-swap-oob
+                    from django.utils.text import slugify
+                    dataset_section_update = f'<div id="dataset-workspace-{slugify(dataset_name)}" hx-swap-oob="outerHTML">{dataset_section_html}</div>'
+                    combined_response = f'{column_badges_html}{dataset_section_update}'
+                else:
+                    # Fallback: update entire workspace if dataset group not found
+                    workspace_html = render_to_string('csv_mapping/partials/selected_columns_workspace.html', workspace_context, request=request)
+                    combined_response = f'{column_badges_html}<div id="selected-columns-workspace" hx-swap-oob="innerHTML">{workspace_html}</div>'
             
-            # Combine both updates using hx-swap-oob
-            combined_response = f'{column_badges_html}<div id="selected-columns-workspace" hx-swap-oob="innerHTML">{workspace_html}</div>'
             return HttpResponse(combined_response)
             
         except Exception as e:
@@ -823,6 +871,247 @@ class DeselectAllDatasetColumnsView(OrganizationMixin, CSVMappingCoordinatorMixi
 # ==============================================================================
 # STEP 4: FK Configuration Views (To be implemented using mixins)
 # ==============================================================================
+
+class ToggleFKFormView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
+    """
+    Toggle FK form view using coordinator-based architecture.
+    """
+    
+    def post(self, request):
+        """Handle POST requests for toggling FK forms."""
+        try:
+            organization_id = self.get_organization_id_from_request(request)
+            column_id = request.POST.get('column_id') or request.GET.get('column_id')
+            
+            logger.info(f"CSV_TOGGLE_FK_FORM: column_id='{column_id}', org='{organization_id}'")
+            
+            if not column_id:
+                return HttpResponse('<div class="text-error text-sm">Column ID required</div>')
+            
+            # Get workspace columns using coordinator
+            workspace_columns = self.get_workspace_columns(request, organization_id)
+            
+            # Find the specific column
+            column = next((col for col in workspace_columns if col.get('id') == column_id), None)
+            if not column:
+                logger.error(f"CSV_TOGGLE_FK_FORM: Column '{column_id}' not found in workspace")
+                return HttpResponse('<div class="text-error text-sm">Column not found in workspace</div>')
+            
+            # Get ALL available datasets with their columns for FK configuration using coordinator
+            all_datasets_with_columns = self.get_all_datasets_with_columns_for_fk(request, organization_id)
+            
+            # Get current FK configuration if exists
+            fk_config = column.get('fk_config', {})
+            current_direction = fk_config.get('direction', 'outbound')
+            target_dataset = fk_config.get('target_dataset', '')
+            target_column = fk_config.get('target_column', '')
+            
+            context = {
+                'column': column,
+                'datasets': all_datasets_with_columns,
+                'current_direction': current_direction,
+                'target_dataset': target_dataset,
+                'target_column': target_column,
+                'organization_id': organization_id,
+                'csrf_token': request.META.get('CSRF_COOKIE')
+            }
+            
+            return render(request, 'csv_mapping/partials/inline_fk_form.html', context)
+            
+        except Exception as e:
+            logger.error(f"CSV_TOGGLE_FK_FORM: Error toggling form: {e}", exc_info=True)
+            return HttpResponse('<div class="text-error text-sm">Error opening FK configuration</div>')
+
+
+class HideFKFormView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
+    """
+    Hide FK form view using coordinator-based architecture.
+    """
+    
+    def get(self, request):
+        """Handle GET requests for hiding FK forms."""
+        try:
+            column_id = request.GET.get('column_id')
+            logger.info(f"CSV_HIDE_FK_FORM: column={column_id}")
+            
+            # Return empty div to hide the form
+            return HttpResponse(f'<div id="fk-form-{column_id}"></div>')
+            
+        except Exception as e:
+            logger.error(f"CSV_HIDE_FK_FORM: Error hiding form: {e}", exc_info=True)
+            return HttpResponse('<div class="text-error text-sm">Error hiding FK form</div>')
+
+
+class UpdateFKTargetColumnsView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
+    """
+    Update FK target columns view using coordinator-based architecture.
+    """
+    
+    def post(self, request):
+        """Handle POST requests for updating FK target columns."""
+        try:
+            organization_id = self.get_organization_id_from_request(request)
+            column_id = request.POST.get('column_id') or request.GET.get('column_id')
+            target_dataset = request.POST.get('target_dataset') or request.GET.get('target_dataset')
+            
+            logger.info(f"CSV_UPDATE_FK_TARGET_COLUMNS: column_id='{column_id}', target_dataset='{target_dataset}', org='{organization_id}'")
+            
+            if not column_id or not target_dataset:
+                return HttpResponse('<option value="">Select target column...</option>')
+            
+            # Get ALL available datasets using coordinator
+            all_datasets_with_columns = self.get_all_datasets_with_columns_for_fk(request, organization_id)
+            
+            # Find the target dataset and get its columns
+            target_dataset_obj = next((d for d in all_datasets_with_columns if d.get('name') == target_dataset), None)
+            
+            if not target_dataset_obj:
+                logger.error(f"CSV_UPDATE_FK_TARGET_COLUMNS: Dataset '{target_dataset}' not found")
+                return HttpResponse('<option value="">Dataset not found</option>')
+            
+            # Get columns from the dataset preview
+            preview = target_dataset_obj.get('preview', {})
+            columns = preview.get('colHeaders', [])
+            
+            logger.info(f"CSV_UPDATE_FK_TARGET_COLUMNS: Found {len(columns)} columns for {target_dataset}")
+            
+            # Build options HTML
+            options_html = '<option value="">Select target column...</option>\n'
+            for column_name in columns:
+                options_html += f'<option value="{column_name}">{column_name}</option>\n'
+            
+            return HttpResponse(options_html)
+            
+        except Exception as e:
+            logger.error(f"CSV_UPDATE_FK_TARGET_COLUMNS: Error updating columns: {e}", exc_info=True)
+            return HttpResponse('<option value="">Error loading columns</option>')
+
+
+class SaveInlineFKConfigView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
+    """
+    Save inline FK configuration view using coordinator-based architecture.
+    """
+    
+    def post(self, request):
+        """Handle POST requests for saving FK configurations."""
+        try:
+            organization_id = self.get_organization_id_from_request(request)
+            
+            # Extract form data
+            column_id = request.POST.get('column_id')
+            fk_direction = request.POST.get('fk_direction')
+            target_dataset = request.POST.get('target_dataset')
+            target_column = request.POST.get('target_column')
+            
+            logger.info(f"CSV_SAVE_INLINE_FK_CONFIG: column_id='{column_id}', direction='{fk_direction}', target='{target_dataset}.{target_column}', org='{organization_id}'")
+            
+            if not all([column_id, fk_direction, target_dataset, target_column]):
+                missing = [name for name, val in [('column_id', column_id), ('fk_direction', fk_direction), ('target_dataset', target_dataset), ('target_column', target_column)] if not val]
+                error_msg = f'Missing required fields: {", ".join(missing)}'
+                logger.error(f"CSV_SAVE_INLINE_FK_CONFIG: VALIDATION FAILED - {error_msg}")
+                return HttpResponse(f'<div class="text-error text-xs p-2">{error_msg}</div>')
+            
+            # Get current workspace using coordinator methods
+            existing_columns = self.get_workspace_columns(request, organization_id)
+            
+            # Find and update the column with FK configuration
+            updated_column = None
+            for col in existing_columns:
+                if col.get('id') == column_id:
+                    col['is_fk'] = True
+                    col['fk_config'] = {
+                        'direction': fk_direction,
+                        'target_dataset': target_dataset,
+                        'target_column': target_column,
+                    }
+                    updated_column = col
+                    logger.info(f"CSV_SAVE_INLINE_FK_CONFIG: ✅ Updated column '{column_id}' with FK config")
+                    break
+            
+            if not updated_column:
+                logger.error(f"CSV_SAVE_INLINE_FK_CONFIG: Column '{column_id}' not found in workspace")
+                return HttpResponse('<div class="text-error text-xs p-2">Column not found in workspace</div>')
+            
+            # Save back to session using coordinator methods
+            self.update_workspace_columns(request, organization_id, existing_columns)
+            
+            logger.info(f"CSV_SAVE_INLINE_FK_CONFIG: Successfully updated FK configuration")
+            
+            # Generate CSRF token for the template
+            from django.middleware.csrf import get_token
+            csrf_token = get_token(request)
+            
+            # Return just the updated column item
+            from django.template.loader import render_to_string
+            column_html = render_to_string('csv_mapping/partials/column_item.html', {
+                'column': updated_column,
+                'organization_id': organization_id,
+                'csrf_token': csrf_token,
+            }, request=request)
+            
+            return HttpResponse(column_html)
+            
+        except Exception as e:
+            logger.error(f"CSV_SAVE_INLINE_FK_CONFIG: Error saving configuration: {e}", exc_info=True)
+            return HttpResponse('<div class="text-error text-xs p-2">Error saving FK configuration</div>')
+
+
+class RemoveFKConfigView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
+    """
+    Remove FK configuration view using coordinator-based architecture.
+    """
+    
+    def post(self, request):
+        """Handle POST requests for removing FK configurations."""
+        try:
+            organization_id = self.get_organization_id_from_request(request)
+            column_id = request.POST.get('column_id')
+            
+            logger.info(f"CSV_REMOVE_FK_CONFIG: column_id='{column_id}', org='{organization_id}'")
+            
+            if not column_id:
+                return HttpResponse('<div class="text-error text-xs p-2">Column ID required</div>')
+            
+            # Get current workspace using coordinator methods
+            existing_columns = self.get_workspace_columns(request, organization_id)
+            
+            # Find and update the column to remove FK configuration
+            updated_column = None
+            for col in existing_columns:
+                if col.get('id') == column_id:
+                    col['is_fk'] = False
+                    col['fk_config'] = {}
+                    updated_column = col
+                    logger.info(f"CSV_REMOVE_FK_CONFIG: ✅ Removed FK config from column '{column_id}'")
+                    break
+            
+            if not updated_column:
+                logger.error(f"CSV_REMOVE_FK_CONFIG: Column '{column_id}' not found in workspace")
+                return HttpResponse('<div class="text-error text-xs p-2">Column not found in workspace</div>')
+            
+            # Save back to session using coordinator methods
+            self.update_workspace_columns(request, organization_id, existing_columns)
+            
+            # Prepare workspace update data
+            workspace_columns = self.get_workspace_columns(request, organization_id)
+            datasets_with_columns = self._prepare_datasets_with_columns(workspace_columns)
+            
+            workspace_context = {
+                'datasets_with_columns': datasets_with_columns,
+                'organization_id': organization_id,
+                'csrf_token': request.META.get('CSRF_COOKIE'),
+            }
+            
+            # Return updated workspace
+            from django.template.loader import render_to_string
+            workspace_html = render_to_string('csv_mapping/partials/selected_columns_workspace.html', workspace_context, request=request)
+            
+            return HttpResponse(workspace_html)
+            
+        except Exception as e:
+            logger.error(f"CSV_REMOVE_FK_CONFIG: Error removing configuration: {e}", exc_info=True)
+            return HttpResponse('<div class="text-error text-xs p-2">Error removing FK configuration</div>')
+
 
 class ConfigureFKRelationshipView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
     """
@@ -1004,13 +1293,21 @@ class LoadMoreDatasetRowsView(OrganizationMixin, CSVMappingCoordinatorMixin, Vie
             dataset_preview = None
             for dataset_info in source_summary.get('datasets', []):
                 if dataset_info.get('name') == dataset_name:
-                    # Get more data with offset and limit
-                    full_data = analyzer.get_dataset_preview(source_name, dataset_name, limit=offset + limit)
-                    if full_data and 'sample_data' in full_data:
-                        # Extract only the new rows
-                        all_rows = full_data['sample_data']
-                        new_rows = all_rows[offset:offset + limit] if len(all_rows) > offset else []
-                        dataset_preview = {'sample_data': new_rows}
+                    # Create S3DataSourceInfo object from the dataset info
+                    source_info = S3DataSourceInfo(
+                        bucket_name=dataset_info.get('bucket_name', ''),
+                        object_key=dataset_info.get('object_key', ''),
+                        name=dataset_info.get('name', dataset_name),
+                        format=dataset_info.get('format', 'csv'),
+                        size_bytes=dataset_info.get('size_bytes'),
+                        modified_date=dataset_info.get('modified_date')
+                    )
+                    
+                    # Get more data with offset and limit using the correct method
+                    table_preview = analyzer.get_s3_table_preview(source_info, dataset_name, offset=offset, limit=limit)
+                    if table_preview and table_preview.data_rows:
+                        # Convert to the expected format
+                        dataset_preview = {'sample_data': table_preview.data_rows}
                     break
             
             if not dataset_preview or not dataset_preview.get('sample_data'):

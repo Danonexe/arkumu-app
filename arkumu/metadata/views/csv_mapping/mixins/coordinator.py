@@ -169,6 +169,31 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         logger.info(f"🎯 COORDINATOR MIXIN: add_column_with_validation() IS BEING CALLED!")
         logger.info(f"🎯 COORDINATOR: Adding column '{column_name}' from dataset '{dataset_name}' with validation")
         
+        # Debug: Log current workspace state before adding column
+        current_workspace = self.get_workspace_columns(request, organization_id)
+        fk_columns_before = [col for col in current_workspace if col.get('is_fk', False)]
+        anchor_columns_before = [col for col in current_workspace if col.get('is_anchor', False)]
+        multi_value_columns_before = [col for col in current_workspace if col.get('is_multi_value', False)]
+        
+        logger.info(f"🔥🔥🔥 COORDINATOR: BEFORE adding column '{column_name}' from '{dataset_name}':")
+        logger.info(f"  - Current workspace: {len(current_workspace)} columns")
+        logger.info(f"  - FK columns before: {len(fk_columns_before)}")
+        logger.info(f"  - Anchor columns before: {len(anchor_columns_before)}")
+        logger.info(f"  - Multi-value columns before: {len(multi_value_columns_before)}")
+        
+        for col in current_workspace:
+            logger.info(f"    - Column '{col.get('id')}': FK={col.get('is_fk', False)}, Anchor={col.get('is_anchor', False)}, Multi={col.get('is_multi_value', False)}, FK_config={col.get('fk_config', {})}")
+        
+        # CRITICAL: Store FK configurations snapshot before adding new column
+        fk_configurations_snapshot = {}
+        for col in current_workspace:
+            if col.get('is_fk', False):
+                fk_configurations_snapshot[col.get('id')] = {
+                    'is_fk': col.get('is_fk', False),
+                    'fk_config': col.get('fk_config', {}),
+                }
+        logger.info(f"🔥 COORDINATOR: FK SNAPSHOT - {len(fk_configurations_snapshot)} FK configs preserved")
+        
         # 1. Validate that dataset is selected
         if not self._is_dataset_selected(request, organization_id, dataset_name):
             error_msg = f"Cannot add column '{column_name}': dataset '{dataset_name}' is not selected"
@@ -184,6 +209,32 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         )
         
         if success:
+            # CRITICAL: Verify FK configurations are still intact after adding column
+            updated_workspace = self.get_workspace_columns(request, organization_id)
+            fk_columns_after = [col for col in updated_workspace if col.get('is_fk', False)]
+            
+            logger.info(f"🔥🔥🔥 COORDINATOR: AFTER adding column '{column_name}' to workspace:")
+            logger.info(f"  - Total columns: {len(updated_workspace)}")
+            logger.info(f"  - FK columns after: {len(fk_columns_after)}")
+            
+            # Verify FK configurations are preserved
+            fk_configs_lost = 0
+            for col_id, fk_data in fk_configurations_snapshot.items():
+                current_col = next((col for col in updated_workspace if col.get('id') == col_id), None)
+                if current_col:
+                    if not current_col.get('is_fk', False) or not current_col.get('fk_config', {}):
+                        fk_configs_lost += 1
+                        logger.error(f"🔥 COORDINATOR: FK CONFIG LOST for column '{col_id}'")
+                    else:
+                        logger.info(f"🔥 COORDINATOR: FK CONFIG PRESERVED for column '{col_id}': {current_col.get('fk_config', {})}")
+                else:
+                    logger.error(f"🔥 COORDINATOR: COLUMN LOST: '{col_id}'")
+            
+            if fk_configs_lost > 0:
+                logger.error(f"🔥🔥🔥 COORDINATOR: CRITICAL ERROR - {fk_configs_lost} FK configurations were lost during column addition!")
+            else:
+                logger.info(f"🔥 COORDINATOR: SUCCESS - All {len(fk_configurations_snapshot)} FK configurations preserved")
+            
             logger.info(f"COORDINATOR: Successfully added column '{column_id}' to workspace")
             return True, new_column, total_columns, None
         else:
@@ -382,3 +433,124 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         is_consistent = len(issues) == 0
         
         return is_consistent, issues, suggestions 
+        
+    # ==========================================================================
+    # FK Configuration Support (All Available Datasets with Session Caching)
+    # ==========================================================================
+    
+    def get_all_datasets_with_columns_for_fk(self, request, organization_id, force_refresh=False):
+        """
+        Get ALL available datasets with their columns for FK configuration, with session caching.
+        
+        This method gets all datasets in the organization (not just selected ones)
+        with their column information, formatted for FK form usage. Results are cached
+        in session to avoid expensive S3 calls on every FK form open.
+        
+        Args:
+            request: Django request object (for session access)
+            organization_id (str): Organization ID
+            force_refresh (bool): If True, bypass cache and refresh data
+            
+        Returns:
+            list: All datasets with their column details
+        """
+        cache_key = f"all_datasets_fk_{organization_id}"
+        
+        # Check if we have cached data and don't need refresh
+        if not force_refresh and cache_key in request.session:
+            cached_data = request.session[cache_key]
+            logger.info(f"COORDINATOR: Using cached FK datasets data, org='{organization_id}' ({len(cached_data)} datasets)")
+            return cached_data
+        
+        logger.info(f"COORDINATOR: Loading ALL datasets with columns for FK configuration, org='{organization_id}'")
+        
+        try:
+            from arkumu.metadata.services.data_analysis.s3_direct_data_analyzer import S3DirectDataAnalyzer
+            analyzer = S3DirectDataAnalyzer()
+            
+            # Get all sources for the organization
+            sources = analyzer.discover_s3_data_sources(organization_id)
+            all_datasets_with_columns = []
+            
+            for source in sources:
+                logger.info(f"COORDINATOR: Processing source '{source.name}'")
+                
+                try:
+                    # Get source summary which includes all datasets with previews
+                    source_summary = analyzer.get_s3_source_summary(organization_id, source.name)
+                    
+                    # Process each dataset in the source
+                    for dataset_info in source_summary.get('datasets', []):
+                        dataset_name = dataset_info.get('name')
+                        
+                        # Only include CSV-compatible datasets
+                        if self._is_csv_dataset(dataset_name, source):
+                            dataset_with_columns = {
+                                'name': dataset_name,
+                                'source': source.name,
+                                'preview': {
+                                    'colHeaders': dataset_info.get('columns', []),
+                                    'data': dataset_info.get('sample_data', []),
+                                    'total_rows': dataset_info.get('row_count', 0),
+                                }
+                            }
+                            all_datasets_with_columns.append(dataset_with_columns)
+                            
+                except Exception as e:
+                    logger.warning(f"COORDINATOR: Error processing source '{source.name}': {e}")
+                    continue
+            
+            # Cache the results in session
+            request.session[cache_key] = all_datasets_with_columns
+            request.session.modified = True
+            
+            logger.info(f"COORDINATOR: Loaded and cached {len(all_datasets_with_columns)} datasets with columns for FK")
+            return all_datasets_with_columns
+            
+        except Exception as e:
+            logger.error(f"COORDINATOR: Error getting all datasets with columns: {e}", exc_info=True)
+            return []
+    
+    def clear_fk_datasets_cache(self, request, organization_id):
+        """
+        Clear the cached FK datasets data for an organization.
+        
+        Args:
+            request: Django request object
+            organization_id (str): Organization ID
+        """
+        cache_key = f"all_datasets_fk_{organization_id}"
+        if cache_key in request.session:
+            del request.session[cache_key]
+            request.session.modified = True
+            logger.info(f"COORDINATOR: Cleared FK datasets cache for org='{organization_id}'")
+    
+    def refresh_fk_datasets_cache(self, request, organization_id):
+        """
+        Refresh the cached FK datasets data for an organization.
+        
+        Args:
+            request: Django request object
+            organization_id (str): Organization ID
+            
+        Returns:
+            list: Refreshed datasets data
+        """
+        logger.info(f"COORDINATOR: Refreshing FK datasets cache for org='{organization_id}'")
+        return self.get_all_datasets_with_columns_for_fk(request, organization_id, force_refresh=True)
+            
+    def _is_csv_dataset(self, dataset_name, source):
+        """
+        Check if a dataset is a CSV/parseable format.
+        
+        Args:
+            dataset_name (str): Name of the dataset
+            source: Source object with format information
+            
+        Returns:
+            bool: True if dataset is CSV-compatible
+        """
+        dataset_lower = dataset_name.lower()
+        return (dataset_lower.endswith(('.csv', '.tsv', '.txt')) or 
+                'csv' in dataset_lower or 
+                (source.format and source.format.lower() in ['csv', 'tsv', 'text']))

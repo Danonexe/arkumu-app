@@ -76,6 +76,20 @@ class MappingWorkspaceMixin:
         # Get current workspace columns
         existing_columns = self.get_workspace_columns(request, organization_id)
         
+        # Debug: Log ALL configurations before adding new column
+        fk_columns_before = [col for col in existing_columns if col.get('is_fk', False)]
+        anchor_columns_before = [col for col in existing_columns if col.get('is_anchor', False)]
+        multi_value_columns_before = [col for col in existing_columns if col.get('is_multi_value', False)]
+        
+        logger.info(f"🔥🔥🔥 WORKSPACE_MIXIN: BEFORE adding column '{column_id}':")
+        logger.info(f"  - Existing columns: {len(existing_columns)}")
+        logger.info(f"  - FK columns before: {len(fk_columns_before)}")
+        logger.info(f"  - Anchor columns before: {len(anchor_columns_before)}")
+        logger.info(f"  - Multi-value columns before: {len(multi_value_columns_before)}")
+        
+        for col in existing_columns:
+            logger.info(f"    - Column '{col.get('id')}': FK={col.get('is_fk', False)}, Anchor={col.get('is_anchor', False)}, Multi={col.get('is_multi_value', False)}, FK_config={col.get('fk_config', {})}")
+        
         # Check if column already exists
         column_exists = any(col.get('id') == column_id for col in existing_columns)
         if column_exists:
@@ -96,6 +110,21 @@ class MappingWorkspaceMixin:
         }
         
         existing_columns.append(new_column)
+        
+        # Debug: Log ALL configurations after adding new column
+        fk_columns_after = [col for col in existing_columns if col.get('is_fk', False)]
+        anchor_columns_after = [col for col in existing_columns if col.get('is_anchor', False)]
+        multi_value_columns_after = [col for col in existing_columns if col.get('is_multi_value', False)]
+        
+        logger.info(f"🔥🔥🔥 WORKSPACE_MIXIN: AFTER adding column '{column_id}':")
+        logger.info(f"  - Total columns: {len(existing_columns)}")
+        logger.info(f"  - FK columns after: {len(fk_columns_after)}")
+        logger.info(f"  - Anchor columns after: {len(anchor_columns_after)}")
+        logger.info(f"  - Multi-value columns after: {len(multi_value_columns_after)}")
+        
+        for col in existing_columns:
+            logger.info(f"    - Column '{col.get('id')}': FK={col.get('is_fk', False)}, Anchor={col.get('is_anchor', False)}, Multi={col.get('is_multi_value', False)}, FK_config={col.get('fk_config', {})}")
+        
         self.update_workspace_columns(request, organization_id, existing_columns)
         
         logger.info(f"WORKSPACE_MIXIN: Added column {column_id} to workspace")
