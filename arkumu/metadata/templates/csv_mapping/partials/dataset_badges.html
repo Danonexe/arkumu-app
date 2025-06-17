@@ -5,7 +5,7 @@
              data-source="{{ dataset.source }}"
              data-dataset="{{ dataset.name }}"
              hx-post="{% url 'metadata:toggle_dataset_card' %}"
-             hx-vals='{"source": "{{ dataset.source }}", "dataset_name": "{{ dataset.name }}", "organization": "{{ organization_id }}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
+             hx-vals='{"source": "{{ dataset.source }}", "dataset": "{{ dataset.name }}", "organization": "{{ organization_id }}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
              hx-target="#table-content"
              hx-swap="innerHTML">
             {{ dataset.name }}
@@ -13,17 +13,10 @@
     {% endfor %}
     
     {% if selected_datasets %}
-        <!-- Hidden form with complex data -->
-        <form id="clear-datasets-form" style="display: none;">
-            {% csrf_token %}
-            <input type="hidden" name="organization" value="{{ organization_id }}">
-            <textarea name="datasets" style="display: none;">{{ datasets_json|default:"[]" }}</textarea>
-        </form>
-        
         <!-- Clear All Button - only show when there are selected datasets -->
         <button class="btn btn-xs btn-outline btn-error hover:btn-error transition-all duration-200 text-xs font-medium ml-2"
-                hx-post="{% url 'metadata:clear_all_datasets' %}"
-                hx-include="#clear-datasets-form"
+                hx-post="{% url 'metadata:csv_clear_all_datasets' %}"
+                hx-vals='{"organization": "{{ organization_id }}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
                 hx-target="#dataset-badges"
                 hx-swap="innerHTML"
                 hx-indicator=".loading-indicator"

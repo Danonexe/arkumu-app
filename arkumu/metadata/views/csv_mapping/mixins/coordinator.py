@@ -166,7 +166,8 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         Returns:
             tuple: (success, new_column, total_columns, error_message)
         """
-        logger.info(f"COORDINATOR: Adding column '{column_name}' from dataset '{dataset_name}' with validation")
+        logger.info(f"🎯 COORDINATOR MIXIN: add_column_with_validation() IS BEING CALLED!")
+        logger.info(f"🎯 COORDINATOR: Adding column '{column_name}' from dataset '{dataset_name}' with validation")
         
         # 1. Validate that dataset is selected
         if not self._is_dataset_selected(request, organization_id, dataset_name):
@@ -267,6 +268,48 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
             'is_consistent': len(orphaned_datasets) == 0,  # True if no orphaned datasets
         }
     
+    # ==========================================================================
+    # Template Data Preparation
+    # ==========================================================================
+    
+    def _prepare_datasets_with_columns(self, workspace_columns):
+        """
+        Prepare datasets_with_columns structure for templates.
+        
+        Args:
+            workspace_columns (list): List of workspace column dictionaries
+            
+        Returns:
+            list: Datasets grouped with their columns
+        """
+        # Group columns by dataset
+        datasets_map = {}
+        
+        for col_dict in workspace_columns:
+            if isinstance(col_dict, dict):
+                dataset_name = col_dict.get('dataset')
+                source_name = col_dict.get('source')
+                
+                if dataset_name:
+                    dataset_key = f"{source_name}::{dataset_name}"
+                    
+                    if dataset_key not in datasets_map:
+                        datasets_map[dataset_key] = {
+                            'name': dataset_name,
+                            'source': source_name,
+                            'selected_count': 0,
+                            'columns': []
+                        }
+                    
+                    datasets_map[dataset_key]['columns'].append(col_dict)
+                    datasets_map[dataset_key]['selected_count'] += 1
+        
+        # Convert to list and sort by dataset name
+        datasets_with_columns = list(datasets_map.values())
+        datasets_with_columns.sort(key=lambda x: x['name'])
+        
+        return datasets_with_columns
+
     # ==========================================================================
     # Consistency Maintenance
     # ==========================================================================

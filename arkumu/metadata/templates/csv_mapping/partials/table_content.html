@@ -1,0 +1,18 @@
+{% if selected_datasets_with_details %}
+    {% for dataset in selected_datasets_with_details %}
+        {% include 'csv_mapping/partials/dataset_card.html' with dataset=dataset organization_id=organization_id %}
+    {% endfor %}
+{% else %}
+    <!-- Initial state - multi-dataset accumulation view -->
+    <div class="hero h-40" id="empty-csv-state">
+        <div class="hero-content text-center">
+            <div class="max-w-md">
+                <svg class="w-16 h-16 mx-auto mb-4 text-base-content opacity-30" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+                </svg>
+                <p class="text-base-content opacity-50">Select CSV datasets above to begin mapping</p>
+                <p class="text-xs text-base-content opacity-30 mt-2">Preview column structures • Configure relationships • Design import strategy</p>
+            </div>
+        </div>
+    </div>
+{% endif %} 

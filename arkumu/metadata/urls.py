@@ -144,14 +144,31 @@ urlpatterns = [
     # Main CSV Mapping Editor
     path('csv-mapping-editor/', csv_mapping_views.csv_mapping_editor_view, name='csv_mapping_editor'),
     
-    # Step 2: Dataset card views (placeholder URLs for now)
-    path('csv-dataset-card/', csv_mapping_views.csv_mapping_editor_view, name='csv_dataset_card'),  # TODO: Implement in Step 2
-    path('toggle-csv-dataset/', csv_mapping_views.csv_mapping_editor_view, name='toggle_dataset_card'),  # TODO: Implement in Step 2
+    # Step 2: Dataset card views (implemented with coordinator)
+    path('csv-dataset-card/', csv_mapping_views.CSVDatasetCardView.as_view(), name='csv_dataset_card'),
+    path('toggle-csv-dataset/', csv_mapping_views.ToggleDatasetSelectionView.as_view(), name='toggle_dataset_card'),
+    path('csv-load-more-rows/', csv_mapping_views.LoadMoreDatasetRowsView.as_view(), name='csv_load_more_dataset_rows'),
     
-    # Step 3: Column workspace management URLs (placeholder for now)
-    # These will be implemented as we extract more views from direct_data_views
+    # Step 3: Column workspace management URLs (implemented with coordinator)
+    path('csv-add-column/', csv_mapping_views.AddColumnToWorkspaceView.as_view(), name='csv_add_column_to_workspace'),
+    path('csv-remove-column/', csv_mapping_views.RemoveColumnFromWorkspaceView.as_view(), name='csv_remove_column_from_workspace'),
+    path('csv-select-all-dataset-columns/', csv_mapping_views.SelectAllDatasetColumnsView.as_view(), name='csv_select_all_dataset_columns'),
+    path('csv-deselect-all-dataset-columns/', csv_mapping_views.DeselectAllDatasetColumnsView.as_view(), name='csv_deselect_all_dataset_columns'),
     
     # Step 4: FK configuration URLs (placeholder for now)
-    # These will be implemented as we extract more views from direct_data_views
+    path('csv-configure-fk/', csv_mapping_views.ConfigureFKRelationshipView.as_view(), name='configure_fk_relationship'),
+    
+    # Missing URLs that templates reference (use existing direct data views for now)
+    path('csv-clear-all-datasets/', csv_mapping_views.ClearAllDatasetsView.as_view(), name='csv_clear_all_datasets'),
+    path('csv-deselect-all-columns/', direct_data_views.deselect_all_columns, name='deselect_all_columns'),
+    path('csv-select-all-dataset-columns/', direct_data_views.select_all_dataset_columns, name='select_all_dataset_columns'),
+    path('csv-deselect-all-dataset-columns/', direct_data_views.deselect_all_dataset_columns, name='deselect_all_dataset_columns'),
+    path('csv-toggle-multi-value-column/', direct_data_views.toggle_multi_value_column, name='toggle_multi_value_column'),
+    path('csv-set-anchor-column/', direct_data_views.set_anchor_column, name='set_anchor_column'),
+    path('csv-toggle-fk-form/', direct_data_views.toggle_fk_form, name='toggle_fk_form'),
+    path('csv-hide-fk-form/', direct_data_views.hide_fk_form, name='hide_fk_form'),
+    path('csv-update-fk-target-columns/', direct_data_views.update_fk_target_columns, name='update_fk_target_columns'),
+    path('csv-save-inline-fk-config/', direct_data_views.save_inline_fk_config, name='save_inline_fk_config'),
+    path('csv-remove-fk-config/', direct_data_views.remove_fk_config, name='remove_fk_config'),
     
     ]

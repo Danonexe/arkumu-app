@@ -23,6 +23,8 @@ from django.shortcuts import render
 from django.http import JsonResponse, HttpResponse
 from django.views import View
 from django.core.serializers.json import DjangoJSONEncoder
+from django.template.loader import render_to_string
+from arkumu.metadata.services.data_analysis.s3_direct_data_analyzer import S3DirectDataAnalyzer
 
 from .mixins import OrganizationMixin, CSVDataMixin, MappingWorkspaceMixin, ImportStrategyMixin, CSVMappingCoordinatorMixin
 
@@ -104,11 +106,14 @@ class CSVMappingEditorView(OrganizationMixin, CSVMappingCoordinatorMixin, Import
                 'import_strategy': import_strategy,
                 'import_strategy_summary': import_strategy_summary,
                 'workspace_summary': workspace_summary,
-                'datasets_json': json.dumps(csv_datasets, cls=DjangoJSONEncoder),
                 'csrf_token': request.META.get('CSRF_COOKIE'),
             }
             
-            return render(request, self.template_name, context)
+            # Handle HTMX requests - return just the partial content
+            if request.headers.get('HX-Request'):
+                return render(request, 'csv_mapping/partials/main_content.html', context)
+            else:
+                return render(request, self.template_name, context)
             
         except Exception as e:
             logger.error(f"CSV_MAPPING_EDITOR: Error loading editor: {e}", exc_info=True)
@@ -148,28 +153,61 @@ class CSVDatasetCardView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
         """Handle GET requests for dataset card preview."""
         try:
             organization_id = self.get_organization_id_from_request(request)
-            dataset_name = request.GET.get('dataset')
+            dataset_name = request.GET.get('dataset_name') or request.GET.get('dataset')
             source_name = request.GET.get('source')
             
             if not dataset_name or not source_name:
                 return HttpResponse('<div class="text-danger">Dataset and source parameters required</div>')
             
-            # Get dataset preview using coordinator
-            dataset_info = self.get_dataset_info_with_preview(source_name, dataset_name, organization_id)
-            if not dataset_info:
-                return HttpResponse('<div class="text-danger">Failed to load dataset preview</div>')
+            # Use S3DirectDataAnalyzer to get the full dataset preview
+            from arkumu.metadata.services.data_analysis.s3_direct_data_analyzer import S3DirectDataAnalyzer
+            analyzer = S3DirectDataAnalyzer()
+            
+            # Get the source summary which contains dataset previews
+            source_summary = analyzer.get_s3_source_summary(organization_id, source_name)
+            
+            # Find the specific dataset in the source
+            dataset_preview = None
+            for dataset_info in source_summary.get('datasets', []):
+                if dataset_info.get('name') == dataset_name:
+                    dataset_preview = dataset_info
+                    break
+            
+            if not dataset_preview or 'error' in dataset_preview:
+                return HttpResponse(f'<div class="text-danger">Failed to load dataset "{dataset_name}" from source "{source_name}"</div>')
+            
+            # Transform the data to match the template expectations
+            dataset = {
+                'name': dataset_name,
+                'source': source_name,
+                'cell_count': dataset_preview.get('row_count', 0) * dataset_preview.get('column_count', 0),
+                'preview': {
+                    'colHeaders': dataset_preview.get('columns', []),
+                    'data': dataset_preview.get('sample_data', []),
+                    'total_rows': dataset_preview.get('row_count', 0),
+                    'showing_rows': len(dataset_preview.get('sample_data', [])),
+                    'has_more': dataset_preview.get('row_count', 0) > len(dataset_preview.get('sample_data', [])),
+                }
+            }
             
             # Get selected columns for this dataset using coordinator
-            selected_columns = self.get_dataset_selected_columns(request, organization_id, dataset_name, source_name)
+            selected_columns = self.get_workspace_columns(request, organization_id)
             
-            # Check if dataset is selected
-            is_selected = self._is_dataset_selected(request, organization_id, dataset_name)
+            # Filter to get only columns from this specific dataset using coordinator column ID format
+            dataset_selected_columns = []
+            for col_id in selected_columns:
+                # Parse the coordinator column ID format: "source::dataset.csv::column_name"
+                parsed = self.parse_column_id(col_id)
+                if parsed and parsed['dataset'] == dataset_name and parsed['source'] == source_name:
+                    dataset_selected_columns.append(parsed['column'])
             
             context = {
-                'dataset_info': dataset_info,
+                'dataset': dataset,
                 'selected_columns': selected_columns,
-                'is_selected': is_selected,
+                'dataset_selected_columns': dataset_selected_columns,
                 'organization_id': organization_id,
+                'csrf_token': request.META.get('CSRF_COOKIE'),
+                'is_direct_mode': True,  # For the template logic
             }
             
             return render(request, 'csv_mapping/partials/dataset_card.html', context)
@@ -201,19 +239,87 @@ class ToggleDatasetSelectionView(OrganizationMixin, CSVMappingCoordinatorMixin, 
                 request, organization_id, dataset_name
             )
             
-            # Get updated workspace summary
+            # Get updated datasets and workspace information
             workspace_summary = self.get_workspace_summary(request, organization_id)
+            csv_datasets = self.get_csv_datasets_for_organization(organization_id)
+            selected_datasets_new, selected_datasets_with_details = self.get_selected_datasets_with_details(
+                request, organization_id, csv_datasets
+            )
             
-            return JsonResponse({
-                'status': 'success',
-                'dataset': dataset_name,
+            # ENHANCEMENT: Load full preview data for each selected dataset
+            enhanced_datasets_with_details = []
+            analyzer = S3DirectDataAnalyzer()
+            
+            # Get workspace columns for dataset-specific column selection info
+            workspace_columns = self.get_workspace_columns(request, organization_id)
+            
+            for dataset in selected_datasets_with_details:
+                try:
+                    # Get the full dataset preview using the same logic as CSVDatasetCardView
+                    source_summary = analyzer.get_s3_source_summary(organization_id, dataset['source'])
+                    
+                    # Find the specific dataset in the source
+                    dataset_preview = None
+                    for dataset_info in source_summary.get('datasets', []):
+                        if dataset_info.get('name') == dataset['name']:
+                            dataset_preview = dataset_info
+                            break
+                    
+                    if dataset_preview and 'error' not in dataset_preview:
+                        # Get selected columns for this specific dataset using coordinator parsing
+                        dataset_selected_columns = []
+                        for col_id in workspace_columns:
+                            parsed = self.parse_column_id(col_id)
+                            if parsed['dataset'] == dataset['name'] and parsed['source'] == dataset['source']:
+                                dataset_selected_columns.append(parsed['column'])
+                        
+                        # Transform to match template expectations
+                        enhanced_dataset = {
+                            **dataset,  # Keep original data
+                            'cell_count': dataset_preview.get('row_count', 0) * dataset_preview.get('column_count', 0),
+                            'dataset_selected_columns': dataset_selected_columns,  # ADD THIS
+                            'preview': {
+                                'colHeaders': dataset_preview.get('columns', []),
+                                'data': dataset_preview.get('sample_data', []),
+                                'total_rows': dataset_preview.get('row_count', 0),
+                                'showing_rows': len(dataset_preview.get('sample_data', [])),
+                                'has_more': dataset_preview.get('row_count', 0) > len(dataset_preview.get('sample_data', [])),
+                            }
+                        }
+                        enhanced_datasets_with_details.append(enhanced_dataset)
+                    else:
+                        # Fallback: dataset without preview (will trigger lazy loading)
+                        enhanced_datasets_with_details.append(dataset)
+                        
+                except Exception as e:
+                    logger.warning(f"TOGGLE_DATASET: Could not load preview for {dataset['name']}: {e}")
+                    # Fallback: dataset without preview
+                    enhanced_datasets_with_details.append(dataset)
+            
+            # Build context for both table content and dataset badges
+            context = {
+                'selected_datasets_with_details': enhanced_datasets_with_details,  # Use enhanced data
+                'datasets': csv_datasets,  # For dataset badges
+                'csv_datasets': csv_datasets,  # For template compatibility
+                'selected_datasets': selected_datasets_new,  # Updated selection list
+                'selected_columns': workspace_columns,  # Global selected columns
+                'organization_id': organization_id,
+                'csrf_token': request.META.get('CSRF_COOKIE'),
                 'was_added': was_added,
-                'columns_affected': columns_affected,
-                'selected_datasets': selected_datasets,
-                'workspace_summary': workspace_summary,
-                'message': f"Dataset {'selected' if was_added else 'deselected'}" + 
-                          (f" (removed {columns_affected} columns)" if columns_affected > 0 else "")
-            })
+                'dataset_name': dataset_name,
+            }
+            
+            # Return table content with out-of-band dataset badges update
+            table_content = render_to_string('csv_mapping/partials/table_content.html', context, request=request)
+            dataset_badges = render_to_string('csv_mapping/partials/dataset_badges.html', context, request=request)
+            
+            # Combine both updates
+            response_html = f'''
+            {table_content}
+            <div id="dataset-badges" hx-swap-oob="innerHTML">{dataset_badges}</div>
+            '''
+            
+            return HttpResponse(response_html)
             
         except Exception as e:
             logger.error(f"TOGGLE_DATASET: Error toggling dataset selection: {e}", exc_info=True)
@@ -236,56 +342,411 @@ class AddColumnToWorkspaceView(OrganizationMixin, CSVMappingCoordinatorMixin, Vi
         """Handle POST requests for adding columns to workspace with validation."""
         try:
             organization_id = self.get_organization_id_from_request(request)
-            column_name = request.POST.get('column')
-            dataset_name = request.POST.get('dataset')
-            source_name = request.POST.get('source')
+            
+            # DEBUG: Proof the coordinator is being called
+            logger.info(f"🔥 ADD_COLUMN VIEW CALLED! Coordinator is working!")
+            logger.info(f"🔥 POST Data: {dict(request.POST)}")
+            logger.info(f"🔥 Organization ID: {organization_id}")
+            
+            # Handle different POST data formats from the template
+            column_name = request.POST.get('column') or request.POST.get('column_name')
+            dataset_name = request.POST.get('dataset') or request.POST.get('dataset_name')
+            source_name = request.POST.get('source') or request.POST.get('source_name')
+            
+            # Parse column_id if provided (format: "dataset_source_column")
+            column_id = request.POST.get('column_id')
+            if column_id and not all([column_name, dataset_name, source_name]):
+                parts = column_id.split('_')
+                if len(parts) >= 3:
+                    dataset_name = parts[0]
+                    source_name = parts[1]
+                    column_name = '_'.join(parts[2:])  # Column name might contain underscores
             
             if not all([column_name, dataset_name, source_name]):
-                return JsonResponse({
-                    'status': 'error', 
-                    'message': 'Column, dataset, and source parameters required'
-                }, status=400)
+                return HttpResponse(f'<div class="alert alert-error">Column, dataset, and source parameters required</div>')
             
             # Use coordinator for validated column addition
+            logger.info(f"🔥 CALLING COORDINATOR: add_column_with_validation({column_name}, {dataset_name}, {source_name})")
             success, new_column, total_columns, error_message = self.add_column_with_validation(
                 request, organization_id, column_name, dataset_name, source_name
             )
+            logger.info(f"🔥 COORDINATOR RESULT: success={success}, error={error_message}")
             
-            if success:
-                # Get updated workspace summary
-                workspace_summary = self.get_workspace_summary(request, organization_id)
-                
-                return JsonResponse({
-                    'status': 'success',
-                    'column': new_column,
-                    'total_columns': total_columns,
-                    'workspace_summary': workspace_summary,
-                    'message': f"Added column '{column_name}' from dataset '{dataset_name}'"
-                })
-            else:
-                return JsonResponse({
-                    'status': 'error',
-                    'message': error_message,
-                    'total_columns': total_columns
-                }, status=400)
+            if not success:
+                return HttpResponse(f'<div class="alert alert-warning">{error_message}</div>')
+            
+            # Get updated dataset with column selection state
+            analyzer = S3DirectDataAnalyzer()
+            source_summary = analyzer.get_s3_source_summary(organization_id, source_name)
+            
+            # Find the dataset and get its column info
+            dataset_preview = None
+            for dataset_info in source_summary.get('datasets', []):
+                if dataset_info.get('name') == dataset_name:
+                    dataset_preview = dataset_info
+                    break
+            
+            if not dataset_preview:
+                return HttpResponse(f'<div class="alert alert-error">Dataset not found</div>')
+            
+            # Get workspace columns and filter for this dataset
+            workspace_columns = self.get_workspace_columns(request, organization_id)
+            dataset_selected_columns = []
+            for col_dict in workspace_columns:
+                # Extract the column ID string from the dictionary
+                col_id = col_dict.get('id') if isinstance(col_dict, dict) else col_dict
+                if col_id:
+                    parsed = self.parse_column_id(col_id)
+                    if parsed['dataset'] == dataset_name and parsed['source'] == source_name:
+                        dataset_selected_columns.append(parsed['column'])
+            
+            # Build dataset context for column badges template
+            dataset_context = {
+                'name': dataset_name,
+                'source': source_name,
+                'preview': {
+                    'colHeaders': dataset_preview.get('columns', [])
+                }
+            }
+            
+            context = {
+                'dataset': dataset_context,
+                'dataset_selected_columns': dataset_selected_columns,
+                'organization_id': organization_id,
+                'csrf_token': request.META.get('CSRF_COOKIE'),
+            }
+            
+            # Return updated column badges HTML with workspace update via hx-swap-oob
+            from django.template.loader import render_to_string
+            
+            # Prepare workspace update data
+            workspace_columns = self.get_workspace_columns(request, organization_id)
+            datasets_with_columns = self._prepare_datasets_with_columns(workspace_columns)
+            
+            workspace_context = {
+                'datasets_with_columns': datasets_with_columns,
+                'organization_id': organization_id,
+                'csrf_token': request.META.get('CSRF_COOKIE'),
+            }
+            
+            # Render column badges
+            column_badges_html = render_to_string('csv_mapping/partials/column_badges.html', context, request=request)
+            
+            # Render workspace update
+            workspace_html = render_to_string('csv_mapping/partials/selected_columns_workspace.html', workspace_context, request=request)
+            
+            # Combine both updates using hx-swap-oob
+            combined_response = f'{column_badges_html}<div id="selected-columns-workspace" hx-swap-oob="innerHTML">{workspace_html}</div>'
+            return HttpResponse(combined_response)
             
         except Exception as e:
             logger.error(f"ADD_COLUMN: Error adding column to workspace: {e}", exc_info=True)
-            return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+            return HttpResponse(f'<div class="alert alert-error">Error: {str(e)}</div>')
 
 
 class RemoveColumnFromWorkspaceView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
     """
     Remove column from workspace view using coordinator-based architecture.
     
-    TODO: Implement in Step 3
-    USES: CSVMappingCoordinatorMixin for column removal with relationship awareness
+    COORDINATOR IMPLEMENTATION: Remove columns with dataset relationship awareness
     """
     
     def post(self, request):
         """Handle POST requests for removing columns from workspace."""
-        # TODO: Implement in Step 3
-        return JsonResponse({'status': 'Step 3 implementation pending'})
+        try:
+            organization_id = self.get_organization_id_from_request(request)
+            
+            # Handle different POST data formats
+            column_name = request.POST.get('column') or request.POST.get('column_name')
+            dataset_name = request.POST.get('dataset') or request.POST.get('dataset_name')
+            source_name = request.POST.get('source') or request.POST.get('source_name')
+            
+            if not all([column_name, dataset_name, source_name]):
+                return HttpResponse(f'<div class="alert alert-error">Column, dataset, and source parameters required</div>')
+            
+            # Generate column ID using coordinator format
+            column_id = self.generate_column_id(dataset_name, column_name, source_name)
+            
+            # Get current workspace columns
+            workspace_columns = self.get_workspace_columns(request, organization_id)
+            
+            # Remove the column - handle both string and dict formats
+            updated_columns = []
+            for col in workspace_columns:
+                if isinstance(col, dict):
+                    col_id = col.get('id')
+                    if col_id != column_id:
+                        updated_columns.append(col)
+                else:
+                    if col != column_id:
+                        updated_columns.append(col)
+            self.update_workspace_columns(request, organization_id, updated_columns)
+            
+            # Get updated dataset with column selection state
+            analyzer = S3DirectDataAnalyzer()
+            source_summary = analyzer.get_s3_source_summary(organization_id, source_name)
+            
+            # Find the dataset and get its column info
+            dataset_preview = None
+            for dataset_info in source_summary.get('datasets', []):
+                if dataset_info.get('name') == dataset_name:
+                    dataset_preview = dataset_info
+                    break
+            
+            if not dataset_preview:
+                return HttpResponse(f'<div class="alert alert-error">Dataset not found</div>')
+            
+            # Get updated workspace columns and filter for this dataset
+            updated_workspace_columns = self.get_workspace_columns(request, organization_id)
+            dataset_selected_columns = []
+            for col_dict in updated_workspace_columns:
+                # Extract the column ID string from the dictionary
+                col_id = col_dict.get('id') if isinstance(col_dict, dict) else col_dict
+                if col_id:
+                    parsed = self.parse_column_id(col_id)
+                    if parsed['dataset'] == dataset_name and parsed['source'] == source_name:
+                        dataset_selected_columns.append(parsed['column'])
+            
+            # Build dataset context for column badges template
+            dataset_context = {
+                'name': dataset_name,
+                'source': source_name,
+                'preview': {
+                    'colHeaders': dataset_preview.get('columns', [])
+                }
+            }
+            
+            context = {
+                'dataset': dataset_context,
+                'dataset_selected_columns': dataset_selected_columns,
+                'organization_id': organization_id,
+                'csrf_token': request.META.get('CSRF_COOKIE'),
+            }
+            
+            # Return updated column badges HTML with workspace update via hx-swap-oob
+            from django.template.loader import render_to_string
+            
+            # Prepare workspace update data
+            workspace_columns = self.get_workspace_columns(request, organization_id)
+            datasets_with_columns = self._prepare_datasets_with_columns(workspace_columns)
+            
+            workspace_context = {
+                'datasets_with_columns': datasets_with_columns,
+                'organization_id': organization_id,
+                'csrf_token': request.META.get('CSRF_COOKIE'),
+            }
+            
+            # For individual column removal: return empty (removes the column) + update badges and header via OOB
+            from django.template.loader import render_to_string
+            
+            # Get updated workspace data for header count
+            workspace_columns = self.get_workspace_columns(request, organization_id)
+            datasets_with_columns = self._prepare_datasets_with_columns(workspace_columns)
+            
+            # Find the updated dataset group for header
+            dataset_group = None
+            for group in datasets_with_columns:
+                if group['name'] == dataset_name and group['source'] == source_name:
+                    dataset_group = group
+                    break
+            
+            # Render updated column badges
+            column_badges_html = render_to_string('csv_mapping/partials/column_badges.html', context, request=request)
+            
+            # Render updated dataset header
+            if dataset_group:
+                dataset_header_html = f'''
+                    <div class="flex items-center gap-2 flex-1">
+                        <!-- Dataset Info -->
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm font-medium text-success">{dataset_group['name']}</span>
+                            <span class="badge badge-success badge-sm font-medium">
+                                {dataset_group['selected_count']} column{'s' if dataset_group['selected_count'] != 1 else ''} selected
+                            </span>
+                            <span class="text-xs text-base-content opacity-50">from {dataset_group['source']}</span>
+                        </div>
+                    </div>
+                '''
+            else:
+                # No columns left in dataset
+                dataset_header_html = f'''
+                    <div class="flex items-center gap-2 flex-1">
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm font-medium text-success">{dataset_name}</span>
+                            <span class="badge badge-success badge-sm font-medium">0 columns selected</span>
+                            <span class="text-xs text-base-content opacity-50">from {source_name}</span>
+                        </div>
+                    </div>
+                '''
+            
+            # Return empty content (removes the column) + badges and header updates via OOB
+            response = f'''<div id="column-badges-{dataset_name.lower()}" hx-swap-oob="innerHTML">{column_badges_html}</div>
+<div id="dataset-header-{dataset_name.lower()}" hx-swap-oob="innerHTML">{dataset_header_html}</div>'''
+            return HttpResponse(response)
+            
+        except Exception as e:
+            logger.error(f"REMOVE_COLUMN: Error removing column from workspace: {e}", exc_info=True)
+            return HttpResponse(f'<div class="alert alert-error">Error: {str(e)}</div>')
+
+
+class SelectAllDatasetColumnsView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
+    """
+    Select all columns from a dataset using coordinator-based architecture.
+    """
+    
+    def post(self, request):
+        """Handle POST requests for selecting all columns from a dataset."""
+        try:
+            organization_id = self.get_organization_id_from_request(request)
+            dataset_name = request.POST.get('dataset')
+            source_name = request.POST.get('source')
+            
+            if not dataset_name or not source_name:
+                return HttpResponse(f'<div class="alert alert-error">Dataset and source parameters required</div>')
+            
+            # Validate that dataset is selected
+            if not self._is_dataset_selected(request, organization_id, dataset_name):
+                return HttpResponse(f'<div class="alert alert-warning">Dataset "{dataset_name}" is not selected</div>')
+            
+            # Get dataset preview to get all column names
+            analyzer = S3DirectDataAnalyzer()
+            source_summary = analyzer.get_s3_source_summary(organization_id, source_name)
+            
+            dataset_preview = None
+            for dataset_info in source_summary.get('datasets', []):
+                if dataset_info.get('name') == dataset_name:
+                    dataset_preview = dataset_info
+                    break
+            
+            if not dataset_preview:
+                return HttpResponse(f'<div class="alert alert-error">Dataset "{dataset_name}" not found</div>')
+            
+            # Add all columns to workspace using coordinator
+            columns_added = 0
+            for column_name in dataset_preview.get('columns', []):
+                success, _, _, _ = self.add_column_with_validation(
+                    request, organization_id, column_name, dataset_name, source_name
+                )
+                if success:
+                    columns_added += 1
+            
+            # Get updated workspace columns and filter for this dataset
+            workspace_columns = self.get_workspace_columns(request, organization_id)
+            dataset_selected_columns = []
+            for col_dict in workspace_columns:
+                # Extract the column ID string from the dictionary
+                col_id = col_dict.get('id') if isinstance(col_dict, dict) else col_dict
+                if col_id:
+                    parsed = self.parse_column_id(col_id)
+                    if parsed['dataset'] == dataset_name and parsed['source'] == source_name:
+                        dataset_selected_columns.append(parsed['column'])
+            
+            # Build dataset context for column badges template
+            dataset_context = {
+                'name': dataset_name,
+                'source': source_name,
+                'preview': {
+                    'colHeaders': dataset_preview.get('columns', [])
+                }
+            }
+            
+            context = {
+                'dataset': dataset_context,
+                'dataset_selected_columns': dataset_selected_columns,
+                'organization_id': organization_id,
+                'csrf_token': request.META.get('CSRF_COOKIE'),
+            }
+            
+            # Return updated column badges HTML
+            return render(request, 'csv_mapping/partials/column_badges.html', context)
+            
+        except Exception as e:
+            logger.error(f"SELECT_ALL_DATASET_COLUMNS: Error selecting all columns: {e}", exc_info=True)
+            return HttpResponse(f'<div class="alert alert-error">Error: {str(e)}</div>')
+
+
+class DeselectAllDatasetColumnsView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
+    """
+    Deselect all columns from a dataset using coordinator-based architecture.
+    """
+    
+    def post(self, request):
+        """Handle POST requests for deselecting all columns from a dataset."""
+        try:
+            organization_id = self.get_organization_id_from_request(request)
+            dataset_name = request.POST.get('dataset')
+            source_name = request.POST.get('source')
+            
+            if not dataset_name or not source_name:
+                return HttpResponse(f'<div class="alert alert-error">Dataset and source parameters required</div>')
+            
+            # Get current workspace columns using coordinator
+            workspace_columns = self.get_workspace_columns(request, organization_id)
+            
+            # Remove all columns belonging to this dataset using coordinator parsing
+            columns_removed = 0
+            updated_columns = []
+            for col_dict in workspace_columns:
+                # Extract the column ID string from the dictionary
+                col_id = col_dict.get('id') if isinstance(col_dict, dict) else col_dict
+                if col_id:
+                    parsed = self.parse_column_id(col_id)
+                    if parsed['dataset'] == dataset_name and parsed['source'] == source_name:
+                        columns_removed += 1
+                    else:
+                        updated_columns.append(col_dict)
+                else:
+                    updated_columns.append(col_dict)
+            
+            # Update workspace using coordinator
+            self.update_workspace_columns(request, organization_id, updated_columns)
+            
+            # Get dataset preview to rebuild column badges
+            analyzer = S3DirectDataAnalyzer()
+            source_summary = analyzer.get_s3_source_summary(organization_id, source_name)
+            
+            dataset_preview = None
+            for dataset_info in source_summary.get('datasets', []):
+                if dataset_info.get('name') == dataset_name:
+                    dataset_preview = dataset_info
+                    break
+            
+            if not dataset_preview:
+                return HttpResponse(f'<div class="alert alert-error">Dataset not found</div>')
+            
+            # Get updated workspace columns and filter for this dataset (should be empty now)
+            updated_workspace_columns = self.get_workspace_columns(request, organization_id)
+            dataset_selected_columns = []
+            for col_dict in updated_workspace_columns:
+                # Extract the column ID string from the dictionary
+                col_id = col_dict.get('id') if isinstance(col_dict, dict) else col_dict
+                if col_id:
+                    parsed = self.parse_column_id(col_id)
+                    if parsed['dataset'] == dataset_name and parsed['source'] == source_name:
+                        dataset_selected_columns.append(parsed['column'])
+            
+            # Build dataset context for column badges template
+            dataset_context = {
+                'name': dataset_name,
+                'source': source_name,
+                'preview': {
+                    'colHeaders': dataset_preview.get('columns', [])
+                }
+            }
+            
+            context = {
+                'dataset': dataset_context,
+                'dataset_selected_columns': dataset_selected_columns,
+                'organization_id': organization_id,
+                'csrf_token': request.META.get('CSRF_COOKIE'),
+            }
+            
+            # Return updated column badges HTML
+            return render(request, 'csv_mapping/partials/column_badges.html', context)
+            
+        except Exception as e:
+            logger.error(f"DESELECT_ALL_DATASET_COLUMNS: Error deselecting all columns: {e}", exc_info=True)
+            return HttpResponse(f'<div class="alert alert-error">Error: {str(e)}</div>')
 
 
 # ==============================================================================
@@ -373,3 +834,139 @@ class UpdateImportStrategyView(OrganizationMixin, ImportStrategyMixin, View):
 #
 # This solves the core architectural challenge you identified!
 # ==============================================================================
+
+class ClearAllDatasetsView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
+    """
+    Clear all dataset selections view using coordinator-based architecture.
+    
+    USES: CSVMappingCoordinatorMixin for proper dataset clearing with column cascade
+    """
+    
+    def post(self, request):
+        """Handle POST requests for clearing all dataset selections."""
+        try:
+            organization_id = self.get_organization_id_from_request(request)
+            
+            # Get current selected datasets
+            selected_datasets, _ = self.get_selected_datasets_with_details(request, organization_id, [])
+            
+            if not selected_datasets:
+                # No datasets to clear
+                context = {
+                    'datasets': [],
+                    'selected_datasets': [],
+                    'organization_id': organization_id,
+                    'csrf_token': request.META.get('CSRF_COOKIE'),
+                }
+                return render(request, 'csv_mapping/partials/dataset_badges.html', context)
+            
+            # Clear all datasets by toggling each one off
+            total_columns_removed = 0
+            for dataset_name in selected_datasets[:]:  # Copy the list since we're modifying it
+                _, was_added, columns_affected = self.toggle_dataset_selection_with_cascade(
+                    request, organization_id, dataset_name
+                )
+                if not was_added:  # Dataset was removed
+                    total_columns_removed += columns_affected
+            
+            # Return updated workspace (empty) + update table via OOB
+            from django.template.loader import render_to_string
+            
+            # Return completely empty workspace - just the container structure
+            workspace_html = '''
+            <div id="selected-columns-workspace" class="flex-1 flex flex-col h-full">
+                <!-- Header with count and controls -->
+                <div class="flex items-center justify-between mb-2 flex-shrink-0">
+                    <!-- Clear All Button (hidden when empty) -->
+                    <div id="workspace-actions" class="flex gap-2 hidden"></div>
+                </div>
+                <!-- Empty workspace container -->
+                <div id="workspace-datasets-container" class="flex-1 overflow-y-auto space-y-2"></div>
+            </div>
+            '''
+            
+            # Get updated CSV datasets for table update
+            csv_datasets = self.get_csv_datasets_for_organization(organization_id)
+            
+            # Get datasets with details but mark all as deselected
+            selected_datasets_with_details, _ = self.get_selected_datasets_with_details(
+                request, organization_id, csv_datasets
+            )
+            
+            # Since we cleared all, there should be no selected datasets with details
+            # But we still want to show the datasets in the table, just deselected
+            # So we pass empty selected_datasets_with_details to show the "select datasets" state
+            table_context = {
+                'datasets': csv_datasets,
+                'selected_datasets': [],  # Empty after clearing all
+                'selected_datasets_with_details': [],  # Empty to show initial state
+                'organization_id': organization_id,
+                'csrf_token': request.META.get('CSRF_COOKIE'),
+            }
+            table_html = render_to_string('csv_mapping/partials/table_content.html', table_context, request=request)
+            
+            # Combined response: empty workspace + table update via OOB
+            response = f'{workspace_html}<div id="table-content" hx-swap-oob="innerHTML">{table_html}</div>'
+            
+            logger.info(f"CLEAR_ALL_DATASETS: Cleared {len(selected_datasets)} datasets, removed {total_columns_removed} columns")
+            return HttpResponse(response)
+            
+        except Exception as e:
+            logger.error(f"CLEAR_ALL_DATASETS: Error clearing datasets: {e}", exc_info=True)
+            return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+
+class LoadMoreDatasetRowsView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
+    """
+    Load more dataset rows view using coordinator-based architecture.
+    
+    COORDINATOR IMPLEMENTATION: Pure coordinator-based dataset row loading
+    """
+    
+    def get(self, request):
+        """Handle GET requests for loading more dataset rows."""
+        try:
+            organization_id = self.get_organization_id_from_request(request)
+            dataset_name = request.GET.get('dataset')
+            source_name = request.GET.get('source')
+            offset = int(request.GET.get('offset', 0))
+            limit = int(request.GET.get('limit', 10))
+            
+            if not dataset_name or not source_name:
+                return HttpResponse('<tr><td colspan="100%" class="text-danger">Dataset and source parameters required</td></tr>')
+            
+            # Use S3DirectDataAnalyzer to get more rows
+            analyzer = S3DirectDataAnalyzer()
+            
+            # Get the dataset with more data
+            source_summary = analyzer.get_s3_source_summary(organization_id, source_name)
+            
+            # Find the specific dataset
+            dataset_preview = None
+            for dataset_info in source_summary.get('datasets', []):
+                if dataset_info.get('name') == dataset_name:
+                    # Get more data with offset and limit
+                    full_data = analyzer.get_dataset_preview(source_name, dataset_name, limit=offset + limit)
+                    if full_data and 'sample_data' in full_data:
+                        # Extract only the new rows
+                        all_rows = full_data['sample_data']
+                        new_rows = all_rows[offset:offset + limit] if len(all_rows) > offset else []
+                        dataset_preview = {'sample_data': new_rows}
+                    break
+            
+            if not dataset_preview or not dataset_preview.get('sample_data'):
+                return HttpResponse('<tr><td colspan="100%" class="text-info">No more rows available</td></tr>')
+            
+            # Return just the table rows
+            context = {
+                'data': dataset_preview['sample_data'],
+                'dataset': dataset_name,
+                'source': source_name,
+            }
+            
+            return render(request, 'csv_mapping/partials/table_rows.html', context)
+            
+        except Exception as e:
+            logger.error(f"LOAD_MORE_ROWS: Error loading more dataset rows: {e}", exc_info=True)
+            return HttpResponse(f'<tr><td colspan="100%" class="text-danger">Error: {str(e)}</td></tr>')

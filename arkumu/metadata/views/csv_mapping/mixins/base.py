@@ -71,15 +71,7 @@ class OrganizationMixin:
         
         try:
             analyzer = S3DirectDataAnalyzer()
-            organizations = analyzer.discover_available_organizations()
-            available_organizations = [
-                {
-                    'id': org_id,
-                    'name': org_name,
-                    'status': 'active'  # Could be enhanced with actual status checking
-                }
-                for org_id, org_name in organizations.items()
-            ]
+            available_organizations = self._discover_available_organizations(analyzer)
             
             if use_cache:
                 cache.set(cache_key, available_organizations, timeout=300)  # Cache for 5 minutes
@@ -125,3 +117,44 @@ class OrganizationMixin:
             'organizations': available_organizations,
             'organization_exists': org_exists,
         } 
+    
+    def _discover_available_organizations(self, analyzer):
+        """
+        Discover available organizations by checking S3 buckets.
+        Similar to how archivist dashboard works.
+        """
+        try:
+            # Standard organization list (same as archivist dashboard)
+            standard_orgs = [
+                {'id': 'rsh', 'name': 'Robert Schumann Hochschule Düsseldorf', 'status': 'unknown'},
+                {'id': 'khm', 'name': 'Kunsthochschule für Medien Köln', 'status': 'unknown'},
+                {'id': 'fuk', 'name': 'Folkwang Universität der Künste', 'status': 'unknown'},
+                {'id': 'hmt', 'name': 'Hochschule für Musik und Tanz Köln', 'status': 'unknown'},
+                {'id': 'det', 'name': 'Hochschule für Musik Detmold', 'status': 'unknown'},
+            ]
+            
+            # Check which organizations actually have S3 data
+            for org in standard_orgs:
+                try:
+                    # Try to discover sources for this organization
+                    sources = analyzer.discover_s3_data_sources(org['id'])
+                    if sources:  # If sources found, mark as active
+                        org['status'] = 'active'
+                    else:
+                        org['status'] = 'inactive'
+                except Exception as e:
+                    logger.debug(f"Organization {org['id']} check failed: {e}")
+                    org['status'] = 'inactive'
+            
+            return standard_orgs
+            
+        except Exception as e:
+            logger.error(f"Error discovering organizations: {e}")
+            # Return standard list with unknown status if discovery fails
+            return [
+                {'id': 'rsh', 'name': 'Robert Schumann Hochschule Düsseldorf', 'status': 'unknown'},
+                {'id': 'khm', 'name': 'Kunsthochschule für Medien Köln', 'status': 'unknown'},
+                {'id': 'fuk', 'name': 'Folkwang Universität der Künste', 'status': 'unknown'},
+                {'id': 'hmt', 'name': 'Hochschule für Musik und Tanz Köln', 'status': 'unknown'},
+                {'id': 'det', 'name': 'Hochschule für Musik Detmold', 'status': 'unknown'},
+            ]

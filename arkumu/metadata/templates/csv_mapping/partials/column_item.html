@@ -111,20 +111,22 @@
             </div>
             {% endif %}
             
-            <!-- Hidden form for remove column data -->
+            <!-- Hidden form for remove column data (coordinator-based) -->
             <form id="remove-data-form-{{ column.id|slugify }}" style="display: none;">
-                <input type="hidden" name="column_id" value="{{ column.id }}">
-                <textarea name="datasets">{{ datasets_json|default:"[]" }}</textarea>
+                <input type="hidden" name="column_name" value="{{ column.name }}">
+                <input type="hidden" name="dataset_name" value="{{ column.dataset }}">
+                <input type="hidden" name="source_name" value="{{ column.source }}">
+                <input type="hidden" name="organization" value="{{ organization_id }}">
                 <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
             </form>
             
             <!-- Remove button -->
             <div class="tooltip tooltip-left" data-tip="Remove column">
                 <button class="btn btn-xs btn-square btn-ghost text-error" 
-                        hx-post="{% url 'metadata:remove_column_from_workspace' %}"
+                        hx-post="{% url 'metadata:csv_remove_column_from_workspace' %}"
                         hx-include="#remove-data-form-{{ column.id|slugify }}"
-                        hx-target="#dataset-workspace-{{ column.dataset|slugify }}"
-                        hx-swap="innerHTML">
+                        hx-target="#column-{{ column.id|slugify }}"
+                        hx-swap="outerHTML">
                     <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                     </svg>
