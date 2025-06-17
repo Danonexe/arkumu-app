@@ -1,6 +1,6 @@
 from django.urls import path
 from arkumu.metadata.views import dashboard_views, resource_views, triple_views, graph_views, bulk_editor_views, data_discovery_views, data_explorer_views, split_views, direct_data_views
-from arkumu.metadata.views.csv_mapping import csv_mapping_views
+from arkumu.metadata.views.csv_mapping import csv_mapping_views, mapping_persistence_views
 
 app_name = 'metadata'
 
@@ -160,6 +160,12 @@ urlpatterns = [
     
     # Missing URLs that templates reference (now using proper CSV mapping views with coordinator mixins)
     path('csv-clear-all-datasets/', csv_mapping_views.ClearAllDatasetsView.as_view(), name='csv_clear_all_datasets'),
+    
+    # Mapping persistence endpoints
+    path('csv-save-mapping/', mapping_persistence_views.SaveMappingView.as_view(), name='csv_save_mapping'),
+    path('csv-load-mapping/', mapping_persistence_views.LoadMappingView.as_view(), name='csv_load_mapping'),
+    path('csv-list-mappings/', mapping_persistence_views.ListMappingsView.as_view(), name='csv_list_mappings'),
+    path('csv-delete-mapping/', mapping_persistence_views.DeleteMappingView.as_view(), name='csv_delete_mapping'),
     path('csv-deselect-all-columns/', direct_data_views.deselect_all_columns, name='deselect_all_columns'),
     path('csv-select-all-dataset-columns/', direct_data_views.select_all_dataset_columns, name='select_all_dataset_columns'),
     path('csv-deselect-all-dataset-columns/', direct_data_views.deselect_all_dataset_columns, name='deselect_all_dataset_columns'),

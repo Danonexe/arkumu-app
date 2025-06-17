@@ -14,6 +14,7 @@ Key principles:
 import logging
 from .csv_data import CSVDataMixin
 from .workspace import MappingWorkspaceMixin
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
@@ -724,3 +725,193 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         return (dataset_lower.endswith(('.csv', '.tsv', '.txt')) or 
                 'csv' in dataset_lower or 
                 (source.format and source.format.lower() in ['csv', 'tsv', 'text']))
+
+    # ==========================================================================
+    # Mapping Persistence (Save/Load State)
+    # ==========================================================================
+    
+    def serialize_current_mapping_state(self, request, organization_id, mapping_name=None):
+        """
+        Serialize current coordinator state to a mapping configuration.
+        
+        This captures all current UI state including selected datasets,
+        workspace columns, FK relationships, and entity configurations.
+        
+        Args:
+            request: Django request object
+            organization_id (str): Organization ID
+            mapping_name (str, optional): Name for the mapping
+            
+        Returns:
+            dict: Serialized mapping configuration suitable for Mapping.mapping_config
+        """
+        logger.info(f"SERIALIZE_MAPPING: Starting serialization for organization {organization_id}")
+        
+        # Get current state
+        selected_datasets = self.get_selected_dataset_names(request, organization_id)
+        workspace_columns = self.get_workspace_columns(request, organization_id)
+        
+        # Serialize FK relationships from workspace columns
+        fk_relationships = {}
+        entity_mappings = {}
+        
+        for column_id, column_data in workspace_columns.items():
+            # Extract FK configurations
+            if column_data.get('fk_config'):
+                fk_relationships[column_id] = {
+                    'target_dataset': column_data['fk_config'].get('target_dataset'),
+                    'target_column': column_data['fk_config'].get('target_column'),
+                    'display_column': column_data['fk_config'].get('display_column'),
+                    'relationship_type': column_data['fk_config'].get('relationship_type', 'reference')
+                }
+            
+            # Extract RDF predicate mappings (if any)
+            if column_data.get('rdf_predicate'):
+                if 'predicate_mappings' not in entity_mappings:
+                    entity_mappings['predicate_mappings'] = {}
+                entity_mappings['predicate_mappings'][column_id] = column_data['rdf_predicate']
+            
+            # Extract subject column designation (if any)
+            if column_data.get('is_subject_column'):
+                entity_mappings['subject_column'] = column_id
+        
+        # Build complete mapping configuration
+        mapping_config = {
+            'version': '1.0',
+            'created_at': timezone.now().isoformat(),
+            'organization_id': organization_id,
+            'selected_datasets': selected_datasets,
+            'workspace_columns': workspace_columns,
+            'fk_relationships': fk_relationships,
+            'entity_mappings': entity_mappings,
+            'metadata': {
+                'total_datasets': len(selected_datasets),
+                'total_columns': len(workspace_columns),
+                'total_fk_relationships': len(fk_relationships),
+                'mapping_name': mapping_name or f"Mapping_{timezone.now().strftime('%Y%m%d_%H%M%S')}"
+            }
+        }
+        
+        logger.info(f"SERIALIZE_MAPPING: Serialized {len(selected_datasets)} datasets, {len(workspace_columns)} columns, {len(fk_relationships)} FK relationships")
+        return mapping_config
+    
+    def deserialize_mapping_state(self, request, organization_id, mapping_config):
+        """
+        Restore coordinator state from a mapping configuration.
+        
+        This loads a saved mapping and restores all UI state including
+        selected datasets, workspace columns, and FK relationships.
+        
+        Args:
+            request: Django request object
+            organization_id (str): Organization ID
+            mapping_config (dict): Mapping configuration from Mapping.mapping_config
+            
+        Returns:
+            dict: Summary of restored state
+        """
+        logger.info(f"DESERIALIZE_MAPPING: Starting deserialization for organization {organization_id}")
+        
+        # Validate mapping config
+        if not mapping_config or mapping_config.get('organization_id') != organization_id:
+            raise ValueError(f"Invalid mapping config for organization {organization_id}")
+        
+        # Clear current state first
+        self.reset_all_coordinator_state(request, organization_id)
+        
+        # Restore selected datasets
+        selected_datasets = mapping_config.get('selected_datasets', [])
+        if selected_datasets:
+            selected_datasets_key = f"selected_datasets_{organization_id}"
+            request.session[selected_datasets_key] = selected_datasets
+            logger.info(f"DESERIALIZE_MAPPING: Restored {len(selected_datasets)} selected datasets")
+        
+        # Restore workspace columns
+        workspace_columns = mapping_config.get('workspace_columns', {})
+        if workspace_columns:
+            workspace_key = f"workspace_columns_{organization_id}"
+            request.session[workspace_key] = workspace_columns
+            logger.info(f"DESERIALIZE_MAPPING: Restored {len(workspace_columns)} workspace columns")
+        
+        # Save session changes
+        request.session.modified = True
+        
+        # Build restoration summary
+        fk_relationships = mapping_config.get('fk_relationships', {})
+        metadata = mapping_config.get('metadata', {})
+        
+        summary = {
+            'datasets_restored': len(selected_datasets),
+            'columns_restored': len(workspace_columns),
+            'fk_relationships_restored': len(fk_relationships),
+            'mapping_name': metadata.get('mapping_name', 'Unknown'),
+            'original_created_at': mapping_config.get('created_at'),
+            'version': mapping_config.get('version', 'Unknown')
+        }
+        
+        logger.info(f"DESERIALIZE_MAPPING: Successfully restored mapping '{summary['mapping_name']}' with {summary['datasets_restored']} datasets and {summary['columns_restored']} columns")
+        return summary
+    
+    def validate_mapping_compatibility(self, request, organization_id, mapping_config):
+        """
+        Validate that a mapping configuration is compatible with current datasets.
+        
+        This checks if the datasets and columns referenced in the mapping
+        are still available in the current organization context.
+        
+        Args:
+            request: Django request object  
+            organization_id (str): Organization ID
+            mapping_config (dict): Mapping configuration to validate
+            
+        Returns:
+            dict: Validation results with warnings/errors
+        """
+        logger.info(f"VALIDATE_MAPPING: Validating mapping compatibility for organization {organization_id}")
+        
+        validation_result = {
+            'is_valid': True,
+            'warnings': [],
+            'errors': [],
+            'missing_datasets': [],
+            'missing_columns': []
+        }
+        
+        # Get available datasets for this organization
+        try:
+            available_datasets = self.get_csv_datasets_for_organization(organization_id)
+            available_dataset_names = [ds['name'] for ds in available_datasets]
+        except Exception as e:
+            validation_result['errors'].append(f"Failed to get available datasets: {str(e)}")
+            validation_result['is_valid'] = False
+            return validation_result
+        
+        # Check dataset availability
+        required_datasets = mapping_config.get('selected_datasets', [])
+        for dataset_name in required_datasets:
+            if dataset_name not in available_dataset_names:
+                validation_result['missing_datasets'].append(dataset_name)
+                validation_result['is_valid'] = False
+        
+        # Check column availability
+        workspace_columns = mapping_config.get('workspace_columns', {})
+        for column_id in workspace_columns.keys():
+            # Parse column ID: "source::dataset::column_name"
+            parts = column_id.split('::', 2)
+            if len(parts) == 3:
+                source, dataset_name, column_name = parts
+                if dataset_name not in available_dataset_names:
+                    validation_result['missing_columns'].append(column_id)
+                    if dataset_name not in validation_result['missing_datasets']:
+                        validation_result['missing_datasets'].append(dataset_name)
+        
+        # Generate warnings/errors
+        if validation_result['missing_datasets']:
+            validation_result['errors'].append(f"Missing datasets: {', '.join(validation_result['missing_datasets'])}")
+            validation_result['is_valid'] = False
+        
+        if validation_result['missing_columns']:
+            validation_result['warnings'].append(f"Some columns may not be available: {len(validation_result['missing_columns'])} columns")
+        
+        logger.info(f"VALIDATE_MAPPING: Validation result - Valid: {validation_result['is_valid']}, Warnings: {len(validation_result['warnings'])}, Errors: {len(validation_result['errors'])}")
+        return validation_result
