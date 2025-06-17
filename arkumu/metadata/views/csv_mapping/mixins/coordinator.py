@@ -30,6 +30,31 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
     # Column ID Management (Dataset-Aware)
     # ==========================================================================
     
+    # ==========================================================================
+    # Selected Dataset Retrieval (Direct Session Access)
+    # ==========================================================================
+    
+    def get_selected_dataset_names(self, request, organization_id):
+        """
+        Get only the selected dataset names from session (lightweight).
+        
+        This is more efficient than get_selected_datasets_with_details() when
+        you only need the names and not the full dataset objects.
+        
+        Args:
+            request: Django request object
+            organization_id (str): Organization ID
+            
+        Returns:
+            list: List of selected dataset names
+        """
+        selected_datasets_key = f"selected_datasets_{organization_id}"
+        return request.session.get(selected_datasets_key, [])
+    
+    # ==========================================================================
+    # Column ID Management (Dataset-Aware)
+    # ==========================================================================
+    
     @staticmethod
     def generate_column_id(dataset_name, column_name, source_name=None):
         """
@@ -258,9 +283,7 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         Returns:
             bool: True if dataset is selected
         """
-        selected_datasets, _ = self.get_selected_datasets_with_details(
-            request, organization_id, []  # We only need the selected list, not details
-        )
+        selected_datasets = self.get_selected_dataset_names(request, organization_id)
         return dataset_name in selected_datasets
     
     # ==========================================================================
@@ -375,8 +398,8 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         # Get columns grouped by dataset
         columns_by_dataset = self.get_columns_by_dataset(request, organization_id)
         
-        # Get selected datasets
-        selected_datasets, _ = self.get_selected_datasets_with_details(request, organization_id, [])
+        # Get selected datasets (names only - more efficient)
+        selected_datasets = self.get_selected_dataset_names(request, organization_id)
         
         # Calculate additional metrics
         datasets_with_columns = set(columns_by_dataset.keys())
@@ -457,6 +480,58 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         return datasets_with_columns
 
     # ==========================================================================
+    # Coordinator State Reset (Complete Clear All)
+    # ==========================================================================
+    
+    def reset_all_coordinator_state(self, request, organization_id):
+        """
+        Completely reset all coordinator state - datasets, columns, and relationships.
+        
+        UNIFIED RESET: This is the definitive "Clear All" method that resets everything.
+        
+        Args:
+            request: Django request object
+            organization_id (str): Organization ID
+            
+        Returns:
+            tuple: (datasets_cleared, columns_cleared, summary)
+        """
+        logger.info(f"🔄 COORDINATOR: COMPLETE STATE RESET for org='{organization_id}'")
+        
+        # 1. Get current state before reset
+        current_workspace = self.get_workspace_columns(request, organization_id)
+        selected_datasets = self.get_selected_dataset_names(request, organization_id)
+        
+        # 2. Clear ALL workspace columns first (most important)
+        self.clear_workspace_columns(request, organization_id)
+        columns_cleared = len(current_workspace)
+        
+        # 3. Clear ALL dataset selections
+        self.clear_selected_datasets(request, organization_id)
+        datasets_cleared = len(selected_datasets)
+        
+        # 4. Clear any cached FK datasets (optional cleanup)
+        self.clear_fk_datasets_cache(request, organization_id)
+        
+        # 5. Verify complete reset
+        final_workspace = self.get_workspace_columns(request, organization_id)
+        final_datasets = self.get_selected_dataset_names(request, organization_id)
+        
+        is_clean = len(final_workspace) == 0 and len(final_datasets) == 0
+        
+        summary = {
+            'datasets_cleared': datasets_cleared,
+            'columns_cleared': columns_cleared,
+            'is_completely_clean': is_clean,
+            'final_workspace_count': len(final_workspace),
+            'final_datasets_count': len(final_datasets)
+        }
+        
+        logger.info(f"🔄 COORDINATOR: RESET COMPLETE - Cleared {datasets_cleared} datasets, {columns_cleared} columns, clean={is_clean}")
+        
+        return datasets_cleared, columns_cleared, summary
+
+    # ==========================================================================
     # Consistency Maintenance
     # ==========================================================================
     
@@ -478,7 +553,7 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         
         # Get current state
         workspace_columns = self.get_workspace_columns(request, organization_id)
-        selected_datasets, _ = self.get_selected_datasets_with_details(request, organization_id, [])
+        selected_datasets = self.get_selected_dataset_names(request, organization_id)
         
         # Find columns from unselected datasets
         valid_columns = [
