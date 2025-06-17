@@ -4,7 +4,7 @@
              id="badge-{{ dataset.name|slugify }}"
              data-source="{{ dataset.source }}"
              data-dataset="{{ dataset.name }}"
-             hx-post="{% url 'metadata:toggle_dataset_card' %}"
+             hx-post="{% url 'metadata:csv_toggle_dataset_card' %}"
              hx-vals='{"source": "{{ dataset.source }}", "dataset": "{{ dataset.name }}", "organization": "{{ organization_id }}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
              hx-target="#table-content"
              hx-swap="innerHTML">
