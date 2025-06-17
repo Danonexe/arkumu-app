@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}CSV Mapping Editor{% endblock %}
+
+{% block content %}
+<!-- CSRF token for HTMX requests -->
+{% csrf_token %}
+<div class="min-h-screen bg-base-200 p-0 m-0 w-full">
+
+    <!-- Header -->
+    <div class="bg-base-100 border-b border-base-300">
+        <div class="container mx-auto max-w-none px-4 py-3">
+            <h1 class="text-xl font-semibold">CSV Mapping Editor</h1>
+            <div class="text-sm text-base-content opacity-70">
+                Design import mappings for SmartBulkUpdater
+            </div>
+        </div>
+    </div>
+    
+    <!-- Controls Section -->
+    <div class="bg-base-100 p-4 shadow-sm">
+        <div class="flex items-center gap-6">
+            <!-- Organization selector with label -->
+            <div class="flex items-center gap-3">
+                <span class="text-sm font-medium">Organization:</span>
+                <select name="organization" 
+                        class="select select-bordered select-sm"
+                        id="organization-selector"
+                        hx-get="{% url 'metadata:csv_mapping_editor' %}"
+                        hx-target="body"
+                        hx-swap="outerHTML"
+                        hx-trigger="change"
+                        hx-indicator=".loading-indicator"
+                        hx-include="this">
+                <option value="">Choose organization...</option>
+                {% for org in organizations %}
+                    <option value="{{ org.id }}" {% if org.id == organization_id %}selected{% endif %}>
+                        {{ org.name }}{% if org.status == 'active' %} ✓{% endif %}
+                    </option>
+                {% endfor %}
+                </select>
+                {% if organization_id %}
+                <span class="text-sm text-base-content opacity-70">{{ organization_id }}</span>
+                {% endif %}
+            </div>
+            
+            <div class="loading-indicator htmx-indicator flex items-center gap-2 ml-auto" style="display: none;">
+                <span class="loading loading-spinner loading-sm"></span>
+                <span class="text-sm">Loading...</span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Dataset Workspace - Keep all state in main template -->
+    {% if organization_id %}
+    <!-- Dataset Labels -->
+    <div class="bg-base-100 px-4 py-3 border-b border-base-300">
+        <div class="flex flex-wrap gap-2" id="dataset-badges">
+            {% include 'csv_mapping/partials/dataset_badges.html' with datasets=datasets selected_datasets=selected_datasets organization_id=organization_id csrf_token=csrf_token datasets_json=datasets_json %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Split Content Area with Fixed Graph Panel -->
+    <div class="container mx-auto max-w-none p-4">
+        <div id="split-content" class="relative grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <!-- Table Panel (Left) - Scrollable -->
+            <div class="card bg-base-100 shadow-xl h-[calc(100vh-160px)] overflow-y-auto">
+                <div class="card-header sticky top-0 z-10 bg-base-100">
+                    <div class="flex items-center gap-2 p-4 border-b border-base-300">
+                        <svg class="w-5 h-5 text-success" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+                        </svg>
+                        <h3 class="card-title text-lg text-success">CSV Datasets</h3>
+                        <div class="ml-auto">
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body p-4 overflow-y-auto" id="table-content">
+                    {% if selected_datasets_with_details %}
+                        {% for dataset in selected_datasets_with_details %}
+                            <div id="csv-dataset-{{ dataset.name|slugify }}" 
+                                 hx-get="{% url 'metadata:csv_dataset_card' %}?source={{ dataset.source|urlencode }}&dataset_name={{ dataset.name|urlencode }}&organization={{ organization_id }}"
+                                 hx-trigger="load once"
+                                 hx-swap="outerHTML">
+                                <div class="card bg-base-100 shadow-lg border border-base-300 p-4">
+                                    <div class="flex items-center gap-2">
+                                        <div class="loading loading-spinner loading-sm"></div>
+                                        <span>Loading {{ dataset.name }}...</span>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    {% else %}
+                        <!-- Initial state - multi-dataset accumulation view -->
+                        <div class="hero h-40" id="empty-csv-state">
+                            <div class="hero-content text-center">
+                                <div class="max-w-md">
+                                    <svg class="w-16 h-16 mx-auto mb-4 text-base-content opacity-30" fill="currentColor" viewBox="0 0 20 20">
+                                        <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+                                    </svg>
+                                    <p class="text-base-content opacity-50">Select CSV datasets above to begin mapping</p>
+                                    <p class="text-xs text-base-content opacity-30 mt-2">Preview column structures • Configure relationships • Design import strategy</p>
+                                </div>
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Mapping Configuration Panel (Right) - Fixed -->
+            <div class="lg:sticky lg:top-4 h-[calc(100vh-160px)]">
+                <div class="card rounded-box bg-base-100 shadow-lg h-full overflow-hidden">
+                    <div class="card-body p-4 flex flex-col h-full">
+                        <!-- Header -->
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-medium">Column Mapping Workspace</h3>
+                        </div>
+                        <div class="divider my-0"></div>
+                        
+                        <!-- Mapping Workspace Content -->
+                        <div class="flex-1 overflow-y-auto">
+                            {% include 'csv_mapping/partials/mapping_workspace.html' with datasets=datasets organization_id=organization_id selected_columns=selected_columns active_datasets=selected_datasets_with_details datasets_json=datasets_json csrf_token=csrf_token %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Hidden template for empty state -->
+<template id="empty-csv-state-template">
+    <div class="hero h-40" id="empty-csv-state">
+        <div class="hero-content text-center">
+            <div class="max-w-md">
+                <svg class="w-16 h-16 mx-auto mb-4 text-base-content opacity-30" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+                </svg>
+                <p class="text-base-content opacity-50">Select CSV datasets above to begin mapping</p>
+                <p class="text-xs text-base-content opacity-30 mt-2">Preview column structures • Configure relationships • Design import strategy</p>
+            </div>
+        </div>
+    </div>
+</template>
+
+<!-- Status Toast -->
+<div id="status-toast" class="toast toast-top toast-end z-50" style="display: none;">
+    <div class="alert shadow-lg">
+        <div>
+            <svg class="stroke-current flex-shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <span id="status-message">Status message</span>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block javascript %}
+{{ block.super }}
+{% endblock %}
+
+{% block inline_javascript %}
+{{ block.super }}
+<!-- Pure HTMX - no JavaScript needed! -->
+{% endblock %} 

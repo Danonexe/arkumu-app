@@ -1,0 +1,28 @@
+<!-- CSV Column Mapping Workspace -->
+<div id="mapping-workspace" class="flex flex-col h-full">
+    
+    <!-- Import Strategy Configuration -->
+    <div class="mb-4">
+        <div class="card bg-base-50 border border-secondary/20">
+            <div class="card-body p-3">
+                <h4 class="text-sm font-medium text-secondary mb-2">Import Strategy</h4>
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                        <span class="text-base-content opacity-60">Update:</span>
+                        <span class="badge badge-secondary badge-xs ml-1">{{ import_strategy.update_strategy|default:"SKIP_EXISTING" }}</span>
+                    </div>
+                    <div>
+                        <span class="text-base-content opacity-60">Topology:</span>
+                        <span class="badge badge-accent badge-xs ml-1">{{ import_strategy.link_topology|default:"row" }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Selected Columns Workspace - This will be updated by HTMX -->
+    <div id="selected-columns-workspace" class="flex-1 overflow-y-auto">
+        {% include 'csv_mapping/partials/selected_columns_workspace.html' with selected_columns=selected_columns active_datasets=active_datasets datasets=datasets organization_id=organization_id datasets_json=datasets_json csrf_token=csrf_token %}
+    </div>
+    
+</div> 

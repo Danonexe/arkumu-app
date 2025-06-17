@@ -1,5 +1,6 @@
 from django.urls import path
 from arkumu.metadata.views import dashboard_views, resource_views, triple_views, graph_views, bulk_editor_views, data_discovery_views, data_explorer_views, split_views, direct_data_views
+from arkumu.metadata.views.csv_mapping import csv_mapping_views
 
 app_name = 'metadata'
 
@@ -135,4 +136,22 @@ urlpatterns = [
     
     # Tooltip helpers for HTMX
     path('tooltip/', direct_data_views.tooltip_view, name='tooltip'),
+    
+    # ==============================================================================
+    # CSV Mapping Editor (Step-by-step extraction from direct_data_views)
+    # ==============================================================================
+    
+    # Main CSV Mapping Editor
+    path('csv-mapping-editor/', csv_mapping_views.csv_mapping_editor_view, name='csv_mapping_editor'),
+    
+    # Step 2: Dataset card views (placeholder URLs for now)
+    path('csv-dataset-card/', csv_mapping_views.csv_mapping_editor_view, name='csv_dataset_card'),  # TODO: Implement in Step 2
+    path('toggle-csv-dataset/', csv_mapping_views.csv_mapping_editor_view, name='toggle_dataset_card'),  # TODO: Implement in Step 2
+    
+    # Step 3: Column workspace management URLs (placeholder for now)
+    # These will be implemented as we extract more views from direct_data_views
+    
+    # Step 4: FK configuration URLs (placeholder for now)
+    # These will be implemented as we extract more views from direct_data_views
+    
     ]
