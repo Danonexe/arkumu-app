@@ -943,15 +943,31 @@ class ClearAllDatasetsView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
             # Get updated CSV datasets and context
             csv_datasets = self.get_csv_datasets_for_organization(organization_id)
             
-            context = {
+            badges_context = {
                 'datasets': csv_datasets,
                 'selected_datasets': [],  # Empty after clearing all
                 'organization_id': organization_id,
                 'csrf_token': request.META.get('CSRF_COOKIE'),
             }
             
+            # Also update table content to show empty state
+            table_context = {
+                'selected_datasets_with_details': [],  # Empty after clearing all
+                'organization_id': organization_id,
+                'csrf_token': request.META.get('CSRF_COOKIE'),
+            }
+            
+            from django.template.loader import render_to_string
+            
+            # Render both templates
+            badges_html = render_to_string('csv_mapping/partials/dataset_badges.html', badges_context, request=request)
+            table_html = render_to_string('csv_mapping/partials/table_content.html', table_context, request=request)
+            
+            # Return badges as main response + table update via OOB
+            response = f'{badges_html}<div id="table-content" hx-swap-oob="innerHTML">{table_html}</div>'
+            
             logger.info(f"CLEAR_ALL_DATASETS: Cleared {len(selected_datasets)} datasets, removed {total_columns_removed} columns")
-            return render(request, 'csv_mapping/partials/dataset_badges.html', context)
+            return HttpResponse(response)
             
         except Exception as e:
             logger.error(f"CLEAR_ALL_DATASETS: Error clearing datasets: {e}", exc_info=True)
