@@ -1,58 +1,65 @@
-<!-- Compact Column Item using DaisyUI List Style -->
-<div class="flex flex-col" 
+<!-- Enhanced Column Item with DaisyUI Card -->
+<div class="card card-compact bg-base-100 border border-base-300 hover:border-primary/50 hover:shadow-md transition-all duration-200 w-full" 
      data-column-id="{{ column.id }}"
      id="column-{{ column.id|slugify }}">
     
-
-    
-    <!-- Compact column row -->
-    <div class="flex items-center justify-between p-2 hover:bg-base-200 hover:border-primary/30 rounded-md border border-base-300 bg-base-100 transition-all duration-200 hover:shadow-sm">
-        
-        <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-1">
-                <!-- Compact status indicators -->
-                {% if column.is_anchor %}
-                <div class="badge badge-warning badge-xs flex-shrink-0 font-medium" title="Anchor Column: Primary column for building relationships">
-                    ⚓
-                </div>
-                {% endif %}
-                {% if column.is_fk %}
-                <div class="badge badge-secondary badge-xs flex-shrink-0 font-medium" 
-                     title="Foreign Key: Links to {{ column.fk_config.target_dataset|default:'target dataset' }}.{{ column.fk_config.target_column|default:'target column' }}">
-                    🔗
-                </div>
-                {% endif %}
-                {% if column.is_multi_value %}
-                <div class="badge badge-accent badge-xs flex-shrink-0 font-medium" title="Multi-value: Contains multiple values that will be split during processing">
-                    🔀
-                </div>
-                {% endif %}
-                
-                <!-- Compact column info -->
-                <div class="min-w-0 flex-1">
-                    <div class="font-medium truncate text-sm">
-                        <span class="text-success">{{ column.dataset }}</span><span class="text-base-content opacity-50">.</span><span class="text-primary">{{ column.name }}</span>
+    <div class="card-body p-3">
+        <div class="flex items-center justify-between gap-3">
+            
+            <!-- Column Info Section -->
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 mb-2">
+                    <!-- Status Badges -->
+                    {% if column.is_anchor %}
+                    <div class="badge badge-warning badge-sm gap-1" title="Anchor Column: Primary column for building relationships">
+                        ⚓
+                        Anchor
                     </div>
-                    
-                    <!-- Compact metadata -->
-                    {% if column.type or column.sample_values %}
-                    <div class="flex items-center gap-1 text-xs text-base-content opacity-60">
-                        {% if column.type %}
-                        <span class="badge badge-ghost badge-xs">{{ column.type }}</span>
-                        {% endif %}
-                        {% if column.sample_values %}
-                        <span class="truncate max-w-[80px]" title="Sample values: {{ column.sample_values|join:', ' }}">
-                            💾 {{ column.sample_values.0|default:'' }}{% if column.sample_values|length > 1 %}...{% endif %}
-                        </span>
-                        {% endif %}
+                    {% endif %}
+                    {% if column.is_fk %}
+                    <div class="badge badge-secondary badge-sm gap-1" 
+                         title="Foreign Key: Links to {{ column.fk_config.target_dataset|default:'target dataset' }}.{{ column.fk_config.target_column|default:'target column' }}">
+                        🔗
+                        FK
+                    </div>
+                    {% endif %}
+                    {% if column.is_multi_value %}
+                    <div class="badge badge-accent badge-sm gap-1" title="Multi-value: Contains multiple values that will be split during processing">
+                        🔀
+                        Multi
                     </div>
                     {% endif %}
                 </div>
+                
+                <!-- Column Name and Dataset -->
+                <div class="mb-1">
+                    <h4 class="font-semibold text-sm truncate">
+                        <span class="text-success">{{ column.dataset }}</span>
+                        <span class="text-base-content/40 mx-1">•</span>
+                        <span class="text-primary">{{ column.name }}</span>
+                    </h4>
+                </div>
+                
+                <!-- Column Metadata -->
+                {% if column.type or column.sample_values %}
+                <div class="flex items-center gap-2 text-xs">
+                    {% if column.type %}
+                    <div class="badge badge-outline badge-xs">{{ column.type }}</div>
+                    {% endif %}
+                    {% if column.sample_values %}
+                    <div class="flex items-center gap-1 text-base-content/60">
+                        💾
+                        <span class="truncate max-w-[120px]" title="Sample values: {{ column.sample_values|join:', ' }}">
+                            {{ column.sample_values.0|default:'' }}{% if column.sample_values|length > 1 %}...{% endif %}
+                        </span>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
             </div>
-        </div>
-        
-        <!-- Compact action buttons -->
-        <div class="flex items-center gap-1 flex-shrink-0">
+            
+            <!-- Action Buttons -->
+            <div class="flex items-center gap-1 flex-shrink-0">
             
             <!-- Hidden form for FK configuration data -->
             <form id="fk-data-form-{{ column.id|slugify }}" style="display: none;">
@@ -62,79 +69,88 @@
                 <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
             </form>
             
-            <!-- Configure FK button - toggles inline form -->
-            <div class="tooltip tooltip-left" data-tip="{% if column.is_fk %}🔗 Edit FK{% else %}🔗 Create FK{% endif %}">
-                <button class="btn btn-xs btn-square {% if column.is_fk %}btn-secondary{% else %}btn-secondary btn-outline{% endif %}" 
-                        hx-post="{% url 'metadata:toggle_fk_form' %}"
-                        hx-include="#fk-data-form-{{ column.id|slugify }}"
-                        hx-target="#fk-form-{{ column.id|slugify }}"
-                        hx-swap="outerHTML">
-                    🔗
-                </button>
-            </div>
-
-            <!-- Hidden form for multi-value toggle data -->
-            <form id="multi-value-data-form-{{ column.id|slugify }}" style="display: none;">
-                <input type="hidden" name="column_id" value="{{ column.id }}">
-                <textarea name="datasets">{{ datasets_json|default:"[]" }}</textarea>
-                <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
-            </form>
-            
-            <!-- Toggle multi-value button -->
-            <div class="tooltip tooltip-left" data-tip="{% if column.is_multi_value %}🔀 Remove Multi-value{% else %}🔀 Mark Multi-value{% endif %}">
-                <button class="btn btn-xs btn-square {% if column.is_multi_value %}btn-accent{% else %}btn-accent btn-outline{% endif %}" 
-                        hx-post="{% url 'metadata:toggle_multi_value_column' %}"
-                        hx-include="#multi-value-data-form-{{ column.id|slugify }}"
-                        hx-target="#dataset-workspace-{{ column.dataset|slugify }}"
-                        hx-swap="innerHTML">
-                    🔀
-                </button>
-            </div>
-
-            <!-- Set as anchor button -->
-            {% if not column.is_anchor %}
-            <!-- Hidden form for anchor column data -->
-            <form id="anchor-data-form-{{ column.id|slugify }}" style="display: none;">
-                <input type="hidden" name="column_id" value="{{ column.id }}">
-                <textarea name="datasets">{{ datasets_json|default:"[]" }}</textarea>
-                <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
-            </form>
-            
-            <div class="tooltip tooltip-left" data-tip="⚓ Set as Anchor">
-                <button class="btn btn-xs btn-square btn-warning btn-outline" 
-                        hx-post="{% url 'metadata:set_anchor_column' %}"
-                        hx-include="#anchor-data-form-{{ column.id|slugify }}"
-                        hx-target="#dataset-workspace-{{ column.dataset|slugify }}"
-                        hx-swap="innerHTML">
-                    ⚓
-                </button>
-            </div>
-            {% endif %}
-            
-            <!-- Hidden form for remove column data (coordinator-based) -->
-            <form id="remove-data-form-{{ column.id|slugify }}" style="display: none;">
-                <input type="hidden" name="column_name" value="{{ column.name }}">
-                <input type="hidden" name="dataset_name" value="{{ column.dataset }}">
-                <input type="hidden" name="source_name" value="{{ column.source }}">
-                <input type="hidden" name="organization" value="{{ organization_id }}">
-                <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
-            </form>
-            
-            <!-- Remove button -->
-            <div class="tooltip tooltip-left" data-tip="Remove column">
-                <button class="btn btn-xs btn-square btn-ghost text-error" 
-                        hx-post="{% url 'metadata:csv_remove_column_from_workspace' %}"
-                        hx-include="#remove-data-form-{{ column.id|slugify }}"
-                        hx-target="#column-{{ column.id|slugify }}"
-                        hx-swap="outerHTML">
-                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                    </svg>
-                </button>
+                <!-- Hidden Forms -->
+                <form id="fk-data-form-{{ column.id|slugify }}" style="display: none;">
+                    <input type="hidden" name="column_id" value="{{ column.id }}">
+                    <input type="hidden" name="organization_id" value="{{ organization_id }}">
+                    <textarea name="datasets">{{ datasets_json|default:"[]" }}</textarea>
+                    <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+                </form>
+                
+                <form id="multi-value-data-form-{{ column.id|slugify }}" style="display: none;">
+                    <input type="hidden" name="column_id" value="{{ column.id }}">
+                    <textarea name="datasets">{{ datasets_json|default:"[]" }}</textarea>
+                    <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+                </form>
+                
+                {% if not column.is_anchor %}
+                <form id="anchor-data-form-{{ column.id|slugify }}" style="display: none;">
+                    <input type="hidden" name="column_id" value="{{ column.id }}">
+                    <textarea name="datasets">{{ datasets_json|default:"[]" }}</textarea>
+                    <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+                </form>
+                {% endif %}
+                
+                <form id="remove-data-form-{{ column.id|slugify }}" style="display: none;">
+                    <input type="hidden" name="column_name" value="{{ column.name }}">
+                    <input type="hidden" name="dataset_name" value="{{ column.dataset }}">
+                    <input type="hidden" name="source_name" value="{{ column.source }}">
+                    <input type="hidden" name="organization" value="{{ organization_id }}">
+                    <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+                </form>
+                
+                <!-- Action Button Group -->
+                <div class="btn-group">
+                    <!-- FK Configuration -->
+                    <div class="tooltip tooltip-left" data-tip="{% if column.is_fk %}Edit Foreign Key{% else %}Create Foreign Key{% endif %}">
+                        <button class="btn btn-sm {% if column.is_fk %}btn-secondary{% else %}btn-outline btn-secondary{% endif %}" 
+                                hx-post="{% url 'metadata:toggle_fk_form' %}"
+                                hx-include="#fk-data-form-{{ column.id|slugify }}"
+                                hx-target="#fk-form-{{ column.id|slugify }}"
+                                hx-swap="outerHTML">
+                            🔗
+                        </button>
+                    </div>
+                    
+                    <!-- Multi-value Toggle -->
+                    <div class="tooltip tooltip-left" data-tip="{% if column.is_multi_value %}Remove Multi-value{% else %}Mark as Multi-value{% endif %}">
+                        <button class="btn btn-sm {% if column.is_multi_value %}btn-accent{% else %}btn-outline btn-accent{% endif %}" 
+                                hx-post="{% url 'metadata:toggle_multi_value_column' %}"
+                                hx-include="#multi-value-data-form-{{ column.id|slugify }}"
+                                hx-target="#dataset-workspace-{{ column.dataset|slugify }}"
+                                hx-swap="innerHTML">
+                            🔀
+                        </button>
+                    </div>
+                    
+                    <!-- Anchor Button -->
+                    {% if not column.is_anchor %}
+                    <div class="tooltip tooltip-left" data-tip="Set as Anchor Column">
+                        <button class="btn btn-sm btn-outline btn-warning" 
+                                hx-post="{% url 'metadata:set_anchor_column' %}"
+                                hx-include="#anchor-data-form-{{ column.id|slugify }}"
+                                hx-target="#dataset-workspace-{{ column.dataset|slugify }}"
+                                hx-swap="innerHTML">
+                            ⚓
+                        </button>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Remove Button -->
+                    <div class="tooltip tooltip-left" data-tip="Remove column from workspace">
+                        <button class="btn btn-sm btn-outline btn-error" 
+                                hx-post="{% url 'metadata:csv_remove_column_from_workspace' %}"
+                                hx-include="#remove-data-form-{{ column.id|slugify }}"
+                                hx-target="#column-{{ column.id|slugify }}"
+                                hx-swap="outerHTML">
+                            ✕
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
+        
+        <!-- FK Configuration Form Placeholder -->
+        <div id="fk-form-{{ column.id|slugify }}" class="mt-3"></div>
     </div>
-    
-    <!-- FK Configuration Form Placeholder - Will be populated by HTMX -->
-    <div id="fk-form-{{ column.id|slugify }}"></div>
 </div> 

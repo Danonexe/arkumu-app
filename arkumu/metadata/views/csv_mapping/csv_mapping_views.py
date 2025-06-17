@@ -268,10 +268,13 @@ class ToggleDatasetSelectionView(OrganizationMixin, CSVMappingCoordinatorMixin, 
                     if dataset_preview and 'error' not in dataset_preview:
                         # Get selected columns for this specific dataset using coordinator parsing
                         dataset_selected_columns = []
-                        for col_id in workspace_columns:
-                            parsed = self.parse_column_id(col_id)
-                            if parsed['dataset'] == dataset['name'] and parsed['source'] == dataset['source']:
-                                dataset_selected_columns.append(parsed['column'])
+                        for col_dict in workspace_columns:
+                            # Extract the column ID string from the dictionary
+                            col_id = col_dict.get('id') if isinstance(col_dict, dict) else col_dict
+                            if col_id:
+                                parsed = self.parse_column_id(col_id)
+                                if parsed['dataset'] == dataset['name'] and parsed['source'] == dataset['source']:
+                                    dataset_selected_columns.append(parsed['column'])
                         
                         # Transform to match template expectations
                         enhanced_dataset = {
@@ -579,9 +582,24 @@ class RemoveColumnFromWorkspaceView(OrganizationMixin, CSVMappingCoordinatorMixi
                     </div>
                 '''
             
-            # Return empty content (removes the column) + badges and header updates via OOB
-            response = f'''<div id="column-badges-{dataset_name.lower()}" hx-swap-oob="innerHTML">{column_badges_html}</div>
-<div id="dataset-header-{dataset_name.lower()}" hx-swap-oob="innerHTML">{dataset_header_html}</div>'''
+            # Return updated column badges as main response + workspace update via OOB
+            from django.template.loader import render_to_string
+            
+            # Prepare workspace update data
+            workspace_columns = self.get_workspace_columns(request, organization_id)
+            datasets_with_columns = self._prepare_datasets_with_columns(workspace_columns)
+            
+            workspace_context = {
+                'datasets_with_columns': datasets_with_columns,
+                'organization_id': organization_id,
+                'csrf_token': request.META.get('CSRF_COOKIE'),
+            }
+            
+            # Render workspace update
+            workspace_html = render_to_string('csv_mapping/partials/selected_columns_workspace.html', workspace_context, request=request)
+            
+            # Return column badges as main response + workspace update via OOB
+            response = f'{column_badges_html}<div id="selected-columns-workspace" hx-swap-oob="innerHTML">{workspace_html}</div>'
             return HttpResponse(response)
             
         except Exception as e:
@@ -657,8 +675,28 @@ class SelectAllDatasetColumnsView(OrganizationMixin, CSVMappingCoordinatorMixin,
                 'csrf_token': request.META.get('CSRF_COOKIE'),
             }
             
-            # Return updated column badges HTML
-            return render(request, 'csv_mapping/partials/column_badges.html', context)
+            # Return updated column badges HTML with workspace update via hx-swap-oob
+            from django.template.loader import render_to_string
+            
+            # Prepare workspace update data
+            workspace_columns = self.get_workspace_columns(request, organization_id)
+            datasets_with_columns = self._prepare_datasets_with_columns(workspace_columns)
+            
+            workspace_context = {
+                'datasets_with_columns': datasets_with_columns,
+                'organization_id': organization_id,
+                'csrf_token': request.META.get('CSRF_COOKIE'),
+            }
+            
+            # Render column badges
+            column_badges_html = render_to_string('csv_mapping/partials/column_badges.html', context, request=request)
+            
+            # Render workspace update
+            workspace_html = render_to_string('csv_mapping/partials/selected_columns_workspace.html', workspace_context, request=request)
+            
+            # Combine both updates using hx-swap-oob
+            combined_response = f'{column_badges_html}<div id="selected-columns-workspace" hx-swap-oob="innerHTML">{workspace_html}</div>'
+            return HttpResponse(combined_response)
             
         except Exception as e:
             logger.error(f"SELECT_ALL_DATASET_COLUMNS: Error selecting all columns: {e}", exc_info=True)
@@ -741,8 +779,28 @@ class DeselectAllDatasetColumnsView(OrganizationMixin, CSVMappingCoordinatorMixi
                 'csrf_token': request.META.get('CSRF_COOKIE'),
             }
             
-            # Return updated column badges HTML
-            return render(request, 'csv_mapping/partials/column_badges.html', context)
+            # Return updated column badges HTML with workspace update via hx-swap-oob
+            from django.template.loader import render_to_string
+            
+            # Prepare workspace update data
+            workspace_columns = self.get_workspace_columns(request, organization_id)
+            datasets_with_columns = self._prepare_datasets_with_columns(workspace_columns)
+            
+            workspace_context = {
+                'datasets_with_columns': datasets_with_columns,
+                'organization_id': organization_id,
+                'csrf_token': request.META.get('CSRF_COOKIE'),
+            }
+            
+            # Render column badges
+            column_badges_html = render_to_string('csv_mapping/partials/column_badges.html', context, request=request)
+            
+            # Render workspace update
+            workspace_html = render_to_string('csv_mapping/partials/selected_columns_workspace.html', workspace_context, request=request)
+            
+            # Combine both updates using hx-swap-oob
+            combined_response = f'{column_badges_html}<div id="selected-columns-workspace" hx-swap-oob="innerHTML">{workspace_html}</div>'
+            return HttpResponse(combined_response)
             
         except Exception as e:
             logger.error(f"DESELECT_ALL_DATASET_COLUMNS: Error deselecting all columns: {e}", exc_info=True)
@@ -869,44 +927,72 @@ class ClearAllDatasetsView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
                 if not was_added:  # Dataset was removed
                     total_columns_removed += columns_affected
             
-            # Return updated workspace (empty) + update table via OOB
+            # Detect which target is being used based on HX-Target header or referer
+            hx_target = request.headers.get('HX-Target', '')
             from django.template.loader import render_to_string
             
-            # Return completely empty workspace - just the container structure
-            workspace_html = '''
-            <div id="selected-columns-workspace" class="flex-1 flex flex-col h-full">
-                <!-- Header with count and controls -->
-                <div class="flex items-center justify-between mb-2 flex-shrink-0">
-                    <!-- Clear All Button (hidden when empty) -->
-                    <div id="workspace-actions" class="flex gap-2 hidden"></div>
-                </div>
-                <!-- Empty workspace container -->
-                <div id="workspace-datasets-container" class="flex-1 overflow-y-auto space-y-2"></div>
-            </div>
-            '''
-            
-            # Get updated CSV datasets for table update
-            csv_datasets = self.get_csv_datasets_for_organization(organization_id)
-            
-            # Get datasets with details but mark all as deselected
-            selected_datasets_with_details, _ = self.get_selected_datasets_with_details(
-                request, organization_id, csv_datasets
-            )
-            
-            # Since we cleared all, there should be no selected datasets with details
-            # But we still want to show the datasets in the table, just deselected
-            # So we pass empty selected_datasets_with_details to show the "select datasets" state
-            table_context = {
-                'datasets': csv_datasets,
-                'selected_datasets': [],  # Empty after clearing all
-                'selected_datasets_with_details': [],  # Empty to show initial state
-                'organization_id': organization_id,
-                'csrf_token': request.META.get('CSRF_COOKIE'),
-            }
-            table_html = render_to_string('csv_mapping/partials/table_content.html', table_context, request=request)
-            
-            # Combined response: empty workspace + table update via OOB
-            response = f'{workspace_html}<div id="table-content" hx-swap-oob="innerHTML">{table_html}</div>'
+            if 'dataset-badges' in hx_target:
+                # Called from dataset badges Clear All button - return updated badges + workspace/table via OOB
+                
+                # Get updated CSV datasets
+                csv_datasets = self.get_csv_datasets_for_organization(organization_id)
+                
+                # Render updated dataset badges (empty selected_datasets)
+                badges_context = {
+                    'datasets': csv_datasets,
+                    'selected_datasets': [],  # Empty after clearing all
+                    'organization_id': organization_id,
+                    'csrf_token': request.META.get('CSRF_COOKIE'),
+                }
+                badges_html = render_to_string('csv_mapping/partials/dataset_badges.html', badges_context, request=request)
+                
+                # Render empty workspace
+                workspace_context = {
+                    'datasets_with_columns': [],  # Empty after clearing all
+                    'organization_id': organization_id,
+                    'csrf_token': request.META.get('CSRF_COOKIE'),
+                }
+                workspace_html = render_to_string('csv_mapping/partials/selected_columns_workspace.html', workspace_context, request=request)
+                
+                # Render updated table
+                table_context = {
+                    'datasets': csv_datasets,
+                    'selected_datasets': [],
+                    'selected_datasets_with_details': [],
+                    'organization_id': organization_id,
+                    'csrf_token': request.META.get('CSRF_COOKIE'),
+                }
+                table_html = render_to_string('csv_mapping/partials/table_content.html', table_context, request=request)
+                
+                # Return badges as main response + workspace and table updates via OOB
+                response = f'{badges_html}<div id="selected-columns-workspace" hx-swap-oob="innerHTML">{workspace_html}</div><div id="table-content" hx-swap-oob="innerHTML">{table_html}</div>'
+                
+            else:
+                # Called from workspace Clear All button - return updated workspace + table via OOB
+                
+                # Render empty workspace
+                workspace_context = {
+                    'datasets_with_columns': [],  # Empty after clearing all
+                    'organization_id': organization_id,
+                    'csrf_token': request.META.get('CSRF_COOKIE'),
+                }
+                workspace_html = render_to_string('csv_mapping/partials/selected_columns_workspace.html', workspace_context, request=request)
+                
+                # Get updated CSV datasets for table update
+                csv_datasets = self.get_csv_datasets_for_organization(organization_id)
+                
+                # Render updated table
+                table_context = {
+                    'datasets': csv_datasets,
+                    'selected_datasets': [],
+                    'selected_datasets_with_details': [],
+                    'organization_id': organization_id,
+                    'csrf_token': request.META.get('CSRF_COOKIE'),
+                }
+                table_html = render_to_string('csv_mapping/partials/table_content.html', table_context, request=request)
+                
+                # Return workspace as main response + table update via OOB
+                response = f'{workspace_html}<div id="table-content" hx-swap-oob="innerHTML">{table_html}</div>'
             
             logger.info(f"CLEAR_ALL_DATASETS: Cleared {len(selected_datasets)} datasets, removed {total_columns_removed} columns")
             return HttpResponse(response)
