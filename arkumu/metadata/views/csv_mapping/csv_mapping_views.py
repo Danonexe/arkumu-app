@@ -891,11 +891,27 @@ class ToggleFKFormView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
             # Get workspace columns using coordinator
             workspace_columns = self.get_workspace_columns(request, organization_id)
             
-            # Find the specific column
-            column = next((col for col in workspace_columns if col.get('id') == column_id), None)
+            # DEBUG: Log workspace contents for FK form debugging
+            logger.info(f"CSV_TOGGLE_FK_FORM: WORKSPACE DEBUG for org='{organization_id}':")
+            logger.info(f"  - Total workspace columns: {len(workspace_columns)}")
+            logger.info(f"  - Looking for column_id: '{column_id}'")
+            for i, col in enumerate(workspace_columns):
+                logger.info(f"    [{i}] ID: '{col.get('id')}' | Name: '{col.get('name')}' | Dataset: '{col.get('dataset')}' | FK: {col.get('is_fk', False)}")
+            
+            # UNIFIED TRACKING: Use coordinator method to find column
+            column = self.get_unified_column_by_id(request, organization_id, column_id)
             if not column:
-                logger.error(f"CSV_TOGGLE_FK_FORM: Column '{column_id}' not found in workspace")
-                return HttpResponse('<div class="text-error text-sm">Column not found in workspace</div>')
+                # Also validate workspace for duplicates and auto-clean
+                is_unique, duplicates, cleaned = self.validate_workspace_column_uniqueness(request, organization_id)
+                if not is_unique:
+                    logger.error(f"CSV_TOGGLE_FK_FORM: Found {len(duplicates)} workspace duplicates - auto-cleaned and retrying")
+                    column = self.get_unified_column_by_id(request, organization_id, column_id)
+                
+                if not column:
+                    logger.error(f"CSV_TOGGLE_FK_FORM: Column '{column_id}' not found even after cleanup")
+                    available_ids = [col.get('id') for col in self.get_workspace_columns(request, organization_id)]
+                    logger.error(f"CSV_TOGGLE_FK_FORM: Available column IDs: {available_ids}")
+                    return HttpResponse('<div class="text-error text-sm">Column not found in workspace</div>')
             
             # Get ALL available datasets with their columns for FK configuration using coordinator
             all_datasets_with_columns = self.get_all_datasets_with_columns_for_fk(request, organization_id)

@@ -62,7 +62,7 @@
             <!-- Action Buttons -->
             <div class="flex gap-2 justify-end">
                 <button type="button" class="btn btn-xs btn-ghost" 
-                        hx-get="{% url 'metadata:csv_hide_fk_form' %}?column_id={{ column.id|slugify }}"
+                        hx-get="{% url 'metadata:csv_hide_fk_form' %}?column_id={{ column.id|urlencode }}"
                         hx-target="#fk-form-{{ column.id|slugify }}"
                         hx-swap="outerHTML">
                     Cancel

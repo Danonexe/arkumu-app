@@ -203,6 +203,11 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         # 2. Generate proper column ID with dataset context
         column_id = self.generate_column_id(dataset_name, column_name, source_name)
         
+        # 2.5. UNIFIED TRACKING: Validate workspace before adding column
+        is_unique, duplicates, _ = self.validate_workspace_column_uniqueness(request, organization_id)
+        if not is_unique:
+            logger.warning(f"🔍 COORDINATOR: Found {len(duplicates)} duplicates before adding '{column_id}' - auto-cleaned")
+        
         # 3. Add column using MappingWorkspaceMixin
         success, new_column, total_columns = self.add_column_to_workspace(
             request, organization_id, column_id, column_name, dataset_name, source_name
@@ -258,6 +263,75 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         )
         return dataset_name in selected_datasets
     
+    # ==========================================================================
+    # Unified Column Tracking & Validation (Single Source of Truth)
+    # ==========================================================================
+    
+    def validate_workspace_column_uniqueness(self, request, organization_id):
+        """
+        Validate that all workspace columns have unique IDs.
+        
+        UNIFIED TRACKING: Ensures no duplicate column IDs exist in the workspace.
+        
+        Args:
+            request: Django request object
+            organization_id (str): Organization ID
+            
+        Returns:
+            tuple: (is_unique, duplicates_found, cleaned_columns)
+        """
+        workspace_columns = self.get_workspace_columns(request, organization_id)
+        seen_ids = set()
+        duplicates = []
+        cleaned_columns = []
+        
+        for col in workspace_columns:
+            if isinstance(col, dict):
+                col_id = col.get('id')
+                if col_id:
+                    if col_id in seen_ids:
+                        duplicates.append(col_id)
+                        logger.warning(f"🔍 COORDINATOR: DUPLICATE DETECTED: '{col_id}'")
+                    else:
+                        seen_ids.add(col_id)
+                        cleaned_columns.append(col)
+                else:
+                    logger.warning(f"🔍 COORDINATOR: Column without ID detected: {col}")
+            else:
+                logger.warning(f"🔍 COORDINATOR: Non-dict column detected: {col}")
+        
+        is_unique = len(duplicates) == 0
+        
+        # Auto-clean if duplicates found
+        if not is_unique:
+            logger.info(f"🔍 COORDINATOR: Auto-cleaning {len(duplicates)} duplicate columns")
+            self.update_workspace_columns(request, organization_id, cleaned_columns)
+        
+        return is_unique, duplicates, cleaned_columns
+    
+    def get_unified_column_by_id(self, request, organization_id, column_id):
+        """
+        Get a column by ID from workspace with validation.
+        
+        UNIFIED TRACKING: Single method to retrieve columns by ID.
+        
+        Args:
+            request: Django request object
+            organization_id (str): Organization ID
+            column_id (str): Column ID to find
+            
+        Returns:
+            dict or None: Column dictionary if found
+        """
+        workspace_columns = self.get_workspace_columns(request, organization_id)
+        
+        for col in workspace_columns:
+            if isinstance(col, dict) and col.get('id') == column_id:
+                return col
+        
+        logger.warning(f"🔍 COORDINATOR: Column '{column_id}' not found in workspace")
+        return None
+
     # ==========================================================================
     # Enhanced Workspace Operations (Dataset-Aware)
     # ==========================================================================
@@ -327,37 +401,58 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         """
         Prepare datasets_with_columns structure for templates.
         
+        UNIFIED TRACKING: This is the single source of truth for rendering datasets with columns.
+        Ensures no duplicates and proper column ID consistency.
+        
         Args:
             workspace_columns (list): List of workspace column dictionaries
             
         Returns:
             list: Datasets grouped with their columns
         """
-        # Group columns by dataset
+        # Group columns by dataset with deduplication
         datasets_map = {}
+        column_ids_seen = set()  # Track unique column IDs to prevent duplicates
+        
+        logger.info(f"🔍 COORDINATOR: _prepare_datasets_with_columns() called with {len(workspace_columns)} columns")
         
         for col_dict in workspace_columns:
             if isinstance(col_dict, dict):
+                column_id = col_dict.get('id')
                 dataset_name = col_dict.get('dataset')
                 source_name = col_dict.get('source')
                 
-                if dataset_name:
-                    dataset_key = f"{source_name}::{dataset_name}"
-                    
-                    if dataset_key not in datasets_map:
-                        datasets_map[dataset_key] = {
-                            'name': dataset_name,
-                            'source': source_name,
-                            'selected_count': 0,
-                            'columns': []
-                        }
-                    
-                    datasets_map[dataset_key]['columns'].append(col_dict)
-                    datasets_map[dataset_key]['selected_count'] += 1
+                # Skip invalid columns
+                if not column_id or not dataset_name:
+                    logger.warning(f"🔍 COORDINATOR: Skipping invalid column: id={column_id}, dataset={dataset_name}")
+                    continue
+                
+                # Skip duplicate column IDs
+                if column_id in column_ids_seen:
+                    logger.warning(f"🔍 COORDINATOR: DUPLICATE COLUMN ID DETECTED: '{column_id}' - skipping duplicate")
+                    continue
+                
+                column_ids_seen.add(column_id)
+                dataset_key = f"{source_name}::{dataset_name}"
+                
+                if dataset_key not in datasets_map:
+                    datasets_map[dataset_key] = {
+                        'name': dataset_name,
+                        'source': source_name,
+                        'selected_count': 0,
+                        'columns': []
+                    }
+                
+                datasets_map[dataset_key]['columns'].append(col_dict)
+                datasets_map[dataset_key]['selected_count'] += 1
+                
+                logger.info(f"🔍 COORDINATOR: Added column '{column_id}' to dataset group '{dataset_key}'")
         
         # Convert to list and sort by dataset name
         datasets_with_columns = list(datasets_map.values())
         datasets_with_columns.sort(key=lambda x: x['name'])
+        
+        logger.info(f"🔍 COORDINATOR: Prepared {len(datasets_with_columns)} dataset groups with total {len(column_ids_seen)} unique columns")
         
         return datasets_with_columns
 

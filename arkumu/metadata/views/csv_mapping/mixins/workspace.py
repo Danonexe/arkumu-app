@@ -90,11 +90,13 @@ class MappingWorkspaceMixin:
         for col in existing_columns:
             logger.info(f"    - Column '{col.get('id')}': FK={col.get('is_fk', False)}, Anchor={col.get('is_anchor', False)}, Multi={col.get('is_multi_value', False)}, FK_config={col.get('fk_config', {})}")
         
-        # Check if column already exists
+        # Check if column already exists (UNIFIED TRACKING ENFORCEMENT)
         column_exists = any(col.get('id') == column_id for col in existing_columns)
         if column_exists:
-            logger.info(f"WORKSPACE_MIXIN: Column {column_id} already exists in workspace")
-            return False, None, len(existing_columns)
+            logger.warning(f"🔍 WORKSPACE_MIXIN: DUPLICATE PREVENTED - Column '{column_id}' already exists in workspace")
+            # Return the existing column instead of None for consistency
+            existing_column = next((col for col in existing_columns if col.get('id') == column_id), None)
+            return False, existing_column, len(existing_columns)
         
         # Create new column entry
         new_column = {
