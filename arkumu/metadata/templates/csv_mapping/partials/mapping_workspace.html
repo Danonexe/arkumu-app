@@ -1,9 +1,48 @@
 <!-- CSV Column Mapping Workspace -->
 <div id="mapping-workspace" class="flex flex-col h-full">
     
-    <!-- Selected Columns Workspace -->
-    <div id="selected-columns-workspace" class="flex-1 overflow-y-auto">
-        {% include 'csv_mapping/partials/selected_columns_workspace.html' with datasets_with_columns=datasets_with_columns organization_id=organization_id csrf_token=csrf_token %}
+    <!-- Tab Navigation -->
+    <div class="tabs tabs-boxed mb-3 flex-shrink-0">
+        <a id="workspace-tab" 
+           class="tab tab-active" 
+           hx-get="{% url 'metadata:csv_mapping_editor' %}?organization={{ organization_id }}"
+           hx-target="#tab-content"
+           hx-vals='{"tab": "workspace"}'
+           onclick="setActiveTab(this)">
+            <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M4 4a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2H4zm2 6a2 2 0 114 0 2 2 0 01-4 0zm8-1a1 1 0 100-2 1 1 0 000 2zm0 4a1 1 0 100-2 1 1 0 000 2z"/>
+            </svg>
+            Workspace
+        </a>
+        <a id="json-tab" 
+           class="tab" 
+           hx-get="{% url 'metadata:csv_get_mapping_json_view' %}?organization={{ organization_id }}"
+           hx-target="#tab-content"
+           onclick="setActiveTab(this)">
+            <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/>
+            </svg>
+            JSON View
+        </a>
     </div>
     
-</div> 
+    <!-- Tab Content -->
+    <div class="flex-1 overflow-y-auto">
+        <div id="tab-content" class="h-full">
+            <!-- Default workspace content -->
+            <div id="selected-columns-workspace" class="h-full overflow-y-auto">
+                {% include 'csv_mapping/partials/selected_columns_workspace.html' with datasets_with_columns=datasets_with_columns organization_id=organization_id csrf_token=csrf_token %}
+            </div>
+        </div>
+    </div>
+    
+</div>
+
+<script>
+function setActiveTab(clickedTab) {
+    // Update tab styling
+    const tabs = document.querySelectorAll('#mapping-workspace .tab');
+    tabs.forEach(t => t.classList.remove('tab-active'));
+    clickedTab.classList.add('tab-active');
+}
+</script> 

@@ -24,6 +24,8 @@ from django.http import JsonResponse, HttpResponse
 from django.views import View
 from django.core.serializers.json import DjangoJSONEncoder
 from django.template.loader import render_to_string
+from django.utils import timezone
+
 from arkumu.metadata.services.data_analysis.s3_direct_data_analyzer import S3DirectDataAnalyzer, S3DataSourceInfo
 
 
@@ -112,7 +114,19 @@ class CSVMappingEditorView(OrganizationMixin, CSVMappingCoordinatorMixin, Import
             
             # Handle HTMX requests - return just the partial content
             if request.headers.get('HX-Request'):
-                return render(request, 'csv_mapping/partials/main_content.html', context)
+                # Check if this is a tab request
+                tab = request.GET.get('tab')
+                if tab == 'workspace':
+                    # Return just the workspace content for tab switching
+                    workspace_context = {
+                        'datasets_with_columns': self._prepare_datasets_with_columns(selected_columns),
+                        'organization_id': organization_id,
+                        'csrf_token': request.META.get('CSRF_COOKIE'),
+                    }
+                    return render(request, 'csv_mapping/partials/selected_columns_workspace.html', workspace_context)
+                else:
+                    # Return main content for other HTMX requests
+                    return render(request, 'csv_mapping/partials/main_content.html', context)
             else:
                 return render(request, self.template_name, context)
             
@@ -1189,23 +1203,175 @@ class UpdateImportStrategyView(OrganizationMixin, ImportStrategyMixin, View):
 
 
 # ==============================================================================
-# COORDINATOR ARCHITECTURE COMPLETE - Dataset-Column Relationships Solved! 
+# JSON Serialization Views
 # ==============================================================================
-#
-# ✅ PROBLEM SOLVED: Dataset-column relationships are now properly managed
-# ✅ STATE CONSISTENCY: Coordinator ensures no orphaned columns 
-# ✅ CASCADE OPERATIONS: Dataset deselection removes related columns
-# ✅ VALIDATION: Cannot add columns from unselected datasets
-# ✅ MAINTENANCE: Consistency checking and cleanup operations
-#
-# The CSVMappingCoordinatorMixin provides:
-# - generate_column_id() / parse_column_id() for dataset-aware IDs
-# - toggle_dataset_selection_with_cascade() for safe dataset operations
-# - add_column_with_validation() for validated column operations
-# - get_workspace_summary() for comprehensive state overview
-# - cleanup_orphaned_columns() for consistency maintenance
-#
-# This solves the core architectural challenge you identified!
+
+class ExportMappingJSONView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
+    """
+    Export current mapping configuration as JSON.
+    
+    Uses the coordinator's serialize_current_mapping_state method to provide
+    a comprehensive JSON representation of the current mapping configuration.
+    """
+    
+    def get(self, request):
+        """Handle GET requests for exporting mapping JSON."""
+        try:
+            organization_id = self.get_organization_id_from_request(request)
+            
+            # Check if we have a valid organization
+            org_context = self.get_organization_context(request)
+            if not org_context['organization_exists']:
+                return JsonResponse({
+                    'error': 'Invalid organization',
+                    'message': f'Organization "{organization_id}" not found'
+                }, status=400)
+            
+            # Use coordinator to serialize current mapping state
+            mapping_config = self.serialize_current_mapping_state(request, organization_id)
+            
+            # Add additional metadata
+            mapping_config['export_timestamp'] = timezone.now().isoformat()
+            mapping_config['exported_by'] = 'CSV Mapping Editor'
+            
+            # Get workspace summary for additional context
+            workspace_summary = self.get_workspace_summary(request, organization_id)
+            mapping_config['workspace_summary'] = workspace_summary
+            
+            # Return formatted JSON response
+            return JsonResponse(mapping_config, json_dumps_params={'indent': 2})
+            
+        except Exception as e:
+            logger.error(f"EXPORT_MAPPING_JSON: Error exporting mapping: {e}", exc_info=True)
+            return JsonResponse({
+                'error': 'Export failed',
+                'message': str(e)
+            }, status=500)
+
+
+class GetMappingJSONViewView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
+    """
+    Get JSON view partial template for HTMX tab switching.
+    
+    This view returns the JSON view partial template, following the HTMX pattern
+    used throughout the CSV mapping interface.
+    """
+    
+    def get(self, request):
+        """Handle GET requests for JSON view partial."""
+        try:
+            organization_id = self.get_organization_id_from_request(request)
+            
+            # Check if we have a valid organization
+            org_context = self.get_organization_context(request)
+            if not org_context['organization_exists']:
+                error_html = f'''
+                <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <h3 class="text-lg font-semibold text-red-800 mb-2">Invalid Organization</h3>
+                    <p class="text-red-700">Organization "{organization_id}" not found</p>
+                </div>
+                '''
+                return HttpResponse(error_html)
+            
+            # Prepare context for the JSON view template
+            context = {
+                'organization_id': organization_id,
+                'csrf_token': request.META.get('CSRF_COOKIE'),
+            }
+            
+            # Return the JSON view partial template
+            return render(request, 'csv_mapping/partials/json_view.html', context)
+            
+        except Exception as e:
+            logger.error(f"GET_MAPPING_JSON_VIEW: Error loading JSON view: {e}", exc_info=True)
+            error_html = f'''
+            <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                <h3 class="text-lg font-semibold text-red-800 mb-2">Error Loading JSON View</h3>
+                <p class="text-red-700">{str(e)}</p>
+            </div>
+            '''
+            return HttpResponse(error_html)
+
+
+class GetMappingJSONContentView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
+    """
+    Get current mapping configuration as JSON content for display in the UI.
+    
+    This view returns formatted JSON content suitable for displaying in the
+    JSON tab of the mapping workspace.
+    """
+    
+    def get(self, request):
+        """Handle GET requests for mapping JSON content."""
+        try:
+            organization_id = self.get_organization_id_from_request(request)
+            
+            # Check if we have a valid organization
+            org_context = self.get_organization_context(request)
+            if not org_context['organization_exists']:
+                error_json = {
+                    'error': 'Invalid organization',
+                    'message': f'Organization "{organization_id}" not found'
+                }
+                formatted_json = json.dumps(error_json, indent=2)
+                return HttpResponse(f'<pre class="bg-gray-100 p-4 rounded text-sm overflow-auto max-h-96"><code>{formatted_json}</code></pre>')
+            
+            # Use coordinator to serialize current mapping state
+            mapping_config = self.serialize_current_mapping_state(request, organization_id)
+            
+            # Add additional metadata for display
+            mapping_config['export_timestamp'] = timezone.now().isoformat()
+            mapping_config['exported_by'] = 'CSV Mapping Editor'
+            
+            # Get workspace summary for additional context
+            workspace_summary = self.get_workspace_summary(request, organization_id)
+            mapping_config['workspace_summary'] = workspace_summary
+            
+            # Format JSON with proper indentation
+            formatted_json = json.dumps(mapping_config, indent=2, cls=DjangoJSONEncoder)
+            
+            # Return as HTML with proper formatting
+            html_content = f'''
+            <div class="bg-gray-50 border rounded-lg p-4">
+                <div class="flex justify-between items-center mb-3">
+                    <h3 class="text-lg font-semibold text-gray-800">Current Mapping Configuration</h3>
+                    <div class="flex gap-2">
+                        <button onclick="copyJsonToClipboard()" class="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700">
+                            📋 Copy JSON
+                        </button>
+                        <a href="/metadata/csv-mapping/export-json/?organization={organization_id}" 
+                           class="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 no-underline">
+                            💾 Download JSON
+                        </a>
+                    </div>
+                </div>
+                <div class="bg-white border rounded p-3 max-h-96 overflow-auto">
+                    <pre id="json-content" class="text-sm text-gray-800 whitespace-pre-wrap"><code>{formatted_json}</code></pre>
+                </div>
+                <div class="mt-3 text-xs text-gray-600">
+                    Generated: {timezone.now().strftime('%Y-%m-%d %H:%M:%S')} | 
+                    Datasets: {len(mapping_config.get('selected_datasets', []))} | 
+                    Columns: {len(mapping_config.get('workspace_columns', {}))} |
+                    FK Relations: {len(mapping_config.get('fk_relationships', {}))}
+                </div>
+            </div>
+            '''
+            
+            return HttpResponse(html_content)
+            
+        except Exception as e:
+            logger.error(f"GET_MAPPING_JSON_CONTENT: Error getting mapping JSON: {e}", exc_info=True)
+            error_html = f'''
+            <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                <h3 class="text-lg font-semibold text-red-800 mb-2">Error Loading JSON</h3>
+                <p class="text-red-700">{str(e)}</p>
+            </div>
+            '''
+            return HttpResponse(error_html)
+
+
+# ==============================================================================
+# COORDINATOR ARCHITECTURE COMPLETE - Dataset-Column Relationships Solved!
 # ==============================================================================
 
 class ClearAllDatasetsView(OrganizationMixin, CSVMappingCoordinatorMixin, View):

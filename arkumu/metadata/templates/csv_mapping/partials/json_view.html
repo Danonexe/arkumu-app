@@ -1,0 +1,56 @@
+<!-- JSON View Content -->
+<div class="bg-base-200 rounded-lg p-4 h-full">
+    <div class="flex items-center justify-between mb-3">
+        <h4 class="font-semibold text-sm">Mapping Configuration (JSON)</h4>
+        <div class="flex gap-2">
+            <button onclick="copyJsonToClipboard()" 
+                    class="btn btn-xs btn-primary">
+                📋 Copy JSON
+            </button>
+            <a href="{% url 'metadata:csv_export_mapping_json' %}?organization={{ organization_id }}" 
+               class="btn btn-xs btn-success">
+                💾 Download JSON
+            </a>
+        </div>
+    </div>
+    <div class="h-full overflow-y-auto">
+        <div id="json-mapping-content" 
+             hx-get="{% url 'metadata:csv_get_mapping_json_content' %}?organization={{ organization_id }}"
+             hx-trigger="load"
+             class="h-full">
+            <!-- Loading state -->
+            <div class="flex items-center justify-center h-full">
+                <div class="loading loading-spinner loading-lg"></div>
+                <span class="ml-3 text-sm text-gray-600">Loading JSON configuration...</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Function to copy JSON to clipboard
+function copyJsonToClipboard() {
+    const codeElement = document.querySelector('#json-mapping-content code');
+    
+    if (codeElement) {
+        const jsonText = codeElement.textContent;
+        navigator.clipboard.writeText(jsonText).then(function() {
+            // Show temporary success message
+            const button = event.target;
+            const originalText = button.textContent;
+            button.textContent = '✅ Copied!';
+            button.classList.remove('btn-primary');
+            button.classList.add('btn-success');
+            
+            setTimeout(function() {
+                button.textContent = originalText;
+                button.classList.remove('btn-success');
+                button.classList.add('btn-primary');
+            }, 2000);
+        }).catch(function(err) {
+            console.error('Failed to copy: ', err);
+            alert('Failed to copy JSON to clipboard');
+        });
+    }
+}
+</script> 

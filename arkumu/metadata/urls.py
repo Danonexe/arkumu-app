@@ -185,4 +185,9 @@ urlpatterns = [
     path('csv-set-anchor-column/', csv_mapping_views.SetAnchorColumnView.as_view(), name='csv_set_anchor_column'),
     path('csv-toggle-multi-value-column/', csv_mapping_views.ToggleMultiValueColumnView.as_view(), name='csv_toggle_multi_value_column'),
     
+    # JSON Export URLs (for mapping configuration serialization)
+    path('csv-mapping/export-json/', csv_mapping_views.ExportMappingJSONView.as_view(), name='csv_export_mapping_json'),
+    path('csv-mapping/json-content/', csv_mapping_views.GetMappingJSONContentView.as_view(), name='csv_get_mapping_json_content'),
+    path('csv-mapping/json-view/', csv_mapping_views.GetMappingJSONViewView.as_view(), name='csv_get_mapping_json_view'),
+    
     ]
