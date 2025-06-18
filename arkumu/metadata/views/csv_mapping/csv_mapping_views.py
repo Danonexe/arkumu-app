@@ -230,6 +230,7 @@ class ToggleDatasetSelectionView(OrganizationMixin, CSVMappingCoordinatorMixin, 
         try:
             organization_id = self.get_organization_id_from_request(request)
             dataset_name = request.POST.get('dataset')
+            action = request.POST.get('action', 'toggle')  # 'add', 'remove', or 'toggle'
             
             if not dataset_name:
                 return JsonResponse({'status': 'error', 'message': 'Dataset parameter required'}, status=400)
@@ -312,7 +313,44 @@ class ToggleDatasetSelectionView(OrganizationMixin, CSVMappingCoordinatorMixin, 
                 'dataset_name': dataset_name,
             }
             
-            # Always return full table content + update badges via OOB - simpler and more reliable
+            # Handle different actions for pure HTMX approach
+            if action == 'add' and was_added:
+                # Return only the single new dataset card for prepending
+                new_dataset = None
+                for dataset in enhanced_datasets_with_details:
+                    if dataset['name'] == dataset_name:
+                        new_dataset = dataset
+                        break
+                
+                if new_dataset:
+                    single_context = {
+                        **context,
+                        'dataset': new_dataset,
+                        'dataset_selected_columns': new_dataset.get('dataset_selected_columns', [])
+                    }
+                    single_card = render_to_string('csv_mapping/partials/dataset_card.html', single_context, request=request)
+                    
+                    # Update badges via OOB
+                    dataset_badges = render_to_string('csv_mapping/partials/dataset_badges.html', context, request=request)
+                    
+                    response_html = f'{single_card}<div id="dataset-badges" hx-swap-oob="innerHTML">{dataset_badges}</div>'
+                    return HttpResponse(response_html)
+            
+            elif action == 'remove' and not was_added:
+                # Return empty response - HTMX will delete the target element
+                # Update badges via OOB
+                dataset_badges = render_to_string('csv_mapping/partials/dataset_badges.html', context, request=request)
+                
+                # Check if no datasets remain, show empty state
+                if not enhanced_datasets_with_details:
+                    empty_state = render_to_string('csv_mapping/partials/table_content.html', context, request=request)
+                    response_html = f'{empty_state}<div id="dataset-badges" hx-swap-oob="innerHTML">{dataset_badges}</div>'
+                    return HttpResponse(response_html)
+                else:
+                    response_html = f'<div id="dataset-badges" hx-swap-oob="innerHTML">{dataset_badges}</div>'
+                    return HttpResponse(response_html)
+            
+            # Fallback: return full table content (for 'toggle' or error cases)
             table_content = render_to_string('csv_mapping/partials/table_content.html', context, request=request)
             
             # Update dataset badges via OOB
