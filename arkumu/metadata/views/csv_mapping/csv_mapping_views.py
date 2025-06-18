@@ -488,7 +488,9 @@ class AddColumnToWorkspaceView(OrganizationMixin, CSVMappingCoordinatorMixin, Vi
             workspace_html = render_to_string('csv_mapping/partials/selected_columns_workspace.html', workspace_context, request=request)
             combined_response = f'{column_badges_html}<div id="selected-columns-workspace" hx-swap-oob="innerHTML">{workspace_html}</div>'
             
-            return HttpResponse(combined_response)
+            # Add workspace update trigger for JSON view synchronization
+            final_response = self.add_workspace_update_trigger(combined_response)
+            return HttpResponse(final_response)
             
         except Exception as e:
             logger.error(f"ADD_COLUMN: Error adding column to workspace: {e}", exc_info=True)
@@ -620,7 +622,10 @@ class RemoveColumnFromWorkspaceView(OrganizationMixin, CSVMappingCoordinatorMixi
             # Use the same pattern as working views - return column badges as main response
             # The workspace update happens via OOB
             response = f'{column_badges_html}<div id="selected-columns-workspace" hx-swap-oob="innerHTML">{workspace_html}</div>'
-            return HttpResponse(response)
+            
+            # Add workspace update trigger for JSON view synchronization
+            final_response = self.add_workspace_update_trigger(response)
+            return HttpResponse(final_response)
             
         except Exception as e:
             logger.error(f"REMOVE_COLUMN: Error removing column from workspace: {e}", exc_info=True)
@@ -740,7 +745,9 @@ class SelectAllDatasetColumnsView(OrganizationMixin, CSVMappingCoordinatorMixin,
             workspace_html = render_to_string('csv_mapping/partials/selected_columns_workspace.html', workspace_context, request=request)
             combined_response = f'{column_badges_html}<div id="selected-columns-workspace" hx-swap-oob="innerHTML">{workspace_html}</div>'
             
-            return HttpResponse(combined_response)
+            # Add workspace update trigger for JSON view synchronization
+            final_response = self.add_workspace_update_trigger(combined_response)
+            return HttpResponse(final_response)
             
         except Exception as e:
             logger.error(f"SELECT_ALL_DATASET_COLUMNS: Error selecting all columns: {e}", exc_info=True)
@@ -872,7 +879,9 @@ class DeselectAllDatasetColumnsView(OrganizationMixin, CSVMappingCoordinatorMixi
                     workspace_html = render_to_string('csv_mapping/partials/selected_columns_workspace.html', workspace_context, request=request)
                     combined_response = f'{column_badges_html}<div id="selected-columns-workspace" hx-swap-oob="innerHTML">{workspace_html}</div>'
             
-            return HttpResponse(combined_response)
+            # Add workspace update trigger for JSON view synchronization
+            final_response = self.add_workspace_update_trigger(combined_response)
+            return HttpResponse(final_response)
             
         except Exception as e:
             logger.error(f"DESELECT_ALL_DATASET_COLUMNS: Error deselecting all columns: {e}", exc_info=True)
@@ -1076,7 +1085,9 @@ class SaveInlineFKConfigView(OrganizationMixin, CSVMappingCoordinatorMixin, View
                 'csrf_token': csrf_token,
             }, request=request)
             
-            return HttpResponse(column_html)
+            # Add workspace update trigger for JSON view synchronization
+            final_response = self.add_workspace_update_trigger(column_html)
+            return HttpResponse(final_response)
             
         except Exception as e:
             logger.error(f"CSV_SAVE_INLINE_FK_CONFIG: Error saving configuration: {e}", exc_info=True)
@@ -1133,7 +1144,9 @@ class RemoveFKConfigView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
             from django.template.loader import render_to_string
             workspace_html = render_to_string('csv_mapping/partials/selected_columns_workspace.html', workspace_context, request=request)
             
-            return HttpResponse(workspace_html)
+            # Add workspace update trigger for JSON view synchronization
+            final_response = self.add_workspace_update_trigger(workspace_html)
+            return HttpResponse(final_response)
             
         except Exception as e:
             logger.error(f"CSV_REMOVE_FK_CONFIG: Error removing configuration: {e}", exc_info=True)
@@ -1548,7 +1561,10 @@ class ClearAllDatasetsView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
                 logger.info(f"CLEAR_ALL_DATASETS: OOB update targets: {[update.split('id=\"')[1].split('\"')[0] for update in all_oob_updates if 'id=\"' in update]}")
             
             logger.info(f"CLEAR_ALL_DATASETS: Cleared {len(selected_datasets)} datasets, removed {total_columns_removed} columns, responded to {'badges' if is_badges_button else 'workspace'} button")
-            return HttpResponse(response)
+            
+            # Add workspace update trigger for JSON view synchronization
+            final_response = self.add_workspace_update_trigger(response)
+            return HttpResponse(final_response)
             
         except Exception as e:
             logger.error(f"CLEAR_ALL_DATASETS: Error clearing datasets: {e}", exc_info=True)
@@ -1675,7 +1691,9 @@ class SetAnchorColumnView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
                 'csrf_token': csrf_token,
             }, request=request)
             
-            return HttpResponse(column_html)
+            # Add workspace update trigger for JSON view synchronization
+            final_response = self.add_workspace_update_trigger(column_html)
+            return HttpResponse(final_response)
             
         except Exception as e:
             logger.error(f"Error setting anchor column: {e}", exc_info=True)
@@ -1743,7 +1761,9 @@ class ToggleMultiValueColumnView(OrganizationMixin, CSVMappingCoordinatorMixin, 
                 'csrf_token': csrf_token,
             }, request=request)
             
-            return HttpResponse(column_html)
+            # Add workspace update trigger for JSON view synchronization
+            final_response = self.add_workspace_update_trigger(column_html)
+            return HttpResponse(final_response)
             
         except Exception as e:
             logger.error(f"Error toggling multi-value column: {e}", exc_info=True)
