@@ -113,29 +113,21 @@
                             <tr>
                                 {% for header in dataset.preview.colHeaders %}
                                 {% if header in dataset_selected_columns|default_if_none:'' %}
-                                <th class="p-2 border border-base-300 font-medium cursor-pointer bg-primary text-primary-content min-w-[120px] whitespace-nowrap column-header selected"
+                                <th class="p-2 border border-base-300 font-medium bg-primary text-primary-content min-w-[120px] whitespace-nowrap column-header selected"
                                     id="column-header-{{ dataset.name|slugify }}-{{ forloop.counter0 }}"
                                     data-column-name="{{ header }}"
                                     data-column-index="{{ forloop.counter0 }}"
                                     data-dataset-name="{{ dataset.name }}"
-                                    data-column-id="{{ dataset.name }}_{{ dataset.source }}_{{ header }}"
-                                    hx-post="{% url 'metadata:csv_add_column_to_workspace' %}"
-                                    hx-include="#column-data-form-{{ dataset.name|slugify }}-{{ forloop.counter0 }}"
-                                    hx-target="#column-badges-{{ dataset.name|slugify }}"
-                                    hx-swap="innerHTML">
+                                    data-column-id="{{ dataset.name }}_{{ dataset.source }}_{{ header }}">
                                     {{ header }}
                                 </th>
                                 {% else %}
-                                <th class="p-2 border border-base-300 font-medium cursor-pointer hover:bg-primary-focus hover:bg-opacity-50 min-w-[120px] whitespace-nowrap column-header"
+                                <th class="p-2 border border-base-300 font-medium min-w-[120px] whitespace-nowrap column-header"
                                     id="column-header-{{ dataset.name|slugify }}-{{ forloop.counter0 }}"
                                     data-column-name="{{ header }}"
                                     data-column-index="{{ forloop.counter0 }}"
                                     data-dataset-name="{{ dataset.name }}"
-                                    data-column-id="{{ dataset.name }}_{{ dataset.source }}_{{ header }}"
-                                    hx-post="{% url 'metadata:csv_add_column_to_workspace' %}"
-                                    hx-include="#column-data-form-{{ dataset.name|slugify }}-{{ forloop.counter0 }}"
-                                    hx-target="#column-badges-{{ dataset.name|slugify }}"
-                                    hx-swap="innerHTML">
+                                    data-column-id="{{ dataset.name }}_{{ dataset.source }}_{{ header }}">
                                     {{ header }}
                                 </th>
                                 {% endif %}
