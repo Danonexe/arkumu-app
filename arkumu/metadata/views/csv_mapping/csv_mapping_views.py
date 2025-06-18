@@ -382,11 +382,6 @@ class AddColumnToWorkspaceView(OrganizationMixin, CSVMappingCoordinatorMixin, Vi
         try:
             organization_id = self.get_organization_id_from_request(request)
             
-            # DEBUG: Proof the coordinator is being called
-            logger.info(f"🔥 ADD_COLUMN VIEW CALLED! Coordinator is working!")
-            logger.info(f"🔥 POST Data: {dict(request.POST)}")
-            logger.info(f"🔥 Organization ID: {organization_id}")
-            
             # Handle different POST data formats from the template
             column_name = request.POST.get('column') or request.POST.get('column_name')
             dataset_name = request.POST.get('dataset') or request.POST.get('dataset_name')
@@ -404,12 +399,10 @@ class AddColumnToWorkspaceView(OrganizationMixin, CSVMappingCoordinatorMixin, Vi
             if not all([column_name, dataset_name, source_name]):
                 return HttpResponse(f'<div class="alert alert-error">Column, dataset, and source parameters required</div>')
             
-            # Use coordinator for validated column addition
-            logger.info(f"🔥 CALLING COORDINATOR: add_column_with_validation({column_name}, {dataset_name}, {source_name})")
-            success, new_column, total_columns, error_message = self.add_column_with_validation(
+            # PERFORMANCE OPTIMIZATION: Use safe add method with automatic state correction
+            success, new_column, total_columns, error_message = self.safe_add_column_with_validation(
                 request, organization_id, column_name, dataset_name, source_name
             )
-            logger.info(f"🔥 COORDINATOR RESULT: success={success}, error={error_message}")
             
             if not success:
                 return HttpResponse(f'<div class="alert alert-warning">{error_message}</div>')
@@ -458,20 +451,14 @@ class AddColumnToWorkspaceView(OrganizationMixin, CSVMappingCoordinatorMixin, Vi
             # Return updated column badges HTML with workspace update via hx-swap-oob
             from django.template.loader import render_to_string
             
-            # Prepare workspace update data with preserved FK configurations
+            # Prepare workspace update data efficiently
             workspace_columns = self.get_workspace_columns(request, organization_id)
-            
-            # Debug: Log FK configurations before preparing datasets
-            fk_columns_after = [col for col in workspace_columns if col.get('is_fk', False)]
-            logger.info(f"🔥🔥🔥 ADD_COLUMN: AFTER adding column '{column_name}' from '{dataset_name}':")
-            logger.info(f"  - Updated workspace: {len(workspace_columns)} columns")
-            logger.info(f"  - FK columns after: {len(fk_columns_after)}")
-            
-            for col in workspace_columns:
-                if col.get('is_fk', False):
-                    logger.info(f"    - FK Column '{col.get('id')}': FK_config={col.get('fk_config', {})}")
-            
             datasets_with_columns = self._prepare_datasets_with_columns(workspace_columns)
+            
+            # DEBUG: Verify workspace template data
+            logger.info(f"🔍 SELECT_ALL_DEBUG: Workspace template will receive {len(datasets_with_columns)} dataset groups:")
+            for i, group in enumerate(datasets_with_columns):
+                logger.info(f"  [{i}] Dataset '{group['name']}' (source: {group['source']}) with {len(group.get('columns', []))} columns")
             
             workspace_context = {
                 'datasets_with_columns': datasets_with_columns,
@@ -482,11 +469,11 @@ class AddColumnToWorkspaceView(OrganizationMixin, CSVMappingCoordinatorMixin, Vi
             # Render column badges
             column_badges_html = render_to_string('csv_mapping/partials/column_badges.html', context, request=request)
             
-            # Render workspace update (back to original working approach)
+            # SIMPLIFIED APPROACH: Always update the entire workspace for reliability
+            # This ensures the workspace shows newly added columns even when starting from empty state
             workspace_html = render_to_string('csv_mapping/partials/selected_columns_workspace.html', workspace_context, request=request)
-            
-            # Combine both updates using hx-swap-oob
             combined_response = f'{column_badges_html}<div id="selected-columns-workspace" hx-swap-oob="innerHTML">{workspace_html}</div>'
+            
             return HttpResponse(combined_response)
             
         except Exception as e:
@@ -641,9 +628,18 @@ class SelectAllDatasetColumnsView(OrganizationMixin, CSVMappingCoordinatorMixin,
             if not dataset_name or not source_name:
                 return HttpResponse(f'<div class="alert alert-error">Dataset and source parameters required</div>')
             
-            # Validate that dataset is selected
-            if not self._is_dataset_selected(request, organization_id, dataset_name):
-                return HttpResponse(f'<div class="alert alert-warning">Dataset "{dataset_name}" is not selected</div>')
+            # Safe validation with auto-correction for dataset selection state
+            is_valid, was_corrected, status_message = self.validate_and_fix_dataset_selection_state(
+                request, organization_id, dataset_name, source_name
+            )
+            
+            if not is_valid:
+                return HttpResponse(f'<div class="alert alert-warning">{status_message}</div>')
+            
+            # Log if auto-correction was applied
+            if was_corrected:
+                logger.info(f"🔒 SELECT_ALL_COLUMNS: {status_message}")
+                # Could optionally show a user-friendly message about the auto-correction
             
             # Get dataset preview to get all column names
             analyzer = S3DirectDataAnalyzer()
@@ -658,14 +654,22 @@ class SelectAllDatasetColumnsView(OrganizationMixin, CSVMappingCoordinatorMixin,
             if not dataset_preview:
                 return HttpResponse(f'<div class="alert alert-error">Dataset "{dataset_name}" not found</div>')
             
-            # Add all columns to workspace using coordinator
-            columns_added = 0
-            for column_name in dataset_preview.get('columns', []):
-                success, _, _, _ = self.add_column_with_validation(
-                    request, organization_id, column_name, dataset_name, source_name
-                )
-                if success:
-                    columns_added += 1
+            # PERFORMANCE OPTIMIZATION: Use batch operation instead of individual column adds
+            column_names = dataset_preview.get('columns', [])
+            total_added, skipped_duplicates, final_count, error_message = self.batch_add_columns_with_validation(
+                request, organization_id, column_names, dataset_name, source_name
+            )
+            
+            if error_message:
+                return HttpResponse(f'<div class="alert alert-error">Error: {error_message}</div>')
+            
+            logger.info(f"🚀 SELECT_ALL_OPTIMIZED: Added {total_added} columns, skipped {skipped_duplicates} duplicates, final count: {final_count}")
+            
+            # DEBUG: Verify workspace state after batch operation
+            workspace_columns_after = self.get_workspace_columns(request, organization_id)
+            dataset_columns_after = [col for col in workspace_columns_after if isinstance(col, dict) and col.get('dataset') == dataset_name]
+            logger.info(f"🔍 SELECT_ALL_DEBUG: After batch operation - workspace has {len(workspace_columns_after)} total columns")
+            logger.info(f"🔍 SELECT_ALL_DEBUG: Dataset '{dataset_name}' now has {len(dataset_columns_after)} columns in workspace")
             
             # Get updated workspace columns and filter for this dataset
             workspace_columns = self.get_workspace_columns(request, organization_id)
@@ -677,6 +681,8 @@ class SelectAllDatasetColumnsView(OrganizationMixin, CSVMappingCoordinatorMixin,
                     parsed = self.parse_column_id(col_id)
                     if parsed['dataset'] == dataset_name and parsed['source'] == source_name:
                         dataset_selected_columns.append(parsed['column'])
+            
+            logger.info(f"🔍 SELECT_ALL_DEBUG: Found {len(dataset_selected_columns)} selected columns for badge rendering: {dataset_selected_columns}")
             
             # Build dataset context for column badges template
             dataset_context = {
@@ -697,25 +703,14 @@ class SelectAllDatasetColumnsView(OrganizationMixin, CSVMappingCoordinatorMixin,
             # Return updated column badges HTML with workspace update via hx-swap-oob
             from django.template.loader import render_to_string
             
-            # Prepare workspace update data
+            # Prepare workspace update data efficiently
             workspace_columns = self.get_workspace_columns(request, organization_id)
-            
-            # DEBUG: Log FK configurations before preparing datasets
-            logger.info(f"🔥 ADD_COLUMN DEBUG: Workspace has {len(workspace_columns)} columns before rendering:")
-            fk_columns = [col for col in workspace_columns if col.get('is_fk')]
-            logger.info(f"🔥 ADD_COLUMN DEBUG: Found {len(fk_columns)} FK columns:")
-            for col in fk_columns:
-                logger.info(f"  - {col.get('id')} has FK config: {col.get('fk_config')}")
-            
             datasets_with_columns = self._prepare_datasets_with_columns(workspace_columns)
             
-            # DEBUG: Log FK configurations after preparing datasets
-            logger.info(f"🔥 ADD_COLUMN DEBUG: After preparing datasets, found {len(datasets_with_columns)} dataset groups:")
-            for dataset_group in datasets_with_columns:
-                fk_columns_in_group = [col for col in dataset_group['columns'] if col.get('is_fk')]
-                logger.info(f"  - Dataset '{dataset_group['name']}' has {len(fk_columns_in_group)} FK columns:")
-                for col in fk_columns_in_group:
-                    logger.info(f"    - {col.get('id')} has FK config: {col.get('fk_config')}")
+            # DEBUG: Verify workspace template data
+            logger.info(f"🔍 SELECT_ALL_DEBUG: Workspace template will receive {len(datasets_with_columns)} dataset groups:")
+            for i, group in enumerate(datasets_with_columns):
+                logger.info(f"  [{i}] Dataset '{group['name']}' (source: {group['source']}) with {len(group.get('columns', []))} columns")
             
             workspace_context = {
                 'datasets_with_columns': datasets_with_columns,
@@ -726,31 +721,10 @@ class SelectAllDatasetColumnsView(OrganizationMixin, CSVMappingCoordinatorMixin,
             # Render column badges
             column_badges_html = render_to_string('csv_mapping/partials/column_badges.html', context, request=request)
             
-            # Only update the specific dataset workspace section instead of the entire workspace
-            # This preserves open FK forms in other dataset sections
-            specific_dataset_group = None
-            for group in datasets_with_columns:
-                if group['name'] == dataset_name and group['source'] == source_name:
-                    specific_dataset_group = group
-                    break
-            
-            if specific_dataset_group:
-                # Render only the specific dataset section
-                dataset_section_context = {
-                    'dataset_group': specific_dataset_group,
-                    'organization_id': organization_id,
-                    'csrf_token': request.META.get('CSRF_COOKIE'),
-                }
-                dataset_section_html = render_to_string('csv_mapping/partials/dataset_workspace_section.html', dataset_section_context, request=request)
-                
-                # Update both the column badges and the specific dataset section via hx-swap-oob
-                from django.utils.text import slugify
-                dataset_section_update = f'<div id="dataset-workspace-{slugify(dataset_name)}" hx-swap-oob="outerHTML">{dataset_section_html}</div>'
-                combined_response = f'{column_badges_html}{dataset_section_update}'
-            else:
-                # Fallback: update entire workspace if dataset group not found
-                workspace_html = render_to_string('csv_mapping/partials/selected_columns_workspace.html', workspace_context, request=request)
-                combined_response = f'{column_badges_html}<div id="selected-columns-workspace" hx-swap-oob="innerHTML">{workspace_html}</div>'
+            # SIMPLIFIED APPROACH: Always update the entire workspace for reliability
+            # This ensures the workspace shows newly added columns even when starting from empty state
+            workspace_html = render_to_string('csv_mapping/partials/selected_columns_workspace.html', workspace_context, request=request)
+            combined_response = f'{column_badges_html}<div id="selected-columns-workspace" hx-swap-oob="innerHTML">{workspace_html}</div>'
             
             return HttpResponse(combined_response)
             
@@ -838,25 +812,9 @@ class DeselectAllDatasetColumnsView(OrganizationMixin, CSVMappingCoordinatorMixi
             # Return updated column badges HTML with workspace update via hx-swap-oob
             from django.template.loader import render_to_string
             
-            # Prepare workspace update data
+            # Prepare workspace update data efficiently
             workspace_columns = self.get_workspace_columns(request, organization_id)
-            
-            # DEBUG: Log FK configurations before preparing datasets
-            logger.info(f"🔥 ADD_COLUMN DEBUG: Workspace has {len(workspace_columns)} columns before rendering:")
-            fk_columns = [col for col in workspace_columns if col.get('is_fk')]
-            logger.info(f"🔥 ADD_COLUMN DEBUG: Found {len(fk_columns)} FK columns:")
-            for col in fk_columns:
-                logger.info(f"  - {col.get('id')} has FK config: {col.get('fk_config')}")
-            
             datasets_with_columns = self._prepare_datasets_with_columns(workspace_columns)
-            
-            # DEBUG: Log FK configurations after preparing datasets
-            logger.info(f"🔥 ADD_COLUMN DEBUG: After preparing datasets, found {len(datasets_with_columns)} dataset groups:")
-            for dataset_group in datasets_with_columns:
-                fk_columns_in_group = [col for col in dataset_group['columns'] if col.get('is_fk')]
-                logger.info(f"  - Dataset '{dataset_group['name']}' has {len(fk_columns_in_group)} FK columns:")
-                for col in fk_columns_in_group:
-                    logger.info(f"    - {col.get('id')} has FK config: {col.get('fk_config')}")
             
             workspace_context = {
                 'datasets_with_columns': datasets_with_columns,

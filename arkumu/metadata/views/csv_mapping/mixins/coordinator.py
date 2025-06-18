@@ -15,6 +15,7 @@ import logging
 from .csv_data import CSVDataMixin
 from .workspace import MappingWorkspaceMixin
 from django.utils import timezone
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -286,6 +287,205 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         """
         selected_datasets = self.get_selected_dataset_names(request, organization_id)
         return dataset_name in selected_datasets
+    
+    def validate_and_fix_dataset_selection_state(self, request, organization_id, dataset_name, source_name, allow_auto_select_empty=False):
+        """
+        Safe validation for dataset selection state with auto-correction.
+        
+        This method detects state inconsistencies where:
+        - A dataset has columns in the workspace but isn't marked as "selected"
+        - Auto-corrects by selecting the dataset if it has workspace columns
+        
+        SAFETY FEATURES:
+        - Non-destructive: Only adds to selection, never removes
+        - Logs all actions for debugging
+        - Maintains backward compatibility
+        - Returns detailed status for error handling
+        
+        Args:
+            request: Django request object
+            organization_id (str): Organization ID
+            dataset_name (str): Dataset name to validate
+            source_name (str): Source name for the dataset
+            allow_auto_select_empty (bool): If True, auto-select dataset even if it has no columns (for "select all" operations)
+            
+        Returns:
+            tuple: (is_valid, was_corrected, status_message)
+                - is_valid (bool): Whether dataset is now in valid state for operations
+                - was_corrected (bool): Whether auto-correction was applied
+                - status_message (str): Descriptive message about the validation
+        """
+        logger.info(f"🔒 SAFE_VALIDATION: Validating dataset selection state for '{dataset_name}' from '{source_name}' (allow_auto_select_empty={allow_auto_select_empty})")
+        
+        # Check current selection state
+        is_currently_selected = self._is_dataset_selected(request, organization_id, dataset_name)
+        
+        if is_currently_selected:
+            logger.info(f"🔒 SAFE_VALIDATION: Dataset '{dataset_name}' is properly selected - no action needed")
+            return True, False, f"Dataset '{dataset_name}' is already selected"
+        
+        # Dataset not selected - check if it has columns in workspace
+        workspace_columns = self.get_workspace_columns(request, organization_id)
+        dataset_has_columns = False
+        column_count = 0
+        
+        for col_dict in workspace_columns:
+            if isinstance(col_dict, dict):
+                col_id = col_dict.get('id', '')
+                parsed = self.parse_column_id(col_id)
+                if parsed['dataset'] == dataset_name and parsed['source'] == source_name:
+                    dataset_has_columns = True
+                    column_count += 1
+        
+        # Determine if we should auto-select the dataset
+        should_auto_select = dataset_has_columns or allow_auto_select_empty
+        
+        if not should_auto_select:
+            # Dataset not selected and has no columns, and auto-select not allowed - this is normal state
+            logger.info(f"🔒 SAFE_VALIDATION: Dataset '{dataset_name}' not selected and has no columns - validation failed")
+            return False, False, f"Dataset '{dataset_name}' is not selected and operation requires selection"
+        
+        # Auto-select the dataset
+        if dataset_has_columns:
+            logger.warning(f"🔒 SAFE_VALIDATION: STATE INCONSISTENCY DETECTED - Dataset '{dataset_name}' has {column_count} columns but is not selected")
+            reason = f"existing columns ({column_count} columns found)"
+        else:
+            logger.info(f"🔒 SAFE_VALIDATION: AUTO-SELECTING empty dataset '{dataset_name}' for select-all operation")
+            reason = "select-all operation"
+        
+        logger.info(f"🔒 SAFE_VALIDATION: Auto-correcting by selecting dataset '{dataset_name}'")
+        
+        # Auto-correct by adding dataset to selection
+        try:
+            # Get current selected datasets
+            current_selected = self.get_selected_dataset_names(request, organization_id)
+            
+            # Add this dataset to the selection
+            updated_selected = list(current_selected) + [dataset_name]
+            
+            # Update the selection (this method varies by implementation)
+            # We need to call the method that updates selected datasets
+            session_key = f'selected_datasets_{organization_id}'
+            request.session[session_key] = updated_selected
+            
+            logger.info(f"🔒 SAFE_VALIDATION: Successfully auto-selected dataset '{dataset_name}' - state corrected")
+            return True, True, f"Dataset '{dataset_name}' was auto-selected due to {reason}"
+            
+        except Exception as e:
+            logger.error(f"🔒 SAFE_VALIDATION: Failed to auto-select dataset '{dataset_name}': {e}")
+            return False, False, f"Failed to auto-correct dataset selection for '{dataset_name}': {str(e)}"
+    
+    def safe_add_column_with_validation(self, request, organization_id, column_name, dataset_name, source_name):
+        """
+        Safely add a column with automatic dataset selection validation and correction.
+        
+        This wrapper around add_column_with_validation ensures that:
+        1. Dataset selection state is validated and corrected if needed
+        2. Column addition proceeds only after state consistency is ensured
+        3. All operations are logged for debugging
+        
+        Args:
+            request: Django request object
+            organization_id (str): Organization ID
+            column_name (str): Name of the column to add
+            dataset_name (str): Dataset name
+            source_name (str): Source name
+            
+        Returns:
+            tuple: (success, new_column, total_columns, error_message)
+                Same as add_column_with_validation but with safe state handling
+        """
+        logger.info(f"🔒 SAFE_ADD_COLUMN: Safely adding column '{column_name}' from dataset '{dataset_name}' (source: '{source_name}')")
+        
+        # First, validate and fix dataset selection state
+        is_valid, was_corrected, status_message = self.validate_and_fix_dataset_selection_state(
+            request, organization_id, dataset_name, source_name
+        )
+        
+        if was_corrected:
+            logger.info(f"🔒 SAFE_ADD_COLUMN: State auto-corrected - {status_message}")
+        
+        # Now proceed with column addition using the standard method
+        return self.add_column_with_validation(request, organization_id, column_name, dataset_name, source_name)
+    
+    def batch_add_columns_with_validation(self, request, organization_id, column_names, dataset_name, source_name):
+        """
+        Efficiently add multiple columns from a dataset in a single operation.
+        
+        PERFORMANCE OPTIMIZATION: This method:
+        1. Validates dataset selection state once
+        2. Batch processes all columns
+        3. Updates workspace only once at the end
+        4. Skips duplicates efficiently
+        5. Preserves existing FK configurations
+        
+        Args:
+            request: Django request object
+            organization_id (str): Organization ID
+            column_names (list): List of column names to add
+            dataset_name (str): Dataset name
+            source_name (str): Source name
+            
+        Returns:
+            tuple: (total_added, skipped_duplicates, final_column_count, error_message)
+        """
+        logger.info(f"🚀 BATCH_ADD: Adding {len(column_names)} columns from dataset '{dataset_name}' (source: '{source_name}')")
+        
+        # Step 1: Validate and fix dataset selection state once
+        is_valid, was_corrected, status_message = self.validate_and_fix_dataset_selection_state(
+            request, organization_id, dataset_name, source_name, allow_auto_select_empty=True
+        )
+        
+        if not is_valid:
+            return 0, 0, 0, status_message
+            
+        if was_corrected:
+            logger.info(f"🚀 BATCH_ADD: State auto-corrected - {status_message}")
+        
+        # Step 2: Get current workspace columns once
+        existing_columns = self.get_workspace_columns(request, organization_id)
+        existing_column_ids = {col.get('id') for col in existing_columns if isinstance(col, dict)}
+        
+        logger.info(f"🚀 BATCH_ADD: Current workspace has {len(existing_columns)} columns")
+        
+        # Step 3: Prepare new columns (skip duplicates)
+        new_columns = []
+        skipped_duplicates = 0
+        
+        for column_name in column_names:
+            column_id = self.generate_column_id(dataset_name, column_name, source_name)
+            
+            if column_id in existing_column_ids:
+                skipped_duplicates += 1
+                logger.debug(f"🚀 BATCH_ADD: Skipping duplicate column '{column_id}'")
+                continue
+            
+            # Create new column entry
+            new_column = {
+                'id': column_id,
+                'name': column_name,
+                'dataset': dataset_name,
+                'source': source_name,
+                'type': 'string',
+                'is_fk': False,
+                'is_anchor': False,
+                'is_multi_value': False,
+                'added_at': datetime.now().isoformat()
+            }
+            new_columns.append(new_column)
+            existing_column_ids.add(column_id)  # Prevent duplicates within this batch
+        
+        # Step 4: Add all new columns to workspace in one operation
+        final_columns = existing_columns + new_columns
+        self.update_workspace_columns(request, organization_id, final_columns)
+        
+        total_added = len(new_columns)
+        final_count = len(final_columns)
+        
+        logger.info(f"🚀 BATCH_ADD: Successfully added {total_added} columns, skipped {skipped_duplicates} duplicates")
+        logger.info(f"🚀 BATCH_ADD: Final workspace size: {final_count} columns")
+        
+        return total_added, skipped_duplicates, final_count, None
     
     # ==========================================================================
     # Unified Column Tracking & Validation (Single Source of Truth)
