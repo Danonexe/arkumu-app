@@ -8,13 +8,13 @@
         <div id="dataset-header-{{ dataset_group.name|slugify }}" class="flex items-center gap-2 flex-1">
             <!-- Dataset Info -->
             <div class="flex items-center gap-2">
+                <svg class="w-3 h-3 text-success" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/>
+                </svg>
                 <span class="text-sm font-medium text-success">{{ dataset_group.name }}</span>
-                <span class="badge badge-success badge-sm font-medium">
-                    {{ dataset_group.selected_count }} column{{ dataset_group.selected_count|pluralize }} selected
+                <span class="badge badge-success font-medium">
+                    {{ dataset_group.selected_count }} selected
                 </span>
-                {% if dataset_group.source %}
-                <span class="text-xs text-base-content opacity-50">from {{ dataset_group.source }}</span>
-                {% endif %}
             </div>
         </div>
         

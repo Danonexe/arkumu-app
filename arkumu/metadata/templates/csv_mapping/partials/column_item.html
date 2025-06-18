@@ -16,7 +16,7 @@
                     </div>
                     {% endif %}
                     {% if column.is_fk %}
-                    <div class="badge badge-secondary badge-sm gap-1" 
+                    <div class="badge badge-primary badge-sm gap-1" 
                          title="Foreign Key: Links to {{ column.fk_config.target_dataset|default:'target dataset' }}.{{ column.fk_config.target_column|default:'target column' }}">
                         🔗 FK
                     </div>
@@ -26,9 +26,6 @@
                         🔀 Multi
                     </div>
                     {% endif %}
-                    {% if column.type %}
-                    <div class="badge badge-outline badge-xs">{{ column.type }}</div>
-                    {% endif %}
                 </div>
                 
                 <!-- Column Name and Dataset -->
@@ -36,8 +33,11 @@
                     <h4 class="font-semibold text-sm mb-1">
                         <span class="text-primary text-base">{{ column.name }}</span>
                     </h4>
-                    <div class="text-xs text-base-content/60">
-                        📊 <span class="font-medium">{{ column.dataset }}</span>
+                    <div class="text-xs text-base-content/60 flex items-center gap-1">
+                        <svg class="w-3 h-3 text-success" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/>
+                        </svg>
+                        <span class="font-medium">{{ column.dataset }}</span>
                         {% if column.source and column.source != column.dataset %}
                         <span class="text-base-content/40 mx-1">•</span>
                         <span class="text-base-content/50">{{ column.source }}</span>
