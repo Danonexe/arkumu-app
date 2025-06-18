@@ -210,14 +210,16 @@ class MappingWorkspaceMixin:
         logger.info(f"WORKSPACE_MIXIN: Updated column {column_id} configuration: {config_updates}")
         return True, updated_column
     
-    def set_anchor_column(self, request, organization_id, column_id):
+    def toggle_anchor_column(self, request, organization_id, column_id):
         """
-        Set a column as the anchor column (only one anchor allowed per dataset).
+        Toggle a column as the anchor column (only one anchor allowed per dataset).
+        If the column is already an anchor, it will be unset. If it's not an anchor,
+        it will be set as anchor and clear any other anchors in the same dataset.
         
         Args:
             request: Django request object
             organization_id (str): Organization ID
-            column_id (str): Column ID to set as anchor
+            column_id (str): Column ID to toggle as anchor
             
         Returns:
             tuple: (success, updated_columns)
@@ -227,32 +229,69 @@ class MappingWorkspaceMixin:
         # Find the target column and its dataset
         target_dataset = None
         anchor_found = False
+        current_anchor_status = False
         
-        logger.info(f"🔍 SET_ANCHOR_MIXIN: Looking for column_id='{column_id}' in {len(existing_columns)} columns")
+        logger.info(f"🔍 TOGGLE_ANCHOR_MIXIN: Looking for column_id='{column_id}' in {len(existing_columns)} columns")
         for col in existing_columns:
             col_id = col.get('id')
-            logger.info(f"  - Comparing '{col_id}' == '{column_id}': {col_id == column_id}")
             if col_id == column_id:
                 target_dataset = col.get('dataset')
-                col['is_anchor'] = True
+                current_anchor_status = col.get('is_anchor', False)
+                # TOGGLE the anchor status
+                col['is_anchor'] = not current_anchor_status
                 anchor_found = True
-                logger.info(f"🔍 SET_ANCHOR_MIXIN: Found column! Setting as anchor for dataset '{target_dataset}'")
+                logger.info(f"🔍 TOGGLE_ANCHOR_MIXIN: Found column! Toggling anchor from {current_anchor_status} to {col['is_anchor']} for dataset '{target_dataset}'")
                 break
         
         if not anchor_found:
-            logger.warning(f"🔍 SET_ANCHOR_MIXIN: Column {column_id} not found for anchor setting")
-            logger.warning(f"🔍 SET_ANCHOR_MIXIN: Available column IDs:")
-            for col in existing_columns:
-                logger.warning(f"  - '{col.get('id')}'")
+            logger.warning(f"🔍 TOGGLE_ANCHOR_MIXIN: Column {column_id} not found for anchor toggling")
             return False, existing_columns
         
-        # Clear all other anchors in the SAME dataset only (not all datasets)
-        for col in existing_columns:
-            if col.get('dataset') == target_dataset and col.get('id') != column_id:
-                col['is_anchor'] = False
+        # If we're SETTING this column as anchor (was False, now True), 
+        # clear all other anchors in the SAME dataset only
+        if not current_anchor_status:  # Was False, now True - clear others
+            for col in existing_columns:
+                if col.get('dataset') == target_dataset and col.get('id') != column_id:
+                    col['is_anchor'] = False
+            logger.info(f"WORKSPACE_MIXIN: Set column {column_id} as anchor for dataset {target_dataset} and cleared others")
+        else:  # Was True, now False - just unset this one
+            logger.info(f"WORKSPACE_MIXIN: Unset column {column_id} as anchor for dataset {target_dataset}")
         
         self.update_workspace_columns(request, organization_id, existing_columns)
-        logger.info(f"WORKSPACE_MIXIN: Set column {column_id} as anchor for dataset {target_dataset}")
+        return True, existing_columns
+
+    def toggle_multi_value_column(self, request, organization_id, column_id):
+        """
+        Toggle the multi-value status of a column.
+        
+        Args:
+            request: Django request object
+            organization_id (str): Organization ID
+            column_id (str): Column ID to toggle multi-value status
+            
+        Returns:
+            tuple: (success, updated_columns)
+        """
+        existing_columns = self.get_workspace_columns(request, organization_id)
+        
+        # Find and toggle the column's multi-value status
+        column_found = False
+        
+        logger.info(f"🔍 TOGGLE_MULTI_VALUE_MIXIN: Looking for column_id='{column_id}' in {len(existing_columns)} columns")
+        for col in existing_columns:
+            if col.get('id') == column_id:
+                # Toggle multi-value status
+                current_status = col.get('is_multi_value', False)
+                col['is_multi_value'] = not current_status
+                column_found = True
+                logger.info(f"TOGGLE_MULTI_VALUE_MIXIN: Toggled column '{column_id}' multi-value from {current_status} to {col['is_multi_value']}")
+                break
+        
+        if not column_found:
+            logger.warning(f"TOGGLE_MULTI_VALUE_MIXIN: Column {column_id} not found for multi-value toggling")
+            return False, existing_columns
+        
+        self.update_workspace_columns(request, organization_id, existing_columns)
         return True, existing_columns
     
     def get_workspace_statistics(self, request, organization_id):

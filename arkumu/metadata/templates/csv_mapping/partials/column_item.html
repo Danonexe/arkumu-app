@@ -87,13 +87,11 @@
                     <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
                 </form>
                 
-                {% if not column.is_anchor %}
                 <form id="anchor-data-form-{{ column.id|slugify }}" style="display: none;">
                     <input type="hidden" name="column_id" value="{{ column.id }}">
                     <input type="hidden" name="organization" value="{{ organization_id }}">
                     <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
                 </form>
-                {% endif %}
                 
                 <form id="remove-data-form-{{ column.id|slugify }}" style="display: none;">
                     <input type="hidden" name="column_name" value="{{ column.name }}">
@@ -132,9 +130,8 @@
                     </div>
                     
                     <!-- Anchor Button -->
-                    {% if not column.is_anchor %}
-                    <div class="tooltip tooltip-left" data-tip="Set as Anchor Column">
-                        <button class="btn btn-sm btn-outline btn-warning" 
+                    <div class="tooltip tooltip-left" data-tip="{% if column.is_anchor %}Remove Anchor{% else %}Set as Anchor Column{% endif %}">
+                        <button class="btn btn-sm {% if column.is_anchor %}btn-warning{% else %}btn-outline btn-warning{% endif %}" 
                                 hx-post="{% url 'metadata:csv_set_anchor_column' %}"
                                 hx-include="#anchor-data-form-{{ column.id|slugify }}"
                                 hx-target="#column-{{ column.id|slugify }}"
@@ -142,7 +139,6 @@
                             ⚓
                         </button>
                     </div>
-                    {% endif %}
                     
                     <!-- Remove Button -->
                     <div class="tooltip tooltip-left" data-tip="Remove column from workspace">

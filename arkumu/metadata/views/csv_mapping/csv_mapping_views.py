@@ -1491,16 +1491,16 @@ class SetAnchorColumnView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
                     logger.error(f"CSV_SET_ANCHOR: Available column IDs: {available_ids}")
                     return JsonResponse({'error': 'Column not found in workspace'}, status=404)
             
-            # Use coordinator mixin to set anchor column
-            success, updated_columns = self.set_anchor_column(request, organization_id, column_id)
+            # Use mixin method to toggle anchor column (consistent with FK approach)
+            success, updated_columns = self.toggle_anchor_column(request, organization_id, column_id)
             
             if not success:
-                return JsonResponse({'error': 'Failed to set anchor column'}, status=500)
+                return JsonResponse({'error': 'Failed to toggle anchor column'}, status=500)
             
             # Find the updated column to return just that column item (like FK save does)
             target_column = next((col for col in updated_columns if col.get('id') == column_id), None)
             if not target_column:
-                return JsonResponse({'error': 'Updated column not found'}, status=404)
+                return JsonResponse({'error': 'Updated column not found'}, status=500)
             
             # Generate CSRF token
             from django.middleware.csrf import get_token
@@ -1559,31 +1559,14 @@ class ToggleMultiValueColumnView(OrganizationMixin, CSVMappingCoordinatorMixin, 
                     logger.error(f"CSV_TOGGLE_MULTI_VALUE: Available column IDs: {available_ids}")
                     return JsonResponse({'error': 'Column not found in workspace'}, status=400)
             
-            # Get current workspace columns and toggle the multi-value status
-            existing_columns = self.get_workspace_columns(request, organization_id)
+            # Use mixin method to toggle multi-value column (consistent with FK approach)
+            success, updated_columns = self.toggle_multi_value_column(request, organization_id, column_id)
             
-            # Find and toggle the column's multi-value status
-            column_found = False
-            dataset_name = None
-            
-            for col in existing_columns:
-                if col.get('id') == column_id:
-                    # Toggle multi-value status
-                    current_status = col.get('is_multi_value', False)
-                    col['is_multi_value'] = not current_status
-                    column_found = True
-                    dataset_name = col.get('dataset')
-                    logger.info(f"CSV_TOGGLE_MULTI_VALUE: Toggled column '{column_id}' multi-value to {col['is_multi_value']}")
-                    break
-            
-            if not column_found:
-                return JsonResponse({'error': 'Column not found in workspace after validation'}, status=500)
-            
-            # Update workspace using coordinator
-            self.update_workspace_columns(request, organization_id, existing_columns)
+            if not success:
+                return JsonResponse({'error': 'Failed to toggle multi-value column'}, status=500)
             
             # Find the updated column to return just that column item (like FK save does)
-            updated_column = next((col for col in existing_columns if col.get('id') == column_id), None)
+            updated_column = next((col for col in updated_columns if col.get('id') == column_id), None)
             if not updated_column:
                 return JsonResponse({'error': 'Updated column not found'}, status=500)
             
