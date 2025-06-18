@@ -173,7 +173,6 @@ urlpatterns = [
     path('csv-save-mapping-htmx/', saved_mappings_ui.SaveMappingHTMXView.as_view(), name='csv_save_mapping_htmx'),
     path('csv-load-mapping-htmx/', saved_mappings_ui.LoadMappingHTMXView.as_view(), name='csv_load_mapping_htmx'),
     path('csv-delete-mapping-htmx/', saved_mappings_ui.DeleteMappingHTMXView.as_view(), name='csv_delete_mapping_htmx'),
-
     
     # Step 4: FK Configuration URLs (now using proper CSV mapping views with coordinator mixins)
     path('csv-toggle-fk-form/', csv_mapping_views.ToggleFKFormView.as_view(), name='csv_toggle_fk_form'),
@@ -181,5 +180,9 @@ urlpatterns = [
     path('csv-update-fk-target-columns/', csv_mapping_views.UpdateFKTargetColumnsView.as_view(), name='csv_update_fk_target_columns'),
     path('csv-save-inline-fk-config/', csv_mapping_views.SaveInlineFKConfigView.as_view(), name='csv_save_inline_fk_config'),
     path('csv-remove-fk-config/', csv_mapping_views.RemoveFKConfigView.as_view(), name='remove_fk_config'),
+    
+    # Column configuration URLs (anchor and multi-value using coordinator mixins)
+    path('csv-set-anchor-column/', csv_mapping_views.SetAnchorColumnView.as_view(), name='csv_set_anchor_column'),
+    path('csv-toggle-multi-value-column/', csv_mapping_views.ToggleMultiValueColumnView.as_view(), name='csv_toggle_multi_value_column'),
     
     ]

@@ -1451,4 +1451,158 @@ class LoadMoreDatasetRowsView(OrganizationMixin, CSVMappingCoordinatorMixin, Vie
             return HttpResponse(f'<tr><td colspan="100%" class="text-danger">Error: {str(e)}</td></tr>')
 
 
+class SetAnchorColumnView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
+    """
+    Set a column as the anchor column using the coordinator mixin.
+    Only one column can be anchor at a time.
+    """
+    
+    def post(self, request):
+        try:
+            organization_id = self.get_organization_id_from_request(request)
+            column_id = request.POST.get('column_id')
+            
+            logger.info(f"🚨 SET_ANCHOR: Received column_id='{column_id}' for org='{organization_id}'")
+            logger.info(f"🚨 SET_ANCHOR: POST data: {dict(request.POST)}")
+            
+            # DEBUG: Check session directly
+            workspace_key = f"workspace_columns_{organization_id}"
+            session_workspace = request.session.get(workspace_key, [])
+            logger.info(f"🚨 SET_ANCHOR: Direct session check - workspace_key='{workspace_key}', columns={len(session_workspace)}")
+            logger.info(f"🚨 SET_ANCHOR: Session keys: {list(request.session.keys())}")
+            for col in session_workspace:
+                logger.info(f"  - Session column: '{col.get('id')}' from dataset '{col.get('dataset')}'")
+            
+            if not column_id:
+                return JsonResponse({'error': 'Missing column_id'}, status=400)
+            
+            # UNIFIED TRACKING: Use coordinator method to find column (same as FK system)
+            column = self.get_unified_column_by_id(request, organization_id, column_id)
+            if not column:
+                # Also validate workspace for duplicates and auto-clean (same as FK system)
+                is_unique, duplicates, cleaned = self.validate_workspace_column_uniqueness(request, organization_id)
+                if not is_unique:
+                    logger.error(f"CSV_SET_ANCHOR: Found {len(duplicates)} workspace duplicates - auto-cleaned and retrying")
+                    column = self.get_unified_column_by_id(request, organization_id, column_id)
+                
+                if not column:
+                    logger.error(f"CSV_SET_ANCHOR: Column '{column_id}' not found even after cleanup")
+                    available_ids = [col.get('id') for col in self.get_workspace_columns(request, organization_id)]
+                    logger.error(f"CSV_SET_ANCHOR: Available column IDs: {available_ids}")
+                    return JsonResponse({'error': 'Column not found in workspace'}, status=404)
+            
+            # Use coordinator mixin to set anchor column
+            success, updated_columns = self.set_anchor_column(request, organization_id, column_id)
+            
+            if not success:
+                return JsonResponse({'error': 'Failed to set anchor column'}, status=500)
+            
+            # Find the updated column to return just that column item (like FK save does)
+            target_column = next((col for col in updated_columns if col.get('id') == column_id), None)
+            if not target_column:
+                return JsonResponse({'error': 'Updated column not found'}, status=404)
+            
+            # Generate CSRF token
+            from django.middleware.csrf import get_token
+            csrf_token = get_token(request)
+            
+            # Return just the updated column item (same approach as SaveInlineFKConfigView)
+            column_html = render_to_string('csv_mapping/partials/column_item.html', {
+                'column': target_column,
+                'organization_id': organization_id,
+                'csrf_token': csrf_token,
+            }, request=request)
+            
+            return HttpResponse(column_html)
+            
+        except Exception as e:
+            logger.error(f"Error setting anchor column: {e}", exc_info=True)
+            return JsonResponse({'error': str(e)}, status=500)
+
+
+class ToggleMultiValueColumnView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
+    """
+    Toggle the multi-value status of a column using the coordinator mixin.
+    """
+    
+    def post(self, request):
+        try:
+            organization_id = self.get_organization_id_from_request(request)
+            column_id = request.POST.get('column_id')
+            
+            logger.info(f"🚨 TOGGLE_MULTI_VALUE: Received column_id='{column_id}' for org='{organization_id}'")
+            logger.info(f"🚨 TOGGLE_MULTI_VALUE: POST data: {dict(request.POST)}")
+            
+            # DEBUG: Check session directly
+            workspace_key = f"workspace_columns_{organization_id}"
+            session_workspace = request.session.get(workspace_key, [])
+            logger.info(f"🚨 TOGGLE_MULTI_VALUE: Direct session check - workspace_key='{workspace_key}', columns={len(session_workspace)}")
+            logger.info(f"🚨 TOGGLE_MULTI_VALUE: Session keys: {list(request.session.keys())}")
+            for col in session_workspace:
+                logger.info(f"  - Session column: '{col.get('id')}' from dataset '{col.get('dataset')}'")
+            
+            if not column_id:
+                return JsonResponse({'error': 'Missing column_id'}, status=400)
+            
+            # UNIFIED TRACKING: Use coordinator method to find column (same as FK system)
+            column = self.get_unified_column_by_id(request, organization_id, column_id)
+            if not column:
+                # Also validate workspace for duplicates and auto-clean (same as FK system)
+                is_unique, duplicates, cleaned = self.validate_workspace_column_uniqueness(request, organization_id)
+                if not is_unique:
+                    logger.error(f"CSV_TOGGLE_MULTI_VALUE: Found {len(duplicates)} workspace duplicates - auto-cleaned and retrying")
+                    column = self.get_unified_column_by_id(request, organization_id, column_id)
+                
+                if not column:
+                    logger.error(f"CSV_TOGGLE_MULTI_VALUE: Column '{column_id}' not found even after cleanup")
+                    available_ids = [col.get('id') for col in self.get_workspace_columns(request, organization_id)]
+                    logger.error(f"CSV_TOGGLE_MULTI_VALUE: Available column IDs: {available_ids}")
+                    return JsonResponse({'error': 'Column not found in workspace'}, status=400)
+            
+            # Get current workspace columns and toggle the multi-value status
+            existing_columns = self.get_workspace_columns(request, organization_id)
+            
+            # Find and toggle the column's multi-value status
+            column_found = False
+            dataset_name = None
+            
+            for col in existing_columns:
+                if col.get('id') == column_id:
+                    # Toggle multi-value status
+                    current_status = col.get('is_multi_value', False)
+                    col['is_multi_value'] = not current_status
+                    column_found = True
+                    dataset_name = col.get('dataset')
+                    logger.info(f"CSV_TOGGLE_MULTI_VALUE: Toggled column '{column_id}' multi-value to {col['is_multi_value']}")
+                    break
+            
+            if not column_found:
+                return JsonResponse({'error': 'Column not found in workspace after validation'}, status=500)
+            
+            # Update workspace using coordinator
+            self.update_workspace_columns(request, organization_id, existing_columns)
+            
+            # Find the updated column to return just that column item (like FK save does)
+            updated_column = next((col for col in existing_columns if col.get('id') == column_id), None)
+            if not updated_column:
+                return JsonResponse({'error': 'Updated column not found'}, status=500)
+            
+            # Generate CSRF token
+            from django.middleware.csrf import get_token
+            csrf_token = get_token(request)
+            
+            # Return just the updated column item (same approach as SaveInlineFKConfigView)
+            column_html = render_to_string('csv_mapping/partials/column_item.html', {
+                'column': updated_column,
+                'organization_id': organization_id,
+                'csrf_token': csrf_token,
+            }, request=request)
+            
+            return HttpResponse(column_html)
+            
+        except Exception as e:
+            logger.error(f"Error toggling multi-value column: {e}", exc_info=True)
+            return JsonResponse({'error': str(e)}, status=500)
+
+
 

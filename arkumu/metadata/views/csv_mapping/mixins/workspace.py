@@ -29,7 +29,14 @@ class MappingWorkspaceMixin:
             list: List of workspace columns
         """
         workspace_key = f"workspace_columns_{organization_id}"
-        return request.session.get(workspace_key, [])
+        columns = request.session.get(workspace_key, [])
+        
+        # DEBUG: Log every time workspace is accessed
+        logger.info(f"🔍 WORKSPACE_ACCESS: Getting workspace for key '{workspace_key}' - found {len(columns)} columns")
+        if columns:
+            logger.info(f"🔍 WORKSPACE_ACCESS: First column ID: '{columns[0].get('id')}'")
+        
+        return columns
     
     def update_workspace_columns(self, request, organization_id, columns):
         """
@@ -43,7 +50,20 @@ class MappingWorkspaceMixin:
         workspace_key = f"workspace_columns_{organization_id}"
         request.session[workspace_key] = columns
         request.session.modified = True
+        
+        # DEBUG: Verify the session was actually updated
+        verification = request.session.get(workspace_key, [])
         logger.info(f"WORKSPACE_MIXIN: Updated workspace with {len(columns)} columns for org={organization_id}")
+        logger.info(f"WORKSPACE_MIXIN: Verification check shows {len(verification)} columns in session")
+        logger.info(f"WORKSPACE_MIXIN: Session key '{workspace_key}' exists: {workspace_key in request.session}")
+        
+        # DEBUG: Show first few column IDs for verification
+        if verification:
+            for i, col in enumerate(verification[:3]):
+                logger.info(f"  - Column {i}: '{col.get('id')}' from dataset '{col.get('dataset')}'")
+        
+        # DEBUG: Force session save
+        request.session.save()
     
     def clear_workspace_columns(self, request, organization_id):
         """
@@ -192,7 +212,7 @@ class MappingWorkspaceMixin:
     
     def set_anchor_column(self, request, organization_id, column_id):
         """
-        Set a column as the anchor column (only one anchor allowed).
+        Set a column as the anchor column (only one anchor allowed per dataset).
         
         Args:
             request: Django request object
@@ -204,21 +224,35 @@ class MappingWorkspaceMixin:
         """
         existing_columns = self.get_workspace_columns(request, organization_id)
         
-        # Clear all anchors first, then set the new one
+        # Find the target column and its dataset
+        target_dataset = None
         anchor_found = False
+        
+        logger.info(f"🔍 SET_ANCHOR_MIXIN: Looking for column_id='{column_id}' in {len(existing_columns)} columns")
         for col in existing_columns:
-            if col.get('id') == column_id:
+            col_id = col.get('id')
+            logger.info(f"  - Comparing '{col_id}' == '{column_id}': {col_id == column_id}")
+            if col_id == column_id:
+                target_dataset = col.get('dataset')
                 col['is_anchor'] = True
                 anchor_found = True
-            else:
-                col['is_anchor'] = False
+                logger.info(f"🔍 SET_ANCHOR_MIXIN: Found column! Setting as anchor for dataset '{target_dataset}'")
+                break
         
         if not anchor_found:
-            logger.warning(f"WORKSPACE_MIXIN: Column {column_id} not found for anchor setting")
+            logger.warning(f"🔍 SET_ANCHOR_MIXIN: Column {column_id} not found for anchor setting")
+            logger.warning(f"🔍 SET_ANCHOR_MIXIN: Available column IDs:")
+            for col in existing_columns:
+                logger.warning(f"  - '{col.get('id')}'")
             return False, existing_columns
         
+        # Clear all other anchors in the SAME dataset only (not all datasets)
+        for col in existing_columns:
+            if col.get('dataset') == target_dataset and col.get('id') != column_id:
+                col['is_anchor'] = False
+        
         self.update_workspace_columns(request, organization_id, existing_columns)
-        logger.info(f"WORKSPACE_MIXIN: Set column {column_id} as anchor")
+        logger.info(f"WORKSPACE_MIXIN: Set column {column_id} as anchor for dataset {target_dataset}")
         return True, existing_columns
     
     def get_workspace_statistics(self, request, organization_id):
