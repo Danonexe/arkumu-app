@@ -112,6 +112,10 @@ class OrganizationMixin:
         available_organizations = self.get_available_organizations()
         org_exists = self.validate_organization_exists(organization_id, available_organizations)
         
+        # Don't pass 'default-org' to template - use None instead for cleaner logic
+        if organization_id == 'default-org':
+            organization_id = None
+        
         return {
             'organization_id': organization_id,
             'organizations': available_organizations,
