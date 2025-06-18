@@ -1413,44 +1413,38 @@ class LoadMoreDatasetRowsView(OrganizationMixin, CSVMappingCoordinatorMixin, Vie
             if not dataset_name or not source_name:
                 return HttpResponse('<tr><td colspan="100%" class="text-danger">Dataset and source parameters required</td></tr>')
             
-            # Use S3DirectDataAnalyzer to get more rows
+            # Use S3DirectDataAnalyzer to get more rows - using the working pattern from direct_data_views.py
             analyzer = S3DirectDataAnalyzer()
             
-            # Get the dataset with more data
-            source_summary = analyzer.get_s3_source_summary(organization_id, source_name)
+            # Find the source in S3 directly (like direct_data_views.py does)
+            sources = analyzer.discover_s3_data_sources(organization_id)
+            source_info = next((s for s in sources if s.name == source_name), None)
             
-            # Find the specific dataset
-            dataset_preview = None
-            for dataset_info in source_summary.get('datasets', []):
-                if dataset_info.get('name') == dataset_name:
-                    # Create S3DataSourceInfo object from the dataset info
-                    source_info = S3DataSourceInfo(
-                        bucket_name=dataset_info.get('bucket_name', ''),
-                        object_key=dataset_info.get('object_key', ''),
-                        name=dataset_info.get('name', dataset_name),
-                        format=dataset_info.get('format', 'csv'),
-                        size_bytes=dataset_info.get('size_bytes'),
-                        modified_date=dataset_info.get('modified_date')
-                    )
-                    
-                    # Get more data with offset and limit using the correct method
-                    table_preview = analyzer.get_s3_table_preview(source_info, dataset_name, offset=offset, limit=limit)
-                    if table_preview and table_preview.data_rows:
-                        # Convert to the expected format
-                        dataset_preview = {'sample_data': table_preview.data_rows}
-                    break
+            if not source_info:
+                return HttpResponse('<tr><td colspan="100%" class="text-danger">Source not found</td></tr>')
             
-            if not dataset_preview or not dataset_preview.get('sample_data'):
+            # Get more data with offset and limit using the complete source_info
+            table_preview = analyzer.get_s3_table_preview(source_info, dataset_name, offset=offset, limit=limit)
+            
+            if not table_preview or not table_preview.data_rows:
                 return HttpResponse('<tr><td colspan="100%" class="text-info">No more rows available</td></tr>')
             
-            # Return just the table rows
+            # Return both table rows AND updated button (like direct_data_views.py does)
             context = {
-                'data': dataset_preview['sample_data'],
+                'data': table_preview.data_rows,
                 'dataset': dataset_name,
                 'source': source_name,
+                'preview': {
+                    'showing_rows': offset + len(table_preview.data_rows),  # Total rows shown so far
+                    'total_rows': table_preview.total_rows,
+                    'has_more': table_preview.has_more,
+                    'offset': offset + len(table_preview.data_rows)  # Next offset
+                },
+                'is_direct_mode': False,  # This is CSV mapping mode, not direct mode
+                'organization_id': organization_id
             }
             
-            return render(request, 'csv_mapping/partials/table_rows.html', context)
+            return render(request, 'partials/load_more_response.html', context)
             
         except Exception as e:
             logger.error(f"LOAD_MORE_ROWS: Error loading more dataset rows: {e}", exc_info=True)

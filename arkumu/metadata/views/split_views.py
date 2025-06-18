@@ -461,15 +461,15 @@ def load_more_dataset_rows(request):
     limit = int(request.GET.get('limit', 20))
     
     if not source or not dataset:
-        return render(request, 'partials/table_rows.html', {'data': []})
+        return render(request, 'csv_mapping/partials/table_rows.html', {'data': []})
     
     try:
         preview_data = _get_dataset_preview_optimized(source, dataset, max_rows=limit, offset=offset)
         
         if not preview_data:
-            return render(request, 'partials/table_rows.html', {'data': []})
+            return render(request, 'csv_mapping/partials/table_rows.html', {'data': []})
         
-        return render(request, 'partials/table_rows.html', {
+        return render(request, 'csv_mapping/partials/table_rows.html', {
             'data': preview_data['data'],
             'colHeaders': preview_data['colHeaders'],
             'rowIds': preview_data.get('rowIds', []),
@@ -480,7 +480,7 @@ def load_more_dataset_rows(request):
         
     except Exception as e:
         logger.error(f"Error loading more rows: {e}")
-        return render(request, 'partials/table_rows.html', {'data': []})
+        return render(request, 'csv_mapping/partials/table_rows.html', {'data': []})
 
 
 

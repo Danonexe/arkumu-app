@@ -14,7 +14,7 @@
             {% if is_direct_mode %}
             hx-get="{% url 'metadata:direct_load_more_dataset_rows' %}?source={{ source|urlencode }}&dataset={{ dataset|urlencode }}&offset={{ preview.offset }}&limit=10{% if organization_id %}&organization={{ organization_id }}{% endif %}"
             {% else %}
-            hx-get="{% url 'metadata:load_more_dataset_rows' %}?source={{ source|urlencode }}&dataset={{ dataset|urlencode }}&offset={{ preview.offset }}&limit=10"
+            hx-get="{% url 'metadata:csv_load_more_dataset_rows' %}?source={{ source|urlencode }}&dataset={{ dataset|urlencode }}&offset={{ preview.offset }}&limit=10{% if organization_id %}&organization={{ organization_id }}{% endif %}"
             {% endif %}
             hx-target="#table-body-{{ dataset|slugify }}"
             hx-swap="beforeend">
