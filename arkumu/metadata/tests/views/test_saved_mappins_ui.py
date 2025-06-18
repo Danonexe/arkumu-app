@@ -159,7 +159,7 @@ class TestValidateMappingNameView:
         assert 'id="save-mapping-btn"' in content
         assert 'hx-post=' in content
         assert 'Save' in content
-        assert '<svg' in content  # Icon should be present
+        assert 'loading-spinner' in content  # Loading indicator should be present
 
 
 @pytest.mark.django_db

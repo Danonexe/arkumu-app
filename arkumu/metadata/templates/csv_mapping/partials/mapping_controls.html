@@ -20,18 +20,24 @@
                        name="mapping_name"
                        placeholder="{% trans 'Mapping name...' %}"
                        class="input input-bordered input-xs flex-1"
+                       {% if organization_id %}
                        hx-get="{% url 'metadata:csv_validate_mapping_name' %}"
                        hx-vals='{"organization": "{{ organization_id }}"}'
                        hx-trigger="keyup changed delay:300ms"
                        hx-target="#save-mapping-btn"
-                       hx-swap="outerHTML">
-                <button class="btn btn-xs btn-primary btn-disabled" 
+                       hx-swap="outerHTML"
+                       {% else %}
+                       disabled
+                       {% endif %}>
+                <button class="btn btn-xs btn-primary {% if not organization_id %}btn-disabled{% else %}btn-disabled{% endif %}" 
                         id="save-mapping-btn"
+                        {% if organization_id %}
                         hx-post="{% url 'metadata:csv_save_mapping_htmx' %}"
                         hx-vals='{"organization": "{{ organization_id }}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
                         hx-include="#mapping-name-input"
                         hx-target="#mapping-status"
                         hx-swap="innerHTML"
+                        {% endif %}
                         disabled>
                     {% trans "Save" %}
                     <span class="loading loading-spinner loading-xs htmx-indicator"></span>
@@ -44,18 +50,25 @@
             <select id="mapping-select" 
                     name="mapping_id"
                     class="select select-bordered select-xs w-full"
+                    {% if organization_id %}
                     hx-get="{% url 'metadata:csv_list_mappings' %}"
                     hx-vals='{"organization": "{{ organization_id }}"}'
                     hx-trigger="load, refreshMappings from:body"
                     hx-target="this"
                     hx-swap="innerHTML"
+                    {% endif %}
                     hx-on:change="htmx.trigger('#load-mapping-btn', 'updateState'); htmx.trigger('#delete-mapping-btn', 'updateState')">
+                {% if organization_id %}
                 <option value="">{% trans "Select saved mapping..." %}</option>
+                {% else %}
+                <option value="">{% trans "Select organization first..." %}</option>
+                {% endif %}
             </select>
             
             <div class="flex gap-1">
                 <button class="btn btn-xs btn-secondary flex-1 btn-disabled" 
                         id="load-mapping-btn"
+                        {% if organization_id %}
                         hx-post="{% url 'metadata:csv_load_mapping_htmx' %}"
                         hx-vals='{"organization": "{{ organization_id }}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
                         hx-include="#mapping-select"
@@ -65,6 +78,7 @@
                         hx-trigger="click, updateState from:#mapping-select"
                         hx-get="{% url 'metadata:csv_update_button_state' %}"
                         hx-vals='{"button": "load"}'
+                        {% endif %}
                         disabled>
                     {% trans "Load" %}
                     <span class="loading loading-spinner loading-xs htmx-indicator"></span>
@@ -72,6 +86,7 @@
                 
                 <button class="btn btn-xs btn-error btn-outline btn-disabled" 
                         id="delete-mapping-btn"
+                        {% if organization_id %}
                         hx-post="{% url 'metadata:csv_delete_mapping_htmx' %}"
                         hx-vals='{"organization": "{{ organization_id }}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
                         hx-include="#mapping-select"
@@ -81,6 +96,7 @@
                         hx-trigger="click, updateState from:#mapping-select"
                         hx-get="{% url 'metadata:csv_update_button_state' %}"
                         hx-vals='{"button": "delete"}'
+                        {% endif %}
                         disabled>
                     {% trans "Delete" %}
                     <span class="loading loading-spinner loading-xs htmx-indicator"></span>
@@ -96,6 +112,16 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
                     </svg>
                 </button>
+            </div>
+        </div>
+        
+        <!-- Compact Status Messages -->
+        <div id="mapping-status" class="hidden mt-2"
+             hx-on:htmx:afterSettle="setTimeout(() => { this.classList.add('hidden'); this.innerHTML = ''; }, 4000)">
+            <!-- Success/error messages will appear here -->
+        </div>
+    </div>
+</div>
             </div>
         </div>
         

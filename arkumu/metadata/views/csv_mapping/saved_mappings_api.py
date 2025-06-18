@@ -20,6 +20,131 @@ logger = logging.getLogger(__name__)
 class SaveMappingView(CSVMappingCoordinatorMixin, View):
     """Save current mapping state to database"""
     
+    def validate_mapping_before_save(self, request, organization_id, mapping_config):
+        """
+        Validate mapping configuration before saving to database.
+        
+        This ensures the mapping state is consistent and all referenced
+        datasets and columns actually exist in the current context.
+        
+        Args:
+            request: Django request object
+            organization_id (str): Organization ID
+            mapping_config (dict): Serialized mapping configuration
+            
+        Returns:
+            dict: Validation result with is_valid, errors, warnings
+        """
+        logger.info(f"VALIDATE_MAPPING: Starting pre-save validation for organization {organization_id}")
+        
+        validation_result = {
+            'is_valid': True,
+            'errors': [],
+            'warnings': []
+        }
+        
+        try:
+            # 1. Check that mapping_config has required structure
+            required_keys = ['selected_datasets', 'workspace_columns', 'fk_relationships', 'metadata']
+            for key in required_keys:
+                if key not in mapping_config:
+                    validation_result['errors'].append(f"Missing required configuration key: {key}")
+                    validation_result['is_valid'] = False
+            
+            # 2. Validate selected datasets exist
+            selected_datasets = mapping_config.get('selected_datasets', [])
+            if not selected_datasets:
+                validation_result['warnings'].append("No datasets selected - mapping will be empty")
+            else:
+                try:
+                    available_datasets = self.get_csv_datasets_for_organization(organization_id)
+                    available_names = {ds.get('name') for ds in available_datasets if ds.get('name')}
+                    
+                    for dataset_name in selected_datasets:
+                        if dataset_name not in available_names:
+                            validation_result['errors'].append(f"Dataset '{dataset_name}' is no longer available")
+                            validation_result['is_valid'] = False
+                except Exception as e:
+                    validation_result['warnings'].append(f"Could not verify dataset availability: {str(e)}")
+            
+            # 3. Validate workspace columns consistency
+            workspace_columns = mapping_config.get('workspace_columns', {})
+            if not workspace_columns:
+                validation_result['warnings'].append("No columns in workspace - mapping will be empty")
+            else:
+                # Check that workspace columns reference valid datasets
+                for column_id, column_data in workspace_columns.items():
+                    try:
+                        # Parse column ID: "source::dataset::column_name"
+                        parts = column_id.split('::', 2)
+                        if len(parts) != 3:
+                            validation_result['errors'].append(f"Invalid column ID format: {column_id}")
+                            validation_result['is_valid'] = False
+                            continue
+                        
+                        source, dataset_name, column_name = parts
+                        
+                        # Check dataset is selected
+                        if dataset_name not in selected_datasets:
+                            validation_result['errors'].append(f"Column '{column_id}' references unselected dataset '{dataset_name}'")
+                            validation_result['is_valid'] = False
+                        
+                        # Validate column data structure
+                        if not isinstance(column_data, dict):
+                            validation_result['errors'].append(f"Invalid column data for '{column_id}' - must be dictionary")
+                            validation_result['is_valid'] = False
+                            
+                    except Exception as e:
+                        validation_result['errors'].append(f"Error validating column '{column_id}': {str(e)}")
+                        validation_result['is_valid'] = False
+            
+            # 4. Validate FK relationships
+            fk_relationships = mapping_config.get('fk_relationships', {})
+            for fk_id, fk_config in fk_relationships.items():
+                if not isinstance(fk_config, dict):
+                    validation_result['errors'].append(f"Invalid FK relationship config for '{fk_id}'")
+                    validation_result['is_valid'] = False
+                    continue
+                
+                # Check required FK fields
+                required_fk_fields = ['target_dataset', 'target_column']
+                for field in required_fk_fields:
+                    if field not in fk_config:
+                        validation_result['errors'].append(f"FK relationship '{fk_id}' missing required field: {field}")
+                        validation_result['is_valid'] = False
+                
+                # Check that FK references valid datasets
+                target_dataset = fk_config.get('target_dataset')
+                if target_dataset and target_dataset not in selected_datasets:
+                    validation_result['errors'].append(f"FK relationship '{fk_id}' references unselected dataset '{target_dataset}'")
+                    validation_result['is_valid'] = False
+            
+            # 5. Validate metadata consistency
+            metadata = mapping_config.get('metadata', {})
+            reported_datasets = metadata.get('total_datasets', 0)
+            reported_columns = metadata.get('total_columns', 0)
+            reported_fks = metadata.get('total_fk_relationships', 0)
+            
+            actual_datasets = len(selected_datasets)
+            actual_columns = len(workspace_columns)
+            actual_fks = len(fk_relationships)
+            
+            if reported_datasets != actual_datasets:
+                validation_result['warnings'].append(f"Metadata mismatch: reported {reported_datasets} datasets, found {actual_datasets}")
+            
+            if reported_columns != actual_columns:
+                validation_result['warnings'].append(f"Metadata mismatch: reported {reported_columns} columns, found {actual_columns}")
+            
+            if reported_fks != actual_fks:
+                validation_result['warnings'].append(f"Metadata mismatch: reported {reported_fks} FK relationships, found {actual_fks}")
+            
+        except Exception as e:
+            validation_result['errors'].append(f"Validation error: {str(e)}")
+            validation_result['is_valid'] = False
+        
+        logger.info(f"VALIDATE_MAPPING: Validation complete - Valid: {validation_result['is_valid']}, Errors: {len(validation_result['errors'])}, Warnings: {len(validation_result['warnings'])}")
+        return validation_result
+    
     def post(self, request):
         """Save current mapping configuration to Mapping model"""
         logger.info("SAVE_MAPPING: Starting save operation")
@@ -35,6 +160,13 @@ class SaveMappingView(CSVMappingCoordinatorMixin, View):
             if not mapping_name:
                 return JsonResponse({'error': 'Mapping name is required'}, status=400)
             
+            # Check for duplicate names BEFORE proceeding
+            if Mapping.objects.filter(name=mapping_name, organization_id=organization_id).exists():
+                logger.warning(f"SAVE_MAPPING: Attempted to save duplicate mapping name '{mapping_name}' for organization {organization_id}")
+                return JsonResponse({
+                    'error': f'Mapping "{mapping_name}" already exists for this organization'
+                }, status=400)
+            
             # Serialize current state
             mapping_config = self.serialize_current_mapping_state(
                 request, organization_id, mapping_name
@@ -43,34 +175,34 @@ class SaveMappingView(CSVMappingCoordinatorMixin, View):
             # Determine source datasets from config
             selected_datasets = mapping_config.get('selected_datasets', [])
             
-            # Get or create mapping record (allows updating existing mappings)
-            mapping, created = Mapping.objects.get_or_create(
+            # Validate mapping before saving
+            validation_result = self.validate_mapping_before_save(request, organization_id, mapping_config)
+            
+            if not validation_result['is_valid']:
+                return JsonResponse({
+                    'error': 'Mapping is not valid',
+                    'validation_errors': validation_result['errors'],
+                    'validation_warnings': validation_result['warnings']
+                }, status=400)
+            
+            # Create new mapping record (no longer using get_or_create to avoid updates)
+            mapping = Mapping.objects.create(
                 name=mapping_name,
                 organization_id=organization_id,
-                defaults={
-                    'source_datasets': selected_datasets,
-                    'mapping_config': mapping_config,
-                    'created_by': request.user if request.user.is_authenticated else None,
-                    'validation_status': 'draft'
-                }
+                source_datasets=selected_datasets,
+                mapping_config=mapping_config,
+                created_by=request.user if request.user.is_authenticated else None,
+                validation_status='draft'
             )
             
-            # If mapping already existed, update it
-            if not created:
-                mapping.source_datasets = selected_datasets
-                mapping.mapping_config = mapping_config
-                mapping.validation_status = 'draft'
-                mapping.save()
-            
-            action = "created" if created else "updated"
-            logger.info(f"SAVE_MAPPING: Successfully {action} mapping '{mapping_name}' with ID {mapping.id}")
+            logger.info(f"SAVE_MAPPING: Successfully created mapping '{mapping_name}' with ID {mapping.id}")
             
             return JsonResponse({
                 'success': True,
                 'mapping_id': str(mapping.id),
                 'mapping_name': mapping_name,
-                'created': created,
-                'message': f'Mapping "{mapping_name}" {action} successfully'
+                'created': True,  # Always true now since we only create
+                'message': f'Mapping "{mapping_name}" created successfully'
             })
             
         except Exception as e:
@@ -84,6 +216,86 @@ class SaveMappingView(CSVMappingCoordinatorMixin, View):
         # With the simplified model, we don't need type determination
         # The GUI interprets the mapping_config structure directly
         return None
+
+
+class UpdateMappingView(CSVMappingCoordinatorMixin, View):
+    """Update existing mapping with current state"""
+    
+    def post(self, request):
+        """Update existing mapping configuration"""
+        logger.info("UPDATE_MAPPING: Starting update operation")
+        
+        try:
+            # Get required parameters
+            organization_id = request.POST.get('organization')
+            mapping_id = request.POST.get('mapping_id')
+            mapping_name = request.POST.get('mapping_name', '').strip()
+            
+            if not organization_id:
+                return JsonResponse({'error': 'Organization ID is required'}, status=400)
+            
+            if not mapping_id:
+                return JsonResponse({'error': 'Mapping ID is required'}, status=400)
+            
+            if not mapping_name:
+                return JsonResponse({'error': 'Mapping name is required'}, status=400)
+            
+            # Get existing mapping
+            try:
+                mapping = Mapping.objects.get(
+                    id=mapping_id,
+                    organization_id=organization_id
+                )
+            except Mapping.DoesNotExist:
+                return JsonResponse({
+                    'error': f'Mapping with ID {mapping_id} not found for organization {organization_id}'
+                }, status=404)
+            
+            # Check if name change would create duplicate (only if name is changing)
+            if mapping.name != mapping_name:
+                if Mapping.objects.filter(name=mapping_name, organization_id=organization_id).exists():
+                    return JsonResponse({
+                        'error': f'Mapping "{mapping_name}" already exists for this organization'
+                    }, status=400)
+            
+            # Serialize current state
+            mapping_config = self.serialize_current_mapping_state(
+                request, organization_id, mapping_name
+            )
+            
+            # Validate mapping before updating (reuse validation from SaveMappingView)
+            save_view = SaveMappingView()
+            validation_result = save_view.validate_mapping_before_save(request, organization_id, mapping_config)
+            
+            if not validation_result['is_valid']:
+                return JsonResponse({
+                    'error': 'Mapping is not valid',
+                    'validation_errors': validation_result['errors'],
+                    'validation_warnings': validation_result['warnings']
+                }, status=400)
+            
+            # Update mapping fields
+            mapping.name = mapping_name
+            mapping.source_datasets = mapping_config.get('selected_datasets', [])
+            mapping.mapping_config = mapping_config
+            mapping.validation_status = 'draft'  # Reset to draft on update
+            mapping.save()
+            
+            logger.info(f"UPDATE_MAPPING: Successfully updated mapping '{mapping_name}' with ID {mapping.id}")
+            
+            return JsonResponse({
+                'success': True,
+                'mapping_id': str(mapping.id),
+                'mapping_name': mapping_name,
+                'updated': True,
+                'message': f'Mapping "{mapping_name}" updated successfully'
+            })
+            
+        except Exception as e:
+            logger.error(f"UPDATE_MAPPING: Error updating mapping: {str(e)}")
+            return JsonResponse({
+                'error': f'Failed to update mapping: {str(e)}'
+            }, status=500)
 
 
 class LoadMappingView(CSVMappingCoordinatorMixin, View):

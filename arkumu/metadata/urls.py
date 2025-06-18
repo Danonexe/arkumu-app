@@ -163,6 +163,7 @@ urlpatterns = [
     
     # Mapping persistence endpoints (JSON API)
     path('csv-save-mapping/', saved_mappings_api.SaveMappingView.as_view(), name='csv_save_mapping'),
+    path('csv-update-mapping/', saved_mappings_api.UpdateMappingView.as_view(), name='csv_update_mapping'),
     path('csv-load-mapping/', saved_mappings_api.LoadMappingView.as_view(), name='csv_load_mapping'),
     path('csv-list-mappings/', saved_mappings_api.ListMappingsView.as_view(), name='csv_list_mappings'),
     path('csv-delete-mapping/', saved_mappings_api.DeleteMappingView.as_view(), name='csv_delete_mapping'),
@@ -173,6 +174,8 @@ urlpatterns = [
     path('csv-save-mapping-htmx/', saved_mappings_ui.SaveMappingHTMXView.as_view(), name='csv_save_mapping_htmx'),
     path('csv-load-mapping-htmx/', saved_mappings_ui.LoadMappingHTMXView.as_view(), name='csv_load_mapping_htmx'),
     path('csv-delete-mapping-htmx/', saved_mappings_ui.DeleteMappingHTMXView.as_view(), name='csv_delete_mapping_htmx'),
+    path('csv-refresh-workspace/', saved_mappings_ui.RefreshWorkspaceView.as_view(), name='csv_refresh_workspace'),
+    path('csv-refresh-dataset-badges/', saved_mappings_ui.RefreshDatasetBadgesView.as_view(), name='csv_refresh_dataset_badges'),
     
     # Step 4: FK Configuration URLs (now using proper CSV mapping views with coordinator mixins)
     path('csv-toggle-fk-form/', csv_mapping_views.ToggleFKFormView.as_view(), name='csv_toggle_fk_form'),

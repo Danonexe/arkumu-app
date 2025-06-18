@@ -13,7 +13,7 @@ from django.contrib.auth import get_user_model
 from django.urls import reverse
 from arkumu.metadata.models.mappings import Mapping
 from arkumu.metadata.views.csv_mapping.saved_mappings_api import (
-    SaveMappingView, LoadMappingView, ListMappingsView, DeleteMappingView
+    SaveMappingView, LoadMappingView, ListMappingsView, DeleteMappingView, UpdateMappingView
 )
 
 User = get_user_model()
@@ -84,14 +84,33 @@ def mock_coordinator_methods():
     """Mock coordinator mixin methods"""
     with patch.multiple(
         'arkumu.metadata.views.csv_mapping.saved_mappings_api.CSVMappingCoordinatorMixin',
-        serialize_current_mapping_state=Mock(return_value={'test': 'data'}),
+        serialize_current_mapping_state=Mock(return_value={
+            'version': '1.0',
+            'organization_id': 'test-org-123',
+            'selected_datasets': ['dataset1.csv', 'dataset2.csv'],
+            'workspace_columns': {
+                'csv::dataset1.csv::id': {'name': 'id', 'dataset': 'dataset1.csv'},
+                'csv::dataset2.csv::name': {'name': 'name', 'dataset': 'dataset2.csv'}
+            },
+            'fk_relationships': {},
+            'entity_mappings': {},
+            'metadata': {
+                'total_datasets': 2,
+                'total_columns': 2,
+                'total_fk_relationships': 0
+            }
+        }),
         deserialize_mapping_state=Mock(return_value={'restored': True}),
         validate_mapping_compatibility=Mock(return_value={
             'is_valid': True,
             'errors': [],
             'warnings': [],
             'missing_datasets': []
-        })
+        }),
+        get_csv_datasets_for_organization=Mock(return_value=[
+            {'name': 'dataset1.csv'},
+            {'name': 'dataset2.csv'}
+        ])
     ) as mocked:
         yield mocked
 
@@ -192,6 +211,35 @@ class TestSaveMappingView:
             response_data = json.loads(response.content)
             assert 'Failed to save mapping' in response_data['error']
             mock_logger.error.assert_called()
+    
+    def test_save_mapping_invalid_configuration(self, client, user, organization_id):
+        """Test save mapping with invalid configuration"""
+        # Mock coordinator to return invalid mapping config
+        with patch.multiple(
+            'arkumu.metadata.views.csv_mapping.saved_mappings_api.CSVMappingCoordinatorMixin',
+            serialize_current_mapping_state=Mock(return_value={
+                'selected_datasets': ['nonexistent_dataset.csv'],
+                'workspace_columns': {},  # Empty workspace
+                'fk_relationships': {},
+                'metadata': {'total_datasets': 1, 'total_columns': 0, 'total_fk_relationships': 0}
+            }),
+            get_csv_datasets_for_organization=Mock(return_value=[
+                {'name': 'existing_dataset.csv'}  # Different dataset
+            ])
+        ):
+            client.force_login(user)
+            
+            data = {
+                'organization': organization_id,
+                'mapping_name': 'Invalid Mapping'
+            }
+            
+            response = client.post(reverse('metadata:csv_save_mapping'), data)
+            
+            assert response.status_code == 400
+            response_data = json.loads(response.content)
+            assert 'Mapping is not valid' in response_data['error']
+            assert 'validation_errors' in response_data
 
 
 @pytest.mark.django_db
@@ -591,3 +639,100 @@ class TestViewIntegration:
         assert created_ids[0] in remaining_ids
         assert created_ids[1] not in remaining_ids  # This one was deleted
         assert created_ids[2] in remaining_ids
+
+
+@pytest.mark.django_db
+class TestUpdateMappingView:
+    """Tests for UpdateMappingView"""
+    
+    def test_update_mapping_success(self, client, user, organization_id, existing_mapping, mock_coordinator_methods):
+        """Test successful mapping update"""
+        client.force_login(user)
+        
+        data = {
+            'organization': organization_id,
+            'mapping_id': str(existing_mapping.id),
+            'mapping_name': 'Updated Mapping Name'
+        }
+        
+        response = client.post(reverse('metadata:csv_update_mapping'), data)
+        
+        assert response.status_code == 200
+        response_data = json.loads(response.content)
+        assert response_data['success'] is True
+        assert response_data['mapping_name'] == 'Updated Mapping Name'
+        assert response_data['updated'] is True
+        
+        # Verify mapping was updated in database
+        existing_mapping.refresh_from_db()
+        assert existing_mapping.name == 'Updated Mapping Name'
+    
+    def test_update_mapping_missing_organization(self, client, user, existing_mapping):
+        """Test update mapping without organization ID"""
+        client.force_login(user)
+        
+        data = {
+            'mapping_id': str(existing_mapping.id),
+            'mapping_name': 'Updated Name'
+        }
+        response = client.post(reverse('metadata:csv_update_mapping'), data)
+        
+        assert response.status_code == 400
+        response_data = json.loads(response.content)
+        assert 'Organization ID is required' in response_data['error']
+    
+    def test_update_mapping_missing_id(self, client, user, organization_id):
+        """Test update mapping without mapping ID"""
+        client.force_login(user)
+        
+        data = {
+            'organization': organization_id,
+            'mapping_name': 'Updated Name'
+        }
+        response = client.post(reverse('metadata:csv_update_mapping'), data)
+        
+        assert response.status_code == 400
+        response_data = json.loads(response.content)
+        assert 'Mapping ID is required' in response_data['error']
+    
+    def test_update_mapping_not_found(self, client, user, organization_id, mock_coordinator_methods):
+        """Test update mapping with non-existent ID"""
+        client.force_login(user)
+        
+        data = {
+            'organization': organization_id,
+            'mapping_id': '00000000-0000-0000-0000-000000000000',
+            'mapping_name': 'Updated Name'
+        }
+        
+        response = client.post(reverse('metadata:csv_update_mapping'), data)
+        
+        assert response.status_code == 404
+        response_data = json.loads(response.content)
+        assert 'not found' in response_data['error']
+    
+    def test_update_mapping_duplicate_name(self, client, user, organization_id, existing_mapping, mock_coordinator_methods):
+        """Test update mapping with name that would create duplicate"""
+        client.force_login(user)
+        
+        # Create another mapping
+        other_mapping = Mapping.objects.create(
+            name='Other Mapping',
+            organization_id=organization_id,
+            source_datasets=[],
+            mapping_config={},
+            created_by=user
+        )
+        
+        # Try to update existing_mapping to have same name as other_mapping
+        data = {
+            'organization': organization_id,
+            'mapping_id': str(existing_mapping.id),
+            'mapping_name': 'Other Mapping'  # This should conflict
+        }
+        
+        response = client.post(reverse('metadata:csv_update_mapping'), data)
+        
+        assert response.status_code == 400
+        response_data = json.loads(response.content)
+        assert 'already exists' in response_data['error']

@@ -13,8 +13,9 @@ from django.template.loader import render_to_string
 from django.utils.translation import gettext as _
 from arkumu.metadata.models.mappings import Mapping
 from arkumu.metadata.views.csv_mapping.saved_mappings_api import (
-    SaveMappingView, LoadMappingView, DeleteMappingView
+    SaveMappingView, UpdateMappingView, LoadMappingView, DeleteMappingView
 )
+from arkumu.metadata.views.csv_mapping.mixins.coordinator import CSVMappingCoordinatorMixin
 
 logger = logging.getLogger(__name__)
 
@@ -202,7 +203,11 @@ class LoadMappingHTMXView(View):
         
         # Convert JSON response to HTML status
         try:
-            data = json_response.json() if hasattr(json_response, 'json') else {}
+            if hasattr(json_response, 'content'):
+                import json
+                data = json.loads(json_response.content)
+            else:
+                data = {}
             
             if json_response.status_code == 200 and data.get('success'):
                 warnings_html = ''
@@ -210,14 +215,40 @@ class LoadMappingHTMXView(View):
                     warnings_list = ''.join([f'<li>{w}</li>' for w in data['warnings']])
                     warnings_html = f'<ul class="text-sm mt-2">{warnings_list}</ul>'
                 
+                # Get organization ID for UI refresh
+                organization_id = request.POST.get('organization', '')
+                
                 status_html = f'''
                 <div class="alert alert-success alert-sm">
                     <span>{data['message']}</span>
                     {warnings_html}
                 </div>
                 <script>
-                    // Reload page to show loaded mapping
-                    setTimeout(() => window.location.reload(), 1000);
+                    // Comprehensive UI refresh after mapping load
+                    setTimeout(() => {{
+                        // 1. Refresh the main workspace area to show loaded columns
+                        htmx.ajax('GET', '/metadata/csv-refresh-workspace/?organization={organization_id}', {{
+                            target: '#selected-columns-workspace',
+                            swap: 'outerHTML'
+                        }});
+                        
+                        // 2. Refresh dataset selection badges to show selected datasets
+                        htmx.ajax('GET', '/metadata/csv-refresh-dataset-badges/?organization={organization_id}', {{
+                            target: '#dataset-badges',
+                            swap: 'innerHTML'
+                        }});
+                        
+                        // 3. Refresh any data preview areas
+                        htmx.trigger('body', 'mappingLoaded');
+                        
+                        // 4. Clear the mapping name input
+                        document.getElementById('mapping-name-input').value = '';
+                        
+                        // 5. Refresh mappings dropdown
+                        htmx.trigger('body', 'refreshMappings');
+                        
+                        console.log('Mapping loaded and UI refreshed');
+                    }}, 500);
                 </script>
                 '''
             else:
@@ -227,10 +258,12 @@ class LoadMappingHTMXView(View):
                     <span>{error_msg}</span>
                 </div>
                 '''
-        except:
-            status_html = '''
+        except Exception as e:
+            # Add detailed error information for debugging
+            status_html = f'''
             <div class="alert alert-error alert-sm">
-                <span>Failed to load mapping</span>
+                <span>Failed to load mapping: {str(e)}</span>
+                <br><small>Status: {json_response.status_code}, Content: {json_response.content[:200]}</small>
             </div>
             '''
         
@@ -275,4 +308,93 @@ class DeleteMappingHTMXView(View):
             </div>
             '''
         
-        return HttpResponse(status_html) 
+        return HttpResponse(status_html)
+
+
+class RefreshWorkspaceView(CSVMappingCoordinatorMixin, View):
+    """Refresh workspace UI after mapping load"""
+    
+    def get(self, request):
+        """Return updated workspace HTML based on current session state"""
+        organization_id = request.GET.get('organization')
+        
+        if not organization_id:
+            return HttpResponse('<div class="alert alert-error">Organization ID required</div>', status=400)
+        
+        try:
+            # Get current workspace state from session
+            workspace_columns = self.get_workspace_columns(request, organization_id)
+            selected_datasets = self.get_selected_dataset_names(request, organization_id)
+            
+            # Prepare datasets with columns for template
+            datasets_with_columns = self._prepare_datasets_with_columns(workspace_columns)
+            
+            # Render the workspace template
+            from django.template.loader import render_to_string
+            from django.middleware.csrf import get_token
+            
+            context = {
+                'datasets_with_columns': datasets_with_columns,
+                'organization_id': organization_id,
+                'csrf_token': get_token(request),
+                'selected_datasets': selected_datasets,
+                'workspace_columns': workspace_columns
+            }
+            
+            workspace_html = render_to_string(
+                'csv_mapping/partials/selected_columns_workspace.html',
+                context,
+                request=request
+            )
+            
+            return HttpResponse(workspace_html)
+            
+        except Exception as e:
+            logger.error(f"REFRESH_WORKSPACE: Error refreshing workspace: {str(e)}")
+            return HttpResponse(
+                f'<div class="alert alert-error">Failed to refresh workspace: {str(e)}</div>',
+                status=500
+            )
+
+
+class RefreshDatasetBadgesView(CSVMappingCoordinatorMixin, View):
+    """Refresh dataset badges UI after mapping load"""
+    
+    def get(self, request):
+        """Return updated dataset badges HTML based on current session state"""
+        organization_id = request.GET.get('organization')
+        
+        if not organization_id:
+            return HttpResponse('<div class="alert alert-error">Organization ID required</div>', status=400)
+        
+        try:
+            # Get current state from session
+            selected_datasets = self.get_selected_dataset_names(request, organization_id)
+            all_datasets = self.get_csv_datasets_for_organization(organization_id)
+            
+            # Render the dataset badges template
+            from django.template.loader import render_to_string
+            from django.middleware.csrf import get_token
+            
+            context = {
+                'datasets': all_datasets,  # Template expects 'datasets' not 'csv_datasets'
+                'selected_datasets': selected_datasets,
+                'organization_id': organization_id,
+                'csrf_token': get_token(request),
+            }
+            
+            # Find the correct template for dataset badges
+            badges_html = render_to_string(
+                'csv_mapping/partials/dataset_badges.html',
+                context,
+                request=request
+            )
+            
+            return HttpResponse(badges_html)
+            
+        except Exception as e:
+            logger.error(f"REFRESH_BADGES: Error refreshing dataset badges: {str(e)}")
+            return HttpResponse(
+                f'<div class="alert alert-error">Failed to refresh dataset badges: {str(e)}</div>',
+                status=500
+            ) 
