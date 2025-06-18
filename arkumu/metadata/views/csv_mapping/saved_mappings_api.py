@@ -11,7 +11,7 @@ keep the codebase organized and maintainable.
 import logging
 from django.http import JsonResponse, HttpResponse
 from django.views import View
-from arkumu.metadata.models.mappings import Mapping, MappingType
+from arkumu.metadata.models.mappings import Mapping
 from arkumu.metadata.views.csv_mapping.mixins.coordinator import CSVMappingCoordinatorMixin
 
 logger = logging.getLogger(__name__)
@@ -35,48 +35,42 @@ class SaveMappingView(CSVMappingCoordinatorMixin, View):
             if not mapping_name:
                 return JsonResponse({'error': 'Mapping name is required'}, status=400)
             
-            # Check if mapping name already exists for this organization
-            existing_mapping = Mapping.objects.filter(
-                organization_id=organization_id,
-                name=mapping_name
-            ).first()
-            
-            if existing_mapping:
-                return JsonResponse({
-                    'error': f'Mapping "{mapping_name}" already exists. Choose a different name.'
-                }, status=400)
-            
             # Serialize current state
             mapping_config = self.serialize_current_mapping_state(
                 request, organization_id, mapping_name
             )
             
-            # Determine mapping type based on configuration
-            mapping_type = self._determine_mapping_type(mapping_config)
-            
-            # Determine primary source dataset
+            # Determine source datasets from config
             selected_datasets = mapping_config.get('selected_datasets', [])
-            source_dataset = selected_datasets[0] if selected_datasets else 'unknown'
             
-            # Create Mapping record
-            mapping = Mapping.objects.create(
+            # Get or create mapping record (allows updating existing mappings)
+            mapping, created = Mapping.objects.get_or_create(
                 name=mapping_name,
-                mapping_type=mapping_type,
-                scope='multi_dataset',
                 organization_id=organization_id,
-                source_dataset=source_dataset,
-                mapping_config=mapping_config,
-                created_by=getattr(request.user, 'username', 'anonymous'),
-                validation_status='draft'
+                defaults={
+                    'source_datasets': selected_datasets,
+                    'mapping_config': mapping_config,
+                    'created_by': request.user if request.user.is_authenticated else None,
+                    'validation_status': 'draft'
+                }
             )
             
-            logger.info(f"SAVE_MAPPING: Successfully saved mapping '{mapping_name}' with ID {mapping.id}")
+            # If mapping already existed, update it
+            if not created:
+                mapping.source_datasets = selected_datasets
+                mapping.mapping_config = mapping_config
+                mapping.validation_status = 'draft'
+                mapping.save()
+            
+            action = "created" if created else "updated"
+            logger.info(f"SAVE_MAPPING: Successfully {action} mapping '{mapping_name}' with ID {mapping.id}")
             
             return JsonResponse({
                 'success': True,
                 'mapping_id': str(mapping.id),
                 'mapping_name': mapping_name,
-                'message': f'Mapping "{mapping_name}" saved successfully'
+                'created': created,
+                'message': f'Mapping "{mapping_name}" {action} successfully'
             })
             
         except Exception as e:
@@ -86,16 +80,10 @@ class SaveMappingView(CSVMappingCoordinatorMixin, View):
             }, status=500)
     
     def _determine_mapping_type(self, mapping_config):
-        """Determine appropriate mapping type based on configuration"""
-        fk_relationships = mapping_config.get('fk_relationships', {})
-        entity_mappings = mapping_config.get('entity_mappings', {})
-        
-        if fk_relationships:
-            return MappingType.LOOKUP
-        elif entity_mappings.get('predicate_mappings'):
-            return MappingType.ENTITY
-        else:
-            return MappingType.ENTITY  # Default
+        """Legacy method - no longer needed with flexible mapping model"""
+        # With the simplified model, we don't need type determination
+        # The GUI interprets the mapping_config structure directly
+        return None
 
 
 class LoadMappingView(CSVMappingCoordinatorMixin, View):
@@ -193,14 +181,14 @@ class ListMappingsView(CSVMappingCoordinatorMixin, View):
                 mapping_list.append({
                     'id': str(mapping.id),
                     'name': mapping.name,
-                    'mapping_type': mapping.get_mapping_type_display(),
+                    'description': getattr(mapping, 'description', f'Mapping configuration for {mapping.name}'),
                     'validation_status': mapping.get_validation_status_display(),
                     'created_at': mapping.created_at.isoformat(),
-                    'created_by': mapping.created_by,
-                    'source_dataset': mapping.source_dataset,
-                    'total_datasets': metadata.get('total_datasets', 0),
-                    'total_columns': metadata.get('total_columns', 0),
-                    'total_fk_relationships': metadata.get('total_fk_relationships', 0),
+                    'created_by': mapping.created_by.username if mapping.created_by else 'Unknown',
+                    'source_datasets': mapping.source_datasets,
+                    'total_datasets': len(mapping.source_datasets),
+                    'total_columns': mapping.get_column_count(),
+                    'total_fk_relationships': mapping.get_relationship_count(),
                     'last_executed': mapping.last_executed.isoformat() if mapping.last_executed else None
                 })
             
@@ -216,7 +204,7 @@ class ListMappingsView(CSVMappingCoordinatorMixin, View):
                     
                     options_html += f'''<option value="{mapping['id']}" 
                                                data-name="{mapping['name']}"
-                                               data-type="{mapping['mapping_type']}"
+                                               data-description="{mapping['description']}"
                                                data-datasets="{mapping['total_datasets']}"
                                                data-columns="{mapping['total_columns']}"
                                                data-created="{created_date}">

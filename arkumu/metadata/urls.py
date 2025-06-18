@@ -1,6 +1,6 @@
 from django.urls import path
 from arkumu.metadata.views import dashboard_views, resource_views, triple_views, graph_views, bulk_editor_views, data_discovery_views, data_explorer_views, split_views, direct_data_views
-from arkumu.metadata.views.csv_mapping import csv_mapping_views, mapping_persistence_views
+from arkumu.metadata.views.csv_mapping import csv_mapping_views, saved_mappings_api, saved_mappings_ui
 
 app_name = 'metadata'
 
@@ -161,16 +161,19 @@ urlpatterns = [
     # Missing URLs that templates reference (now using proper CSV mapping views with coordinator mixins)
     path('csv-clear-all-datasets/', csv_mapping_views.ClearAllDatasetsView.as_view(), name='csv_clear_all_datasets'),
     
-    # Mapping persistence endpoints
-    path('csv-save-mapping/', mapping_persistence_views.SaveMappingView.as_view(), name='csv_save_mapping'),
-    path('csv-load-mapping/', mapping_persistence_views.LoadMappingView.as_view(), name='csv_load_mapping'),
-    path('csv-list-mappings/', mapping_persistence_views.ListMappingsView.as_view(), name='csv_list_mappings'),
-    path('csv-delete-mapping/', mapping_persistence_views.DeleteMappingView.as_view(), name='csv_delete_mapping'),
-    path('csv-deselect-all-columns/', direct_data_views.deselect_all_columns, name='deselect_all_columns'),
-    path('csv-select-all-dataset-columns/', direct_data_views.select_all_dataset_columns, name='select_all_dataset_columns'),
-    path('csv-deselect-all-dataset-columns/', direct_data_views.deselect_all_dataset_columns, name='deselect_all_dataset_columns'),
-    path('csv-toggle-multi-value-column/', direct_data_views.toggle_multi_value_column, name='toggle_multi_value_column'),
-    path('csv-set-anchor-column/', direct_data_views.set_anchor_column, name='set_anchor_column'),
+    # Mapping persistence endpoints (JSON API)
+    path('csv-save-mapping/', saved_mappings_api.SaveMappingView.as_view(), name='csv_save_mapping'),
+    path('csv-load-mapping/', saved_mappings_api.LoadMappingView.as_view(), name='csv_load_mapping'),
+    path('csv-list-mappings/', saved_mappings_api.ListMappingsView.as_view(), name='csv_list_mappings'),
+    path('csv-delete-mapping/', saved_mappings_api.DeleteMappingView.as_view(), name='csv_delete_mapping'),
+    
+    # Mapping persistence endpoints (HTMX UI)
+    path('csv-validate-mapping-name/', saved_mappings_ui.ValidateMappingNameView.as_view(), name='csv_validate_mapping_name'),
+    path('csv-update-button-state/', saved_mappings_ui.UpdateButtonStateView.as_view(), name='csv_update_button_state'),
+    path('csv-save-mapping-htmx/', saved_mappings_ui.SaveMappingHTMXView.as_view(), name='csv_save_mapping_htmx'),
+    path('csv-load-mapping-htmx/', saved_mappings_ui.LoadMappingHTMXView.as_view(), name='csv_load_mapping_htmx'),
+    path('csv-delete-mapping-htmx/', saved_mappings_ui.DeleteMappingHTMXView.as_view(), name='csv_delete_mapping_htmx'),
+
     
     # Step 4: FK Configuration URLs (now using proper CSV mapping views with coordinator mixins)
     path('csv-toggle-fk-form/', csv_mapping_views.ToggleFKFormView.as_view(), name='csv_toggle_fk_form'),

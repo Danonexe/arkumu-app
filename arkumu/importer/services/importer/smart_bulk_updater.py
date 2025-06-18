@@ -13,7 +13,7 @@ from django.utils import timezone as django_timezone
 
 from arkumu.metadata.models.resource import Resource, ResourceType
 from arkumu.metadata.models.triples import Triple
-from arkumu.metadata.models.mappings import Mapping, MappingType
+from arkumu.metadata.models.mappings import Mapping
 from arkumu.metadata.services.mapping_executor import MappingExecutor, MappingExecutionStats
 from arkumu.importer.services.importer.uri_utils import mint_uri, slugify_uri_part
 from arkumu.importer.services.importer.data_utils import normalize_string_nfc
@@ -939,9 +939,9 @@ class SmartBulkUpdater:
             # Look for existing mappings for this dataset
             existing_mappings = Mapping.objects.filter(
                 organization_id=organization_id,
-                source_dataset=dataset_name,
+                source_datasets__contains=dataset_name,
                 validation_status='active'
-            ).order_by('mapping_type')
+            )
             
             results = {
                 'dataset_name': dataset_name,
@@ -966,22 +966,17 @@ class SmartBulkUpdater:
                 else:
                     raise ValueError(f"No active mappings found for dataset {dataset_name} in organization {organization_id}")
             
-            # Execute mappings in order: ENTITY first, then LOOKUP/JUNCTION/VOCABULARY
-            mapping_order = [MappingType.ENTITY, MappingType.LOOKUP, MappingType.JUNCTION, MappingType.VOCABULARY]
-            
-            for mapping_type in mapping_order:
-                type_mappings = [m for m in existing_mappings if m.mapping_type == mapping_type]
-                
-                for mapping in type_mappings:
+            # Execute all available mappings (no type ordering needed with flexible model)
+            for mapping in existing_mappings:
                     try:
-                        logger.info(f"Executing {mapping.get_mapping_type_display()}: {mapping.name}")
+                        logger.info(f"Executing mapping: {mapping.name}")
                         
                         stats = executor.execute_mapping(mapping, csv_data)
                         
                         mapping_result = {
                             'mapping_id': str(mapping.id),
                             'mapping_name': mapping.name,
-                            'mapping_type': mapping.get_mapping_type_display(),
+                            'description': mapping.description,
                             'entities_created': stats.entities_created,
                             'entities_updated': stats.entities_updated,
                             'triples_created': stats.triples_created,
@@ -1004,7 +999,7 @@ class SmartBulkUpdater:
                         error_result = {
                             'mapping_id': str(mapping.id),
                             'mapping_name': mapping.name,
-                            'mapping_type': mapping.get_mapping_type_display(),
+                            'description': mapping.description,
                             'error': str(e),
                             'entities_created': 0,
                             'triples_created': 0,
@@ -1071,12 +1066,11 @@ class SmartBulkUpdater:
         
         mapping = Mapping.objects.create(
             name=f"Auto-generated Entity Mapping for {dataset_name}",
-            mapping_type=MappingType.ENTITY,
+            description=f"Automatically generated mapping for dataset {dataset_name}",
             organization_id=organization_id,
-            source_dataset=dataset_name,
+            source_datasets=[dataset_name],
             mapping_config=mapping_config,
-            validation_status='active',
-            created_by='system_auto_generation'
+            validation_status='active'
         )
         
         logger.info(f"Auto-created entity mapping {mapping.id} for {dataset_name} with subject column: {subject_column}")

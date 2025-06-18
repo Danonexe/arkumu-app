@@ -71,6 +71,11 @@
                     </div>
                     <div class="divider my-0"></div>
                     
+                    <!-- Mapping Controls (Save/Load/Delete) -->
+                    <div class="mb-4">
+                        {% include 'csv_mapping/partials/mapping_controls.html' with organization_id=organization_id csrf_token=csrf_token %}
+                    </div>
+                    
                     <!-- Mapping Workspace Content -->
                     <div class="flex-1 overflow-y-auto">
                         {% include 'csv_mapping/partials/mapping_workspace.html' with datasets=csv_datasets organization_id=organization_id selected_columns=selected_columns active_datasets=selected_datasets_with_details csrf_token=csrf_token import_strategy=import_strategy %}

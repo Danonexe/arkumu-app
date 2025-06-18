@@ -755,7 +755,12 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         fk_relationships = {}
         entity_mappings = {}
         
-        for column_id, column_data in workspace_columns.items():
+        # Handle workspace_columns as list (current format)
+        for column_data in workspace_columns:
+            column_id = column_data.get('id')
+            if not column_id:
+                continue
+                
             # Extract FK configurations
             if column_data.get('fk_config'):
                 fk_relationships[column_id] = {
@@ -775,13 +780,20 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
             if column_data.get('is_subject_column'):
                 entity_mappings['subject_column'] = column_id
         
+        # Convert workspace_columns list to dict for easier storage/lookup
+        workspace_columns_dict = {}
+        for column_data in workspace_columns:
+            column_id = column_data.get('id')
+            if column_id:
+                workspace_columns_dict[column_id] = column_data
+        
         # Build complete mapping configuration
         mapping_config = {
             'version': '1.0',
             'created_at': timezone.now().isoformat(),
             'organization_id': organization_id,
             'selected_datasets': selected_datasets,
-            'workspace_columns': workspace_columns,
+            'workspace_columns': workspace_columns_dict,  # Store as dict for easier lookup
             'fk_relationships': fk_relationships,
             'entity_mappings': entity_mappings,
             'metadata': {
@@ -826,12 +838,14 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
             request.session[selected_datasets_key] = selected_datasets
             logger.info(f"DESERIALIZE_MAPPING: Restored {len(selected_datasets)} selected datasets")
         
-        # Restore workspace columns
-        workspace_columns = mapping_config.get('workspace_columns', {})
-        if workspace_columns:
+        # Restore workspace columns (convert dict back to list format)
+        workspace_columns_dict = mapping_config.get('workspace_columns', {})
+        if workspace_columns_dict:
+            # Convert dict back to list format expected by workspace
+            workspace_columns_list = list(workspace_columns_dict.values())
             workspace_key = f"workspace_columns_{organization_id}"
-            request.session[workspace_key] = workspace_columns
-            logger.info(f"DESERIALIZE_MAPPING: Restored {len(workspace_columns)} workspace columns")
+            request.session[workspace_key] = workspace_columns_list
+            logger.info(f"DESERIALIZE_MAPPING: Restored {len(workspace_columns_list)} workspace columns")
         
         # Save session changes
         request.session.modified = True

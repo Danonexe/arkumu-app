@@ -11,7 +11,7 @@ from datetime import datetime
 from django.db import transaction
 from django.utils import timezone
 
-from arkumu.metadata.models.mappings import Mapping, MappingType
+from arkumu.metadata.models.mappings import Mapping
 from arkumu.metadata.models.resource import Resource, ResourceType
 from arkumu.metadata.models.triples import Triple
 from arkumu.importer.services.importer.uri_utils import mint_uri, slugify_uri_part
@@ -29,6 +29,16 @@ class MappingExecutionStats:
         self.vocabulary_matches = 0
         self.errors = 0
         self.rows_processed = 0
+    
+    def merge(self, other: 'MappingExecutionStats'):
+        """Merge another stats object into this one"""
+        self.entities_created += other.entities_created
+        self.entities_updated += other.entities_updated
+        self.triples_created += other.triples_created
+        self.lookups_resolved += other.lookups_resolved
+        self.vocabulary_matches += other.vocabulary_matches
+        self.errors += other.errors
+        self.rows_processed += other.rows_processed
 
 
 class MappingExecutor:
@@ -57,16 +67,27 @@ class MappingExecutor:
         
         try:
             with transaction.atomic():
-                if mapping.mapping_type == MappingType.ENTITY:
+                # Execute based on mapping configuration structure
+                config = mapping.mapping_config
+                
+                # Check for entity mapping configuration
+                if config.get('subject_column') and config.get('predicate_mappings'):
                     stats = self._execute_entity_mapping(mapping, csv_data)
-                elif mapping.mapping_type == MappingType.LOOKUP:
-                    stats = self._execute_lookup_mapping(mapping, csv_data)
-                elif mapping.mapping_type == MappingType.VOCABULARY:
-                    stats = self._execute_vocabulary_mapping(mapping, csv_data)
-                elif mapping.mapping_type == MappingType.JUNCTION:
-                    stats = self._execute_junction_mapping(mapping, csv_data)
-                else:
-                    raise ValueError(f"Unsupported mapping type: {mapping.mapping_type}")
+                
+                # Check for lookup mapping configuration  
+                if config.get('lookup_config'):
+                    lookup_stats = self._execute_lookup_mapping(mapping, csv_data)
+                    stats.merge(lookup_stats)
+                
+                # Check for vocabulary mapping configuration
+                if config.get('vocabulary_mappings'):
+                    vocab_stats = self._execute_vocabulary_mapping(mapping, csv_data)
+                    stats.merge(vocab_stats)
+                
+                # Check for junction mapping configuration
+                if config.get('junction_config'):
+                    junction_stats = self._execute_junction_mapping(mapping, csv_data)
+                    stats.merge(junction_stats)
                 
                 # Update mapping execution stats
                 mapping.last_executed = timezone.now()
@@ -117,10 +138,13 @@ class MappingExecutor:
                     continue
                 
                 # Create entity URI
+                # Get primary dataset from source_datasets
+                primary_dataset = mapping.source_datasets[0] if mapping.source_datasets else 'unknown'
+                
                 entity_uri = base_uri_template.format(
                     base_uri=self.base_uri,
                     organization=mapping.organization_id,
-                    dataset=mapping.source_dataset,
+                    dataset=primary_dataset,
                     subject=slugify_uri_part(str(subject_value))
                 )
                 

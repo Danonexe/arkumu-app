@@ -23,7 +23,7 @@ from django.core.serializers.json import DjangoJSONEncoder
 
 from arkumu.metadata.services.data_analysis.s3_direct_data_analyzer import S3DirectDataAnalyzer
 from arkumu.metadata.services.relationship_discovery.service import RelationshipDiscoveryService
-from arkumu.metadata.models.mappings import Mapping, MappingType
+from arkumu.metadata.models.mappings import Mapping
 from arkumu.metadata.services.mapping_executor import MappingExecutor
 
 logger = logging.getLogger(__name__)
@@ -2562,22 +2562,16 @@ def create_mapping(request):
         if not all([mapping_name, mapping_type, source_dataset]):
             return JsonResponse({'error': 'Missing required fields: name, type, and source dataset'}, status=400)
         
-        if mapping_type not in [choice[0] for choice in MappingType.choices]:
-            return JsonResponse({'error': f'Invalid mapping type: {mapping_type}'}, status=400)
-        
-        # Build mapping configuration based on type
+        # Build flexible mapping configuration from form data
         mapping_config = {}
         
-        if mapping_type == MappingType.ENTITY:
-            # Entity mapping configuration
-            subject_column = request.POST.get('subject_column', '').strip()
-            predicate_mappings_json = request.POST.get('predicate_mappings', '{}')
-            
-            if not subject_column:
-                return JsonResponse({'error': 'Entity mapping requires subject column'}, status=400)
-            
+        # Get configuration from form - flexible structure
+        subject_column = request.POST.get('subject_column', '').strip()
+        predicate_mappings_json = request.POST.get('predicate_mappings', '{}')
+        
+        if subject_column:
             try:
-                predicate_mappings = json.loads(predicate_mappings_json)
+                predicate_mappings = json.loads(predicate_mappings_json) if predicate_mappings_json else {}
             except json.JSONDecodeError:
                 return JsonResponse({'error': 'Invalid predicate mappings JSON'}, status=400)
             
@@ -2586,37 +2580,32 @@ def create_mapping(request):
                 'predicate_mappings': predicate_mappings,
                 'base_uri_template': f'http://arkumu.org/data/{organization_id}/{source_dataset}/entities/{{subject}}'
             }
-            
-        elif mapping_type == MappingType.LOOKUP:
-            # Lookup mapping configuration
-            source_column = request.POST.get('source_column', '').strip()
-            target_column = request.POST.get('target_column', '').strip()
-            source_dataset_ref = request.POST.get('source_dataset_ref', '').strip()
-            target_dataset_ref = request.POST.get('target_dataset_ref', '').strip()
-            relationship_property = request.POST.get('relationship_property', '').strip()
-            
-            if not all([source_column, target_column, source_dataset_ref, target_dataset_ref, relationship_property]):
-                return JsonResponse({'error': 'Lookup mapping requires all lookup configuration fields'}, status=400)
-            
-            mapping_config = {
-                'lookup_config': {
-                    'source_column': source_column,
-                    'target_column': target_column,
-                    'source_dataset': source_dataset_ref,
-                    'target_dataset': target_dataset_ref,
-                    'relationship_property': relationship_property
-                }
+        
+        # Add lookup configuration if provided
+        source_column = request.POST.get('source_column', '').strip()
+        target_column = request.POST.get('target_column', '').strip()
+        source_dataset_ref = request.POST.get('source_dataset_ref', '').strip()
+        target_dataset_ref = request.POST.get('target_dataset_ref', '').strip()
+        relationship_property = request.POST.get('relationship_property', '').strip()
+        
+        if all([source_column, target_column, source_dataset_ref, target_dataset_ref, relationship_property]):
+            mapping_config['lookup_config'] = {
+                'source_column': source_column,
+                'target_column': target_column,
+                'source_dataset': source_dataset_ref,
+                'target_dataset': target_dataset_ref,
+                'relationship_property': relationship_property
             }
         
         # Create the mapping
         mapping = Mapping.objects.create(
             name=mapping_name,
-            mapping_type=mapping_type,
+            description=f"Mapping for {source_dataset}",
             organization_id=organization_id,
-            source_dataset=source_dataset,
+            source_datasets=[source_dataset],
             mapping_config=mapping_config,
             validation_status='draft',
-            created_by=f'user_{request.user.id}' if request.user.is_authenticated else 'anonymous'
+            created_by=request.user if request.user.is_authenticated else None
         )
         
         logger.info(f"CREATE MAPPING: Created mapping {mapping.id} - {mapping_name}")
@@ -2631,9 +2620,8 @@ def create_mapping(request):
             mapping_info = {
                 'id': str(m.id),
                 'name': m.name,
-                'mapping_type': m.mapping_type,
-                'mapping_type_display': m.get_mapping_type_display(),
-                'source_dataset': m.source_dataset,
+                'description': m.description,
+                'source_datasets': m.source_datasets,
                 'validation_status': m.validation_status,
                 'created_at': m.created_at.isoformat(),
                 'config': m.mapping_config,
@@ -2645,7 +2633,7 @@ def create_mapping(request):
         return render(request, 'partials/mappings_section.html', {
             'mappings': mappings_data,
             'organization_id': organization_id,
-            'message': f'Created {mapping.get_mapping_type_display()}: {mapping_name}'
+            'message': f'Created mapping: {mapping_name}'
         })
         
     except Exception as e:
