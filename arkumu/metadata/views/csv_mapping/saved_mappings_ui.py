@@ -242,6 +242,107 @@ class LoadMappingHTMXView(CSVMappingCoordinatorMixin, View):
             logger.error(f"Error getting badges content: {str(e)}")
             return '<div class="alert alert-error">Failed to load badges</div>'
     
+    def _get_table_content(self, request, organization_id):
+        """Get table content (dataset cards) for out-of-band update"""
+        try:
+            selected_datasets = self.get_selected_dataset_names(request, organization_id)
+            
+            # Get detailed dataset info for selected datasets
+            selected_datasets_with_details = []
+            if selected_datasets:
+                all_datasets = self.get_csv_datasets_for_organization(organization_id)
+                
+                # Filter to only selected datasets
+                basic_selected_datasets = [
+                    ds for ds in all_datasets if ds.get('name') in selected_datasets
+                ]
+                
+                # Load preview data for each selected dataset
+                for dataset_info in basic_selected_datasets:
+                    dataset_name = dataset_info.get('name')
+                    source_name = dataset_info.get('source')
+                    
+                    # Get dataset preview using S3DirectDataAnalyzer
+                    try:
+                        from arkumu.metadata.services.data_analysis.s3_direct_data_analyzer import S3DirectDataAnalyzer
+                        analyzer = S3DirectDataAnalyzer()
+                        
+                        # Get the source summary which contains dataset previews
+                        source_summary = analyzer.get_s3_source_summary(organization_id, source_name)
+                        
+                        # Find the specific dataset in the source
+                        dataset_preview = None
+                        for ds_info in source_summary.get('datasets', []):
+                            if ds_info.get('name') == dataset_name:
+                                dataset_preview = ds_info
+                                break
+                        
+                        if dataset_preview:
+                            # Transform the data to match the template expectations
+                            detailed_dataset = {
+                                'name': dataset_name,
+                                'source': source_name,
+                                'cell_count': dataset_preview.get('row_count', 0) * dataset_preview.get('column_count', 0),
+                                'preview': {
+                                    'colHeaders': dataset_preview.get('columns', []),
+                                    'data': dataset_preview.get('sample_data', []),
+                                    'total_rows': dataset_preview.get('row_count', 0),
+                                    'showing_rows': len(dataset_preview.get('sample_data', [])),
+                                    'has_more': dataset_preview.get('row_count', 0) > len(dataset_preview.get('sample_data', [])),
+                                }
+                            }
+                            selected_datasets_with_details.append(detailed_dataset)
+                    except Exception as e:
+                        logger.error(f"Error loading preview for dataset {dataset_name}: {str(e)}")
+                        # Add basic dataset info without preview
+                        dataset_info['preview'] = None
+                        selected_datasets_with_details.append(dataset_info)
+            
+            # Get selected columns for highlighting in dataset cards
+            workspace_columns = self.get_workspace_columns(request, organization_id)
+            
+            # Prepare dataset-specific selected columns for each dataset
+            dataset_selected_columns_map = {}
+            for dataset in selected_datasets_with_details:
+                dataset_name = dataset.get('name')
+                source_name = dataset.get('source')
+                
+                # Filter to get only columns from this specific dataset
+                columns_for_dataset = []
+                for column in workspace_columns:
+                    parsed = self.parse_column_id(column.get('id', ''))
+                    if parsed and parsed.get('dataset') == dataset_name and parsed.get('source') == source_name:
+                        columns_for_dataset.append(parsed.get('column'))
+                
+                dataset_selected_columns_map[dataset_name] = columns_for_dataset
+            
+            # Render each dataset card separately with its specific selected columns
+            dataset_cards_html = ""
+            for dataset in selected_datasets_with_details:
+                dataset_name = dataset.get('name')
+                dataset_selected_columns = dataset_selected_columns_map.get(dataset_name, [])
+                
+                from django.middleware.csrf import get_token
+                context = {
+                    'dataset': dataset,
+                    'organization_id': organization_id,
+                    'csrf_token': get_token(request),
+                    'selected_columns': workspace_columns,
+                    'dataset_selected_columns': dataset_selected_columns,
+                }
+                
+                dataset_card_html = render_to_string(
+                    'csv_mapping/partials/dataset_card.html',
+                    context,
+                    request=request
+                )
+                dataset_cards_html += dataset_card_html
+            
+            return dataset_cards_html
+        except Exception as e:
+            logger.error(f"Error getting table content: {str(e)}")
+            return f'<div class="alert alert-error">Failed to load dataset cards: {str(e)}</div>'
+    
     def post(self, request):
         """Load mapping and return HTML status message"""
         # Call the original JSON view
@@ -268,6 +369,7 @@ class LoadMappingHTMXView(CSVMappingCoordinatorMixin, View):
                 # Get fresh workspace and badges content for out-of-band updates
                 workspace_content = self._get_workspace_content(request, organization_id)
                 badges_content = self._get_badges_content(request, organization_id)
+                table_content = self._get_table_content(request, organization_id)
                 
                 status_html = f'''
                 <div class="alert alert-success alert-sm">
@@ -279,6 +381,9 @@ class LoadMappingHTMXView(CSVMappingCoordinatorMixin, View):
                 </div>
                 <div id="dataset-badges" hx-swap-oob="innerHTML">
                     {badges_content}
+                </div>
+                <div id="table-content" hx-swap-oob="innerHTML">
+                    {table_content}
                 </div>
                 '''
                 
