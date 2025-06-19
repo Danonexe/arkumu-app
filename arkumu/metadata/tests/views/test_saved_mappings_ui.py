@@ -156,13 +156,13 @@ class TestRefreshDatasetBadgesView:
 
 @pytest.mark.django_db
 class TestEnhancedMappingLoadWorkflow:
-    """Integration tests for the enhanced mapping load workflow"""
+    """Integration tests for the enhanced mapping load workflow with HTMX"""
     
-    def test_complete_load_workflow(self, client, user, organization_id, existing_mapping):
-        """Test the complete enhanced load workflow"""
+    def test_complete_load_workflow_htmx_patterns(self, client, user, organization_id, existing_mapping):
+        """Test the enhanced load workflow using proper HTMX patterns"""
         client.force_login(user)
         
-        # Mock coordinator methods for both load and refresh operations
+        # Mock both API and UI coordinator methods  
         with patch.multiple(
             'arkumu.metadata.views.csv_mapping.saved_mappings_api.CSVMappingCoordinatorMixin',
             deserialize_mapping_state=Mock(return_value={
@@ -176,6 +176,14 @@ class TestEnhancedMappingLoadWorkflow:
                 'warnings': [],
                 'errors': []
             })
+        ), patch.multiple(
+            'arkumu.metadata.views.csv_mapping.saved_mappings_ui.CSVMappingCoordinatorMixin',
+            get_workspace_columns=Mock(return_value=[]),
+            get_selected_dataset_names=Mock(return_value=['test.csv']),
+            _prepare_datasets_with_columns=Mock(return_value=[]),
+            get_csv_datasets_for_organization=Mock(return_value=[
+                {'name': 'test.csv', 'source': 'csv'}
+            ])
         ):
             # 1. Load the mapping via HTMX
             load_response = client.post('/metadata/csv-load-mapping-htmx/', {
@@ -186,10 +194,27 @@ class TestEnhancedMappingLoadWorkflow:
         assert load_response.status_code == 200
         load_content = load_response.content.decode()
         
-        # Check that the load response includes our enhanced JavaScript
-        assert 'csv-refresh-workspace' in load_content
-        assert 'csv-refresh-dataset-badges' in load_content
-        assert 'Comprehensive UI refresh after mapping load' in load_content
+        # Test new HTMX patterns instead of old JavaScript
+        
+        # 1. Check for success message
+        assert 'alert-success' in load_content
+        assert 'Test Mapping' in load_content
+        
+        # 2. Check for out-of-band swaps (hx-swap-oob)
+        assert 'hx-swap-oob="innerHTML"' in load_content
+        assert 'id="selected-columns-workspace"' in load_content
+        assert 'id="dataset-badges"' in load_content
+        
+        # 3. Check HTMX trigger header for events
+        assert 'HX-Trigger-After-Swap' in load_response
+        
+        # Parse the trigger header
+        import json
+        trigger_data = json.loads(load_response['HX-Trigger-After-Swap'])
+        assert 'mappingLoaded' in trigger_data
+        assert 'refreshMappings' in trigger_data
+        assert 'clearMappingInput' in trigger_data
+        assert trigger_data['mappingLoaded']['organization'] == organization_id
         
         # 2. Test that workspace refresh would work
         with patch.multiple(
@@ -222,10 +247,10 @@ class TestMappingControlsIntegration:
     """Integration tests for mapping controls with enhanced workflow"""
     
     def test_mapping_controls_load_button_integration(self, client, user, organization_id, existing_mapping):
-        """Test that mapping controls load button triggers enhanced workflow correctly"""
+        """Test that mapping controls load button triggers enhanced HTMX workflow correctly"""
         client.force_login(user)
         
-        # Mock coordinator methods for load operation
+        # Mock coordinator methods for both API and UI operations
         with patch.multiple(
             'arkumu.metadata.views.csv_mapping.saved_mappings_api.CSVMappingCoordinatorMixin',
             deserialize_mapping_state=Mock(return_value={
@@ -239,6 +264,14 @@ class TestMappingControlsIntegration:
                 'warnings': [],
                 'errors': []
             })
+        ), patch.multiple(
+            'arkumu.metadata.views.csv_mapping.saved_mappings_ui.CSVMappingCoordinatorMixin',
+            get_workspace_columns=Mock(return_value=[]),
+            get_selected_dataset_names=Mock(return_value=['test.csv']),
+            _prepare_datasets_with_columns=Mock(return_value=[]),
+            get_csv_datasets_for_organization=Mock(return_value=[
+                {'name': 'test.csv', 'source': 'csv'}
+            ])
         ):
             # Simulate the load button click from mapping_controls.html
             response = client.post('/metadata/csv-load-mapping-htmx/', {
@@ -249,16 +282,26 @@ class TestMappingControlsIntegration:
         assert response.status_code == 200
         content = response.content.decode()
         
-        # Verify the enhanced workflow JavaScript is present
-        assert 'csv-refresh-workspace' in content
-        assert 'csv-refresh-dataset-badges' in content
-        assert '#selected-columns-workspace' in content
-        assert '#dataset-badges' in content
-        assert 'Comprehensive UI refresh after mapping load' in content
+        # Verify modern HTMX patterns instead of embedded JavaScript
         
-        # Verify success message
+        # 1. Success message
         assert 'alert-success' in content
-        assert 'Test Mapping' in content or 'loaded successfully' in content.lower()
+        assert 'Test Mapping' in content
+        
+        # 2. Out-of-band updates for workspace and badges
+        assert 'hx-swap-oob="innerHTML"' in content
+        assert 'id="selected-columns-workspace"' in content
+        assert 'id="dataset-badges"' in content
+        
+        # 3. HTMX trigger header should contain event data
+        assert 'HX-Trigger-After-Swap' in response
+        
+        # 4. Parse and verify trigger events
+        import json
+        trigger_data = json.loads(response['HX-Trigger-After-Swap'])
+        expected_events = ['mappingLoaded', 'refreshMappings', 'clearMappingInput']
+        for event in expected_events:
+            assert event in trigger_data
     
     def test_mapping_controls_target_elements_exist(self, client, user, organization_id):
         """Test that the target elements our enhanced workflow needs actually exist"""
@@ -293,6 +336,281 @@ class TestMappingControlsIntegration:
             badges_content = badges_response.content.decode()
             assert 'test.csv' in badges_content
             assert 'badge' in badges_content
+
+
+@pytest.mark.django_db
+class TestHTMXPatternImprovements:
+    """Test the enhanced HTMX patterns using headers and out-of-band swaps"""
+    
+    def test_save_mapping_htmx_triggers(self, client, user, organization_id):
+        """Test that save mapping uses HTMX trigger headers correctly"""
+        client.force_login(user)
+        
+        # Mock the original save view to return success
+        with patch('arkumu.metadata.views.csv_mapping.saved_mappings_ui.SaveMappingView.post') as mock_save:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {
+                'success': True,
+                'message': 'Mapping saved successfully'
+            }
+            mock_save.return_value = mock_response
+            
+            response = client.post('/metadata/csv-save-mapping-htmx/', {
+                'organization': organization_id,
+                'mapping_name': 'Test Mapping'
+            })
+        
+        assert response.status_code == 200
+        content = response.content.decode()
+        
+        # Check success message
+        assert 'alert-success' in content
+        assert 'saved successfully' in content
+        
+        # Check HTMX trigger header
+        assert 'HX-Trigger-After-Swap' in response
+        
+        # Parse trigger data
+        import json
+        trigger_data = json.loads(response['HX-Trigger-After-Swap'])
+        assert 'clearMappingInput' in trigger_data
+        assert 'refreshMappings' in trigger_data
+    
+    def test_delete_mapping_htmx_triggers(self, client, user, organization_id, existing_mapping):
+        """Test that delete mapping uses HTMX trigger headers correctly"""
+        client.force_login(user)
+        
+        # Mock the original delete view to return success
+        with patch('arkumu.metadata.views.csv_mapping.saved_mappings_ui.DeleteMappingView.post') as mock_delete:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {
+                'success': True,
+                'message': 'Mapping deleted successfully'
+            }
+            mock_delete.return_value = mock_response
+            
+            response = client.post('/metadata/csv-delete-mapping-htmx/', {
+                'organization': organization_id,
+                'mapping_id': str(existing_mapping.id)
+            })
+        
+        assert response.status_code == 200
+        content = response.content.decode()
+        
+        # Check success message
+        assert 'alert-success' in content
+        assert 'deleted successfully' in content
+        
+        # Check HTMX trigger header
+        assert 'HX-Trigger-After-Swap' in response
+        
+        # Parse trigger data
+        import json
+        trigger_data = json.loads(response['HX-Trigger-After-Swap'])
+        assert 'refreshMappings' in trigger_data
+        assert 'clearMappingSelection' in trigger_data
+    
+    def test_out_of_band_swaps_content(self, client, user, organization_id, existing_mapping):
+        """Test that out-of-band swaps contain proper content"""
+        client.force_login(user)
+        
+        # Mock all required coordinator methods
+        with patch.multiple(
+            'arkumu.metadata.views.csv_mapping.saved_mappings_api.CSVMappingCoordinatorMixin',
+            deserialize_mapping_state=Mock(return_value={
+                'datasets_restored': 1,
+                'columns_restored': 2,
+                'fk_relationships_restored': 0,
+                'mapping_name': 'Test Mapping'
+            }),
+            validate_mapping_compatibility=Mock(return_value={
+                'is_valid': True,
+                'warnings': [],
+                'errors': []
+            })
+        ), patch.multiple(
+            'arkumu.metadata.views.csv_mapping.saved_mappings_ui.CSVMappingCoordinatorMixin',
+            get_workspace_columns=Mock(return_value=[{
+                'id': 'csv::test::column1',
+                'name': 'Test Column',
+                'dataset_name': 'test.csv'
+            }]),
+            get_selected_dataset_names=Mock(return_value=['test.csv']),
+            _prepare_datasets_with_columns=Mock(return_value=[{
+                'dataset_name': 'test.csv',
+                'columns': [{'id': 'csv::test::column1', 'name': 'Test Column'}]
+            }]),
+            get_csv_datasets_for_organization=Mock(return_value=[
+                {'name': 'test.csv', 'source': 'csv', 'preview': {'colHeaders': ['Test Column']}}
+            ])
+        ):
+            response = client.post('/metadata/csv-load-mapping-htmx/', {
+                'organization': organization_id,
+                'mapping_id': str(existing_mapping.id)
+            })
+        
+        assert response.status_code == 200
+        content = response.content.decode()
+        
+        # Check that out-of-band content contains expected workspace elements
+        assert 'hx-swap-oob="innerHTML"' in content
+        
+        # Look for workspace content within the OOB section
+        workspace_start = content.find('id="selected-columns-workspace" hx-swap-oob="innerHTML"')
+        assert workspace_start != -1
+        
+        # Look for badges content within the OOB section  
+        badges_start = content.find('id="dataset-badges" hx-swap-oob="innerHTML"')
+        assert badges_start != -1
+    
+    def test_error_handling_preserves_response_structure(self, client, user, organization_id):
+        """Test that error responses maintain consistent structure"""
+        client.force_login(user)
+        
+        # Mock the original save view to return an error
+        with patch('arkumu.metadata.views.csv_mapping.saved_mappings_ui.SaveMappingView.post') as mock_save:
+            mock_response = Mock()
+            mock_response.status_code = 400
+            mock_response.json.return_value = {
+                'success': False,
+                'error': 'Invalid mapping data'
+            }
+            mock_save.return_value = mock_response
+            
+            response = client.post('/metadata/csv-save-mapping-htmx/', {
+                'organization': organization_id,
+                'mapping_name': ''  # Invalid empty name
+            })
+        
+        assert response.status_code == 200  # HTMX wrapper always returns 200 with error content
+        content = response.content.decode()
+        
+        # Check error message structure
+        assert 'alert-error' in content
+        assert 'Invalid mapping data' in content
+        
+        # Error responses should not have trigger headers
+        assert 'HX-Trigger-After-Swap' not in response
+
+
+@pytest.mark.django_db
+class TestButtonStateValidation:
+    """Test button state validation and HTMX interactions"""
+    
+    def test_validate_mapping_name_empty(self, client, user, organization_id):
+        """Test mapping name validation with empty name"""
+        client.force_login(user)
+        
+        response = client.get(
+            f'/metadata/csv-validate-mapping-name/?mapping_name=&organization={organization_id}'
+        )
+        
+        assert response.status_code == 200
+        content = response.content.decode()
+        
+        # Should have disabled button
+        assert 'btn-disabled' in content
+        assert 'disabled' in content
+        assert 'Save' in content
+    
+    def test_validate_mapping_name_duplicate(self, client, user, organization_id, existing_mapping):
+        """Test mapping name validation with duplicate name"""
+        client.force_login(user)
+        
+        response = client.get(
+            f'/metadata/csv-validate-mapping-name/?mapping_name={existing_mapping.name}&organization={organization_id}'
+        )
+        
+        assert response.status_code == 200
+        content = response.content.decode()
+        
+        # Should have error button for duplicate
+        assert 'btn-error' in content
+        assert 'disabled' in content
+        assert 'Name already exists' in content
+    
+    def test_validate_mapping_name_valid(self, client, user, organization_id):
+        """Test mapping name validation with valid unique name"""
+        client.force_login(user)
+        
+        response = client.get(
+            f'/metadata/csv-validate-mapping-name/?mapping_name=New Unique Name&organization={organization_id}'
+        )
+        
+        assert response.status_code == 200
+        content = response.content.decode()
+        
+        # Should have enabled button
+        assert 'btn-primary' in content
+        assert 'btn-disabled' not in content
+        assert 'disabled' not in content
+        assert 'Save' in content
+    
+    def test_update_button_state_load_with_selection(self, client, user, organization_id):
+        """Test load button state with mapping selected"""
+        client.force_login(user)
+        
+        response = client.get(
+            f'/metadata/csv-update-button-state/?button=load&mapping_id=123&organization={organization_id}'
+        )
+        
+        assert response.status_code == 200
+        content = response.content.decode()
+        
+        # Should have enabled load button
+        assert 'btn-secondary' in content
+        assert 'btn-disabled' not in content
+        assert 'disabled' not in content
+        assert 'Load' in content
+        assert 'hx-confirm' in content  # Should have confirmation
+    
+    def test_update_button_state_load_without_selection(self, client, user, organization_id):
+        """Test load button state without mapping selected"""
+        client.force_login(user)
+        
+        response = client.get(
+            f'/metadata/csv-update-button-state/?button=load&mapping_id=&organization={organization_id}'
+        )
+        
+        assert response.status_code == 200
+        content = response.content.decode()
+        
+        # Should have disabled load button
+        assert 'btn-disabled' in content
+        assert 'disabled' in content
+        assert 'Load' in content
+    
+    def test_update_button_state_delete_with_selection(self, client, user, organization_id):
+        """Test delete button state with mapping selected"""
+        client.force_login(user)
+        
+        response = client.get(
+            f'/metadata/csv-update-button-state/?button=delete&mapping_id=123&organization={organization_id}'
+        )
+        
+        assert response.status_code == 200
+        content = response.content.decode()
+        
+        # Should have enabled delete button
+        assert 'btn-error' in content
+        assert 'btn-outline' in content
+        assert 'btn-disabled' not in content
+        assert 'disabled' not in content
+        assert 'Delete' in content
+        assert 'hx-confirm' in content  # Should have confirmation
+    
+    def test_update_button_state_invalid_button_type(self, client, user, organization_id):
+        """Test button state update with invalid button type"""
+        client.force_login(user)
+        
+        response = client.get(
+            f'/metadata/csv-update-button-state/?button=invalid&organization={organization_id}'
+        )
+        
+        assert response.status_code == 400
+        assert 'Invalid button type' in response.content.decode()
 
 
 @pytest.mark.django_db

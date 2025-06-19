@@ -36,7 +36,9 @@
 {% if organization_id %}
 <!-- Dataset Labels -->
 <div class="bg-base-100 px-4 py-3 border-b border-base-300">
-    <div class="flex flex-wrap gap-2" id="dataset-badges">
+    <div class="flex flex-wrap gap-2" id="dataset-badges"
+         hx-get="{% url 'metadata:csv_refresh_dataset_badges' %}?organization={{ organization_id }}"
+         hx-swap="innerHTML">
         {% include 'csv_mapping/partials/dataset_badges.html' with datasets=csv_datasets selected_datasets=selected_datasets organization_id=organization_id csrf_token=csrf_token %}
     </div>
 </div>
@@ -64,25 +66,25 @@
         <!-- Mapping Configuration Panel (Right) -->
         <div class="card bg-base-100 shadow-xl h-[calc(100vh-160px)]" style="min-width: 0;">
             <div class="card-body p-4 flex flex-col h-full overflow-hidden" style="min-width: 0; min-height: 0;">
-                
+                    
                 <!-- Mapping Controls -->
                 <div class="flex-shrink-0 mb-4">
-                    {% include 'csv_mapping/partials/mapping_controls.html' with organization_id=organization_id csrf_token=csrf_token %}
-                </div>
-                
+                        {% include 'csv_mapping/partials/mapping_controls.html' with organization_id=organization_id csrf_token=csrf_token %}
+                    </div>
+                    
                 <!-- Mapping Workspace - Contained -->
                 <div class="flex-1 bg-base-50 rounded-lg border border-base-300 overflow-hidden flex flex-col" style="min-width: 0; min-height: 0;">
                     <div class="p-3 border-b border-base-300 bg-base-100">
                         <h3 class="font-semibold text-sm">Mapping Workspace</h3>
                     </div>
-                    <div class="flex-1 overflow-hidden" style="min-width: 0; min-height: 0;">
+                    <div id="selected-columns-workspace" class="flex-1 overflow-hidden" style="min-width: 0; min-height: 0;">
                         {% include 'csv_mapping/partials/mapping_workspace.html' with datasets=csv_datasets organization_id=organization_id selected_columns=selected_columns active_datasets=selected_datasets_with_details csrf_token=csrf_token import_strategy=import_strategy %}
                     </div>
                 </div>
                 
-            </div>
         </div>
     </div>
+</div>
 
 {% else %}
 <!-- No organization selected state -->

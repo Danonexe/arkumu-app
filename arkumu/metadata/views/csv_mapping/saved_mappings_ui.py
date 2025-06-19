@@ -6,6 +6,7 @@ These views complement the JSON-based persistence views by providing HTML respon
 for button states, status messages, and other UI elements.
 """
 
+import json
 import logging
 from django.http import HttpResponse
 from django.views import View
@@ -105,9 +106,6 @@ class UpdateButtonStateView(View):
                     hx-target="#mapping-status"
                     hx-swap="innerHTML"
                     hx-confirm="{_('This will replace your current mapping configuration. Continue?')}"
-                    hx-trigger="click, updateState from:#mapping-select"
-                    hx-get="/metadata/csv-update-button-state/"
-                    hx-vals='{{"button": "load"}}'
                     {'disabled' if disabled else ''}>
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
@@ -134,9 +132,6 @@ class UpdateButtonStateView(View):
                     hx-target="#mapping-status"
                     hx-swap="innerHTML"
                     hx-confirm="{_('Are you sure you want to delete this mapping? This action cannot be undone.')}"
-                    hx-trigger="click, updateState from:#mapping-select"
-                    hx-get="/metadata/csv-update-button-state/"
-                    hx-vals='{{"button": "delete"}}'
                     {'disabled' if disabled else ''}>
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
@@ -169,12 +164,16 @@ class SaveMappingHTMXView(View):
                 <div class="alert alert-success alert-sm">
                     <span>{data['message']}</span>
                 </div>
-                <script>
-                    // Clear input and refresh mappings
-                    document.getElementById('mapping-name-input').value = '';
-                    htmx.trigger('body', 'refreshMappings');
-                </script>
                 '''
+                
+                # Create response with HTMX trigger headers
+                response = HttpResponse(status_html)
+                trigger_data = {
+                    'clearMappingInput': True,
+                    'refreshMappings': True
+                }
+                response['HX-Trigger-After-Swap'] = json.dumps(trigger_data)
+                return response
             else:
                 error_msg = data.get('error', 'Unknown error occurred')
                 status_html = f'''
@@ -182,18 +181,66 @@ class SaveMappingHTMXView(View):
                     <span>{error_msg}</span>
                 </div>
                 '''
+                return HttpResponse(status_html)
         except:
             status_html = '''
             <div class="alert alert-error alert-sm">
                 <span>Failed to save mapping</span>
             </div>
             '''
-        
         return HttpResponse(status_html)
 
 
-class LoadMappingHTMXView(View):
+class LoadMappingHTMXView(CSVMappingCoordinatorMixin, View):
     """HTMX wrapper for load mapping that returns HTML status"""
+    
+    def _get_workspace_content(self, request, organization_id):
+        """Get workspace content for out-of-band update"""
+        try:
+            workspace_columns = self.get_workspace_columns(request, organization_id)
+            selected_datasets = self.get_selected_dataset_names(request, organization_id)
+            datasets_with_columns = self._prepare_datasets_with_columns(workspace_columns)
+            
+            from django.middleware.csrf import get_token
+            context = {
+                'datasets_with_columns': datasets_with_columns,
+                'organization_id': organization_id,
+                'csrf_token': get_token(request),
+                'selected_datasets': selected_datasets,
+                'workspace_columns': workspace_columns
+            }
+            
+            return render_to_string(
+                'csv_mapping/partials/selected_columns_workspace_content.html',
+                context,
+                request=request
+            )
+        except Exception as e:
+            logger.error(f"Error getting workspace content: {str(e)}")
+            return '<div class="alert alert-error">Failed to load workspace</div>'
+    
+    def _get_badges_content(self, request, organization_id):
+        """Get badges content for out-of-band update"""
+        try:
+            selected_datasets = self.get_selected_dataset_names(request, organization_id)
+            all_datasets = self.get_csv_datasets_for_organization(organization_id)
+            
+            from django.middleware.csrf import get_token
+            context = {
+                'datasets': all_datasets,
+                'selected_datasets': selected_datasets,
+                'organization_id': organization_id,
+                'csrf_token': get_token(request),
+            }
+            
+            return render_to_string(
+                'csv_mapping/partials/dataset_badges.html',
+                context,
+                request=request
+            )
+        except Exception as e:
+            logger.error(f"Error getting badges content: {str(e)}")
+            return '<div class="alert alert-error">Failed to load badges</div>'
     
     def post(self, request):
         """Load mapping and return HTML status message"""
@@ -218,42 +265,33 @@ class LoadMappingHTMXView(View):
                 # Get organization ID for UI refresh
                 organization_id = request.POST.get('organization', '')
                 
+                # Get fresh workspace and badges content for out-of-band updates
+                workspace_content = self._get_workspace_content(request, organization_id)
+                badges_content = self._get_badges_content(request, organization_id)
+                
                 status_html = f'''
                 <div class="alert alert-success alert-sm">
                     <span>{data['message']}</span>
                     {warnings_html}
                 </div>
-                <script>
-                    // Comprehensive UI refresh after mapping load
-                    setTimeout(() => {{
-                        console.log('Loading mapping - refreshing workspace and UI');
-                        
-                        // 1. Refresh the main workspace area to show loaded columns
-                        htmx.ajax('GET', '/metadata/csv-refresh-workspace/?organization={organization_id}', {{
-                            target: '#selected-columns-workspace',
-                            swap: 'innerHTML'
-                        }});
-                        
-                        // 2. Refresh dataset selection badges to show selected datasets
-                        htmx.ajax('GET', '/metadata/csv-refresh-dataset-badges/?organization={organization_id}', {{
-                            target: '#dataset-badges',
-                            swap: 'innerHTML'
-                        }});
-                        
-                        // 3. Refresh any data preview areas
-                        htmx.trigger('body', 'mappingLoaded');
-                        
-                        // 4. Clear the mapping name input (if exists)
-                        const mappingInput = document.getElementById('mapping-name-input');
-                        if (mappingInput) mappingInput.value = '';
-                        
-                        // 5. Refresh mappings dropdown
-                        htmx.trigger('body', 'refreshMappings');
-                        
-                        console.log('Mapping loaded successfully - UI refreshed');
-                    }}, 500);
-                </script>
+                <div id="selected-columns-workspace" hx-swap-oob="innerHTML">
+                    {workspace_content}
+                </div>
+                <div id="dataset-badges" hx-swap-oob="innerHTML">
+                    {badges_content}
+                </div>
                 '''
+                
+                # Create HttpResponse with HTMX trigger headers
+                response = HttpResponse(status_html)
+                # Use HX-Trigger header to trigger events after swap
+                trigger_data = {
+                    'mappingLoaded': {'organization': organization_id},
+                    'refreshMappings': True,
+                    'clearMappingInput': True
+                }
+                response['HX-Trigger-After-Swap'] = json.dumps(trigger_data)
+                return response
             else:
                 error_msg = data.get('error', 'Unknown error occurred')
                 status_html = f'''
@@ -261,6 +299,7 @@ class LoadMappingHTMXView(View):
                     <span>{error_msg}</span>
                 </div>
                 '''
+                return HttpResponse(status_html)
         except Exception as e:
             # Add detailed error information for debugging
             status_html = f'''
@@ -269,7 +308,6 @@ class LoadMappingHTMXView(View):
                 <br><small>Status: {json_response.status_code}, Content: {json_response.content[:200]}</small>
             </div>
             '''
-        
         return HttpResponse(status_html)
 
 
@@ -291,12 +329,16 @@ class DeleteMappingHTMXView(View):
                 <div class="alert alert-success alert-sm">
                     <span>{data['message']}</span>
                 </div>
-                <script>
-                    // Refresh mappings and clear selection
-                    htmx.trigger('body', 'refreshMappings');
-                    document.getElementById('mapping-select').value = '';
-                </script>
                 '''
+                
+                # Create response with HTMX trigger headers
+                response = HttpResponse(status_html)
+                trigger_data = {
+                    'refreshMappings': True,
+                    'clearMappingSelection': True
+                }
+                response['HX-Trigger-After-Swap'] = json.dumps(trigger_data)
+                return response
             else:
                 error_msg = data.get('error', 'Unknown error occurred')
                 status_html = f'''
@@ -304,13 +346,13 @@ class DeleteMappingHTMXView(View):
                     <span>{error_msg}</span>
                 </div>
                 '''
+                return HttpResponse(status_html)
         except:
             status_html = '''
             <div class="alert alert-error alert-sm">
                 <span>Failed to delete mapping</span>
             </div>
             '''
-        
         return HttpResponse(status_html)
 
 

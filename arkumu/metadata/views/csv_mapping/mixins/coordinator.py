@@ -1046,6 +1046,8 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
             workspace_key = f"workspace_columns_{organization_id}"
             request.session[workspace_key] = workspace_columns_list
             logger.info(f"DESERIALIZE_MAPPING: Restored {len(workspace_columns_list)} workspace columns")
+        else:
+            workspace_columns_list = []
         
         # Save session changes
         request.session.modified = True
@@ -1056,7 +1058,7 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         
         summary = {
             'datasets_restored': len(selected_datasets),
-            'columns_restored': len(workspace_columns),
+            'columns_restored': len(workspace_columns_list),
             'fk_relationships_restored': len(fk_relationships),
             'mapping_name': metadata.get('mapping_name', 'Unknown'),
             'original_created_at': mapping_config.get('created_at'),

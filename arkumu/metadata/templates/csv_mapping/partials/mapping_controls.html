@@ -56,8 +56,25 @@
                     hx-trigger="load, refreshMappings from:body"
                     hx-target="this"
                     hx-swap="innerHTML"
-                    {% endif %}
-                    hx-on:change="htmx.trigger('#load-mapping-btn', 'updateState'); htmx.trigger('#delete-mapping-btn', 'updateState')">
+                    hx-on:change="
+                        const mappingId = this.value;
+                        const organization = '{{ organization_id }}';
+                        
+                        // Update load button state
+                        htmx.ajax('GET', '{% url 'metadata:csv_update_button_state' %}', {
+                            values: {button: 'load', mapping_id: mappingId, organization: organization},
+                            target: '#load-mapping-btn',
+                            swap: 'outerHTML'
+                        });
+                        
+                        // Update delete button state  
+                        htmx.ajax('GET', '{% url 'metadata:csv_update_button_state' %}', {
+                            values: {button: 'delete', mapping_id: mappingId, organization: organization},
+                            target: '#delete-mapping-btn',
+                            swap: 'outerHTML'
+                        });
+                    "
+                    {% endif %}>
                 {% if organization_id %}
                 <option value="">{% trans "Select saved mapping..." %}</option>
                 {% else %}
@@ -70,14 +87,12 @@
                         id="load-mapping-btn"
                         {% if organization_id %}
                         hx-post="{% url 'metadata:csv_load_mapping_htmx' %}"
-                        hx-vals='{"organization": "{{ organization_id }}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
+                        hx-vals='{"organization": "{{ organization_id }}", "csrfmiddlewaretoken": "{{ csrf_token }}", "button": "load"}'
                         hx-include="#mapping-select"
                         hx-target="#mapping-status"
                         hx-swap="innerHTML"
                         hx-confirm="{% trans 'Replace current mapping?' %}"
-                        hx-trigger="click, updateState from:#mapping-select"
-                        hx-get="{% url 'metadata:csv_update_button_state' %}"
-                        hx-vals='{"button": "load"}'
+                        hx-trigger="click"
                         {% endif %}
                         disabled>
                     {% trans "Load" %}
@@ -88,14 +103,12 @@
                         id="delete-mapping-btn"
                         {% if organization_id %}
                         hx-post="{% url 'metadata:csv_delete_mapping_htmx' %}"
-                        hx-vals='{"organization": "{{ organization_id }}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
+                        hx-vals='{"organization": "{{ organization_id }}", "csrfmiddlewaretoken": "{{ csrf_token }}", "button": "delete"}'
                         hx-include="#mapping-select"
                         hx-target="#mapping-status"
                         hx-swap="innerHTML"
                         hx-confirm="{% trans 'Delete permanently?' %}"
-                        hx-trigger="click, updateState from:#mapping-select"
-                        hx-get="{% url 'metadata:csv_update_button_state' %}"
-                        hx-vals='{"button": "delete"}'
+                        hx-trigger="click"
                         {% endif %}
                         disabled>
                     {% trans "Delete" %}
@@ -117,7 +130,10 @@
         
         <!-- Status Messages -->
         <div id="mapping-status" class="hidden mt-2"
-             hx-on:htmx:afterSettle="setTimeout(() => { this.classList.add('hidden'); this.innerHTML = ''; }, 4000)">
+             hx-on:htmx:afterSettle="setTimeout(() => { this.classList.add('hidden'); this.innerHTML = ''; }, 4000)"
+             hx-on:clearMappingInput="document.getElementById('mapping-name-input').value = ''"
+             hx-on:clearMappingSelection="document.getElementById('mapping-select').value = ''"
+             hx-on:refreshMappings="htmx.trigger('#mapping-select', 'load')">
             <!-- Success/error messages will appear here -->
         </div>
     </div>

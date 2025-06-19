@@ -66,7 +66,7 @@
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                     </svg>
-                </button> Split Content Area with Fixed Graph Panel 
+                </button>
             </div>
         </div>
         
@@ -97,7 +97,7 @@
             <form id="column-data-form-{{ dataset.name|slugify }}-{{ forloop.counter0 }}" style="display: none;">
                 <input type="hidden" name="column_name" value="{{ header }}">
                 <input type="hidden" name="dataset_name" value="{{ dataset.name }}">
-                <in Split Content Area with Fixed Graph Panel put type="hidden" name="source_name" value="{{ dataset.source }}">
+                <input type="hidden" name="source_name" value="{{ dataset.source }}">
                 <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
             </form>
             {% endfor %}
