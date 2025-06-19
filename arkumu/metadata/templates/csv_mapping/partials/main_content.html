@@ -43,9 +43,9 @@
 
 <!-- Split Content Area with Fixed Graph Panel -->
 <div class="container mx-auto max-w-none p-4">
-    <div id="split-content" class="relative grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <div id="split-content" class="relative grid grid-cols-1 lg:grid-cols-2 gap-4" style="min-height: 0;">
         <!-- Table Panel (Left) - Scrollable -->
-        <div class="card bg-base-100 shadow-xl h-[calc(100vh-160px)] overflow-y-auto">
+        <div class="card bg-base-100 shadow-xl h-[calc(100vh-160px)] overflow-y-auto" style="min-width: 0;">
             <div class="card-header sticky top-0 z-10 bg-base-100">
                 <div class="flex items-center gap-2 p-4 border-b border-base-300">
                     <svg class="w-5 h-5 text-success" fill="currentColor" viewBox="0 0 20 20">
@@ -61,25 +61,28 @@
             </div>
         </div>
         
-        <!-- Mapping Configuration Panel (Right) - Fixed -->
-        <div class="lg:sticky lg:top-4 h-[calc(100vh-160px)]">
-            <div class="card rounded-box bg-base-100 shadow-lg h-full overflow-hidden">
-                <div class="card-body p-4 flex flex-col h-full">
-                    
-                    <!-- Mapping Controls (Save/Load/Delete) -->
-                    <div class="mb-4">
-                        {% include 'csv_mapping/partials/mapping_controls.html' with organization_id=organization_id csrf_token=csrf_token %}
+        <!-- Mapping Configuration Panel (Right) -->
+        <div class="card bg-base-100 shadow-xl h-[calc(100vh-160px)]" style="min-width: 0;">
+            <div class="card-body p-4 flex flex-col h-full overflow-hidden" style="min-width: 0; min-height: 0;">
+                
+                <!-- Mapping Controls -->
+                <div class="flex-shrink-0 mb-4">
+                    {% include 'csv_mapping/partials/mapping_controls.html' with organization_id=organization_id csrf_token=csrf_token %}
+                </div>
+                
+                <!-- Mapping Workspace - Contained -->
+                <div class="flex-1 bg-base-50 rounded-lg border border-base-300 overflow-hidden flex flex-col" style="min-width: 0; min-height: 0;">
+                    <div class="p-3 border-b border-base-300 bg-base-100">
+                        <h3 class="font-semibold text-sm">Mapping Workspace</h3>
                     </div>
-                    
-                    <!-- Mapping Workspace Content -->
-                    <div class="flex-1 overflow-y-auto">
+                    <div class="flex-1 overflow-hidden" style="min-width: 0; min-height: 0;">
                         {% include 'csv_mapping/partials/mapping_workspace.html' with datasets=csv_datasets organization_id=organization_id selected_columns=selected_columns active_datasets=selected_datasets_with_details csrf_token=csrf_token import_strategy=import_strategy %}
                     </div>
                 </div>
+                
             </div>
         </div>
     </div>
-</div>
 
 {% else %}
 <!-- No organization selected state -->

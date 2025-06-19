@@ -226,10 +226,12 @@ class LoadMappingHTMXView(View):
                 <script>
                     // Comprehensive UI refresh after mapping load
                     setTimeout(() => {{
+                        console.log('Loading mapping - refreshing workspace and UI');
+                        
                         // 1. Refresh the main workspace area to show loaded columns
                         htmx.ajax('GET', '/metadata/csv-refresh-workspace/?organization={organization_id}', {{
                             target: '#selected-columns-workspace',
-                            swap: 'outerHTML'
+                            swap: 'innerHTML'
                         }});
                         
                         // 2. Refresh dataset selection badges to show selected datasets
@@ -241,13 +243,14 @@ class LoadMappingHTMXView(View):
                         // 3. Refresh any data preview areas
                         htmx.trigger('body', 'mappingLoaded');
                         
-                        // 4. Clear the mapping name input
-                        document.getElementById('mapping-name-input').value = '';
+                        // 4. Clear the mapping name input (if exists)
+                        const mappingInput = document.getElementById('mapping-name-input');
+                        if (mappingInput) mappingInput.value = '';
                         
                         // 5. Refresh mappings dropdown
                         htmx.trigger('body', 'refreshMappings');
                         
-                        console.log('Mapping loaded and UI refreshed');
+                        console.log('Mapping loaded successfully - UI refreshed');
                     }}, 500);
                 </script>
                 '''
@@ -342,7 +345,7 @@ class RefreshWorkspaceView(CSVMappingCoordinatorMixin, View):
             }
             
             workspace_html = render_to_string(
-                'csv_mapping/partials/selected_columns_workspace.html',
+                'csv_mapping/partials/selected_columns_workspace_content.html',
                 context,
                 request=request
             )

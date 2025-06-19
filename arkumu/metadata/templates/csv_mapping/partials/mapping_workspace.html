@@ -1,5 +1,5 @@
 <!-- CSV Column Mapping Workspace -->
-<div id="mapping-workspace" class="flex flex-col h-full">
+<div id="mapping-workspace" class="h-full flex flex-col">
     
     <!-- Tab Navigation -->
     <div class="tabs tabs-boxed mb-3 flex-shrink-0">
@@ -27,11 +27,11 @@
     </div>
     
     <!-- Tab Content -->
-    <div class="flex-1 overflow-y-auto">
+    <div class="flex-1 overflow-hidden">
         <div id="tab-content" class="h-full">
             <!-- Default workspace content -->
             <div id="selected-columns-workspace" class="h-full overflow-y-auto">
-                {% include 'csv_mapping/partials/selected_columns_workspace.html' with datasets_with_columns=datasets_with_columns organization_id=organization_id csrf_token=csrf_token %}
+                {% include 'csv_mapping/partials/selected_columns_workspace_content.html' with datasets_with_columns=datasets_with_columns organization_id=organization_id csrf_token=csrf_token %}
             </div>
         </div>
     </div>
