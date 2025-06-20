@@ -1412,13 +1412,19 @@ class ClearAllDatasetsView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
             is_badges_button = hx_target == 'dataset-badges'
             is_workspace_button = hx_target == 'selected-columns-workspace'
             
+            # DEBUG: Detailed debugging for Clear All issue
+            logger.info(f"🚨 CLEAR_ALL_DEBUG: Raw HX-Target header: '{hx_target}'")
+            logger.info(f"🚨 CLEAR_ALL_DEBUG: is_badges_button: {is_badges_button}")
+            logger.info(f"🚨 CLEAR_ALL_DEBUG: is_workspace_button: {is_workspace_button}")
+            logger.info(f"🚨 CLEAR_ALL_DEBUG: All request headers: {dict(request.headers)}")
+            
             logger.info(f"CLEAR_ALL_DATASETS: Called from {'badges' if is_badges_button else 'workspace' if is_workspace_button else 'unknown'} button, target='{hx_target}'")
             
             # Get current selected datasets (names only - more efficient)
             selected_datasets = self.get_selected_dataset_names(request, organization_id)
             
             # DEBUG: Log selected datasets state
-            logger.info(f"CLEAR_ALL_DATASETS: Found {len(selected_datasets)} selected datasets")
+            logger.info(f"CLEAR_ALL_DATASETS: Found {len(selected_datasets)} selected datasets: {selected_datasets}")
             
             # Check if there are workspace columns to clear as well
             workspace_columns = self.get_workspace_columns(request, organization_id)
@@ -1445,13 +1451,35 @@ class ClearAllDatasetsView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
                     }
                     return render(request, 'csv_mapping/partials/selected_columns_workspace.html', workspace_context)
             
-            # TRUE COORDINATOR RESET: Use coordinator's complete state reset method
-            logger.info(f"CLEAR_ALL_DATASETS: Using coordinator COMPLETE RESET for {len(selected_datasets)} datasets")
-            
-            # Execute complete coordinator state reset
-            datasets_cleared, columns_cleared, reset_summary = self.reset_all_coordinator_state(
-                request, organization_id
-            )
+            # DIFFERENT BEHAVIOR based on which button was clicked
+            if is_badges_button:
+                # BADGES CLEAR ALL: Clear ONLY selected datasets, KEEP workspace columns
+                logger.info(f"CLEAR_ALL_DATASETS: BADGES BUTTON - Clear {len(selected_datasets)} datasets, KEEP {len(workspace_columns)} workspace columns")
+                self.clear_selected_datasets(request, organization_id)
+                # FORCE session commit AND save to prevent race condition with immediate refresh
+                request.session.modified = True
+                request.session.save()  # Force immediate save to database
+                datasets_cleared = len(selected_datasets)
+                columns_cleared = 0  # No columns cleared
+                reset_summary = {
+                    'is_completely_clean': False,  # Workspace columns still exist
+                    'final_datasets_count': 0,  # Datasets cleared
+                    'final_workspace_count': len(workspace_columns)  # Columns kept
+                }
+            else:
+                # WORKSPACE CLEAR ALL: Only clear columns, keep datasets selected
+                logger.info(f"CLEAR_ALL_DATASETS: WORKSPACE BUTTON - Clearing {len(workspace_columns)} columns only, keeping {len(selected_datasets)} datasets")
+                self.clear_workspace_columns(request, organization_id)
+                # FORCE session commit AND save to prevent race condition with immediate refresh
+                request.session.modified = True
+                request.session.save()  # Force immediate save to database
+                datasets_cleared = 0  # Datasets not cleared
+                columns_cleared = len(workspace_columns)
+                reset_summary = {
+                    'is_completely_clean': False,  # Datasets still selected
+                    'final_datasets_count': len(selected_datasets),
+                    'final_workspace_count': 0
+                }
             
             # Log reset results
             logger.info(f"CLEAR_ALL_DATASETS: COORDINATOR RESET RESULTS:")
@@ -1480,18 +1508,37 @@ class ClearAllDatasetsView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
             # COORDINATOR VERIFICATION: Log final state
             logger.info(f"CLEAR_ALL_DATASETS: Final coordinator state - {len(datasets_with_columns)} dataset groups, {len(updated_workspace_columns)} total columns")
             
-            # Get updated CSV datasets for badges update
+            # Get updated CSV datasets for badges update AND actual coordinator state
             csv_datasets = self.get_csv_datasets_for_organization(organization_id)
+            # Get ACTUAL selected datasets from coordinator after operation
+            actual_selected_datasets = self.get_selected_dataset_names(request, organization_id)
+            logger.info(f"🚨🚨🚨 CLEAR_ALL_DATASETS: After operation - actual_selected_datasets: {actual_selected_datasets}")
+            logger.info(f"🚨🚨🚨 CLEAR_ALL_DATASETS: Found {len(csv_datasets)} total datasets: {[d['name'] for d in csv_datasets]}")
+            logger.info(f"🚨🚨🚨 CLEAR_ALL_DATASETS: Session key for selected datasets: selected_datasets_{organization_id}")
+            logger.info(f"🚨🚨🚨 CLEAR_ALL_DATASETS: Session value: {request.session.get(f'selected_datasets_{organization_id}', 'NOT_FOUND')}")
             badges_context = {
                 'datasets': csv_datasets,
-                'selected_datasets': [],  # Empty after clearing all
+                'selected_datasets': actual_selected_datasets,  # Use actual coordinator state
                 'organization_id': organization_id,
                 'csrf_token': request.META.get('CSRF_COOKIE'),
             }
+            logger.info(f"🚨🚨🚨 CLEAR_ALL_DATASETS: badges_context selected_datasets: {badges_context['selected_datasets']}")
             
-            # Also update table content to show empty state
+            # Also update table content using actual coordinator state
+            # For badges button: empty table (datasets cleared), for workspace button: keep datasets but no columns
+            if is_badges_button:
+                # Badges cleared datasets only - empty table
+                actual_selected_datasets_with_details = []
+            else:
+                # Workspace cleared columns only - get datasets with empty column data
+                selected_datasets_after = self.get_selected_dataset_names(request, organization_id)
+                csv_datasets = self.get_csv_datasets_for_organization(organization_id)
+                actual_selected_datasets_with_details = [
+                    dataset for dataset in csv_datasets if dataset['name'] in selected_datasets_after
+                ]
+            
             table_context = {
-                'selected_datasets_with_details': [],  # Empty after clearing all
+                'selected_datasets_with_details': actual_selected_datasets_with_details,  # Different based on button
                 'organization_id': organization_id,
                 'csrf_token': request.META.get('CSRF_COOKIE'),
             }
@@ -1527,30 +1574,33 @@ class ClearAllDatasetsView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
                 
                 column_badge_updates.append(f'<div id="{target_id}" hx-swap-oob="innerHTML">{column_badges_html}</div>')
             
+            # SIMPLIFIED APPROACH: Let table_content template handle the empty state naturally
+            # No need for explicit deletion commands - just update table_content to empty state
+            
             # RETURN APPROPRIATE CONTENT based on which button was clicked
             if is_badges_button:
-                # BADGES BUTTON: Return updated badges as main response + ALL other components as OOB updates
+                # BADGES BUTTON: Return updated badges + OOB updates to clear table content and workspace
                 badges_html = render_to_string('csv_mapping/partials/dataset_badges.html', badges_context, request=request)
                 workspace_html = render_to_string('csv_mapping/partials/selected_columns_workspace.html', workspace_context, request=request)
                 table_html = render_to_string('csv_mapping/partials/table_content.html', table_context, request=request)
                 
-                # DEBUG: Log badges button structure
-                logger.info(f"CLEAR_ALL_DATASETS: BADGES BUTTON creating {len(column_badge_updates)} column badge updates")
-                
-                # Combine all updates
-                all_oob_updates = [
+                # OOB updates for workspace and table content (since datasets were cleared)
+                oob_updates = [
                     f'<div id="selected-columns-workspace" hx-swap-oob="innerHTML">{workspace_html}</div>',
                     f'<div id="table-content" hx-swap-oob="innerHTML">{table_html}</div>'
                 ] + column_badge_updates
                 
-                response = badges_html + ''.join(all_oob_updates)
+                # Main response (badges) + OOB updates (workspace and table)
+                response = badges_html + ''.join(oob_updates)
                 
-                # DEBUG: Log badges button OOB targets
-                logger.info(f"CLEAR_ALL_DATASETS: BADGES BUTTON OOB targets: {[update.split('id=\"')[1].split('\"')[0] for update in all_oob_updates if 'id=\"' in update]}")
+                # DEBUG: Log badges button structure
+                logger.info(f"🚨 CLEAR_ALL_DEBUG: BADGES BUTTON badges_context: {badges_context}")
+                logger.info(f"🚨 CLEAR_ALL_DEBUG: badges_html preview: {badges_html[:200]}...")
+                logger.info(f"🚨 CLEAR_ALL_DEBUG: Added {len(oob_updates)} OOB updates to clear table and workspace")
+                logger.info(f"🚨 CLEAR_ALL_DEBUG: Final response length: {len(response)} chars")
                 
             else:
-                # WORKSPACE BUTTON: Match badges button pattern exactly
-                # Main response goes to target + OOB updates for everything else
+                # WORKSPACE BUTTON: Main response goes to workspace + OOB updates for everything else
                 workspace_html = render_to_string('csv_mapping/partials/selected_columns_workspace.html', workspace_context, request=request)
                 badges_html = render_to_string('csv_mapping/partials/dataset_badges.html', badges_context, request=request)
                 table_html = render_to_string('csv_mapping/partials/table_content.html', table_context, request=request)
@@ -1570,8 +1620,13 @@ class ClearAllDatasetsView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
             
             logger.info(f"CLEAR_ALL_DATASETS: Cleared {len(selected_datasets)} datasets, removed {total_columns_removed} columns, responded to {'badges' if is_badges_button else 'workspace'} button")
             
-            # Add workspace update trigger for JSON view synchronization
-            final_response = self.add_workspace_update_trigger(response)
+            # Add workspace update trigger ONLY for workspace button (not badges to avoid race condition)
+            if is_badges_button:
+                # Badges button: No automatic triggers to prevent race condition with immediate refresh
+                final_response = response
+            else:
+                # Workspace button: Add trigger for JSON view synchronization
+                final_response = self.add_workspace_update_trigger(response)
             return HttpResponse(final_response)
             
         except Exception as e:

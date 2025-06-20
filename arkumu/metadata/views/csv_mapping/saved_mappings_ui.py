@@ -249,7 +249,7 @@ class LoadMappingHTMXView(CSVMappingCoordinatorMixin, View):
             }
             
             return render_to_string(
-                'csv_mapping/partials/selected_columns_workspace_content.html',
+                'csv_mapping/partials/selected_columns_workspace.html',
                 context,
                 request=request
             )
@@ -550,7 +550,7 @@ class RefreshWorkspaceView(CSVMappingCoordinatorMixin, View):
             }
             
             workspace_html = render_to_string(
-                'csv_mapping/partials/selected_columns_workspace_content.html',
+                'csv_mapping/partials/selected_columns_workspace.html',
                 context,
                 request=request
             )
@@ -579,6 +579,10 @@ class RefreshDatasetBadgesView(CSVMappingCoordinatorMixin, View):
             # Get current state from session
             selected_datasets = self.get_selected_dataset_names(request, organization_id)
             all_datasets = self.get_csv_datasets_for_organization(organization_id)
+            
+            # DEBUG: Log what RefreshDatasetBadgesView is finding
+            logger.info(f"🔄 REFRESH_BADGES: Found {len(selected_datasets)} selected datasets: {selected_datasets}")
+            logger.info(f"🔄 REFRESH_BADGES: Found {len(all_datasets)} total datasets")
             
             # Render the dataset badges template
             from django.template.loader import render_to_string

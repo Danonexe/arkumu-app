@@ -38,6 +38,7 @@
 <div class="bg-base-100 px-4 py-3 border-b border-base-300">
     <div class="flex flex-wrap gap-2" id="dataset-badges"
          hx-get="{% url 'metadata:csv_refresh_dataset_badges' %}?organization={{ organization_id }}"
+         hx-trigger="refreshBadges"
          hx-swap="innerHTML">
         {% include 'csv_mapping/partials/dataset_badges.html' with datasets=csv_datasets selected_datasets=selected_datasets organization_id=organization_id csrf_token=csrf_token %}
     </div>
@@ -77,7 +78,7 @@
                     <div class="p-3 border-b border-base-300 bg-base-100">
                         <h3 class="font-semibold text-sm">Mapping Workspace</h3>
                     </div>
-                    <div id="selected-columns-workspace" class="flex-1 overflow-hidden" style="min-width: 0; min-height: 0;">
+                    <div id="mapping-workspace-container" class="flex-1 overflow-hidden" style="min-width: 0; min-height: 0;">
                         {% include 'csv_mapping/partials/mapping_workspace.html' with datasets=csv_datasets organization_id=organization_id selected_columns=selected_columns active_datasets=selected_datasets_with_details csrf_token=csrf_token import_strategy=import_strategy %}
                     </div>
                 </div>

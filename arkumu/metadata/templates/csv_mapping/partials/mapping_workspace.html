@@ -18,7 +18,7 @@
            class="tab" 
            hx-get="{% url 'metadata:csv_get_mapping_json_view' %}?organization={{ organization_id }}"
            hx-target="#tab-content"
-           onclick="setActiveTab(this)">
+           onclick="setActiveTab(this); refreshJsonContent('{{ organization_id }}')">
             <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/>
             </svg>
@@ -29,9 +29,9 @@
     <!-- Tab Content -->
     <div class="flex-1 overflow-hidden">
         <div id="tab-content" class="h-full">
-            <!-- Default workspace content -->
-            <div id="selected-columns-workspace" class="h-full overflow-y-auto">
-                {% include 'csv_mapping/partials/selected_columns_workspace_content.html' with datasets_with_columns=datasets_with_columns organization_id=organization_id csrf_token=csrf_token %}
+            <!-- Default workspace content - this container is what gets replaced by OOB swaps -->
+            <div id="selected-columns-workspace" class="h-full overflow-y-auto flex-1 flex flex-col bg-base-50/30 rounded-lg border border-base-300/50">
+                {% include 'csv_mapping/partials/selected_columns_workspace.html' with datasets_with_columns=datasets_with_columns organization_id=organization_id csrf_token=csrf_token %}
             </div>
         </div>
     </div>
@@ -44,5 +44,15 @@ function setActiveTab(clickedTab) {
     const tabs = document.querySelectorAll('#mapping-workspace .tab');
     tabs.forEach(t => t.classList.remove('tab-active'));
     clickedTab.classList.add('tab-active');
+}
+
+function refreshJsonContent(organizationId) {
+    // Manually refresh JSON content when switching to JSON tab
+    setTimeout(() => {
+        const jsonContent = document.querySelector('#json-mapping-content');
+        if (jsonContent) {
+            htmx.trigger(jsonContent, 'refreshJson');
+        }
+    }, 100); // Small delay to ensure tab content is loaded
 }
 </script> 
