@@ -25,6 +25,7 @@ from django.views import View
 from django.core.serializers.json import DjangoJSONEncoder
 from django.template.loader import render_to_string
 from django.utils import timezone
+from typing import Dict, Any
 
 from arkumu.metadata.services.data_analysis.s3_direct_data_analyzer import S3DirectDataAnalyzer, S3DataSourceInfo
 
@@ -1472,8 +1473,22 @@ class ClearWorkspaceColumnsView(OrganizationMixin, CSVMappingCoordinatorMixin, V
             badges_html = render_to_string('csv_mapping/partials/dataset_badges.html', context_data['badges_context'], request=request)
             workspace_html = render_to_string('csv_mapping/partials/selected_columns_workspace.html', context_data['workspace_context'], request=request)
             
-            # OOB updates for both workspace and badges - no main response content to avoid targeting issues
-            response = f'<div id="selected-columns-workspace" hx-swap-oob="innerHTML">{workspace_html}</div><div id="dataset-badges" hx-swap-oob="innerHTML">{badges_html}</div>'
+            # CRITICAL: Also refresh dataset cards to show columns as unselected (keep datasets open)
+            # Get selected datasets WITH details but WITH cleared column selections
+            selected_datasets, selected_datasets_with_details = self.get_selected_datasets_with_details(
+                request, organization_id, context_data['csv_datasets']
+            )
+            
+            # Build table content context with datasets still visible but columns unselected
+            table_context = {
+                'selected_datasets_with_details': selected_datasets_with_details,
+                'organization_id': organization_id,
+                'csrf_token': request.META.get('CSRF_COOKIE'),
+            }
+            table_content_html = render_to_string('csv_mapping/partials/table_content.html', table_context, request=request)
+            
+            # OOB updates for workspace, badges, AND table content (refresh column states)
+            response = f'<div id="selected-columns-workspace" hx-swap-oob="innerHTML">{workspace_html}</div><div id="dataset-badges" hx-swap-oob="innerHTML">{badges_html}</div><div id="table-content" hx-swap-oob="innerHTML">{table_content_html}</div>'
             
             # Add workspace update trigger for JSON view synchronization
             final_response = self.add_workspace_update_trigger(response)
@@ -2367,6 +2382,226 @@ class ValidateExternalOntologyIdentifierView(OrganizationMixin, CSVMappingCoordi
                 'success': False,
                 'error': 'Error validating external ontology identifier'
             })
+
+
+# ==============================================================================
+# GUI Mapping Integration - Execute Mappings Created Through the Interface
+# ==============================================================================
+
+class ExecuteGUIMappingView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
+    """
+    Execute a GUI mapping configuration using the integrated mapping processor.
+    
+    This view bridges the GUI mapping system with the SmartBulkUpdater,
+    handling the complex dependencies between different column types.
+    """
+    
+    def post(self, request):
+        """Handle POST requests for executing GUI mappings."""
+        try:
+            organization_id = self.get_organization_id_from_request(request)
+            dataset_name = request.POST.get('dataset_name')
+            
+            if not dataset_name:
+                return JsonResponse({'status': 'error', 'message': 'Dataset name required'}, status=400)
+            
+            # Get the current mapping configuration from the GUI
+            mapping_config = self.serialize_current_mapping_state(request, organization_id)
+            
+            # Validate that we have columns configured
+            workspace_columns = mapping_config.get('workspace_columns', [])
+            if not workspace_columns:
+                return JsonResponse({
+                    'status': 'error', 
+                    'message': 'No columns configured. Please add columns to workspace first.'
+                }, status=400)
+            
+            # Get the CSV data for the dataset
+            from arkumu.metadata.services.data_analysis.s3_direct_data_analyzer import S3DirectDataAnalyzer
+            analyzer = S3DirectDataAnalyzer()
+            
+            try:
+                # Get full dataset data (not just preview)
+                csv_data = analyzer.get_full_dataset_data(organization_id, dataset_name)
+                if not csv_data:
+                    return JsonResponse({
+                        'status': 'error',
+                        'message': f'No data found for dataset {dataset_name}'
+                    }, status=404)
+                
+            except Exception as e:
+                logger.error(f"EXECUTE_GUI_MAPPING: Error loading dataset {dataset_name}: {e}")
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'Failed to load dataset: {str(e)}'
+                }, status=500)
+            
+            # Initialize the mapping processor
+            from arkumu.importer.services.importer.mapping_processor import GUIMappingProcessor
+            processor = GUIMappingProcessor(
+                base_uri="http://arkumu.org/data",
+                default_strategy=self._get_update_strategy_from_config(mapping_config)
+            )
+            
+            # Execute the mapping with proper dependency handling
+            logger.info(f"EXECUTE_GUI_MAPPING: Starting execution for {dataset_name} with {len(csv_data)} rows")
+            
+            execution_results = processor.process_gui_mapping(
+                mapping_config=mapping_config,
+                csv_data=csv_data,
+                organization_id=organization_id,
+                dataset_name=dataset_name
+            )
+            
+            # Format results for response
+            response_data = {
+                'status': 'success',
+                'dataset_name': dataset_name,
+                'organization_id': organization_id,
+                'execution_summary': {
+                    'total_rows_processed': execution_results.get('total_rows', 0),
+                    'total_resources_created': execution_results.get('total_resources_created', 0),
+                    'total_triples_created': execution_results.get('total_triples_created', 0),
+                    'total_errors': execution_results.get('total_errors', 0),
+                    'phases_executed': len(execution_results.get('phases_executed', []))
+                },
+                'phase_details': execution_results.get('phases_executed', []),
+                'external_ontology_results': execution_results.get('external_ontology_results', []),
+                'mapping_config_used': {
+                    'total_columns': len(workspace_columns),
+                    'anchor_columns': len([c for c in workspace_columns if c.get('is_anchor')]),
+                    'fk_columns': len([c for c in workspace_columns if c.get('is_fk')]),
+                    'multi_value_columns': len([c for c in workspace_columns if c.get('is_multi_value')]),
+                    'relationship_context_columns': len([c for c in workspace_columns if c.get('is_relationship_context')]),
+                    'external_ontology_columns': len([c for c in workspace_columns if c.get('is_external_ontology')])
+                }
+            }
+            
+            # Add error details if any errors occurred
+            if execution_results.get('total_errors', 0) > 0:
+                response_data['status'] = 'completed_with_errors'
+                response_data['error_details'] = execution_results.get('error', 'Multiple errors occurred during processing')
+            
+            logger.info(f"EXECUTE_GUI_MAPPING: Completed - {response_data['execution_summary']}")
+            
+            return JsonResponse(response_data)
+            
+        except Exception as e:
+            logger.error(f"EXECUTE_GUI_MAPPING: Unexpected error: {e}", exc_info=True)
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Execution failed: {str(e)}'
+            }, status=500)
+    
+    def _get_update_strategy_from_config(self, mapping_config: Dict[str, Any]):
+        """Extract update strategy from mapping configuration."""
+        from arkumu.importer.services.importer.smart_bulk_updater import UpdateStrategy
+        
+        import_strategy = mapping_config.get('import_strategy', {})
+        strategy_name = import_strategy.get('update_strategy', 'skip_existing')
+        
+        strategy_map = {
+            'skip_existing': UpdateStrategy.SKIP_EXISTING,
+            'update_values': UpdateStrategy.UPDATE_VALUES,
+            'merge_triples': UpdateStrategy.MERGE_TRIPLES,
+            'replace_all': UpdateStrategy.REPLACE_ALL,
+            'timestamp_based': UpdateStrategy.TIMESTAMP_BASED
+        }
+        
+        return strategy_map.get(strategy_name, UpdateStrategy.SKIP_EXISTING)
+
+
+class GetMappingExecutionStatusView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
+    """
+    Get the execution status and preview what would happen if mapping is executed.
+    
+    This provides a dry-run analysis without actually executing the mapping.
+    """
+    
+    def get(self, request):
+        """Handle GET requests for mapping execution analysis."""
+        try:
+            organization_id = self.get_organization_id_from_request(request)
+            dataset_name = request.GET.get('dataset_name')
+            
+            if not dataset_name:
+                return JsonResponse({'status': 'error', 'message': 'Dataset name required'}, status=400)
+            
+            # Get the current mapping configuration
+            mapping_config = self.serialize_current_mapping_state(request, organization_id)
+            workspace_columns = mapping_config.get('workspace_columns', [])
+            
+            if not workspace_columns:
+                return JsonResponse({
+                    'status': 'no_mapping',
+                    'message': 'No mapping configuration found',
+                    'ready_to_execute': False
+                })
+            
+            # Analyze the mapping configuration
+            from arkumu.importer.services.importer.mapping_processor import GUIMappingProcessor
+            processor = GUIMappingProcessor()
+            execution_plan = processor.analyze_gui_mapping_config(mapping_config)
+            
+            # Count different types of columns
+            column_analysis = {
+                'total_columns': len(workspace_columns),
+                'anchor_columns': len(execution_plan.phase_1_columns),
+                'literal_columns': len(execution_plan.phase_2_columns),
+                'fk_columns': len(execution_plan.phase_3_columns),
+                'relationship_context_columns': len(execution_plan.phase_4_columns),
+                'external_ontology_columns': len(execution_plan.external_ontology_columns)
+            }
+            
+            # Determine readiness
+            ready_to_execute = len(workspace_columns) > 0
+            warnings = []
+            
+            if not execution_plan.phase_1_columns:
+                warnings.append("No anchor columns defined - entities will be created from all columns")
+            
+            if execution_plan.phase_3_columns and not execution_plan.phase_1_columns:
+                warnings.append("FK relationships defined but no anchor entities - may cause broken links")
+            
+            if execution_plan.phase_4_columns and not execution_plan.phase_3_columns:
+                warnings.append("Relationship contexts defined but no FKs - junction tables may be incomplete")
+            
+            return JsonResponse({
+                'status': 'ready' if ready_to_execute else 'not_ready',
+                'ready_to_execute': ready_to_execute,
+                'column_analysis': column_analysis,
+                'execution_phases': {
+                    'phase_1_entities': len(execution_plan.phase_1_columns),
+                    'phase_2_literals': len(execution_plan.phase_2_columns),
+                    'phase_3_relationships': len(execution_plan.phase_3_columns),
+                    'phase_4_contexts': len(execution_plan.phase_4_columns)
+                },
+                'warnings': warnings,
+                'dataset_name': dataset_name,
+                'organization_id': organization_id
+            })
+            
+        except Exception as e:
+            logger.error(f"GET_MAPPING_EXECUTION_STATUS: Error: {e}", exc_info=True)
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Analysis failed: {str(e)}'
+            }, status=500)
+
+
+# ==============================================================================
+# Function-based view wrappers for URL compatibility
+# ==============================================================================
+
+def execute_gui_mapping_view(request):
+    """Function-based wrapper for ExecuteGUIMappingView."""
+    view = ExecuteGUIMappingView()
+    return view.post(request)
+
+def get_mapping_execution_status_view(request):
+    """Function-based wrapper for GetMappingExecutionStatusView."""
+    view = GetMappingExecutionStatusView()
+    return view.get(request)
 
 
 
