@@ -1872,6 +1872,9 @@ class SaveInlineRelationshipContextView(OrganizationMixin, CSVMappingCoordinator
     def post(self, request):
         """Handle POST requests for saving relationship context configurations."""
         try:
+            # Debug: Log all POST parameters
+            logger.info(f"CSV_SAVE_RELATIONSHIP_CONTEXT: POST params: {dict(request.POST)}")
+            
             organization_id = self.get_organization_id_from_request(request)
             
             # Extract form data
@@ -2079,6 +2082,335 @@ class UpdateRelationshipContextColumnsView(OrganizationMixin, CSVMappingCoordina
         except Exception as e:
             logger.error(f"CSV_UPDATE_RELATIONSHIP_CONTEXT_COLUMNS: Error updating columns: {e}", exc_info=True)
             return HttpResponse('<option value="">Error loading columns</option>')
+
+
+# =============================================================================
+# External Ontology Column Views
+# =============================================================================
+
+class ToggleExternalOntologyFormView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
+    """
+    Toggle external ontology configuration form view using coordinator-based architecture.
+    """
+    
+    def post(self, request):
+        """Handle POST requests for toggling external ontology forms."""
+        try:
+            organization_id = self.get_organization_id_from_request(request)
+            column_id = request.POST.get('column_id') or request.GET.get('column_id')
+            
+            logger.info(f"CSV_TOGGLE_EXTERNAL_ONTOLOGY_FORM: column_id='{column_id}', org='{organization_id}'")
+            
+            if not column_id:
+                return HttpResponse('<div class="text-error text-sm">Column ID required</div>')
+            
+            # Get workspace columns using coordinator
+            workspace_columns = self.get_workspace_columns(request, organization_id)
+            
+            # Find column using coordinator method
+            column = self.get_unified_column_by_id(request, organization_id, column_id)
+            if not column:
+                logger.error(f"CSV_TOGGLE_EXTERNAL_ONTOLOGY_FORM: Column '{column_id}' not found")
+                return HttpResponse('<div class="text-error text-sm">Column not found in workspace</div>')
+            
+            # Get current external ontology configuration if exists
+            external_ontology = column.get('external_ontology', {})
+            ontology_type = external_ontology.get('ontology_type', '')
+            uri_template = external_ontology.get('uri_template', '')
+            identifier_pattern = external_ontology.get('identifier_pattern', '')
+            validation_enabled = external_ontology.get('validation_enabled', True)
+            
+            # Define common ontology types with their templates and patterns
+            ontology_presets = {
+                'orcid': {
+                    'name': 'ORCID',
+                    'uri_template': 'https://orcid.org/{identifier}',
+                    'identifier_pattern': r'^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$',
+                    'example': '0000-0002-1825-0097',
+                    'description': 'ORCID researcher identifiers'
+                },
+                'wikidata': {
+                    'name': 'Wikidata',
+                    'uri_template': 'https://www.wikidata.org/entity/{identifier}',
+                    'identifier_pattern': r'^Q\d+$',
+                    'example': 'Q42',
+                    'description': 'Wikidata entity IDs'
+                },
+                'gnd': {
+                    'name': 'GND (German National Library)',
+                    'uri_template': 'https://d-nb.info/gnd/{identifier}',
+                    'identifier_pattern': r'^\d{8,9}[\dX]?$',
+                    'example': '118501429',
+                    'description': 'German National Library authority file'
+                },
+                'viaf': {
+                    'name': 'VIAF',
+                    'uri_template': 'https://viaf.org/viaf/{identifier}',
+                    'identifier_pattern': r'^\d+$',
+                    'example': '12347231',
+                    'description': 'Virtual International Authority File'
+                },
+                'loc': {
+                    'name': 'Library of Congress',
+                    'uri_template': 'http://id.loc.gov/authorities/names/{identifier}',
+                    'identifier_pattern': r'^[a-z]{1,2}\d{8,10}$',
+                    'example': 'n80057250',
+                    'description': 'Library of Congress Name Authority File'
+                },
+                'isni': {
+                    'name': 'ISNI',
+                    'uri_template': 'https://isni.org/isni/{identifier}',
+                    'identifier_pattern': r'^\d{15}[\dX]$',
+                    'example': '0000000121032683',
+                    'description': 'International Standard Name Identifier'
+                },
+                'custom': {
+                    'name': 'Custom Ontology',
+                    'uri_template': '',
+                    'identifier_pattern': '',
+                    'example': '',
+                    'description': 'Custom ontology with user-defined template'
+                }
+            }
+            
+            context = {
+                'column': column,
+                'ontology_type': ontology_type,
+                'uri_template': uri_template,
+                'identifier_pattern': identifier_pattern,
+                'validation_enabled': validation_enabled,
+                'ontology_presets': ontology_presets,
+                'organization_id': organization_id,
+                'csrf_token': request.META.get('CSRF_COOKIE')
+            }
+            
+            return render(request, 'csv_mapping/partials/inline_external_ontology_form.html', context)
+            
+        except Exception as e:
+            logger.error(f"CSV_TOGGLE_EXTERNAL_ONTOLOGY_FORM: Error toggling form: {e}", exc_info=True)
+            return HttpResponse('<div class="text-error text-sm">Error opening external ontology configuration</div>')
+
+
+class SaveInlineExternalOntologyView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
+    """
+    Save inline external ontology configuration view using coordinator-based architecture.
+    """
+    
+    def post(self, request):
+        """Handle POST requests for saving external ontology configurations."""
+        try:
+            # Debug: Log all POST parameters
+            logger.info(f"CSV_SAVE_EXTERNAL_ONTOLOGY: POST params: {dict(request.POST)}")
+            
+            organization_id = self.get_organization_id_from_request(request)
+            
+            # Extract form data
+            column_id = request.POST.get('column_id')
+            ontology_type = request.POST.get('ontology_type')
+            uri_template = request.POST.get('uri_template')
+            identifier_pattern = request.POST.get('identifier_pattern')
+            validation_enabled = request.POST.get('validation_enabled') == 'on'
+            
+            logger.info(f"CSV_SAVE_EXTERNAL_ONTOLOGY: column_id='{column_id}', type='{ontology_type}', template='{uri_template}', org='{organization_id}'")
+            
+            # Validate required fields
+            if not all([column_id, ontology_type]):
+                missing = []
+                if not column_id: missing.append('column_id')
+                if not ontology_type: missing.append('ontology_type')
+                error_msg = f'Missing required fields: {", ".join(missing)}'
+                logger.error(f"CSV_SAVE_EXTERNAL_ONTOLOGY: VALIDATION FAILED - {error_msg}")
+                return HttpResponse(f'<div class="text-error text-xs p-2">{error_msg}</div>')
+            
+            # For custom ontology, require URI template
+            if ontology_type == 'custom' and not uri_template:
+                error_msg = 'URI template is required for custom ontologies'
+                logger.error(f"CSV_SAVE_EXTERNAL_ONTOLOGY: VALIDATION FAILED - {error_msg}")
+                return HttpResponse(f'<div class="text-error text-xs p-2">{error_msg}</div>')
+            
+            # Get current workspace using coordinator methods
+            existing_columns = self.get_workspace_columns(request, organization_id)
+            
+            # Find and update the column with external ontology configuration
+            updated_column = None
+            for col in existing_columns:
+                if col.get('id') == column_id:
+                    col['is_external_ontology'] = True
+                    col['external_ontology'] = {
+                        'ontology_type': ontology_type,
+                        'uri_template': uri_template,
+                        'identifier_pattern': identifier_pattern,
+                        'validation_enabled': validation_enabled,
+                    }
+                    updated_column = col
+                    logger.info(f"CSV_SAVE_EXTERNAL_ONTOLOGY: ✅ Updated column '{column_id}' with external ontology config")
+                    break
+            
+            if not updated_column:
+                logger.error(f"CSV_SAVE_EXTERNAL_ONTOLOGY: Column '{column_id}' not found in workspace")
+                return HttpResponse('<div class="text-error text-xs p-2">Column not found in workspace</div>')
+            
+            # Save back to session using coordinator methods
+            self.update_workspace_columns(request, organization_id, existing_columns)
+            
+            logger.info(f"CSV_SAVE_EXTERNAL_ONTOLOGY: Successfully updated external ontology configuration")
+            
+            # Generate CSRF token for the template
+            from django.middleware.csrf import get_token
+            csrf_token = get_token(request)
+            
+            # Return just the updated column item
+            from django.template.loader import render_to_string
+            column_html = render_to_string('csv_mapping/partials/column_item.html', {
+                'column': updated_column,
+                'organization_id': organization_id,
+                'csrf_token': csrf_token,
+            }, request=request)
+            
+            # Add workspace update trigger for JSON view synchronization
+            final_response = self.add_workspace_update_trigger(column_html)
+            return HttpResponse(final_response)
+            
+        except Exception as e:
+            logger.error(f"CSV_SAVE_EXTERNAL_ONTOLOGY: Error saving configuration: {e}", exc_info=True)
+            return HttpResponse('<div class="text-error text-xs p-2">Error saving external ontology configuration</div>')
+
+
+class HideExternalOntologyFormView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
+    """
+    Hide external ontology form view using coordinator-based architecture.
+    """
+    
+    def get(self, request):
+        """Handle GET requests for hiding external ontology forms."""
+        try:
+            column_id = request.GET.get('column_id')
+            logger.info(f"CSV_HIDE_EXTERNAL_ONTOLOGY_FORM: column={column_id}")
+            
+            # Return empty div to hide the form (using slugified ID to match template)
+            from django.utils.text import slugify
+            slugified_id = slugify(column_id) if column_id else 'unknown'
+            return HttpResponse(f'<div id="external-ontology-form-{slugified_id}"></div>')
+            
+        except Exception as e:
+            logger.error(f"CSV_HIDE_EXTERNAL_ONTOLOGY_FORM: Error hiding form: {e}", exc_info=True)
+            return HttpResponse('<div class="text-error text-sm">Error hiding external ontology form</div>')
+
+
+class RemoveExternalOntologyView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
+    """
+    Remove external ontology configuration view using coordinator-based architecture.
+    """
+    
+    def post(self, request):
+        """Handle POST requests for removing external ontology configurations."""
+        try:
+            organization_id = self.get_organization_id_from_request(request)
+            column_id = request.POST.get('column_id')
+            
+            logger.info(f"CSV_REMOVE_EXTERNAL_ONTOLOGY: column_id='{column_id}', org='{organization_id}'")
+            
+            if not column_id:
+                return HttpResponse('<div class="text-error text-xs p-2">Column ID required</div>')
+            
+            # Get current workspace using coordinator methods
+            existing_columns = self.get_workspace_columns(request, organization_id)
+            
+            # Find and update the column to remove external ontology configuration
+            updated_column = None
+            for col in existing_columns:
+                if col.get('id') == column_id:
+                    col['is_external_ontology'] = False
+                    col['external_ontology'] = {}
+                    updated_column = col
+                    logger.info(f"CSV_REMOVE_EXTERNAL_ONTOLOGY: ✅ Removed external ontology config from column '{column_id}'")
+                    break
+            
+            if not updated_column:
+                logger.error(f"CSV_REMOVE_EXTERNAL_ONTOLOGY: Column '{column_id}' not found in workspace")
+                return HttpResponse('<div class="text-error text-xs p-2">Column not found in workspace</div>')
+            
+            # Save back to session using coordinator methods
+            self.update_workspace_columns(request, organization_id, existing_columns)
+            
+            # Prepare workspace update data for response
+            workspace_datasets = self._prepare_datasets_with_columns(existing_columns)
+            
+            # Generate CSRF token for the template
+            from django.middleware.csrf import get_token
+            csrf_token = get_token(request)
+            
+            # Return the updated workspace content
+            from django.template.loader import render_to_string
+            workspace_html = render_to_string('csv_mapping/partials/workspace_content.html', {
+                'workspace_datasets': workspace_datasets,
+                'organization_id': organization_id,
+                'csrf_token': csrf_token,
+            }, request=request)
+            
+            # Add workspace update trigger for JSON view synchronization
+            final_response = self.add_workspace_update_trigger(workspace_html)
+            return HttpResponse(final_response)
+            
+        except Exception as e:
+            logger.error(f"CSV_REMOVE_EXTERNAL_ONTOLOGY: Error removing configuration: {e}", exc_info=True)
+            return HttpResponse('<div class="text-error text-xs p-2">Error removing external ontology configuration</div>')
+
+
+class ValidateExternalOntologyIdentifierView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
+    """
+    Validate external ontology identifier view using coordinator-based architecture.
+    """
+    
+    def post(self, request):
+        """Handle POST requests for validating external ontology identifiers."""
+        try:
+            organization_id = self.get_organization_id_from_request(request)
+            
+            # Extract validation data
+            column_id = request.POST.get('column_id')
+            identifier = request.POST.get('identifier')
+            ontology_type = request.POST.get('ontology_type')
+            identifier_pattern = request.POST.get('identifier_pattern')
+            
+            logger.info(f"CSV_VALIDATE_EXTERNAL_ONTOLOGY: column_id='{column_id}', type='{ontology_type}', identifier='{identifier}', org='{organization_id}'")
+            
+            if not all([column_id, identifier, ontology_type]):
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Missing required fields for validation'
+                })
+            
+            # Validate identifier format
+            is_valid = True
+            validation_message = ''
+            
+            if identifier_pattern:
+                import re
+                if not re.match(identifier_pattern, identifier):
+                    is_valid = False
+                    validation_message = f'Identifier does not match expected pattern for {ontology_type}'
+                else:
+                    validation_message = f'Valid {ontology_type} identifier format'
+            else:
+                validation_message = f'No validation pattern available for {ontology_type}'
+            
+            logger.info(f"CSV_VALIDATE_EXTERNAL_ONTOLOGY: Validation result - Valid: {is_valid}, Message: {validation_message}")
+            
+            return JsonResponse({
+                'success': True,
+                'is_valid': is_valid,
+                'message': validation_message,
+                'identifier': identifier,
+                'ontology_type': ontology_type
+            })
+            
+        except Exception as e:
+            logger.error(f"CSV_VALIDATE_EXTERNAL_ONTOLOGY: Error validating identifier: {e}", exc_info=True)
+            return JsonResponse({
+                'success': False,
+                'error': 'Error validating external ontology identifier'
+            })
 
 
 

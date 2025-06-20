@@ -200,4 +200,11 @@ urlpatterns = [
     path('csv-mapping/json-content/', csv_mapping_views.GetMappingJSONContentView.as_view(), name='csv_get_mapping_json_content'),
     path('csv-mapping/json-view/', csv_mapping_views.GetMappingJSONViewView.as_view(), name='csv_get_mapping_json_view'),
     
+    # External Ontology Views
+    path('csv-toggle-external-ontology-form/', csv_mapping_views.ToggleExternalOntologyFormView.as_view(), name='csv_toggle_external_ontology_form'),
+    path('csv-hide-external-ontology-form/', csv_mapping_views.HideExternalOntologyFormView.as_view(), name='csv_hide_external_ontology_form'),
+    path('csv-save-external-ontology/', csv_mapping_views.SaveInlineExternalOntologyView.as_view(), name='csv_save_external_ontology'),
+    path('csv-remove-external-ontology/', csv_mapping_views.RemoveExternalOntologyView.as_view(), name='csv_remove_external_ontology'),
+    path('csv-validate-external-ontology-identifier/', csv_mapping_views.ValidateExternalOntologyIdentifierView.as_view(), name='csv_validate_external_ontology_identifier'),
+    
     ]

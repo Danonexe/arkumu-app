@@ -962,6 +962,7 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         # Serialize FK relationships and relationship contexts from workspace columns
         fk_relationships = {}
         relationship_contexts = {}
+        external_ontologies = {}
         entity_mappings = {}
         
         # Handle workspace_columns as list (current format)
@@ -989,6 +990,15 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
                     'context_predicate': column_data['relationship_context'].get('context_predicate')
                 }
             
+            # Extract external ontology configurations
+            if column_data.get('is_external_ontology') and column_data.get('external_ontology'):
+                external_ontologies[column_id] = {
+                    'ontology_type': column_data['external_ontology'].get('ontology_type'),
+                    'uri_template': column_data['external_ontology'].get('uri_template'),
+                    'identifier_pattern': column_data['external_ontology'].get('identifier_pattern'),
+                    'validation_enabled': column_data['external_ontology'].get('validation_enabled', True)
+                }
+            
             # Extract RDF predicate mappings (if any)
             if column_data.get('rdf_predicate'):
                 if 'predicate_mappings' not in entity_mappings:
@@ -1008,24 +1018,26 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         
         # Build complete mapping configuration
         mapping_config = {
-            'version': '1.1',  # Updated version to include relationship contexts
+            'version': '1.2',  # Updated version to include external ontologies
             'created_at': timezone.now().isoformat(),
             'organization_id': organization_id,
             'selected_datasets': selected_datasets,
             'workspace_columns': workspace_columns_dict,  # Store as dict for easier lookup
             'fk_relationships': fk_relationships,
             'relationship_contexts': relationship_contexts,  # New: relationship context configurations
+            'external_ontologies': external_ontologies,  # New: external ontology configurations
             'entity_mappings': entity_mappings,
             'metadata': {
                 'total_datasets': len(selected_datasets),
                 'total_columns': len(workspace_columns),
                 'total_fk_relationships': len(fk_relationships),
                 'total_relationship_contexts': len(relationship_contexts),
+                'total_external_ontologies': len(external_ontologies),
                 'mapping_name': mapping_name or f"Mapping_{timezone.now().strftime('%Y%m%d_%H%M%S')}"
             }
         }
         
-        logger.info(f"SERIALIZE_MAPPING: Serialized {len(selected_datasets)} datasets, {len(workspace_columns)} columns, {len(fk_relationships)} FK relationships, {len(relationship_contexts)} relationship contexts")
+        logger.info(f"SERIALIZE_MAPPING: Serialized {len(selected_datasets)} datasets, {len(workspace_columns)} columns, {len(fk_relationships)} FK relationships, {len(relationship_contexts)} relationship contexts, {len(external_ontologies)} external ontologies")
         return mapping_config
     
     def deserialize_mapping_state(self, request, organization_id, mapping_config):
@@ -1076,6 +1088,7 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         # Build restoration summary
         fk_relationships = mapping_config.get('fk_relationships', {})
         relationship_contexts = mapping_config.get('relationship_contexts', {})
+        external_ontologies = mapping_config.get('external_ontologies', {})
         metadata = mapping_config.get('metadata', {})
         
         summary = {
@@ -1083,12 +1096,13 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
             'columns_restored': len(workspace_columns_list),
             'fk_relationships_restored': len(fk_relationships),
             'relationship_contexts_restored': len(relationship_contexts),
+            'external_ontologies_restored': len(external_ontologies),
             'mapping_name': metadata.get('mapping_name', 'Unknown'),
             'original_created_at': mapping_config.get('created_at'),
             'version': mapping_config.get('version', 'Unknown')
         }
         
-        logger.info(f"DESERIALIZE_MAPPING: Successfully restored mapping '{summary['mapping_name']}' with {summary['datasets_restored']} datasets, {summary['columns_restored']} columns, {summary['fk_relationships_restored']} FK relationships, and {summary['relationship_contexts_restored']} relationship contexts")
+        logger.info(f"DESERIALIZE_MAPPING: Successfully restored mapping '{summary['mapping_name']}' with {summary['datasets_restored']} datasets, {summary['columns_restored']} columns, {summary['fk_relationships_restored']} FK relationships, {summary['relationship_contexts_restored']} relationship contexts, and {summary['external_ontologies_restored']} external ontologies")
         return summary
     
     def validate_mapping_compatibility(self, request, organization_id, mapping_config):
