@@ -89,8 +89,8 @@ def mock_coordinator_methods():
             'organization_id': 'test-org-123',
             'selected_datasets': ['dataset1.csv', 'dataset2.csv'],
             'workspace_columns': {
-                'csv::dataset1.csv::id': {'name': 'id', 'dataset': 'dataset1.csv'},
-                'csv::dataset2.csv::name': {'name': 'name', 'dataset': 'dataset2.csv'}
+                'test-org-123::dataset1.csv::id': {'name': 'id', 'dataset': 'dataset1.csv', 'source': 'csv'},
+                'test-org-123::dataset2.csv::name': {'name': 'name', 'dataset': 'dataset2.csv', 'source': 'csv'}
             },
             'fk_relationships': {},
             'entity_mappings': {},
@@ -736,3 +736,124 @@ class TestUpdateMappingView:
         assert response.status_code == 400
         response_data = json.loads(response.content)
         assert 'already exists' in response_data['error']
+
+
+@pytest.mark.django_db
+class TestColumnIDCompatibility:
+    """Test compatibility of saved mappings API with new organization_id column format"""
+    
+    def test_save_mapping_with_new_column_format(self, client, user, organization_id):
+        """Test saving mapping with new organization_id::dataset::column format"""
+        # Mock serialization to return new format
+        new_format_config = {
+            'version': '1.0',
+            'organization_id': organization_id,
+            'selected_datasets': ['test_dataset.csv'],
+            'workspace_columns': {
+                f'{organization_id}::test_dataset.csv::id': {
+                    'name': 'id', 
+                    'dataset': 'test_dataset.csv', 
+                    'source': 'test_source'
+                },
+                f'{organization_id}::test_dataset.csv::name': {
+                    'name': 'name', 
+                    'dataset': 'test_dataset.csv', 
+                    'source': 'test_source'
+                }
+            },
+            'fk_relationships': {},
+            'entity_mappings': {},
+            'metadata': {
+                'total_datasets': 1,
+                'total_columns': 2,
+                'total_fk_relationships': 0
+            }
+        }
+        
+        with patch.multiple(
+            'arkumu.metadata.views.csv_mapping.saved_mappings_api.CSVMappingCoordinatorMixin',
+            serialize_current_mapping_state=Mock(return_value=new_format_config),
+            get_csv_datasets_for_organization=Mock(return_value=[
+                {'name': 'test_dataset.csv'}
+            ])
+        ):
+            client.force_login(user)
+            
+            data = {
+                'organization': organization_id,
+                'mapping_name': 'New Format Test Mapping'
+            }
+            
+            response = client.post(reverse('metadata:csv_save_mapping'), data)
+            
+            assert response.status_code == 200
+            response_data = json.loads(response.content)
+            assert response_data['success'] is True
+            
+            # Verify the mapping was saved with correct format
+            mapping = Mapping.objects.get(name='New Format Test Mapping')
+            stored_config = mapping.mapping_config
+            
+            # Check that column IDs use organization_id format
+            column_ids = list(stored_config['workspace_columns'].keys())
+            for column_id in column_ids:
+                assert column_id.startswith(organization_id), f"Column ID {column_id} should start with {organization_id}"
+                assert '::' in column_id, f"Column ID {column_id} should contain ::"
+                
+                # Parse the ID to verify format
+                parts = column_id.split('::')
+                assert len(parts) == 3, f"Column ID {column_id} should have 3 parts"
+                assert parts[0] == organization_id, f"First part should be organization_id"
+                assert parts[1] == 'test_dataset.csv', f"Second part should be dataset name"
+    
+    def test_backward_compatibility_with_legacy_column_format(self, client, user, organization_id):
+        """Test that API can handle legacy column format gracefully"""
+        # Create mapping with legacy format
+        legacy_format_config = {
+            'selected_datasets': ['test_dataset.csv'],
+            'workspace_columns': {
+                'test_dataset.csv::id': {  # Legacy format without organization prefix
+                    'name': 'id', 
+                    'dataset': 'test_dataset.csv'
+                },
+                'csv::test_dataset.csv::name': {  # Old CSV format
+                    'name': 'name', 
+                    'dataset': 'test_dataset.csv'
+                }
+            },
+            'fk_relationships': {},
+            'entity_mappings': {}
+        }
+        
+        mapping = Mapping.objects.create(
+            name='Legacy Format Mapping',
+            organization_id=organization_id,
+            source_datasets=['test_dataset.csv'],
+            mapping_config=legacy_format_config,
+            created_by=user
+        )
+        
+        with patch.multiple(
+            'arkumu.metadata.views.csv_mapping.saved_mappings_api.CSVMappingCoordinatorMixin',
+            validate_mapping_compatibility=Mock(return_value={
+                'is_valid': True,
+                'errors': [],
+                'warnings': ['Some column formats have been updated'],
+                'missing_datasets': []
+            }),
+            deserialize_mapping_state=Mock(return_value={'restored': True})
+        ):
+            client.force_login(user)
+            
+            data = {
+                'organization': organization_id,
+                'mapping_id': str(mapping.id)
+            }
+            
+            response = client.post(reverse('metadata:csv_load_mapping'), data)
+            
+            # Should load successfully with warnings
+            assert response.status_code == 200
+            response_data = json.loads(response.content)
+            assert response_data['success'] is True
+            assert 'warnings' in response_data

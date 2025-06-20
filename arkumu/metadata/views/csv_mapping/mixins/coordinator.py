@@ -85,6 +85,14 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         Returns:
             dict: Parsed components with keys: source, dataset, column
         """
+        # Handle None and empty values gracefully
+        if not column_id:
+            return {
+                'source': None,
+                'dataset': None,
+                'column': None
+            }
+        
         parts = column_id.split("::")
         if len(parts) == 3:
             return {

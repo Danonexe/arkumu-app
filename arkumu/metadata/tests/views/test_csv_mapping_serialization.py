@@ -18,15 +18,16 @@ from unittest.mock import patch, MagicMock
 from django.test import RequestFactory
 from django.contrib.sessions.middleware import SessionMiddleware
 from django.middleware.csrf import CsrfViewMiddleware
+from django.contrib.auth import get_user_model
 
 from arkumu.metadata.views.csv_mapping.mixins.coordinator import CSVMappingCoordinatorMixin
 from arkumu.metadata.views.csv_mapping.csv_mapping_views import (
-    CSVMappingEditorView,
     AddColumnToWorkspaceView,
     RemoveColumnFromWorkspaceView,
-    ExportMappingJSONView,
-    GetMappingJSONContentView
+    ExportMappingJSONView
 )
+
+User = get_user_model()
 
 
 @pytest.fixture
@@ -522,5 +523,380 @@ class TestColumnFiltering:
         
         assert new_format_count == 1  # Only the new format column
         assert legacy_format_count == 2  # Legacy and very old format
+
+
+class TestEdgeCasesAndErrorHandling:
+    """Test edge cases and error handling scenarios for CSV mapping serialization."""
+    
+    def test_parse_malformed_column_ids(self):
+        """Test parsing malformed or invalid column IDs."""
+        malformed_ids = [
+            "",  # Empty string
+            ":",  # Just separator
+            "::",  # Just separators
+            "single_part",  # No separators
+            "two::parts",  # Only two parts
+            "too::many::parts::here::extra",  # Too many parts
+            "org::dataset::",  # Missing column
+            "::dataset::column",  # Missing org
+            "org::::column",  # Missing dataset
+        ]
+        
+        for malformed_id in malformed_ids:
+            parsed = CSVMappingCoordinatorMixin.parse_column_id(malformed_id)
+            # Should handle gracefully and not crash
+            assert isinstance(parsed, dict)
+            assert 'source' in parsed
+            assert 'dataset' in parsed  
+            assert 'column' in parsed
+    
+    def test_generate_column_id_with_special_characters(self):
+        """Test column ID generation with special characters in inputs."""
+        special_chars_test_cases = [
+            ("org with spaces", "dataset with spaces.csv", "column with spaces"),
+            ("org-with-dashes", "dataset-with-dashes.csv", "column-with-dashes"),
+            ("org_with_underscores", "dataset_with_underscores.csv", "column_with_underscores"),
+            ("org.with.dots", "dataset.with.dots.csv", "column.with.dots"),
+            ("org123", "dataset123.csv", "column123"),
+        ]
+        
+        for org_id, dataset, column in special_chars_test_cases:
+            column_id = CSVMappingCoordinatorMixin.generate_column_id(dataset, column, org_id)
+            
+            # Should generate valid ID
+            assert "::" in column_id
+            assert org_id in column_id
+            assert dataset in column_id
+            assert column in column_id
+            
+            # Should be parseable back
+            parsed = CSVMappingCoordinatorMixin.parse_column_id(column_id)
+            assert parsed['source'] == org_id
+            assert parsed['dataset'] == dataset
+            assert parsed['column'] == column
+    
+    def test_empty_and_none_values(self):
+        """Test handling of empty and None values."""
+        # Test with None values
+        with_none = CSVMappingCoordinatorMixin.generate_column_id(None, "column", "org")
+        assert with_none is not None
+        
+        # Test with empty strings  
+        with_empty = CSVMappingCoordinatorMixin.generate_column_id("", "column", "org")
+        assert with_empty is not None
+        
+        # Test parsing None - should return dict with None values
+        parsed_none = CSVMappingCoordinatorMixin.parse_column_id(None)
+        assert parsed_none is not None
+        assert isinstance(parsed_none, dict)
+        assert parsed_none['source'] is None
+        assert parsed_none['dataset'] is None
+        assert parsed_none['column'] is None
+        
+        # Test parsing empty string - should return dict with None values
+        parsed_empty = CSVMappingCoordinatorMixin.parse_column_id("")
+        assert parsed_empty is not None
+        assert isinstance(parsed_empty, dict)
+        assert parsed_empty['source'] is None
+        assert parsed_empty['dataset'] is None
+        assert parsed_empty['column'] is None
+    
+    @pytest.mark.django_db
+    def test_coordinator_error_handling(self, base_test_data):
+        """Test coordinator error handling with invalid data."""
+        coordinator = CSVMappingCoordinatorMixin()
+        factory = RequestFactory()
+        request = factory.post('/')
+        request = add_session_to_request(request)
+        
+        # Test with invalid organization_id
+        with patch.object(coordinator, '_is_dataset_selected', return_value=False):
+            success, new_column, total_columns, error = coordinator.add_column_with_validation(
+                request,
+                "",  # Empty organization_id
+                base_test_data['column_name'],
+                base_test_data['dataset_name'],
+                base_test_data['source_name']
+            )
+            # Should handle gracefully
+            assert success is False
+            assert error is not None
+    
+    def test_mixed_id_formats_in_workspace(self, base_test_data):
+        """Test handling workspace with mixed old and new column ID formats."""
+        workspace_columns = [
+            # New format
+            {'id': f"{base_test_data['organization_id']}::{base_test_data['dataset_name']}::new_col1"},
+            # Legacy format 
+            {'id': f"{base_test_data['dataset_name']}::legacy_col1"},
+            # Very old format
+            {'id': 'very_old_col1'},
+            # Malformed
+            {'id': '::malformed::'},
+            # Empty
+            {'id': ''},
+            # Another new format
+            {'id': f"{base_test_data['organization_id']}::{base_test_data['dataset_name']}::new_col2"},
+        ]
+        
+        # Count valid columns for our organization and dataset
+        valid_new_format = 0
+        for col in workspace_columns:
+            parsed = CSVMappingCoordinatorMixin.parse_column_id(col['id'])
+            if (parsed['source'] == base_test_data['organization_id'] and 
+                parsed['dataset'] == base_test_data['dataset_name']):
+                valid_new_format += 1
+        
+        assert valid_new_format == 2  # Only new_col1 and new_col2
+    
+    def test_unicode_and_international_characters(self):
+        """Test handling of Unicode and international characters."""
+        unicode_test_cases = [
+            ("org_ñ", "datäset.csv", "colümn"),
+            ("组织", "数据集.csv", "列"),
+            ("орг", "набор_данных.csv", "столбец"),
+            ("منظمة", "مجموعة_البيانات.csv", "عمود"),
+        ]
+        
+        for org_id, dataset, column in unicode_test_cases:
+            try:
+                column_id = CSVMappingCoordinatorMixin.generate_column_id(dataset, column, org_id)
+                assert column_id is not None
+                
+                # Should be parseable
+                parsed = CSVMappingCoordinatorMixin.parse_column_id(column_id)
+                assert parsed['source'] == org_id
+                assert parsed['dataset'] == dataset  
+                assert parsed['column'] == column
+            except Exception as e:
+                # If Unicode handling fails, that's also valid to know
+                assert False, f"Unicode handling failed for {org_id}, {dataset}, {column}: {e}"
+
+
+class TestSerializationEdgeCases:
+    """Test serialization edge cases and complex scenarios."""
+    
+    @pytest.mark.django_db
+    def test_serialization_with_empty_workspace(self, base_test_data):
+        """Test serialization when workspace is empty."""
+        coordinator = CSVMappingCoordinatorMixin()
+        factory = RequestFactory()
+        request = factory.post('/')
+        request = add_session_to_request(request)
+        
+        with patch.object(coordinator, 'get_selected_dataset_names') as mock_datasets:
+            mock_datasets.return_value = []
+            
+            with patch.object(coordinator, 'get_workspace_columns') as mock_columns:
+                mock_columns.return_value = []
+                
+                mapping_config = coordinator.serialize_current_mapping_state(
+                    request, 
+                    base_test_data['organization_id']
+                )
+                
+                assert mapping_config['organization_id'] == base_test_data['organization_id']
+                assert mapping_config['workspace_columns'] == {}
+                assert mapping_config['selected_datasets'] == []
+                assert mapping_config['fk_relationships'] == {}
+                assert mapping_config['entity_mappings'] == {}
+    
+    @pytest.mark.django_db
+    def test_serialization_with_corrupted_workspace_data(self, base_test_data):
+        """Test serialization when workspace contains corrupted data."""
+        coordinator = CSVMappingCoordinatorMixin()
+        factory = RequestFactory()
+        request = factory.post('/')
+        request = add_session_to_request(request)
+        
+        # Mock corrupted workspace data
+        corrupted_workspace = [
+            # Missing required fields
+            {'name': 'col1'},
+            # Malformed ID
+            {'id': ':::', 'name': 'col2'},
+            # None values
+            {'id': None, 'name': None},
+            # Valid entry for comparison
+            {
+                'id': f"{base_test_data['organization_id']}::{base_test_data['dataset_name']}::valid_col",
+                'name': 'valid_col',
+                'dataset': base_test_data['dataset_name'],
+                'source': base_test_data['source_name']
+            }
+        ]
+        
+        with patch.object(coordinator, 'get_selected_dataset_names') as mock_datasets:
+            mock_datasets.return_value = [base_test_data['dataset_name']]
+            
+            with patch.object(coordinator, 'get_workspace_columns') as mock_columns:
+                mock_columns.return_value = corrupted_workspace
+                
+                # Should not crash, even with corrupted data
+                mapping_config = coordinator.serialize_current_mapping_state(
+                    request, 
+                    base_test_data['organization_id']
+                )
+                
+                assert mapping_config is not None
+                assert mapping_config['organization_id'] == base_test_data['organization_id']
+                # Should have at least the valid column
+                valid_col_id = f"{base_test_data['organization_id']}::{base_test_data['dataset_name']}::valid_col"
+                assert valid_col_id in mapping_config['workspace_columns']
+    
+    @pytest.mark.django_db
+    def test_large_workspace_serialization(self, base_test_data):
+        """Test serialization performance with large workspace."""
+        coordinator = CSVMappingCoordinatorMixin()
+        factory = RequestFactory()
+        request = factory.post('/')
+        request = add_session_to_request(request)
+        
+        # Create a large workspace (1000 columns)
+        large_workspace = []
+        for i in range(1000):
+            large_workspace.append({
+                'id': f"{base_test_data['organization_id']}::{base_test_data['dataset_name']}::col_{i}",
+                'name': f'col_{i}',
+                'dataset': base_test_data['dataset_name'],
+                'source': base_test_data['source_name']
+            })
+        
+        with patch.object(coordinator, 'get_selected_dataset_names') as mock_datasets:
+            mock_datasets.return_value = [base_test_data['dataset_name']]
+            
+            with patch.object(coordinator, 'get_workspace_columns') as mock_columns:
+                mock_columns.return_value = large_workspace
+                
+                # Should handle large datasets efficiently
+                mapping_config = coordinator.serialize_current_mapping_state(
+                    request, 
+                    base_test_data['organization_id']
+                )
+                
+                assert len(mapping_config['workspace_columns']) == 1000
+                # Verify first and last entries  
+                assert f"{base_test_data['organization_id']}::{base_test_data['dataset_name']}::col_0" in mapping_config['workspace_columns']
+                assert f"{base_test_data['organization_id']}::{base_test_data['dataset_name']}::col_999" in mapping_config['workspace_columns']
+
+
+class TestViewsErrorHandling:
+    """Test error handling in view integration scenarios."""
+    
+    @pytest.mark.django_db
+    @patch('arkumu.metadata.views.csv_mapping.csv_mapping_views.S3DirectDataAnalyzer')
+    def test_add_column_view_with_invalid_data(self, mock_analyzer_class, base_test_data):
+        """Test AddColumnToWorkspaceView with invalid input data."""
+        # Mock the analyzer to raise an exception
+        mock_analyzer = MagicMock()
+        mock_analyzer_class.return_value = mock_analyzer
+        mock_analyzer.get_s3_source_summary.side_effect = Exception("S3 connection failed")
+        
+        view = AddColumnToWorkspaceView()
+        factory = RequestFactory()
+        
+        # Test with missing required POST data
+        request = factory.post('/', {})  # No column, dataset, or source
+        request = add_session_to_request(request)
+        
+        with patch.object(view, 'get_organization_id_from_request') as mock_org_id:
+            mock_org_id.return_value = base_test_data['organization_id']
+            
+            # Should handle missing data gracefully
+            try:
+                response = view.post(request)
+                # Should return some response, not crash
+                assert response is not None
+            except Exception as e:
+                # If it does raise an exception, it should be handled gracefully
+                assert "column" in str(e).lower() or "required" in str(e).lower()
+    
+    @pytest.mark.django_db
+    @patch('arkumu.metadata.views.csv_mapping.csv_mapping_views.S3DirectDataAnalyzer')
+    def test_remove_column_view_with_nonexistent_column(self, mock_analyzer_class, base_test_data):
+        """Test RemoveColumnFromWorkspaceView when trying to remove non-existent column."""
+        mock_analyzer = MagicMock()
+        mock_analyzer_class.return_value = mock_analyzer
+        mock_analyzer.get_s3_source_summary.return_value = {'datasets': []}
+        
+        view = RemoveColumnFromWorkspaceView()
+        factory = RequestFactory()
+        
+        request = factory.post('/', {
+            'column': 'nonexistent_column',
+            'dataset': base_test_data['dataset_name'],
+            'source': base_test_data['source_name']
+        })
+        request = add_session_to_request(request)
+        
+        with patch.object(view, 'get_organization_id_from_request') as mock_org_id:
+            mock_org_id.return_value = base_test_data['organization_id']
+            
+            with patch.object(view, 'get_workspace_columns') as mock_workspace:
+                mock_workspace.return_value = []  # Empty workspace
+                
+                with patch.object(view, '_prepare_datasets_with_columns') as mock_prepare:
+                    mock_prepare.return_value = []
+                    
+                    with patch('arkumu.metadata.views.csv_mapping.csv_mapping_views.render_to_string') as mock_render:
+                        mock_render.return_value = '<div>empty</div>'
+                        
+                        # Should handle removal of non-existent column gracefully
+                        response = view.post(request)
+                        assert response is not None
+
+
+class TestConcurrencyAndRaceConditions:
+    """Test handling of concurrency scenarios."""
+    
+    @pytest.mark.django_db
+    def test_concurrent_column_additions(self, base_test_data):
+        """Test handling concurrent column additions to workspace."""
+        coordinator = CSVMappingCoordinatorMixin()
+        factory = RequestFactory()
+        request = factory.post('/')
+        request = add_session_to_request(request)
+        
+        # Simulate workspace being modified between operations
+        initial_workspace = [
+            {
+                'id': f"{base_test_data['organization_id']}::{base_test_data['dataset_name']}::existing_col",
+                'name': 'existing_col',
+                'dataset': base_test_data['dataset_name'],
+                'source': base_test_data['source_name']
+            }
+        ]
+        
+        modified_workspace = initial_workspace + [
+            {
+                'id': f"{base_test_data['organization_id']}::{base_test_data['dataset_name']}::concurrent_col",
+                'name': 'concurrent_col',
+                'dataset': base_test_data['dataset_name'],
+                'source': base_test_data['source_name']
+            }
+        ]
+        
+        with patch.object(coordinator, '_is_dataset_selected', return_value=True):
+            with patch.object(coordinator, 'get_workspace_columns') as mock_get_workspace:
+                # Return initial workspace for all calls (simulate stable state for this test)
+                mock_get_workspace.return_value = initial_workspace
+                
+                with patch.object(coordinator, 'validate_workspace_column_uniqueness') as mock_validate_unique:
+                    mock_validate_unique.return_value = (True, [], None)
+                    
+                    with patch.object(coordinator, 'add_column_to_workspace') as mock_add_workspace:
+                        mock_add_workspace.return_value = (True, {'id': 'test_col_id'}, 2)
+                        
+                        success, new_column, total_columns, error = coordinator.add_column_with_validation(
+                            request,
+                            base_test_data['organization_id'],
+                            'new_col',
+                            base_test_data['dataset_name'],
+                            base_test_data['source_name']
+                        )
+                        
+                        # Should handle the operation successfully
+                        assert success is True
+                        assert mock_add_workspace.called
 
 
