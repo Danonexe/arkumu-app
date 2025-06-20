@@ -212,7 +212,7 @@ class CSVDatasetCardView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
             for col_id in selected_columns:
                 # Parse the coordinator column ID format: "source::dataset.csv::column_name"
                 parsed = self.parse_column_id(col_id)
-                if parsed and parsed['dataset'] == dataset_name and parsed['source'] == source_name:
+                if parsed and parsed['dataset'] == dataset_name and parsed['source'] == organization_id:
                     dataset_selected_columns.append(parsed['column'])
             
             context = {
@@ -287,8 +287,8 @@ class ToggleDatasetSelectionView(OrganizationMixin, CSVMappingCoordinatorMixin, 
                             # Extract the column ID string from the dictionary
                             col_id = col_dict.get('id') if isinstance(col_dict, dict) else col_dict
                             if col_id:
-                                parsed = self.parse_column_id(col_id)
-                                if parsed['dataset'] == dataset['name'] and parsed['source'] == dataset['source']:
+                                                            parsed = self.parse_column_id(col_id)
+                            if parsed['dataset'] == dataset['name'] and parsed['source'] == organization_id:
                                     dataset_selected_columns.append(parsed['column'])
                         
                         # Transform to match template expectations
@@ -517,8 +517,8 @@ class RemoveColumnFromWorkspaceView(OrganizationMixin, CSVMappingCoordinatorMixi
             if not all([column_name, dataset_name, source_name]):
                 return HttpResponse(f'<div class="alert alert-error">Column, dataset, and source parameters required</div>')
             
-            # Generate column ID using coordinator format
-            column_id = self.generate_column_id(dataset_name, column_name, source_name)
+            # Generate column ID using coordinator format (using organization_id as source)
+            column_id = self.generate_column_id(dataset_name, column_name, organization_id)
             
             # Get current workspace columns
             workspace_columns = self.get_workspace_columns(request, organization_id)
@@ -698,7 +698,7 @@ class SelectAllDatasetColumnsView(OrganizationMixin, CSVMappingCoordinatorMixin,
                 col_id = col_dict.get('id') if isinstance(col_dict, dict) else col_dict
                 if col_id:
                     parsed = self.parse_column_id(col_id)
-                    if parsed['dataset'] == dataset_name and parsed['source'] == source_name:
+                    if parsed['dataset'] == dataset_name and parsed['source'] == organization_id:
                         dataset_selected_columns.append(parsed['column'])
             
             logger.info(f"🔍 SELECT_ALL_DEBUG: Found {len(dataset_selected_columns)} selected columns for badge rendering: {dataset_selected_columns}")
@@ -811,7 +811,7 @@ class DeselectAllDatasetColumnsView(OrganizationMixin, CSVMappingCoordinatorMixi
                 col_id = col_dict.get('id') if isinstance(col_dict, dict) else col_dict
                 if col_id:
                     parsed = self.parse_column_id(col_id)
-                    if parsed['dataset'] == dataset_name and parsed['source'] == source_name:
+                    if parsed['dataset'] == dataset_name and parsed['source'] == organization_id:
                         dataset_selected_columns.append(parsed['column'])
             
             # Build dataset context for column badges template

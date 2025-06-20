@@ -227,8 +227,8 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
             logger.warning(f"COORDINATOR: {error_msg}")
             return False, None, 0, error_msg
         
-        # 2. Generate proper column ID with dataset context
-        column_id = self.generate_column_id(dataset_name, column_name, source_name)
+        # 2. Generate proper column ID with dataset context (using organization_id as source)
+        column_id = self.generate_column_id(dataset_name, column_name, organization_id)
         
         # 2.5. UNIFIED TRACKING: Validate workspace before adding column
         is_unique, duplicates, _ = self.validate_workspace_column_uniqueness(request, organization_id)
@@ -333,7 +333,7 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
             if isinstance(col_dict, dict):
                 col_id = col_dict.get('id', '')
                 parsed = self.parse_column_id(col_id)
-                if parsed['dataset'] == dataset_name and parsed['source'] == source_name:
+                if parsed['dataset'] == dataset_name and parsed['source'] == organization_id:
                     dataset_has_columns = True
                     column_count += 1
         
@@ -453,7 +453,7 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         skipped_duplicates = 0
         
         for column_name in column_names:
-            column_id = self.generate_column_id(dataset_name, column_name, source_name)
+            column_id = self.generate_column_id(dataset_name, column_name, organization_id)
             
             if column_id in existing_column_ids:
                 skipped_duplicates += 1

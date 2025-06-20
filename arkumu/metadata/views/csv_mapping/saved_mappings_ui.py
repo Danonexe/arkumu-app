@@ -311,7 +311,7 @@ class LoadMappingHTMXView(CSVMappingCoordinatorMixin, View):
                 columns_for_dataset = []
                 for column in workspace_columns:
                     parsed = self.parse_column_id(column.get('id', ''))
-                    if parsed and parsed.get('dataset') == dataset_name and parsed.get('source') == source_name:
+                    if parsed and parsed.get('dataset') == dataset_name and parsed.get('source') == organization_id:
                         columns_for_dataset.append(parsed.get('column'))
                 
                 dataset_selected_columns_map[dataset_name] = columns_for_dataset

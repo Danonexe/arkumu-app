@@ -4487,8 +4487,8 @@ def save_inline_fk_config(request):
             # Source column exists but is not in workspace - we need to add it first
             logger.info(f"SAVE INLINE FK CONFIG: Source column exists but not in workspace, adding it first")
             
-            # Generate the proper workspace column ID format using coordinator format
-            workspace_column_id = coordinator.generate_column_id(dataset_name, column_name, source_name)
+            # Generate the proper workspace column ID format using coordinator format (using organization_id as source)
+            workspace_column_id = coordinator.generate_column_id(dataset_name, column_name, organization_id)
             
             # Add column to workspace
             new_workspace_column = {
