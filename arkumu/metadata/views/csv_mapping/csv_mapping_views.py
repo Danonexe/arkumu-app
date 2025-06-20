@@ -1472,8 +1472,8 @@ class ClearWorkspaceColumnsView(OrganizationMixin, CSVMappingCoordinatorMixin, V
             badges_html = render_to_string('csv_mapping/partials/dataset_badges.html', context_data['badges_context'], request=request)
             workspace_html = render_to_string('csv_mapping/partials/selected_columns_workspace.html', context_data['workspace_context'], request=request)
             
-            # Main response: workspace, OOB update: badges (to show preserved selections)
-            response = workspace_html + f'<div id="dataset-badges" hx-swap-oob="innerHTML">{badges_html}</div>'
+            # OOB updates for both workspace and badges - no main response content to avoid targeting issues
+            response = f'<div id="selected-columns-workspace" hx-swap-oob="innerHTML">{workspace_html}</div><div id="dataset-badges" hx-swap-oob="innerHTML">{badges_html}</div>'
             
             # Add workspace update trigger for JSON view synchronization
             final_response = self.add_workspace_update_trigger(response)

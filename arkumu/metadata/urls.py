@@ -158,7 +158,12 @@ urlpatterns = [
     # Step 4: FK configuration URLs (placeholder for now)
     path('csv-configure-fk/', csv_mapping_views.ConfigureFKRelationshipView.as_view(), name='configure_fk_relationship'),
     
-    # Missing URLs that templates reference (now using proper CSV mapping views with coordinator mixins)
+    # Clear operation URLs (separated by responsibility)
+    path('csv-clear-selected-datasets/', csv_mapping_views.ClearSelectedDatasetsView.as_view(), name='csv_clear_selected_datasets'),
+    path('csv-clear-workspace-columns/', csv_mapping_views.ClearWorkspaceColumnsView.as_view(), name='csv_clear_workspace_columns'),
+    path('csv-clear-all-mapping-state/', csv_mapping_views.ClearAllMappingStateView.as_view(), name='csv_clear_all_mapping_state'),
+    
+    # Legacy clear URL (now delegates to ClearSelectedDatasetsView for backward compatibility)
     path('csv-clear-all-datasets/', csv_mapping_views.ClearAllDatasetsView.as_view(), name='csv_clear_all_datasets'),
     
     # Mapping persistence endpoints (JSON API)
