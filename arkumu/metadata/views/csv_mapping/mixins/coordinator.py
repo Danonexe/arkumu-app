@@ -740,6 +740,117 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         
         return datasets_cleared, columns_cleared, summary
 
+    def clear_selected_datasets_only(self, request, organization_id):
+        """
+        Clear ONLY selected datasets (keep workspace columns intact).
+        
+        SPECIFIC OPERATION: This is for the dataset badges "Clear Selected" button.
+        Only removes dataset selections but preserves all workspace columns and their configurations.
+        
+        Args:
+            request: Django request object
+            organization_id (str): Organization ID
+            
+        Returns:
+            tuple: (datasets_cleared, workspace_preserved_count)
+        """
+        logger.info(f"🗂️ COORDINATOR: CLEAR SELECTED DATASETS ONLY for org='{organization_id}'")
+        
+        # Get current state
+        selected_datasets = self.get_selected_dataset_names(request, organization_id)
+        workspace_columns = self.get_workspace_columns(request, organization_id)
+        
+        # Clear ONLY dataset selections
+        self.clear_selected_datasets(request, organization_id)
+        datasets_cleared = len(selected_datasets)
+        
+        # Workspace remains untouched
+        workspace_preserved_count = len(workspace_columns)
+        
+        logger.info(f"🗂️ COORDINATOR: DATASETS ONLY CLEAR - Cleared {datasets_cleared} datasets, preserved {workspace_preserved_count} workspace columns")
+        
+        return datasets_cleared, workspace_preserved_count
+
+    def clear_workspace_columns_only(self, request, organization_id):
+        """
+        Clear ONLY workspace columns (keep selected datasets intact).
+        
+        SPECIFIC OPERATION: This is for the workspace "Clear Workspace" button.
+        Only removes workspace columns but preserves all dataset selections.
+        
+        Args:
+            request: Django request object
+            organization_id (str): Organization ID
+            
+        Returns:
+            tuple: (columns_cleared, datasets_preserved_count)
+        """
+        logger.info(f"🏗️ COORDINATOR: CLEAR WORKSPACE COLUMNS ONLY for org='{organization_id}'")
+        
+        # Get current state
+        workspace_columns = self.get_workspace_columns(request, organization_id)
+        selected_datasets = self.get_selected_dataset_names(request, organization_id)
+        
+        # Clear ONLY workspace columns
+        self.clear_workspace_columns(request, organization_id)
+        columns_cleared = len(workspace_columns)
+        
+        # Selected datasets remain untouched
+        datasets_preserved_count = len(selected_datasets)
+        
+        logger.info(f"🏗️ COORDINATOR: WORKSPACE ONLY CLEAR - Cleared {columns_cleared} workspace columns, preserved {datasets_preserved_count} selected datasets")
+        
+        return columns_cleared, datasets_preserved_count
+
+    def get_clear_operation_context(self, request, organization_id):
+        """
+        Get context data needed for clear operation responses.
+        
+        UNIFIED CONTEXT: This provides all the data needed to render responses after clear operations.
+        
+        Args:
+            request: Django request object
+            organization_id (str): Organization ID
+            
+        Returns:
+            dict: Context data for templates
+        """
+        # Get updated state
+        updated_selected_datasets = self.get_selected_dataset_names(request, organization_id)
+        updated_workspace_columns = self.get_workspace_columns(request, organization_id)
+        csv_datasets = self.get_csv_datasets_for_organization(organization_id)
+        
+        # Prepare template contexts
+        badges_context = {
+            'datasets': csv_datasets,
+            'selected_datasets': updated_selected_datasets,
+            'organization_id': organization_id,
+            'csrf_token': request.META.get('CSRF_COOKIE'),
+        }
+        
+        datasets_with_columns = self._prepare_datasets_with_columns(updated_workspace_columns)
+        workspace_context = {
+            'datasets_with_columns': datasets_with_columns,
+            'organization_id': organization_id,
+            'csrf_token': request.META.get('CSRF_COOKIE'),
+        }
+        
+        # Table content context for dataset cards (right side)
+        table_content_context = {
+            'selected_datasets_with_details': [],  # Will be populated based on operation type
+            'organization_id': organization_id,
+            'csrf_token': request.META.get('CSRF_COOKIE'),
+        }
+        
+        return {
+            'badges_context': badges_context,
+            'workspace_context': workspace_context,
+            'table_content_context': table_content_context,
+            'updated_selected_datasets': updated_selected_datasets,
+            'updated_workspace_columns': updated_workspace_columns,
+            'csv_datasets': csv_datasets
+        }
+
     # ==========================================================================
     # Consistency Maintenance
     # ==========================================================================

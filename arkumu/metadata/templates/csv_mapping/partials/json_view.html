@@ -16,7 +16,7 @@
     <div class="h-full overflow-y-auto">
         <div id="json-mapping-content" 
              hx-get="{% url 'metadata:csv_get_mapping_json_content' %}?organization={{ organization_id }}"
-             hx-trigger="load, refreshJson"
+             hx-trigger="load, refreshJson, workspaceUpdated from:body"
              class="h-full">
             <!-- Loading state -->
             <div class="flex items-center justify-center h-full">
