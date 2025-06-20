@@ -160,9 +160,22 @@ class SaveMappingHTMXView(View):
             data = json_response.json() if hasattr(json_response, 'json') else {}
             
             if json_response.status_code == 200 and data.get('success'):
+                # Extract additional information for better feedback
+                mapping_name = data.get('mapping_name', 'Unknown')
+                mapping_id = data.get('mapping_id', '')
+                was_created = data.get('created', False)
+                
                 status_html = f'''
                 <div class="alert alert-success alert-sm">
-                    <span>{data['message']}</span>
+                    <div class="flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                        <span>{data['message']}</span>
+                    </div>
+                    <div class="text-xs mt-1 opacity-75">
+                        {'Created new mapping' if was_created else 'Updated existing mapping'}: <strong>{mapping_name}</strong>
+                    </div>
                 </div>
                 '''
                 
@@ -170,22 +183,47 @@ class SaveMappingHTMXView(View):
                 response = HttpResponse(status_html)
                 trigger_data = {
                     'clearMappingInput': True,
-                    'refreshMappings': True
+                    'refreshMappings': True,
+                    'mappingSaved': {
+                        'mapping_id': mapping_id,
+                        'mapping_name': mapping_name,
+                        'created': was_created
+                    }
                 }
                 response['HX-Trigger-After-Swap'] = json.dumps(trigger_data)
                 return response
             else:
                 error_msg = data.get('error', 'Unknown error occurred')
+                validation_errors = data.get('validation_errors', [])
+                validation_warnings = data.get('validation_warnings', [])
+                
+                # Build detailed error message
+                error_details = ''
+                if validation_errors:
+                    error_list = ''.join([f'<li class="text-sm">{err}</li>' for err in validation_errors])
+                    error_details += f'<ul class="mt-2 ml-4 list-disc">{error_list}</ul>'
+                
+                if validation_warnings:
+                    warning_list = ''.join([f'<li class="text-sm">{warn}</li>' for warn in validation_warnings])
+                    error_details += f'<div class="mt-2"><strong>Warnings:</strong><ul class="ml-4 list-disc">{warning_list}</ul></div>'
+                
                 status_html = f'''
                 <div class="alert alert-error alert-sm">
-                    <span>{error_msg}</span>
+                    <div class="flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        <span>{error_msg}</span>
+                    </div>
+                    {error_details}
                 </div>
                 '''
                 return HttpResponse(status_html)
-        except:
-            status_html = '''
+        except Exception as e:
+            logger.error(f"SAVE_MAPPING_HTMX: Error processing save response: {str(e)}")
+            status_html = f'''
             <div class="alert alert-error alert-sm">
-                <span>Failed to save mapping</span>
+                <span>Failed to save mapping: {str(e)}</span>
             </div>
             '''
         return HttpResponse(status_html)
@@ -307,12 +345,14 @@ class LoadMappingHTMXView(CSVMappingCoordinatorMixin, View):
                 dataset_name = dataset.get('name')
                 source_name = dataset.get('source')
                 
-                # Filter to get only columns from this specific dataset
+                # Filter to get only columns from this specific dataset using coordinator's parse method
                 columns_for_dataset = []
                 for column in workspace_columns:
-                    parsed = self.parse_column_id(column.get('id', ''))
-                    if parsed and parsed.get('dataset') == dataset_name and parsed.get('source') == organization_id:
-                        columns_for_dataset.append(parsed.get('column'))
+                    column_id = column.get('id', '')
+                    if column_id:
+                        parsed = self.parse_column_id(column_id)
+                        if parsed and parsed.get('dataset') == dataset_name and parsed.get('source') == organization_id:
+                            columns_for_dataset.append(parsed.get('column'))
                 
                 dataset_selected_columns_map[dataset_name] = columns_for_dataset
             
@@ -360,8 +400,25 @@ class LoadMappingHTMXView(CSVMappingCoordinatorMixin, View):
             if json_response.status_code == 200 and data.get('success'):
                 warnings_html = ''
                 if data.get('warnings'):
-                    warnings_list = ''.join([f'<li>{w}</li>' for w in data['warnings']])
-                    warnings_html = f'<ul class="text-sm mt-2">{warnings_list}</ul>'
+                    warnings_list = ''.join([f'<li class="text-sm">{w}</li>' for w in data['warnings']])
+                    warnings_html = f'<ul class="text-sm mt-2 ml-4 list-disc">{warnings_list}</ul>'
+                
+                # Add summary information from the load operation
+                summary = data.get('summary', {})
+                summary_html = ''
+                if summary:
+                    summary_items = []
+                    if summary.get('datasets_restored', 0) > 0:
+                        summary_items.append(f"{summary['datasets_restored']} datasets")
+                    if summary.get('columns_restored', 0) > 0:
+                        summary_items.append(f"{summary['columns_restored']} columns")
+                    if summary.get('fk_relationships_restored', 0) > 0:
+                        summary_items.append(f"{summary['fk_relationships_restored']} FK relationships")
+                    if summary.get('relationship_contexts_restored', 0) > 0:
+                        summary_items.append(f"{summary['relationship_contexts_restored']} relationship contexts")
+                    
+                    if summary_items:
+                        summary_html = f'<div class="text-sm text-success-content mt-1">Restored: {", ".join(summary_items)}</div>'
                 
                 # Get organization ID for UI refresh
                 organization_id = request.POST.get('organization', '')
@@ -374,6 +431,7 @@ class LoadMappingHTMXView(CSVMappingCoordinatorMixin, View):
                 status_html = f'''
                 <div class="alert alert-success alert-sm">
                     <span>{data['message']}</span>
+                    {summary_html}
                     {warnings_html}
                 </div>
                 <div id="selected-columns-workspace" hx-swap-oob="innerHTML">

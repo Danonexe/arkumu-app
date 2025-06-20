@@ -1251,6 +1251,14 @@ class ExportMappingJSONView(OrganizationMixin, CSVMappingCoordinatorMixin, View)
             workspace_summary = self.get_workspace_summary(request, organization_id)
             mapping_config['workspace_summary'] = workspace_summary
             
+            # Add relationship context information
+            relationship_contexts = {}
+            workspace_columns = self.get_workspace_columns(request, organization_id)
+            for col in workspace_columns:
+                if col.get('is_relationship_context', False):
+                    relationship_contexts[col.get('id')] = col.get('relationship_context', {})
+            mapping_config['relationship_contexts'] = relationship_contexts
+            
             # Return formatted JSON response
             return JsonResponse(mapping_config, json_dumps_params={'indent': 2})
             
@@ -1768,6 +1776,311 @@ class ToggleMultiValueColumnView(OrganizationMixin, CSVMappingCoordinatorMixin, 
         except Exception as e:
             logger.error(f"Error toggling multi-value column: {e}", exc_info=True)
             return JsonResponse({'error': str(e)}, status=500)
+
+
+# ==============================================================================
+# STEP 5: Relationship Context Views (Junction Tables with Attributes)
+# ==============================================================================
+
+class ToggleRelationshipContextFormView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
+    """
+    Toggle relationship context form view using coordinator-based architecture.
+    
+    Handles junction tables where columns represent relationship attributes
+    rather than simple FK references. Examples:
+    - Person-Project-Role relationships
+    - Subject-Predicate-Context relationships
+    - Any many-to-many with additional qualifying attributes
+    """
+    
+    def post(self, request):
+        """Handle POST requests for toggling relationship context forms."""
+        try:
+            organization_id = self.get_organization_id_from_request(request)
+            column_id = request.POST.get('column_id') or request.GET.get('column_id')
+            
+            logger.info(f"CSV_TOGGLE_RELATIONSHIP_CONTEXT_FORM: column_id='{column_id}', org='{organization_id}'")
+            
+            if not column_id:
+                return HttpResponse('<div class="text-error text-sm">Column ID required</div>')
+            
+            # Get workspace columns using coordinator
+            workspace_columns = self.get_workspace_columns(request, organization_id)
+            
+            # DEBUG: Log workspace contents for relationship context debugging
+            logger.info(f"CSV_TOGGLE_RELATIONSHIP_CONTEXT_FORM: WORKSPACE DEBUG for org='{organization_id}':")
+            logger.info(f"  - Total workspace columns: {len(workspace_columns)}")
+            logger.info(f"  - Looking for column_id: '{column_id}'")
+            for i, col in enumerate(workspace_columns):
+                context_info = col.get('relationship_context', {})
+                logger.info(f"    [{i}] ID: '{col.get('id')}' | Name: '{col.get('name')}' | Dataset: '{col.get('dataset')}' | RelContext: {bool(context_info)}")
+            
+            # UNIFIED TRACKING: Use coordinator method to find column
+            column = self.get_unified_column_by_id(request, organization_id, column_id)
+            if not column:
+                # Also validate workspace for duplicates and auto-clean
+                is_unique, duplicates, cleaned = self.validate_workspace_column_uniqueness(request, organization_id)
+                if not is_unique:
+                    logger.error(f"CSV_TOGGLE_RELATIONSHIP_CONTEXT_FORM: Found {len(duplicates)} workspace duplicates - auto-cleaned and retrying")
+                    column = self.get_unified_column_by_id(request, organization_id, column_id)
+                
+                if not column:
+                    logger.error(f"CSV_TOGGLE_RELATIONSHIP_CONTEXT_FORM: Column '{column_id}' not found even after cleanup")
+                    available_ids = [col.get('id') for col in self.get_workspace_columns(request, organization_id)]
+                    logger.error(f"CSV_TOGGLE_RELATIONSHIP_CONTEXT_FORM: Available column IDs: {available_ids}")
+                    return HttpResponse('<div class="text-error text-sm">Column not found in workspace</div>')
+            
+            # Get ALL workspace columns to identify potential FK pairs for this relationship context
+            fk_columns = [col for col in workspace_columns if col.get('is_fk', False)]
+            
+            # Get available datasets using coordinator for dataset/column selection
+            datasets = self.get_all_datasets_with_columns_for_fk(request, organization_id)
+            
+            # Get current relationship context configuration if exists
+            relationship_context = column.get('relationship_context', {})
+            context_type = relationship_context.get('context_type', 'attribute')  # attribute, role, qualifier
+            primary_fk_dataset = relationship_context.get('primary_fk_dataset', '')
+            primary_fk_column = relationship_context.get('primary_fk_column', '')
+            secondary_fk_dataset = relationship_context.get('secondary_fk_dataset', '')
+            secondary_fk_column = relationship_context.get('secondary_fk_column', '')
+            context_predicate = relationship_context.get('context_predicate', '')
+            
+            context = {
+                'column': column,
+                'datasets': datasets,
+                'fk_columns': fk_columns,
+                'context_type': context_type,
+                'primary_fk_dataset': primary_fk_dataset,
+                'primary_fk_column': primary_fk_column,
+                'secondary_fk_dataset': secondary_fk_dataset,
+                'secondary_fk_column': secondary_fk_column,
+                'context_predicate': context_predicate,
+                'organization_id': organization_id,
+                'csrf_token': request.META.get('CSRF_COOKIE')
+            }
+            
+            return render(request, 'csv_mapping/partials/inline_relationship_context_form.html', context)
+            
+        except Exception as e:
+            logger.error(f"CSV_TOGGLE_RELATIONSHIP_CONTEXT_FORM: Error toggling form: {e}", exc_info=True)
+            return HttpResponse('<div class="text-error text-sm">Error opening relationship context configuration</div>')
+
+
+class SaveInlineRelationshipContextView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
+    """
+    Save inline relationship context configuration view using coordinator-based architecture.
+    """
+    
+    def post(self, request):
+        """Handle POST requests for saving relationship context configurations."""
+        try:
+            organization_id = self.get_organization_id_from_request(request)
+            
+            # Extract form data
+            column_id = request.POST.get('column_id')
+            context_type = request.POST.get('context_type')  # attribute, role, qualifier
+            primary_fk_dataset = request.POST.get('primary_fk_dataset')
+            primary_fk_column = request.POST.get('primary_fk_column')
+            secondary_fk_dataset = request.POST.get('secondary_fk_dataset')
+            secondary_fk_column = request.POST.get('secondary_fk_column')
+            context_predicate = request.POST.get('context_predicate')
+            
+            logger.info(f"CSV_SAVE_RELATIONSHIP_CONTEXT: column_id='{column_id}', type='{context_type}', primary_fk='{primary_fk_dataset}.{primary_fk_column}', secondary_fk='{secondary_fk_dataset}.{secondary_fk_column}', predicate='{context_predicate}', org='{organization_id}'")
+            
+            if not all([column_id, context_type]):
+                missing = [name for name, val in [('column_id', column_id), ('context_type', context_type)] if not val]
+                error_msg = f'Missing required fields: {", ".join(missing)}'
+                logger.error(f"CSV_SAVE_RELATIONSHIP_CONTEXT: VALIDATION FAILED - {error_msg}")
+                return HttpResponse(f'<div class="text-error text-xs p-2">{error_msg}</div>')
+            
+            # Get current workspace using coordinator methods
+            existing_columns = self.get_workspace_columns(request, organization_id)
+            
+            # Find and update the column with relationship context configuration
+            updated_column = None
+            for col in existing_columns:
+                if col.get('id') == column_id:
+                    col['is_relationship_context'] = True
+                    col['relationship_context'] = {
+                        'context_type': context_type,
+                        'primary_fk_dataset': primary_fk_dataset,
+                        'primary_fk_column': primary_fk_column,
+                        'secondary_fk_dataset': secondary_fk_dataset,
+                        'secondary_fk_column': secondary_fk_column,
+                        'context_predicate': context_predicate,
+                    }
+                    updated_column = col
+                    logger.info(f"CSV_SAVE_RELATIONSHIP_CONTEXT: ✅ Updated column '{column_id}' with relationship context config")
+                    break
+            
+            if not updated_column:
+                logger.error(f"CSV_SAVE_RELATIONSHIP_CONTEXT: Column '{column_id}' not found in workspace")
+                return HttpResponse('<div class="text-error text-xs p-2">Column not found in workspace</div>')
+            
+            # Save back to session using coordinator methods
+            self.update_workspace_columns(request, organization_id, existing_columns)
+            
+            logger.info(f"CSV_SAVE_RELATIONSHIP_CONTEXT: Successfully updated relationship context configuration")
+            
+            # Generate CSRF token for the template
+            from django.middleware.csrf import get_token
+            csrf_token = get_token(request)
+            
+            # Return just the updated column item
+            from django.template.loader import render_to_string
+            column_html = render_to_string('csv_mapping/partials/column_item.html', {
+                'column': updated_column,
+                'organization_id': organization_id,
+                'csrf_token': csrf_token,
+            }, request=request)
+            
+            # Add workspace update trigger for JSON view synchronization
+            final_response = self.add_workspace_update_trigger(column_html)
+            return HttpResponse(final_response)
+            
+        except Exception as e:
+            logger.error(f"CSV_SAVE_RELATIONSHIP_CONTEXT: Error saving configuration: {e}", exc_info=True)
+            return HttpResponse('<div class="text-error text-xs p-2">Error saving relationship context configuration</div>')
+
+
+class HideRelationshipContextFormView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
+    """
+    Hide relationship context form view using coordinator-based architecture.
+    """
+    
+    def get(self, request):
+        """Handle GET requests for hiding relationship context forms."""
+        try:
+            column_id = request.GET.get('column_id')
+            logger.info(f"CSV_HIDE_RELATIONSHIP_CONTEXT_FORM: column={column_id}")
+            
+            # Return empty div to hide the form
+            return HttpResponse(f'<div id="relationship-context-form-{column_id}"></div>')
+            
+        except Exception as e:
+            logger.error(f"CSV_HIDE_RELATIONSHIP_CONTEXT_FORM: Error hiding form: {e}", exc_info=True)
+            return HttpResponse('<div class="text-error text-sm">Error hiding relationship context form</div>')
+
+
+class RemoveRelationshipContextView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
+    """
+    Remove relationship context configuration view using coordinator-based architecture.
+    """
+    
+    def post(self, request):
+        """Handle POST requests for removing relationship context configurations."""
+        try:
+            organization_id = self.get_organization_id_from_request(request)
+            column_id = request.POST.get('column_id')
+            
+            logger.info(f"CSV_REMOVE_RELATIONSHIP_CONTEXT: column_id='{column_id}', org='{organization_id}'")
+            
+            if not column_id:
+                return HttpResponse('<div class="text-error text-xs p-2">Column ID required</div>')
+            
+            # Get current workspace using coordinator methods
+            existing_columns = self.get_workspace_columns(request, organization_id)
+            
+            # Find and update the column to remove relationship context configuration
+            updated_column = None
+            for col in existing_columns:
+                if col.get('id') == column_id:
+                    col['is_relationship_context'] = False
+                    col['relationship_context'] = {}
+                    updated_column = col
+                    logger.info(f"CSV_REMOVE_RELATIONSHIP_CONTEXT: ✅ Removed relationship context config from column '{column_id}'")
+                    break
+            
+            if not updated_column:
+                logger.error(f"CSV_REMOVE_RELATIONSHIP_CONTEXT: Column '{column_id}' not found in workspace")
+                return HttpResponse('<div class="text-error text-xs p-2">Column not found in workspace</div>')
+            
+            # Save back to session using coordinator methods
+            self.update_workspace_columns(request, organization_id, existing_columns)
+            
+            # Prepare workspace update data
+            workspace_columns = self.get_workspace_columns(request, organization_id)
+            datasets_with_columns = self._prepare_datasets_with_columns(workspace_columns)
+            
+            workspace_context = {
+                'datasets_with_columns': datasets_with_columns,
+                'organization_id': organization_id,
+                'csrf_token': request.META.get('CSRF_COOKIE'),
+            }
+            
+            # Return updated workspace
+            from django.template.loader import render_to_string
+            workspace_html = render_to_string('csv_mapping/partials/selected_columns_workspace.html', workspace_context, request=request)
+            
+            # Add workspace update trigger for JSON view synchronization
+            final_response = self.add_workspace_update_trigger(workspace_html)
+            return HttpResponse(final_response)
+            
+        except Exception as e:
+            logger.error(f"CSV_REMOVE_RELATIONSHIP_CONTEXT: Error removing configuration: {e}", exc_info=True)
+            return HttpResponse('<div class="text-error text-xs p-2">Error removing relationship context configuration</div>')
+
+
+# ==============================================================================
+# Enhanced JSON Serialization with Relationship Context Support
+# ==============================================================================
+
+
+class UpdateRelationshipContextColumnsView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
+    """
+    Update relationship context columns based on selected dataset (HTMX endpoint).
+    """
+    
+    def post(self, request):
+        """Handle POST requests for updating relationship context column options."""
+        try:
+            organization_id = self.get_organization_id_from_request(request)
+            column_id = request.POST.get('column_id')
+            field_type = request.POST.get('field_type')  # 'primary' or 'secondary'
+            
+            # Determine which FK we're updating based on field_type and get the corresponding dataset
+            if field_type == 'primary':
+                target_dataset = request.POST.get('primary_fk_dataset')
+                field_name = "primary_fk_column"
+            elif field_type == 'secondary':
+                target_dataset = request.POST.get('secondary_fk_dataset')
+                field_name = "secondary_fk_column"
+            else:
+                logger.error(f"CSV_UPDATE_RELATIONSHIP_CONTEXT_COLUMNS: Invalid field_type '{field_type}'")
+                return HttpResponse('<option value="">Choose column...</option>')
+            
+            logger.info(f"CSV_UPDATE_RELATIONSHIP_CONTEXT_COLUMNS: column_id='{column_id}', field_type='{field_type}', target_dataset='{target_dataset}', field='{field_name}', org='{organization_id}'")
+            
+            if not column_id or not target_dataset:
+                logger.error(f"CSV_UPDATE_RELATIONSHIP_CONTEXT_COLUMNS: Missing required fields - column_id='{column_id}', target_dataset='{target_dataset}'")
+                return HttpResponse('<option value="">Select target column...</option>')
+            
+            # Get available datasets using coordinator
+            datasets = self.get_all_datasets_with_columns_for_fk(request, organization_id)
+            
+            # Find the target dataset and get its columns
+            target_dataset_obj = next((d for d in datasets if d.get('name') == target_dataset), None)
+            
+            if not target_dataset_obj:
+                logger.error(f"CSV_UPDATE_RELATIONSHIP_CONTEXT_COLUMNS: Dataset '{target_dataset}' not found")
+                return HttpResponse('<option value="">Dataset not found</option>')
+            
+            # Get columns from the dataset preview
+            preview = target_dataset_obj.get('preview', {})
+            columns = preview.get('colHeaders', [])
+            
+            logger.info(f"CSV_UPDATE_RELATIONSHIP_CONTEXT_COLUMNS: Found {len(columns)} columns for {target_dataset}")
+            
+            # Build options HTML
+            options_html = '<option value="">Select target column...</option>\n'
+            for column_name in columns:
+                options_html += f'<option value="{column_name}">{column_name}</option>\n'
+            
+            return HttpResponse(options_html)
+            
+        except Exception as e:
+            logger.error(f"CSV_UPDATE_RELATIONSHIP_CONTEXT_COLUMNS: Error updating columns: {e}", exc_info=True)
+            return HttpResponse('<option value="">Error loading columns</option>')
 
 
 

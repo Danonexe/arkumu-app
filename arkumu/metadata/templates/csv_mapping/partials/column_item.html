@@ -26,6 +26,11 @@
                         🔀 Multi
                     </div>
                     {% endif %}
+                    {% if column.is_relationship_context %}
+                    <div class="badge badge-info badge-sm gap-1" title="Relationship Context: {{ column.relationship_context.context_type|default:'attribute' }} for {{ column.relationship_context.primary_fk|default:'relationship' }}">
+                        🔗 Context
+                    </div>
+                    {% endif %}
                 </div>
                 
                 <!-- Column Name and Dataset -->
@@ -56,6 +61,29 @@
                     </div>
                     <div class="text-xs text-base-content/50 mt-1">
                         Direction: {{ column.fk_config.direction|default:'outbound'|capfirst }}
+                    </div>
+                </div>
+                {% endif %}
+                
+                <!-- Relationship Context Info -->
+                {% if column.is_relationship_context and column.relationship_context %}
+                <div class="mb-2 p-2 bg-info/10 rounded border-l-2 border-info">
+                    <div class="text-xs font-medium text-info mb-1">🔗 Relationship Context:</div>
+                    <div class="text-xs text-base-content/80">
+                        <div class="mb-1">
+                            <span class="font-semibold">Type:</span> {{ column.relationship_context.context_type|default:'attribute'|capfirst }}
+                        </div>
+                        {% if column.relationship_context.primary_fk and column.relationship_context.secondary_fk %}
+                        <div class="mb-1">
+                            <span class="font-semibold">Between:</span> {{ column.relationship_context.primary_fk }} ↔ {{ column.relationship_context.secondary_fk }}
+                        </div>
+                        {% endif %}
+                        {% if column.relationship_context.context_predicate %}
+                        <div>
+                            <span class="font-semibold">Predicate:</span> 
+                            <span class="font-mono bg-base-200 px-1 rounded">{{ column.relationship_context.context_predicate }}</span>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
                 {% endif %}
@@ -101,6 +129,12 @@
                     <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
                 </form>
                 
+                <form id="relationship-context-data-form-{{ column.id|slugify }}" style="display: none;">
+                    <input type="hidden" name="column_id" value="{{ column.id }}">
+                    <input type="hidden" name="organization" value="{{ organization_id }}">
+                    <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+                </form>
+                
                 <!-- Action Button Group -->
                 <div class="btn-group">
                     <!-- FK Configuration -->
@@ -126,6 +160,17 @@
                                 hx-target="#column-{{ column.id|slugify }}"
                                 hx-swap="outerHTML">
                             🔀
+                        </button>
+                    </div>
+                    
+                    <!-- Relationship Context Button -->
+                    <div class="tooltip tooltip-left" data-tip="{% if column.is_relationship_context %}Edit Relationship Context{% else %}Configure as Relationship Context{% endif %}">
+                        <button class="btn btn-sm {% if column.is_relationship_context %}btn-info{% else %}btn-outline btn-info{% endif %}" 
+                                hx-post="{% url 'metadata:csv_toggle_relationship_context_form' %}"
+                                hx-include="#relationship-context-data-form-{{ column.id|slugify }}"
+                                hx-target="#relationship-context-form-{{ column.id|slugify }}"
+                                hx-swap="outerHTML">
+                            🔗
                         </button>
                     </div>
                     
@@ -156,5 +201,8 @@
         
         <!-- FK Configuration Form Placeholder -->
         <div id="fk-form-{{ column.id|slugify }}" class="mt-3"></div>
+        
+        <!-- Relationship Context Configuration Form Placeholder -->
+        <div id="relationship-context-form-{{ column.id|slugify }}" class="mt-3"></div>
     </div>
 </div> 

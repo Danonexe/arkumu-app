@@ -188,6 +188,13 @@ urlpatterns = [
     path('csv-set-anchor-column/', csv_mapping_views.SetAnchorColumnView.as_view(), name='csv_set_anchor_column'),
     path('csv-toggle-multi-value-column/', csv_mapping_views.ToggleMultiValueColumnView.as_view(), name='csv_toggle_multi_value_column'),
     
+    # Step 5: Relationship Context Configuration URLs (junction tables with attributes)
+    path('csv-toggle-relationship-context-form/', csv_mapping_views.ToggleRelationshipContextFormView.as_view(), name='csv_toggle_relationship_context_form'),
+    path('csv-hide-relationship-context-form/', csv_mapping_views.HideRelationshipContextFormView.as_view(), name='csv_hide_relationship_context_form'),
+    path('csv-update-relationship-context-columns/', csv_mapping_views.UpdateRelationshipContextColumnsView.as_view(), name='csv_update_relationship_context_columns'),
+    path('csv-save-relationship-context/', csv_mapping_views.SaveInlineRelationshipContextView.as_view(), name='csv_save_relationship_context'),
+    path('csv-remove-relationship-context/', csv_mapping_views.RemoveRelationshipContextView.as_view(), name='csv_remove_relationship_context'),
+    
     # JSON Export URLs (for mapping configuration serialization)
     path('csv-mapping/export-json/', csv_mapping_views.ExportMappingJSONView.as_view(), name='csv_export_mapping_json'),
     path('csv-mapping/json-content/', csv_mapping_views.GetMappingJSONContentView.as_view(), name='csv_get_mapping_json_content'),

@@ -119,15 +119,42 @@ class SaveMappingView(CSVMappingCoordinatorMixin, View):
                     validation_result['errors'].append(f"FK relationship '{fk_id}' references unselected dataset '{target_dataset}'")
                     validation_result['is_valid'] = False
             
+            # 4.5. Validate relationship contexts (new feature)
+            relationship_contexts = mapping_config.get('relationship_contexts', {})
+            for context_id, context_config in relationship_contexts.items():
+                if not isinstance(context_config, dict):
+                    validation_result['errors'].append(f"Invalid relationship context config for '{context_id}'")
+                    validation_result['is_valid'] = False
+                    continue
+                
+                # Check required context fields
+                required_context_fields = ['context_type']
+                for field in required_context_fields:
+                    if field not in context_config:
+                        validation_result['errors'].append(f"Relationship context '{context_id}' missing required field: {field}")
+                        validation_result['is_valid'] = False
+                
+                # Check that referenced FK columns exist in workspace
+                primary_fk = context_config.get('primary_fk')
+                secondary_fk = context_config.get('secondary_fk')
+                
+                if primary_fk and primary_fk not in workspace_columns:
+                    validation_result['warnings'].append(f"Relationship context '{context_id}' references missing primary FK: {primary_fk}")
+                
+                if secondary_fk and secondary_fk not in workspace_columns:
+                    validation_result['warnings'].append(f"Relationship context '{context_id}' references missing secondary FK: {secondary_fk}")
+            
             # 5. Validate metadata consistency
             metadata = mapping_config.get('metadata', {})
             reported_datasets = metadata.get('total_datasets', 0)
             reported_columns = metadata.get('total_columns', 0)
             reported_fks = metadata.get('total_fk_relationships', 0)
+            reported_contexts = metadata.get('total_relationship_contexts', 0)
             
             actual_datasets = len(selected_datasets)
             actual_columns = len(workspace_columns)
             actual_fks = len(fk_relationships)
+            actual_contexts = len(relationship_contexts)
             
             if reported_datasets != actual_datasets:
                 validation_result['warnings'].append(f"Metadata mismatch: reported {reported_datasets} datasets, found {actual_datasets}")
@@ -137,6 +164,9 @@ class SaveMappingView(CSVMappingCoordinatorMixin, View):
             
             if reported_fks != actual_fks:
                 validation_result['warnings'].append(f"Metadata mismatch: reported {reported_fks} FK relationships, found {actual_fks}")
+            
+            if reported_contexts != actual_contexts:
+                validation_result['warnings'].append(f"Metadata mismatch: reported {reported_contexts} relationship contexts, found {actual_contexts}")
             
         except Exception as e:
             validation_result['errors'].append(f"Validation error: {str(e)}")
@@ -390,6 +420,8 @@ class ListMappingsView(CSVMappingCoordinatorMixin, View):
             mapping_list = []
             for mapping in mappings:
                 metadata = mapping.mapping_config.get('metadata', {})
+                relationship_contexts = mapping.mapping_config.get('relationship_contexts', {})
+                
                 mapping_list.append({
                     'id': str(mapping.id),
                     'name': mapping.name,
@@ -401,6 +433,8 @@ class ListMappingsView(CSVMappingCoordinatorMixin, View):
                     'total_datasets': len(mapping.source_datasets),
                     'total_columns': mapping.get_column_count(),
                     'total_fk_relationships': mapping.get_relationship_count(),
+                    'total_relationship_contexts': len(relationship_contexts),
+                    'mapping_version': mapping.mapping_config.get('version', '1.0'),
                     'last_executed': mapping.last_executed.isoformat() if mapping.last_executed else None
                 })
             
@@ -412,13 +446,26 @@ class ListMappingsView(CSVMappingCoordinatorMixin, View):
                 options_html = '<option value="">Select a mapping...</option>'
                 for mapping in mapping_list:
                     created_date = mapping['created_at'][:10] if mapping['created_at'] else 'Unknown'
+                    
+                    # Enhanced dataset info with FK and context counts
+                    extra_info = []
+                    if mapping.get('total_fk_relationships', 0) > 0:
+                        extra_info.append(f"{mapping['total_fk_relationships']} FKs")
+                    if mapping.get('total_relationship_contexts', 0) > 0:
+                        extra_info.append(f"{mapping['total_relationship_contexts']} contexts")
+                    
                     datasets_info = f"{mapping['total_datasets']} datasets, {mapping['total_columns']} columns"
+                    if extra_info:
+                        datasets_info += f", {', '.join(extra_info)}"
                     
                     options_html += f'''<option value="{mapping['id']}" 
                                                data-name="{mapping['name']}"
                                                data-description="{mapping['description']}"
                                                data-datasets="{mapping['total_datasets']}"
                                                data-columns="{mapping['total_columns']}"
+                                               data-fks="{mapping.get('total_fk_relationships', 0)}"
+                                               data-contexts="{mapping.get('total_relationship_contexts', 0)}"
+                                               data-version="{mapping.get('mapping_version', '1.0')}"
                                                data-created="{created_date}">
                         {mapping['name']} ({datasets_info}) - {created_date}
                     </option>'''

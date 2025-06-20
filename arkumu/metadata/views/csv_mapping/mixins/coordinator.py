@@ -959,8 +959,9 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         selected_datasets = self.get_selected_dataset_names(request, organization_id)
         workspace_columns = self.get_workspace_columns(request, organization_id)
         
-        # Serialize FK relationships from workspace columns
+        # Serialize FK relationships and relationship contexts from workspace columns
         fk_relationships = {}
+        relationship_contexts = {}
         entity_mappings = {}
         
         # Handle workspace_columns as list (current format)
@@ -975,7 +976,17 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
                     'target_dataset': column_data['fk_config'].get('target_dataset'),
                     'target_column': column_data['fk_config'].get('target_column'),
                     'display_column': column_data['fk_config'].get('display_column'),
-                    'relationship_type': column_data['fk_config'].get('relationship_type', 'reference')
+                    'relationship_type': column_data['fk_config'].get('relationship_type', 'reference'),
+                    'direction': column_data['fk_config'].get('direction', 'outbound')
+                }
+            
+            # Extract relationship context configurations
+            if column_data.get('is_relationship_context') and column_data.get('relationship_context'):
+                relationship_contexts[column_id] = {
+                    'context_type': column_data['relationship_context'].get('context_type'),
+                    'primary_fk': column_data['relationship_context'].get('primary_fk'),
+                    'secondary_fk': column_data['relationship_context'].get('secondary_fk'),
+                    'context_predicate': column_data['relationship_context'].get('context_predicate')
                 }
             
             # Extract RDF predicate mappings (if any)
@@ -997,22 +1008,24 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         
         # Build complete mapping configuration
         mapping_config = {
-            'version': '1.0',
+            'version': '1.1',  # Updated version to include relationship contexts
             'created_at': timezone.now().isoformat(),
             'organization_id': organization_id,
             'selected_datasets': selected_datasets,
             'workspace_columns': workspace_columns_dict,  # Store as dict for easier lookup
             'fk_relationships': fk_relationships,
+            'relationship_contexts': relationship_contexts,  # New: relationship context configurations
             'entity_mappings': entity_mappings,
             'metadata': {
                 'total_datasets': len(selected_datasets),
                 'total_columns': len(workspace_columns),
                 'total_fk_relationships': len(fk_relationships),
+                'total_relationship_contexts': len(relationship_contexts),
                 'mapping_name': mapping_name or f"Mapping_{timezone.now().strftime('%Y%m%d_%H%M%S')}"
             }
         }
         
-        logger.info(f"SERIALIZE_MAPPING: Serialized {len(selected_datasets)} datasets, {len(workspace_columns)} columns, {len(fk_relationships)} FK relationships")
+        logger.info(f"SERIALIZE_MAPPING: Serialized {len(selected_datasets)} datasets, {len(workspace_columns)} columns, {len(fk_relationships)} FK relationships, {len(relationship_contexts)} relationship contexts")
         return mapping_config
     
     def deserialize_mapping_state(self, request, organization_id, mapping_config):
@@ -1062,18 +1075,20 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         
         # Build restoration summary
         fk_relationships = mapping_config.get('fk_relationships', {})
+        relationship_contexts = mapping_config.get('relationship_contexts', {})
         metadata = mapping_config.get('metadata', {})
         
         summary = {
             'datasets_restored': len(selected_datasets),
             'columns_restored': len(workspace_columns_list),
             'fk_relationships_restored': len(fk_relationships),
+            'relationship_contexts_restored': len(relationship_contexts),
             'mapping_name': metadata.get('mapping_name', 'Unknown'),
             'original_created_at': mapping_config.get('created_at'),
             'version': mapping_config.get('version', 'Unknown')
         }
         
-        logger.info(f"DESERIALIZE_MAPPING: Successfully restored mapping '{summary['mapping_name']}' with {summary['datasets_restored']} datasets and {summary['columns_restored']} columns")
+        logger.info(f"DESERIALIZE_MAPPING: Successfully restored mapping '{summary['mapping_name']}' with {summary['datasets_restored']} datasets, {summary['columns_restored']} columns, {summary['fk_relationships_restored']} FK relationships, and {summary['relationship_contexts_restored']} relationship contexts")
         return summary
     
     def validate_mapping_compatibility(self, request, organization_id, mapping_config):
@@ -1128,6 +1143,19 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
                     validation_result['missing_columns'].append(column_id)
                     if dataset_name not in validation_result['missing_datasets']:
                         validation_result['missing_datasets'].append(dataset_name)
+        
+        # Check relationship context consistency
+        relationship_contexts = mapping_config.get('relationship_contexts', {})
+        for context_id, context_config in relationship_contexts.items():
+            primary_fk = context_config.get('primary_fk')
+            secondary_fk = context_config.get('secondary_fk')
+            
+            # Check that referenced FK columns exist in workspace
+            if primary_fk and primary_fk not in workspace_columns:
+                validation_result['warnings'].append(f"Relationship context '{context_id}' references missing primary FK: {primary_fk}")
+            
+            if secondary_fk and secondary_fk not in workspace_columns:
+                validation_result['warnings'].append(f"Relationship context '{context_id}' references missing secondary FK: {secondary_fk}")
         
         # Generate warnings/errors
         if validation_result['missing_datasets']:
