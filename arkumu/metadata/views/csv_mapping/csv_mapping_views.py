@@ -811,7 +811,7 @@ class DeselectAllDatasetColumnsView(OrganizationMixin, CSVMappingCoordinatorMixi
                 col_id = col_dict.get('id') if isinstance(col_dict, dict) else col_dict
                 if col_id:
                     parsed = self.parse_column_id(col_id)
-                    if parsed['dataset'] == dataset_name and parsed['source'] == organization_id:
+                    if parsed['dataset'] == dataset_name and parsed['source'] == source_name:
                         dataset_selected_columns.append(parsed['column'])
             
             # Build dataset context for column badges template
