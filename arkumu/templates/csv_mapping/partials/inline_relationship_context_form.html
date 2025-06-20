@@ -1,5 +1,5 @@
 {# Inline Relationship Context Configuration Form #}
-<div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-2" id="relationship-context-form-{{ column.id }}">
+<div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-2" id="relationship-context-form-{{ column.id|slugify }}">
     <div class="flex justify-between items-center mb-3">
         <h4 class="text-sm font-semibold text-blue-800">
             🔗 Relationship Context: {{ column.name }}
@@ -7,7 +7,7 @@
         <button type="button" 
                 class="text-blue-600 hover:text-blue-800 text-xs"
                 hx-get="{% url 'metadata:csv_hide_relationship_context_form' %}?column_id={{ column.id }}"
-                hx-target="#relationship-context-form-{{ column.id }}"
+                hx-target="#relationship-context-form-{{ column.id|slugify }}"
                 hx-swap="outerHTML">
             ✕ Close
         </button>
@@ -180,7 +180,7 @@
             <button type="button" 
                     class="px-3 py-1 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
                     hx-get="{% url 'metadata:csv_hide_relationship_context_form' %}?column_id={{ column.id }}"
-                    hx-target="#relationship-context-form-{{ column.id }}"
+                    hx-target="#relationship-context-form-{{ column.id|slugify }}"
                     hx-swap="outerHTML">
                 Cancel
             </button>

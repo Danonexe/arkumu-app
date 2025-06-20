@@ -1954,8 +1954,10 @@ class HideRelationshipContextFormView(OrganizationMixin, CSVMappingCoordinatorMi
             column_id = request.GET.get('column_id')
             logger.info(f"CSV_HIDE_RELATIONSHIP_CONTEXT_FORM: column={column_id}")
             
-            # Return empty div to hide the form
-            return HttpResponse(f'<div id="relationship-context-form-{column_id}"></div>')
+            # Return empty div to hide the form (using slugified ID to match template)
+            from django.utils.text import slugify
+            slugified_id = slugify(column_id) if column_id else 'unknown'
+            return HttpResponse(f'<div id="relationship-context-form-{slugified_id}"></div>')
             
         except Exception as e:
             logger.error(f"CSV_HIDE_RELATIONSHIP_CONTEXT_FORM: Error hiding form: {e}", exc_info=True)
