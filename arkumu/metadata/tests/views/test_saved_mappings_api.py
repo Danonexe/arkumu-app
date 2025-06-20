@@ -746,7 +746,7 @@ class TestColumnIDCompatibility:
         """Test saving mapping with new organization_id::dataset::column format"""
         # Mock serialization to return new format
         new_format_config = {
-            'version': '1.0',
+            'version': '1.1',
             'organization_id': organization_id,
             'selected_datasets': ['test_dataset.csv'],
             'workspace_columns': {
@@ -857,3 +857,284 @@ class TestColumnIDCompatibility:
             response_data = json.loads(response.content)
             assert response_data['success'] is True
             assert 'warnings' in response_data
+
+
+@pytest.mark.django_db
+class TestRelationshipContextInSavedMappings:
+    """Test relationship context functionality in saved mappings API"""
+    
+    def test_save_mapping_with_relationship_contexts(self, client, user, organization_id):
+        """Test saving mapping that includes relationship contexts"""
+        # Mock serialization to return config with relationship contexts
+        config_with_contexts = {
+            'version': '1.1',
+            'organization_id': organization_id,
+            'selected_datasets': ['person_project_roles.csv'],
+            'workspace_columns': {
+                f'{organization_id}::person_project_roles.csv::role': {
+                    'id': f'{organization_id}::person_project_roles.csv::role',
+                    'name': 'role',
+                    'dataset': 'person_project_roles.csv',
+                    'is_relationship_context': True,
+                    'relationship_context': {
+                        'context_predicate': 'hasRole',
+                        'primary_fk_dataset': 'person_project_roles.csv',
+                        'primary_fk_column': 'person_id',
+                        'secondary_fk_dataset': 'person_project_roles.csv',
+                        'secondary_fk_column': 'project_id'
+                    }
+                },
+                f'{organization_id}::person_project_roles.csv::person_id': {
+                    'id': f'{organization_id}::person_project_roles.csv::person_id',
+                    'name': 'person_id',
+                    'dataset': 'person_project_roles.csv',
+                    'fk_config': {
+                        'target_dataset': 'persons.csv',
+                        'target_column': 'id'
+                    }
+                }
+            },
+            'fk_relationships': {
+                f'{organization_id}::person_project_roles.csv::person_id': {
+                    'target_dataset': 'persons.csv',
+                    'target_column': 'id'
+                }
+            },
+            'relationship_contexts': {
+                f'{organization_id}::person_project_roles.csv::role': {
+                    'context_predicate': 'hasRole',
+                    'primary_fk_dataset': 'person_project_roles.csv',
+                    'primary_fk_column': 'person_id',
+                    'secondary_fk_dataset': 'person_project_roles.csv',
+                    'secondary_fk_column': 'project_id'
+                }
+            },
+            'entity_mappings': {},
+            'metadata': {
+                'total_datasets': 1,
+                'total_columns': 2,
+                'total_fk_relationships': 1,
+                'total_relationship_contexts': 1
+            }
+        }
+        
+        with patch.multiple(
+            'arkumu.metadata.views.csv_mapping.saved_mappings_api.CSVMappingCoordinatorMixin',
+            serialize_current_mapping_state=Mock(return_value=config_with_contexts),
+            get_csv_datasets_for_organization=Mock(return_value=[
+                {'name': 'person_project_roles.csv'}
+            ])
+        ):
+            client.force_login(user)
+            
+            data = {
+                'organization': organization_id,
+                'mapping_name': 'Mapping With Relationship Contexts'
+            }
+            
+            response = client.post(reverse('metadata:csv_save_mapping'), data)
+            
+            assert response.status_code == 200
+            response_data = json.loads(response.content)
+            assert response_data['success'] is True
+            assert 'relationship contexts' in response_data['message']
+            
+            # Verify the mapping was saved with relationship contexts
+            mapping = Mapping.objects.get(name='Mapping With Relationship Contexts')
+            stored_config = mapping.mapping_config
+            
+            # Check that relationship context was preserved
+            role_column = next(
+                col for col in stored_config['columns']
+                if col['name'] == 'role'
+            )
+            assert 'relationship_context' in role_column
+            ctx = role_column['relationship_context']
+            assert ctx['predicate'] == 'hasRole'
+            assert ctx['primary_fk_column'] == 'person_id'
+            assert ctx['secondary_fk_column'] == 'project_id'
+    
+    def test_load_mapping_with_relationship_contexts(self, client, user, organization_id):
+        """Test loading mapping that includes relationship contexts"""
+        # Create mapping with relationship contexts
+        config_with_contexts = {
+            'version': '1.1',
+            'source_id': organization_id,
+            'selected_datasets': ['person_project_roles.csv'],
+            'columns': [
+                {
+                    'id': f'{organization_id}::person_project_roles.csv::role',
+                    'name': 'role',
+                    'dataset': 'person_project_roles.csv',
+                    'relationship_context': {
+                        'predicate': 'hasRole',
+                        'primary_fk_dataset': 'person_project_roles.csv',
+                        'primary_fk_column': 'person_id',
+                        'secondary_fk_dataset': 'person_project_roles.csv',
+                        'secondary_fk_column': 'project_id'
+                    }
+                }
+            ],
+            'import_strategy': {}
+        }
+        
+        mapping = Mapping.objects.create(
+            name='Mapping With Contexts',
+            organization_id=organization_id,
+            source_datasets=['person_project_roles.csv'],
+            mapping_config=config_with_contexts,
+            created_by=user
+        )
+        
+        mock_deserialize_result = {
+            'success': True,
+            'summary': {
+                'columns': 1,
+                'fk_relationships': 0,
+                'relationship_contexts': 1,
+                'selected_datasets': 1
+            }
+        }
+        
+        with patch.multiple(
+            'arkumu.metadata.views.csv_mapping.saved_mappings_api.CSVMappingCoordinatorMixin',
+            validate_mapping_compatibility=Mock(return_value={
+                'is_valid': True,
+                'errors': [],
+                'warnings': [],
+                'missing_datasets': []
+            }),
+            deserialize_mapping_state=Mock(return_value=mock_deserialize_result)
+        ):
+            client.force_login(user)
+            
+            data = {
+                'organization': organization_id,
+                'mapping_id': str(mapping.id)
+            }
+            
+            response = client.post(reverse('metadata:csv_load_mapping'), data)
+            
+            assert response.status_code == 200
+            response_data = json.loads(response.content)
+            assert response_data['success'] is True
+            assert 'relationship_contexts' in response_data['summary']
+            assert response_data['summary']['relationship_contexts'] == 1
+            assert 'relationship context' in response_data['message']
+    
+    def test_validation_with_relationship_contexts(self, client, user, organization_id):
+        """Test validation of mappings with relationship contexts"""
+        # Create mapping with relationship contexts that reference non-existent columns
+        config_with_invalid_contexts = {
+            'version': '1.1',
+            'source_id': organization_id,
+            'columns': [
+                {
+                    'id': f'{organization_id}::person_project_roles.csv::role',
+                    'name': 'role',
+                    'dataset': 'person_project_roles.csv',
+                    'relationship_context': {
+                        'predicate': 'hasRole',
+                        'primary_fk_dataset': 'nonexistent.csv',  # Invalid reference
+                        'primary_fk_column': 'person_id',
+                        'secondary_fk_dataset': 'person_project_roles.csv',
+                        'secondary_fk_column': 'project_id'
+                    }
+                }
+            ]
+        }
+        
+        mapping = Mapping.objects.create(
+            name='Invalid Context Mapping',
+            organization_id=organization_id,
+            source_datasets=['person_project_roles.csv'],
+            mapping_config=config_with_invalid_contexts,
+            created_by=user
+        )
+        
+        with patch.multiple(
+            'arkumu.metadata.views.csv_mapping.saved_mappings_api.CSVMappingCoordinatorMixin',
+            validate_mapping_compatibility=Mock(return_value={
+                'is_valid': False,
+                'errors': [
+                    'Relationship context for column "role" references non-existent dataset "nonexistent.csv"'
+                ],
+                'warnings': [],
+                'missing_datasets': ['nonexistent.csv']
+            })
+        ):
+            client.force_login(user)
+            
+            data = {
+                'organization': organization_id,
+                'mapping_id': str(mapping.id)
+            }
+            
+            response = client.post(reverse('metadata:csv_load_mapping'), data)
+            
+            assert response.status_code == 400
+            response_data = json.loads(response.content)
+            assert response_data['success'] is False
+            assert 'relationship context' in response_data['error']
+            assert 'nonexistent.csv' in response_data['error']
+    
+    def test_list_mappings_shows_relationship_context_info(self, client, user, organization_id):
+        """Test that list mappings includes relationship context information"""
+        # Create mapping with relationship contexts
+        config_with_contexts = {
+            'version': '1.1',
+            'columns': [
+                {
+                    'id': f'{organization_id}::roles.csv::role_name',
+                    'name': 'role_name',
+                    'relationship_context': {
+                        'predicate': 'hasRole',
+                        'primary_fk_dataset': 'persons.csv',
+                        'primary_fk_column': 'id'
+                    }
+                },
+                {
+                    'id': f'{organization_id}::skills.csv::skill_level',
+                    'name': 'skill_level',
+                    'relationship_context': {
+                        'predicate': 'hasSkillLevel',
+                        'primary_fk_dataset': 'persons.csv',
+                        'primary_fk_column': 'id'
+                    }
+                }
+            ],
+            'metadata': {
+                'total_relationship_contexts': 2
+            }
+        }
+        
+        mapping = Mapping.objects.create(
+            name='Multiple Contexts Mapping',
+            organization_id=organization_id,
+            source_datasets=['roles.csv', 'skills.csv'],
+            mapping_config=config_with_contexts,
+            created_by=user
+        )
+        
+        client.force_login(user)
+        
+        response = client.get(
+            reverse('metadata:csv_list_mappings'),
+            {'organization': organization_id},
+            HTTP_ACCEPT='application/json'
+        )
+        
+        assert response.status_code == 200
+        response_data = json.loads(response.content)
+        assert response_data['success'] is True
+        
+        # Find our mapping in the results
+        mapping_data = next(
+            m for m in response_data['mappings']
+            if m['name'] == 'Multiple Contexts Mapping'
+        )
+        
+        assert 'metadata' in mapping_data
+        assert 'relationship_contexts' in mapping_data['metadata']
+        assert mapping_data['metadata']['relationship_contexts'] == 2
+

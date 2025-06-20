@@ -900,3 +900,202 @@ class TestConcurrencyAndRaceConditions:
                         assert mock_add_workspace.called
 
 
+@pytest.mark.django_db
+class TestRelationshipContextSerialization:
+    """Test serialization and deserialization of relationship contexts"""
+    
+    def test_serialize_mapping_with_relationship_contexts(self, base_test_data):
+        """Test that relationship contexts are properly serialized"""
+        coordinator = CSVMappingCoordinatorMixin()
+        factory = base_test_data['factory']
+        organization_id = base_test_data['organization_id']
+        
+        request = factory.post('/')
+        request = add_session_to_request(request)
+        
+        # Mock workspace with relationship contexts
+        mock_columns = [
+            {
+                'id': f'{organization_id}::person_project_roles.csv::role',
+                'name': 'role',
+                'dataset': 'person_project_roles.csv',
+                'source': 'test_source',
+                'relationship_context': {
+                    'predicate': 'hasRole',
+                    'primary_fk_dataset': 'person_project_roles.csv',
+                    'primary_fk_column': 'person_id',
+                    'secondary_fk_dataset': 'person_project_roles.csv',
+                    'secondary_fk_column': 'project_id'
+                }
+            },
+            {
+                'id': f'{organization_id}::person_project_roles.csv::person_id',
+                'name': 'person_id',
+                'dataset': 'person_project_roles.csv',
+                'source': 'test_source',
+                'fk_reference': {
+                    'target_dataset': 'persons.csv',
+                    'target_column': 'id'
+                }
+            }
+        ]
+        
+        with patch.object(coordinator, 'get_workspace_columns', return_value=mock_columns):
+            with patch.object(coordinator, 'get_selected_datasets_with_details', return_value=([], [])):
+                with patch.object(coordinator, 'get_import_strategy', return_value={}):
+                    
+                    mapping_state = coordinator.serialize_current_mapping_state(
+                        request, organization_id
+                    )
+                    
+                    # Verify version 1.1 for relationship context support
+                    assert mapping_state['version'] == '1.1'
+                    
+                    # Verify relationship context is preserved
+                    role_column = next(
+                        col for col in mapping_state['columns']
+                        if col['name'] == 'role'
+                    )
+                    
+                    assert 'relationship_context' in role_column
+                    ctx = role_column['relationship_context']
+                    assert ctx['predicate'] == 'hasRole'
+                    assert ctx['primary_fk_dataset'] == 'person_project_roles.csv'
+                    assert ctx['primary_fk_column'] == 'person_id'
+                    assert ctx['secondary_fk_dataset'] == 'person_project_roles.csv'
+                    assert ctx['secondary_fk_column'] == 'project_id'
+                    
+                    # Verify FK reference is still preserved for other columns
+                    person_id_column = next(
+                        col for col in mapping_state['columns']
+                        if col['name'] == 'person_id'
+                    )
+                    
+                    assert 'fk_reference' in person_id_column
+                    assert person_id_column['fk_reference']['target_dataset'] == 'persons.csv'
+    
+    def test_deserialize_mapping_with_relationship_contexts(self, base_test_data):
+        """Test that relationship contexts are properly deserialized"""
+        coordinator = CSVMappingCoordinatorMixin()
+        factory = base_test_data['factory']
+        organization_id = base_test_data['organization_id']
+        
+        request = factory.post('/')
+        request = add_session_to_request(request)
+        
+        # Create mapping state with relationship contexts
+        mapping_state = {
+            'version': '1.1',
+            'source_id': organization_id,
+            'columns': [
+                {
+                    'id': f'{organization_id}::person_project_roles.csv::role',
+                    'name': 'role',
+                    'dataset': 'person_project_roles.csv',
+                    'relationship_context': {
+                        'predicate': 'hasRole',
+                        'primary_fk_dataset': 'person_project_roles.csv',
+                        'primary_fk_column': 'person_id',
+                        'secondary_fk_dataset': 'person_project_roles.csv',
+                        'secondary_fk_column': 'project_id'
+                    }
+                },
+                {
+                    'id': f'{organization_id}::person_project_roles.csv::skill_level',
+                    'name': 'skill_level',
+                    'dataset': 'person_project_roles.csv',
+                    'relationship_context': {
+                        'predicate': 'hasSkillLevel',
+                        'primary_fk_dataset': 'person_project_roles.csv',
+                        'primary_fk_column': 'person_id',
+                        'secondary_fk_dataset': 'person_project_roles.csv',
+                        'secondary_fk_column': 'skill_id'
+                    }
+                }
+            ],
+            'selected_datasets': [],
+            'import_strategy': {}
+        }
+        
+        with patch.object(coordinator, 'clear_workspace'):
+            with patch.object(coordinator, 'update_workspace_columns') as mock_update:
+                with patch.object(coordinator, 'update_selected_datasets'):
+                    with patch.object(coordinator, 'set_import_strategy'):
+                        
+                        result = coordinator.deserialize_mapping_state(
+                            request, organization_id, mapping_state
+                        )
+                        
+                        # Verify deserialization was successful
+                        assert result['success'] is True
+                        assert 'relationship_contexts' in result['summary']
+                        assert result['summary']['relationship_contexts'] == 2
+                        
+                        # Verify the columns were updated with relationship contexts
+                        mock_update.assert_called_once()
+                        call_args = mock_update.call_args[0]
+                        restored_columns = call_args[2]
+                        
+                        # Verify both columns have relationship contexts
+                        role_column = next(
+                            col for col in restored_columns
+                            if col['name'] == 'role'
+                        )
+                        assert 'relationship_context' in role_column
+                        assert role_column['relationship_context']['predicate'] == 'hasRole'
+                        
+                        skill_column = next(
+                            col for col in restored_columns
+                            if col['name'] == 'skill_level'
+                        )
+                        assert 'relationship_context' in skill_column
+                        assert skill_column['relationship_context']['predicate'] == 'hasSkillLevel'
+    
+    def test_backward_compatibility_with_version_1_0(self, base_test_data):
+        """Test that mappings saved with version 1.0 can still be loaded"""
+        coordinator = CSVMappingCoordinatorMixin()
+        factory = base_test_data['factory']
+        organization_id = base_test_data['organization_id']
+        
+        request = factory.post('/')
+        request = add_session_to_request(request)
+        
+        # Create mapping state with version 1.0 (no relationship contexts)
+        legacy_mapping_state = {
+            'version': '1.0',
+            'source_id': organization_id,
+            'columns': [
+                {
+                    'id': f'{organization_id}::person_project_roles.csv::role',
+                    'name': 'role',
+                    'dataset': 'person_project_roles.csv'
+                    # No relationship_context field
+                }
+            ],
+            'selected_datasets': [],
+            'import_strategy': {}
+        }
+        
+        with patch.object(coordinator, 'clear_workspace'):
+            with patch.object(coordinator, 'update_workspace_columns') as mock_update:
+                with patch.object(coordinator, 'update_selected_datasets'):
+                    with patch.object(coordinator, 'set_import_strategy'):
+                        
+                        result = coordinator.deserialize_mapping_state(
+                            request, organization_id, legacy_mapping_state
+                        )
+                        
+                        # Should still deserialize successfully
+                        assert result['success'] is True
+                        assert result['summary']['relationship_contexts'] == 0
+                        
+                        # Verify the column was restored without relationship context
+                        mock_update.assert_called_once()
+                        call_args = mock_update.call_args[0]
+                        restored_columns = call_args[2]
+                        
+                        role_column = restored_columns[0]
+                        assert role_column['name'] == 'role'
+                        assert 'relationship_context' not in role_column
+
+

@@ -1838,7 +1838,6 @@ class ToggleRelationshipContextFormView(OrganizationMixin, CSVMappingCoordinator
             
             # Get current relationship context configuration if exists
             relationship_context = column.get('relationship_context', {})
-            context_type = relationship_context.get('context_type', 'attribute')  # attribute, role, qualifier
             primary_fk_dataset = relationship_context.get('primary_fk_dataset', '')
             primary_fk_column = relationship_context.get('primary_fk_column', '')
             secondary_fk_dataset = relationship_context.get('secondary_fk_dataset', '')
@@ -1849,7 +1848,6 @@ class ToggleRelationshipContextFormView(OrganizationMixin, CSVMappingCoordinator
                 'column': column,
                 'datasets': datasets,
                 'fk_columns': fk_columns,
-                'context_type': context_type,
                 'primary_fk_dataset': primary_fk_dataset,
                 'primary_fk_column': primary_fk_column,
                 'secondary_fk_dataset': secondary_fk_dataset,
@@ -1878,17 +1876,16 @@ class SaveInlineRelationshipContextView(OrganizationMixin, CSVMappingCoordinator
             
             # Extract form data
             column_id = request.POST.get('column_id')
-            context_type = request.POST.get('context_type')  # attribute, role, qualifier
             primary_fk_dataset = request.POST.get('primary_fk_dataset')
             primary_fk_column = request.POST.get('primary_fk_column')
             secondary_fk_dataset = request.POST.get('secondary_fk_dataset')
             secondary_fk_column = request.POST.get('secondary_fk_column')
             context_predicate = request.POST.get('context_predicate')
             
-            logger.info(f"CSV_SAVE_RELATIONSHIP_CONTEXT: column_id='{column_id}', type='{context_type}', primary_fk='{primary_fk_dataset}.{primary_fk_column}', secondary_fk='{secondary_fk_dataset}.{secondary_fk_column}', predicate='{context_predicate}', org='{organization_id}'")
+            logger.info(f"CSV_SAVE_RELATIONSHIP_CONTEXT: column_id='{column_id}', primary_fk='{primary_fk_dataset}.{primary_fk_column}', secondary_fk='{secondary_fk_dataset}.{secondary_fk_column}', predicate='{context_predicate}', org='{organization_id}'")
             
-            if not all([column_id, context_type]):
-                missing = [name for name, val in [('column_id', column_id), ('context_type', context_type)] if not val]
+            if not all([column_id, context_predicate]):
+                missing = [name for name, val in [('column_id', column_id), ('context_predicate', context_predicate)] if not val]
                 error_msg = f'Missing required fields: {", ".join(missing)}'
                 logger.error(f"CSV_SAVE_RELATIONSHIP_CONTEXT: VALIDATION FAILED - {error_msg}")
                 return HttpResponse(f'<div class="text-error text-xs p-2">{error_msg}</div>')
@@ -1902,7 +1899,6 @@ class SaveInlineRelationshipContextView(OrganizationMixin, CSVMappingCoordinator
                 if col.get('id') == column_id:
                     col['is_relationship_context'] = True
                     col['relationship_context'] = {
-                        'context_type': context_type,
                         'primary_fk_dataset': primary_fk_dataset,
                         'primary_fk_column': primary_fk_column,
                         'secondary_fk_dataset': secondary_fk_dataset,

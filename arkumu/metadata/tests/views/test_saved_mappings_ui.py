@@ -809,4 +809,261 @@ class TestMappingControlsTemplate:
         assert 'Select organization first...' in html
         assert 'Select saved mapping...' not in html
         
-        print(f"Template without org ID: {html[:500]}...") 
+        print(f"Template without org ID: {html[:500]}...")
+
+
+@pytest.mark.django_db
+class TestRelationshipContextInSavedMappingsUI:
+    """Test relationship context functionality in saved mappings UI"""
+    
+    def test_load_mapping_with_relationship_contexts_shows_summary(self, client, user, organization_id):
+        """Test that loading mapping with relationship contexts shows proper summary"""
+        from arkumu.metadata.models.mappings import Mapping
+        
+        # Create mapping with relationship contexts
+        config_with_contexts = {
+            'version': '1.1',
+            'source_id': organization_id,
+            'columns': [
+                {
+                    'id': f'{organization_id}::person_project_roles.csv::role',
+                    'name': 'role',
+                    'dataset': 'person_project_roles.csv',
+                    'relationship_context': {
+                        'predicate': 'hasRole',
+                        'primary_fk_dataset': 'person_project_roles.csv',
+                        'primary_fk_column': 'person_id',
+                        'secondary_fk_dataset': 'person_project_roles.csv',
+                        'secondary_fk_column': 'project_id'
+                    }
+                },
+                {
+                    'id': f'{organization_id}::person_project_roles.csv::skill_level',
+                    'name': 'skill_level',
+                    'dataset': 'person_project_roles.csv',
+                    'relationship_context': {
+                        'predicate': 'hasSkillLevel',
+                        'primary_fk_dataset': 'person_project_roles.csv',
+                        'primary_fk_column': 'person_id',
+                        'secondary_fk_dataset': 'person_project_roles.csv',
+                        'secondary_fk_column': 'skill_id'
+                    }
+                }
+            ]
+        }
+        
+        mapping = Mapping.objects.create(
+            name='Mapping With Multiple Contexts',
+            organization_id=organization_id,
+            source_datasets=['person_project_roles.csv'],
+            mapping_config=config_with_contexts,
+            created_by=user
+        )
+        
+        mock_deserialize_result = {
+            'success': True,
+            'summary': {
+                'columns': 2,
+                'fk_relationships': 0,
+                'relationship_contexts': 2,
+                'selected_datasets': 1
+            }
+        }
+        
+        with patch.multiple(
+            'arkumu.metadata.views.csv_mapping.saved_mappings_ui.CSVMappingCoordinatorMixin',
+            validate_mapping_compatibility=Mock(return_value={
+                'is_valid': True,
+                'errors': [],
+                'warnings': [],
+                'missing_datasets': []
+            }),
+            deserialize_mapping_state=Mock(return_value=mock_deserialize_result)
+        ):
+            client.force_login(user)
+            
+            data = {
+                'organization': organization_id,
+                'mapping_id': str(mapping.id)
+            }
+            
+            response = client.post(
+                reverse('metadata:csv_load_mapping_ui'),
+                data,
+                HTTP_HX_REQUEST='true'
+            )
+            
+            assert response.status_code == 200
+            content = response.content.decode()
+            
+            # Should show relationship context information
+            assert '2 relationship contexts' in content
+            assert 'Successfully loaded mapping' in content
+            assert 'relationship context' in content.lower()
+    
+    def test_save_mapping_with_relationship_contexts_shows_details(self, client, user, organization_id):
+        """Test that saving mapping with relationship contexts shows proper details"""
+        config_with_contexts = {
+            'version': '1.1',
+            'source_id': organization_id,
+            'selected_datasets': ['person_project_roles.csv'],
+            'columns': [
+                {
+                    'id': f'{organization_id}::person_project_roles.csv::role',
+                    'name': 'role',
+                    'dataset': 'person_project_roles.csv',
+                    'relationship_context': {
+                        'predicate': 'hasRole',
+                        'primary_fk_dataset': 'person_project_roles.csv',
+                        'primary_fk_column': 'person_id',
+                        'secondary_fk_dataset': 'person_project_roles.csv',
+                        'secondary_fk_column': 'project_id'
+                    }
+                }
+            ],
+            'import_strategy': {},
+            'metadata': {
+                'total_datasets': 1,
+                'total_columns': 1,
+                'total_fk_relationships': 0,
+                'total_relationship_contexts': 1
+            }
+        }
+        
+        with patch.multiple(
+            'arkumu.metadata.views.csv_mapping.saved_mappings_ui.CSVMappingCoordinatorMixin',
+            serialize_current_mapping_state=Mock(return_value=config_with_contexts),
+            get_csv_datasets_for_organization=Mock(return_value=[
+                {'name': 'person_project_roles.csv'}
+            ])
+        ):
+            client.force_login(user)
+            
+            data = {
+                'organization': organization_id,
+                'mapping_name': 'Context Test Mapping'
+            }
+            
+            response = client.post(
+                reverse('metadata:csv_save_mapping_ui'),
+                data,
+                HTTP_HX_REQUEST='true'
+            )
+            
+            assert response.status_code == 200
+            content = response.content.decode()
+            
+            # Should show relationship context information in save feedback
+            assert '1 relationship context' in content
+            assert 'Successfully saved mapping' in content
+            assert 'Context Test Mapping' in content
+    
+    def test_mapping_dropdown_shows_relationship_context_count(self, client, user, organization_id):
+        """Test that mapping dropdown shows relationship context counts"""
+        from arkumu.metadata.models.mappings import Mapping
+        
+        # Create mapping with relationship contexts
+        config_with_contexts = {
+            'version': '1.1',
+            'columns': [
+                {
+                    'id': f'{organization_id}::roles.csv::role_type',
+                    'name': 'role_type',
+                    'relationship_context': {
+                        'predicate': 'hasRoleType',
+                        'primary_fk_dataset': 'persons.csv',
+                        'primary_fk_column': 'id'
+                    }
+                }
+            ],
+            'metadata': {
+                'total_relationship_contexts': 1
+            }
+        }
+        
+        mapping = Mapping.objects.create(
+            name='Dropdown Context Test',
+            organization_id=organization_id,
+            source_datasets=['roles.csv'],
+            mapping_config=config_with_contexts,
+            created_by=user
+        )
+        
+        client.force_login(user)
+        
+        response = client.get(
+            f'/metadata/csv-list-mappings/?organization={organization_id}',
+            HTTP_HX_REQUEST='true'
+        )
+        
+        assert response.status_code == 200
+        content = response.content.decode()
+        
+        # Should show relationship context count in the dropdown option
+        assert 'Dropdown Context Test' in content
+        assert '1 context' in content or '1 relationship context' in content
+    
+    def test_validation_error_with_relationship_contexts(self, client, user, organization_id):
+        """Test validation error handling for mappings with relationship contexts"""
+        from arkumu.metadata.models.mappings import Mapping
+        
+        # Create mapping with invalid relationship contexts
+        config_with_invalid_contexts = {
+            'version': '1.1',
+            'source_id': organization_id,
+            'columns': [
+                {
+                    'id': f'{organization_id}::roles.csv::role_type',
+                    'name': 'role_type',
+                    'relationship_context': {
+                        'predicate': 'hasRole',
+                        'primary_fk_dataset': 'missing_dataset.csv',  # Non-existent
+                        'primary_fk_column': 'person_id',
+                        'secondary_fk_dataset': 'roles.csv',
+                        'secondary_fk_column': 'role_id'
+                    }
+                }
+            ]
+        }
+        
+        mapping = Mapping.objects.create(
+            name='Invalid Context Mapping',
+            organization_id=organization_id,
+            source_datasets=['roles.csv'],
+            mapping_config=config_with_invalid_contexts,
+            created_by=user
+        )
+        
+        with patch.multiple(
+            'arkumu.metadata.views.csv_mapping.saved_mappings_ui.CSVMappingCoordinatorMixin',
+            validate_mapping_compatibility=Mock(return_value={
+                'is_valid': False,
+                'errors': [
+                    'Relationship context references missing dataset: missing_dataset.csv',
+                    'Column role_type has invalid relationship context configuration'
+                ],
+                'warnings': [],
+                'missing_datasets': ['missing_dataset.csv']
+            })
+        ):
+            client.force_login(user)
+            
+            data = {
+                'organization': organization_id,
+                'mapping_id': str(mapping.id)
+            }
+            
+            response = client.post(
+                reverse('metadata:csv_load_mapping_ui'),
+                data,
+                HTTP_HX_REQUEST='true'
+            )
+            
+            assert response.status_code == 200
+            content = response.content.decode()
+            
+            # Should show specific relationship context validation errors
+            assert 'relationship context' in content.lower()
+            assert 'missing_dataset.csv' in content
+            assert 'invalid relationship context configuration' in content.lower()
+            assert 'Cannot load mapping' in content

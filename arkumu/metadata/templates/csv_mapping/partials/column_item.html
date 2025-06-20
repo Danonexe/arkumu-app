@@ -27,7 +27,7 @@
                     </div>
                     {% endif %}
                     {% if column.is_relationship_context %}
-                    <div class="badge badge-info badge-sm gap-1" title="Relationship Context: {{ column.relationship_context.context_type|default:'attribute' }} for {{ column.relationship_context.primary_fk|default:'relationship' }}">
+                    <div class="badge badge-info badge-sm gap-1" title="Relationship Context: {{ column.relationship_context.context_predicate|default:'context' }} between entities">
                         🔗 Context
                     </div>
                     {% endif %}
@@ -70,18 +70,15 @@
                 <div class="mb-2 p-2 bg-info/10 rounded border-l-2 border-info">
                     <div class="text-xs font-medium text-info mb-1">🔗 Relationship Context:</div>
                     <div class="text-xs text-base-content/80">
-                        <div class="mb-1">
-                            <span class="font-semibold">Type:</span> {{ column.relationship_context.context_type|default:'attribute'|capfirst }}
-                        </div>
-                        {% if column.relationship_context.primary_fk and column.relationship_context.secondary_fk %}
-                        <div class="mb-1">
-                            <span class="font-semibold">Between:</span> {{ column.relationship_context.primary_fk }} ↔ {{ column.relationship_context.secondary_fk }}
-                        </div>
-                        {% endif %}
                         {% if column.relationship_context.context_predicate %}
-                        <div>
+                        <div class="mb-1">
                             <span class="font-semibold">Predicate:</span> 
                             <span class="font-mono bg-base-200 px-1 rounded">{{ column.relationship_context.context_predicate }}</span>
+                        </div>
+                        {% endif %}
+                        {% if column.relationship_context.primary_fk_dataset and column.relationship_context.secondary_fk_dataset %}
+                        <div class="mb-1">
+                            <span class="font-semibold">Between:</span> {{ column.relationship_context.primary_fk_dataset }}.{{ column.relationship_context.primary_fk_column }} ↔ {{ column.relationship_context.secondary_fk_dataset }}.{{ column.relationship_context.secondary_fk_column }}
                         </div>
                         {% endif %}
                     </div>
