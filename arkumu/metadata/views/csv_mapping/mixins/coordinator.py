@@ -154,6 +154,7 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
     def _remove_columns_for_dataset(self, request, organization_id, dataset_name):
         """
         Remove all workspace columns that belong to a specific dataset.
+        Also clears column selection state to prevent orphaned HTMX requests.
         
         Args:
             request: Django request object
@@ -175,7 +176,31 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         # Update workspace
         self.update_workspace_columns(request, organization_id, remaining_columns)
         
+        # CRITICAL: Also clear column selection state for this dataset to prevent htmx:targetError
+        # When dataset is deselected, its column badges container is removed from DOM,
+        # but pending HTMX requests might still try to update it
+        selection_key = f"column_selection_{organization_id}"
+        column_selections = request.session.get(selection_key, {})
+        
+        # Find all dataset keys that match this dataset name (could have different sources)
+        keys_to_remove = []
+        for dataset_key in column_selections.keys():
+            # dataset_key format: "dataset_name::source_name"
+            if dataset_key.startswith(f"{dataset_name}::"):
+                keys_to_remove.append(dataset_key)
+        
+        # Remove column selections for this dataset
+        for key in keys_to_remove:
+            del column_selections[key]
+            logger.info(f"COORDINATOR: Cleared column selection state for '{key}'")
+        
+        # Save updated column selections
+        if keys_to_remove:
+            request.session[selection_key] = column_selections
+            request.session.modified = True
+        
         columns_removed = initial_count - len(remaining_columns)
+        logger.info(f"COORDINATOR: Removed {columns_removed} workspace columns and cleared {len(keys_to_remove)} column selection states for dataset '{dataset_name}'")
         return columns_removed
     
     # ==========================================================================

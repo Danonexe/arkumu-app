@@ -141,9 +141,10 @@
                 {% if dataset.preview.has_more %}
                 <div class="border-t border-base-300 bg-base-50 p-3" id="load-more-{{ dataset.name|slugify }}">
                     <button class="btn btn-sm btn-ghost btn-outline w-full gap-2 hover:btn-info"
-                            data-hx-url="{% url 'metadata:csv_load_more_dataset_rows' %}?source={{ dataset.source|urlencode }}&dataset={{ dataset.name|urlencode }}&offset={{ dataset.preview.showing_rows }}&limit=10{% if organization_id %}&organization={{ organization_id }}{% endif %}"
-                            data-hx-target="#table-body-{{ dataset.name|slugify }}"
-                            onclick="console.log('=== LOAD MORE BUTTON CLICKED ==='); console.log('Dataset:', '{{ dataset.name }}'); console.log('Target:', '#table-body-{{ dataset.name|slugify }}'); console.log('Making direct HTMX request...'); const url = this.getAttribute('data-hx-url'); const target = this.getAttribute('data-hx-target'); console.log('URL:', url); console.log('Target:', target); htmx.ajax('GET', url, {target: target, swap: 'beforeend'}); return false;">
+                            hx-get="{% url 'metadata:csv_load_more_dataset_rows' %}?source={{ dataset.source|urlencode }}&dataset={{ dataset.name|urlencode }}&offset={{ dataset.preview.showing_rows }}&limit=10{% if organization_id %}&organization={{ organization_id }}{% endif %}"
+                            hx-target="#table-body-{{ dataset.name|slugify }}"
+                            hx-swap="beforeend"
+                            hx-indicator=".htmx-indicator">
                         <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                             <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/>
                         </svg>

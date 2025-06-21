@@ -131,14 +131,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // Listen for workspace updates to keep JSON view in sync
-    document.addEventListener('workspaceUpdated', function(evt) {
-        console.log('🔄 Workspace updated - triggering JSON refresh');
-        const jsonContent = document.querySelector('#json-mapping-content');
-        if (jsonContent) {
-            htmx.trigger(jsonContent, 'refreshJson');
-        }
-    });
+    // JSON view will refresh automatically when it becomes visible via tab switching
 });
 
 function showErrorToast(message) {
