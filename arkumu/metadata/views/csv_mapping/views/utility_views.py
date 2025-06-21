@@ -58,18 +58,21 @@ class ClearSelectedDatasetsView(
             
             logger.info(f"CLEAR_DATASETS: Cleared {datasets_cleared} datasets, preserved {workspace_preserved} workspace columns")
             
-            # Use template helpers for rendering
+            # CORRECTED: Only update selection interface (badges + table), NOT the workspace
+            # The workspace is independent and should only be cleared by its own "Clear Workspace" button
+            
+            # Render dataset badges (now unselected)
             badges_html = self.render_dataset_badges_template(
                 request, organization_id, 
                 context_data['csv_datasets'], 
-                context_data.get('selected_datasets', [])
+                context_data.get('selected_datasets', [])  # This will be empty after clear
             )
-            workspace_html = self.render_workspace_template(request, organization_id)
+            
+            # Render empty table content (no selected datasets to show)
             table_content_html = self.render_table_content_template(request, organization_id, [])
             
-            # Build OOB response using template helper
+            # Build response that ONLY updates selection interface, leaves workspace alone
             response = self.build_oob_response(badges_html, {
-                'selected-columns-workspace': workspace_html,
                 'table-content': table_content_html
             })
             

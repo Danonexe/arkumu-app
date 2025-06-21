@@ -199,6 +199,46 @@ class CSVMappingTemplateHelperMixin:
         
         return f'{main_html}{oob_html}'
     
+    def build_safe_oob_response(self, main_html, oob_updates=None):
+        """
+        Build response with SAFE out-of-band updates that won't cause targetError.
+        
+        This version adds JavaScript to check if targets exist before applying OOB updates.
+        Prevents htmx:targetError when DOM structure changes between requests.
+        
+        Args:
+            main_html (str): The main response HTML
+            oob_updates (dict): Dict of {target_id: content} for OOB updates
+        
+        Returns:
+            str: Complete HTML response with safe OOB updates
+        """
+        if not oob_updates:
+            return main_html
+        
+        # Build safe OOB updates with existence checks
+        safe_updates = []
+        for target_id, content in oob_updates.items():
+            # Escape the content for JavaScript
+            escaped_content = content.replace('\\', '\\\\').replace("'", "\\'").replace('\n', '\\n').replace('\r', '\\r')
+            
+            safe_update = f"""
+            <script>
+            (function() {{
+                const target = document.getElementById('{target_id}');
+                if (target) {{
+                    target.innerHTML = '{escaped_content}';
+                    console.log('✅ Safe OOB: Updated #{target_id}');
+                }} else {{
+                    console.warn('⚠️ Safe OOB: Target #{target_id} not found - skipping update');
+                }}
+            }})();
+            </script>
+            """
+            safe_updates.append(safe_update)
+        
+        return f'{main_html}{"".join(safe_updates)}'
+    
     def build_standard_ui_refresh_response(self, request, organization_id, main_html=""):
         """
         Build a standard response that refreshes all major UI components.

@@ -222,33 +222,28 @@ class ToggleDatasetSelectionView(
                     }
                     single_card = render_to_string('csv_mapping/partials/dataset_card.html', single_context, request=request)
                     
-                    # Update badges via OOB using template helper
-                    dataset_badges = self.render_dataset_badges_template(request, organization_id, csv_datasets, selected_datasets_new)
-                    
-                    response_html = f'{single_card}<div id="dataset-badges" hx-swap-oob="innerHTML">{dataset_badges}</div>'
+                    # Trigger event for badges to refresh themselves
+                    response_html = f'{single_card}<script>htmx.trigger(document.body, "badgesUpdated");</script>'
                     return HttpResponse(response_html)
             
             elif action == 'remove' and not was_added:
                 # Return empty response - HTMX will delete the target element
-                # Update badges via OOB using template helper
-                dataset_badges = self.render_dataset_badges_template(request, organization_id, csv_datasets, selected_datasets_new)
-                
                 # Check if no datasets remain, show empty state
                 if not enhanced_datasets_with_details:
-                    empty_state = render_to_string('csv_mapping/partials/table_content.html', context, request=request)
-                    response_html = f'{empty_state}<div id="dataset-badges" hx-swap-oob="innerHTML">{dataset_badges}</div>'
+                    empty_state = self.render_table_content_template(request, organization_id, [])
+                    # Trigger event for badges to refresh themselves
+                    response_html = f'{empty_state}<script>htmx.trigger(document.body, "badgesUpdated");</script>'
                     return HttpResponse(response_html)
                 else:
-                    response_html = f'<div id="dataset-badges" hx-swap-oob="innerHTML">{dataset_badges}</div>'
+                    # Just trigger badges update event
+                    response_html = '<script>htmx.trigger(document.body, "badgesUpdated");</script>'
                     return HttpResponse(response_html)
             
             # Fallback: return full table content (for 'toggle' or error cases)
-            table_content = render_to_string('csv_mapping/partials/table_content.html', context, request=request)
+            table_content = self.render_table_content_template(request, organization_id, enhanced_datasets_with_details)
             
-            # Update dataset badges via OOB using template helper
-            dataset_badges = self.render_dataset_badges_template(request, organization_id, csv_datasets, selected_datasets_new)
-            
-            response_html = f'{table_content}<div id="dataset-badges" hx-swap-oob="innerHTML">{dataset_badges}</div>'
+            # Trigger event for badges to refresh themselves
+            response_html = f'{table_content}<script>htmx.trigger(document.body, "badgesUpdated");</script>'
             
             return HttpResponse(response_html)
             
@@ -316,4 +311,44 @@ class LoadMoreDatasetRowsView(
             
         except Exception as e:
             logger.error(f"LOAD_MORE_ROWS: Error loading more dataset rows: {e}", exc_info=True)
-            return HttpResponse(f'<tr><td colspan="100%" class="text-danger">Error: {str(e)}</td></tr>') 
+            return HttpResponse(f'<tr><td colspan="100%" class="text-danger">Error: {str(e)}</td></tr>')
+
+
+class GetDatasetBadgesView(
+    OrganizationMixin, 
+    CSVMappingCoordinatorMixin, 
+    CSVMappingTemplateHelperMixin,
+    View
+):
+    """
+    Get dataset badges view using template helpers.
+    
+    Returns just the inner content of dataset badges for event-driven refreshes.
+    """
+    
+    def get(self, request):
+        """Handle GET requests for dataset badges content."""
+        try:
+            organization_id = self.get_organization_id_from_request(request)
+            
+            # Use template helper to render badges content
+            csv_datasets = self.get_csv_datasets_for_organization(organization_id)
+            selected_datasets = self.get_selected_dataset_names(request, organization_id)
+            
+            context = {
+                'datasets': csv_datasets,
+                'selected_datasets': selected_datasets,
+                'organization_id': organization_id,
+                'csrf_token': request.META.get('CSRF_COOKIE'),
+            }
+            
+            # Render just the inner content for the HTMX refresh
+            return HttpResponse(render_to_string(
+                'csv_mapping/partials/dataset_badges_inner.html',
+                context,
+                request=request
+            ))
+            
+        except Exception as e:
+            logger.error(f"GET_BADGES: Error getting dataset badges: {e}", exc_info=True)
+            return HttpResponse(f'<div class="text-danger">Error: {str(e)}</div>') 

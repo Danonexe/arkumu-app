@@ -304,6 +304,11 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         - A dataset has columns in the workspace but isn't marked as "selected"
         - Auto-corrects by selecting the dataset if it has workspace columns
         
+        ENHANCED FOR POST-CLEAR OPERATIONS:
+        - Always allows auto-selection when dataset has orphaned columns
+        - Gracefully handles "Clear Selected Datasets" workflow
+        - Maintains coordinator integrity during mixed operations
+        
         SAFETY FEATURES:
         - Non-destructive: Only adds to selection, never removes
         - Logs all actions for debugging
@@ -345,21 +350,27 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
                     dataset_has_columns = True
                     column_count += 1
         
-        # Determine if we should auto-select the dataset
+        # ENHANCED LOGIC: Always allow auto-selection for column operations
+        # This handles the "Clear Selected Datasets" → "Add Column" workflow gracefully
         should_auto_select = dataset_has_columns or allow_auto_select_empty
         
+        # NEW: If user is trying to add a column to any dataset, allow auto-selection
+        # This makes the coordinator more forgiving after clear operations
         if not should_auto_select:
-            # Dataset not selected and has no columns, and auto-select not allowed - this is normal state
-            logger.info(f"🔒 SAFE_VALIDATION: Dataset '{dataset_name}' not selected and has no columns - validation failed")
-            return False, False, f"Dataset '{dataset_name}' is not selected and operation requires selection"
+            logger.info(f"🔒 SAFE_VALIDATION: AUTO-SELECTING dataset '{dataset_name}' for column operation (post-clear recovery)")
+            should_auto_select = True
+            allow_auto_select_empty = True
         
         # Auto-select the dataset
         if dataset_has_columns:
             logger.warning(f"🔒 SAFE_VALIDATION: STATE INCONSISTENCY DETECTED - Dataset '{dataset_name}' has {column_count} columns but is not selected")
             reason = f"existing columns ({column_count} columns found)"
+        elif allow_auto_select_empty:
+            logger.info(f"🔒 SAFE_VALIDATION: AUTO-SELECTING dataset '{dataset_name}' for column operation")
+            reason = "column addition operation"
         else:
-            logger.info(f"🔒 SAFE_VALIDATION: AUTO-SELECTING empty dataset '{dataset_name}' for select-all operation")
-            reason = "select-all operation"
+            logger.info(f"🔒 SAFE_VALIDATION: Dataset '{dataset_name}' not selected and has no columns - validation failed")
+            return False, False, f"Dataset '{dataset_name}' is not selected and operation requires selection"
         
         logger.info(f"🔒 SAFE_VALIDATION: Auto-correcting by selecting dataset '{dataset_name}'")
         
@@ -368,16 +379,20 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
             # Get current selected datasets
             current_selected = self.get_selected_dataset_names(request, organization_id)
             
-            # Add this dataset to the selection
-            updated_selected = list(current_selected) + [dataset_name]
-            
-            # Update the selection (this method varies by implementation)
-            # We need to call the method that updates selected datasets
-            session_key = f'selected_datasets_{organization_id}'
-            request.session[session_key] = updated_selected
-            
-            logger.info(f"🔒 SAFE_VALIDATION: Successfully auto-selected dataset '{dataset_name}' - state corrected")
-            return True, True, f"Dataset '{dataset_name}' was auto-selected due to {reason}"
+            # Add this dataset to the selection if not already there
+            if dataset_name not in current_selected:
+                updated_selected = list(current_selected) + [dataset_name]
+                
+                # Update the selection
+                session_key = f'selected_datasets_{organization_id}'
+                request.session[session_key] = updated_selected
+                request.session.modified = True
+                
+                logger.info(f"🔒 SAFE_VALIDATION: Successfully auto-selected dataset '{dataset_name}' - state corrected")
+                return True, True, f"Dataset '{dataset_name}' was auto-selected due to {reason}"
+            else:
+                logger.info(f"🔒 SAFE_VALIDATION: Dataset '{dataset_name}' already in selection - no correction needed")
+                return True, False, f"Dataset '{dataset_name}' was already selected"
             
         except Exception as e:
             logger.error(f"🔒 SAFE_VALIDATION: Failed to auto-select dataset '{dataset_name}': {e}")

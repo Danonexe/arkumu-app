@@ -148,6 +148,7 @@ urlpatterns = [
     # Step 2: Dataset card views (implemented with coordinator)
     path('csv-dataset-card/', dataset_views.CSVDatasetCardView.as_view(), name='csv_dataset_card'),
     path('toggle-csv-dataset/', dataset_views.ToggleDatasetSelectionView.as_view(), name='csv_toggle_dataset_card'),
+    path('csv-get-dataset-badges/', dataset_views.GetDatasetBadgesView.as_view(), name='csv_get_dataset_badges'),
     path('csv-load-more-rows/', dataset_views.LoadMoreDatasetRowsView.as_view(), name='csv_load_more_dataset_rows'),
     
     # Step 3: Column workspace management URLs (implemented with coordinator)

@@ -70,12 +70,11 @@ class AddColumnToWorkspaceView(
                 request, organization_id, dataset_name, source_name
             )
             
-            # Return updated column badges HTML with workspace update via hx-swap-oob using template helper
-            workspace_html = self.render_workspace_template(request, organization_id)
-            combined_response = f'{column_badges_html}<div id="selected-columns-workspace" hx-swap-oob="innerHTML">{workspace_html}</div>'
+            # PURE HTMX: Only return column badges, workspace self-refreshes via event
+            # The workspace listens for 'workspaceUpdated' events and refreshes itself
             
-            # Add workspace update trigger for JSON view synchronization
-            final_response = self.add_workspace_update_trigger(combined_response)
+            # Add workspace update trigger for both workspace and JSON view synchronization
+            final_response = self.add_workspace_update_trigger(column_badges_html)
             return HttpResponse(final_response)
             
         except Exception as e:
@@ -135,17 +134,10 @@ class RemoveColumnFromWorkspaceView(
             # Render workspace update using template helper
             workspace_html = self.render_workspace_template(request, organization_id)
             
-            # Return workspace update as main response + column badges update via OOB
-            # The workspace remove button targets the individual column, so we need to return empty content
-            # plus update both the workspace and the corresponding dataset's column badges
-            workspace_update = f'<div id="selected-columns-workspace" hx-swap-oob="innerHTML">{workspace_html}</div>'
-            # Use Django's slugify to match template format
-            from django.utils.text import slugify
-            column_badges_update = f'<div id="column-badges-{slugify(dataset_name)}" hx-swap-oob="innerHTML">{column_badges_html}</div>'
-            
-            # Use the same pattern as working views - return column badges as main response
-            # The workspace update happens via OOB
-            response = f'{column_badges_html}<div id="selected-columns-workspace" hx-swap-oob="innerHTML">{workspace_html}</div>'
+            # Use template helper to build OOB response
+            response = self.build_oob_response(column_badges_html, {
+                'selected-columns-workspace': workspace_html
+            })
             
             # Add workspace update trigger for JSON view synchronization
             final_response = self.add_workspace_update_trigger(response)
@@ -220,12 +212,11 @@ class SelectAllDatasetColumnsView(
                 request, organization_id, dataset_name, source_name, dataset_preview
             )
             
-            # SIMPLIFIED APPROACH: Always update the entire workspace for reliability using template helper
-            workspace_html = self.render_workspace_template(request, organization_id)
-            combined_response = f'{column_badges_html}<div id="selected-columns-workspace" hx-swap-oob="innerHTML">{workspace_html}</div>'
+            # PURE HTMX: Only return column badges, workspace self-refreshes via event
+            # The workspace listens for 'workspaceUpdated' events and refreshes itself
             
-            # Add workspace update trigger for JSON view synchronization
-            final_response = self.add_workspace_update_trigger(combined_response)
+            # Add workspace update trigger for both workspace and JSON view synchronization
+            final_response = self.add_workspace_update_trigger(column_badges_html)
             return HttpResponse(final_response)
             
         except Exception as e:
@@ -302,7 +293,9 @@ class DeselectAllDatasetColumnsView(
             else:
                 # Update the workspace using template helper
                 workspace_html = self.render_workspace_template(request, organization_id)
-                combined_response = f'{column_badges_html}<div id="selected-columns-workspace" hx-swap-oob="innerHTML">{workspace_html}</div>'
+                combined_response = self.build_oob_response(column_badges_html, {
+                    'selected-columns-workspace': workspace_html
+                })
             
             # Add workspace update trigger for JSON view synchronization
             final_response = self.add_workspace_update_trigger(combined_response)
