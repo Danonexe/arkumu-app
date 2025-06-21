@@ -116,15 +116,33 @@ class CSVMappingTemplateHelperMixin:
                 if parsed and parsed['dataset'] == dataset_name and parsed['source'] == organization_id:
                     dataset_selected_columns.append(parsed['column'])
         
+        # Get dataset preview if not provided
+        if dataset_preview is None:
+            from arkumu.metadata.services.data_analysis.s3_direct_data_analyzer import S3DirectDataAnalyzer
+            analyzer = S3DirectDataAnalyzer()
+            source_summary = analyzer.get_s3_source_summary(organization_id, source_name)
+            
+            # Find the specific dataset
+            for dataset_info in source_summary.get('datasets', []):
+                if dataset_info.get('name') == dataset_name:
+                    dataset_preview = dataset_info
+                    break
+        
         # Build dataset context
         dataset_context = {
             'name': dataset_name,
             'source': source_name,
         }
         
+        # Always add preview data for column badges to render
         if dataset_preview:
             dataset_context['preview'] = {
-                'colHeaders': dataset_preview.get('columns', [])
+                'colHeaders': dataset_preview.get('columns', dataset_preview.get('colHeaders', []))
+            }
+        else:
+            # Fallback to prevent template errors
+            dataset_context['preview'] = {
+                'colHeaders': []
             }
         
         context = {
