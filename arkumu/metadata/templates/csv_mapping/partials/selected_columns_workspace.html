@@ -24,7 +24,8 @@
         </div>
         
         <!-- Workspace Actions -->
-        <div id="workspace-actions" class="flex gap-2 {% if not datasets_with_columns %}hidden{% endif %}">
+        {% comment %}Show clear button if there are datasets with columns OR if there are orphaned columns{% endcomment %}
+        <div id="workspace-actions" class="flex gap-2 {% if not datasets_with_columns and workspace_columns_count|default:0 == 0 %}hidden{% endif %}">
             <button class="btn btn-sm btn-outline btn-error gap-2" 
                     hx-post="{% url 'metadata:csv_clear_workspace_columns' %}"
                     hx-vals='{"organization": "{{ organization_id }}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'

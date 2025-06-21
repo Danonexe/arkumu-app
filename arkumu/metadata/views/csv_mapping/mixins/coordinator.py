@@ -341,7 +341,7 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
             if isinstance(col_dict, dict):
                 col_id = col_dict.get('id', '')
                 parsed = self.parse_column_id(col_id)
-                if parsed['dataset'] == dataset_name and parsed['source'] == organization_id:
+                if parsed['dataset'] == dataset_name and (parsed['source'] == source_name or parsed['source'] == organization_id):
                     dataset_has_columns = True
                     column_count += 1
         
@@ -831,6 +831,7 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         datasets_with_columns = self._prepare_datasets_with_columns(updated_workspace_columns)
         workspace_context = {
             'datasets_with_columns': datasets_with_columns,
+            'workspace_columns_count': len(updated_workspace_columns),  # Add raw count for button visibility
             'organization_id': organization_id,
             'csrf_token': request.META.get('CSRF_COOKIE'),
         }
