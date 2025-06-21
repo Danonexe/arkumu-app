@@ -77,7 +77,7 @@ class CSVMappingTemplateHelperMixin:
         """
         Render table content template with standard context.
         
-        Consolidates the repeated pattern for table content rendering.
+        Includes column selection state for each dataset.
         """
         if selected_datasets_with_details is None:
             # Get basic selected datasets info
@@ -87,8 +87,25 @@ class CSVMappingTemplateHelperMixin:
                 ds for ds in csv_datasets if ds.get('name') in selected_datasets
             ]
         
+        # Get column selection state for all datasets
+        selection_key = f"column_selection_{organization_id}"
+        column_selections = request.session.get(selection_key, {})
+        
+        # Add column selection context to each dataset
+        enhanced_datasets = []
+        for dataset in selected_datasets_with_details:
+            dataset_key = f"{dataset.get('name')}::{dataset.get('source')}"
+            dataset_selected_columns = column_selections.get(dataset_key, [])
+            
+            # Create enhanced dataset with selection context
+            enhanced_dataset = {
+                **dataset,
+                'dataset_selected_columns': dataset_selected_columns
+            }
+            enhanced_datasets.append(enhanced_dataset)
+        
         context = {
-            'selected_datasets_with_details': selected_datasets_with_details,
+            'selected_datasets_with_details': enhanced_datasets,  # Include selection context
             'organization_id': organization_id,
             'csrf_token': get_token(request),
         }
@@ -103,18 +120,13 @@ class CSVMappingTemplateHelperMixin:
         """
         Render column badges template for a specific dataset.
         
-        Consolidates the repeated pattern for column badges rendering.
+        Uses separate column selection session (not workspace) for pure selection interface.
         """
-        # Get workspace columns and filter for this dataset
-        workspace_columns = self.get_workspace_columns(request, organization_id)
-        dataset_selected_columns = []
-        
-        for col_dict in workspace_columns:
-            col_id = col_dict.get('id') if isinstance(col_dict, dict) else col_dict
-            if col_id:
-                parsed = self.parse_column_id(col_id)
-                if parsed and parsed['dataset'] == dataset_name and parsed['source'] == organization_id:
-                    dataset_selected_columns.append(parsed['column'])
+        # Get column selection state from separate session key (not workspace)
+        selection_key = f"column_selection_{organization_id}"
+        column_selections = request.session.get(selection_key, {})
+        dataset_key = f"{dataset_name}::{source_name}"
+        dataset_selected_columns = column_selections.get(dataset_key, [])
         
         # Get dataset preview if not provided
         if dataset_preview is None:
@@ -147,7 +159,7 @@ class CSVMappingTemplateHelperMixin:
         
         context = {
             'dataset': dataset_context,
-            'dataset_selected_columns': dataset_selected_columns,
+            'dataset_selected_columns': dataset_selected_columns,  # From selection interface, not workspace
             'organization_id': organization_id,
             'csrf_token': get_token(request),
         }
@@ -198,46 +210,6 @@ class CSVMappingTemplateHelperMixin:
             oob_html += f'<div id="{target_id}" hx-swap-oob="innerHTML">{content}</div>'
         
         return f'{main_html}{oob_html}'
-    
-    def build_safe_oob_response(self, main_html, oob_updates=None):
-        """
-        Build response with SAFE out-of-band updates that won't cause targetError.
-        
-        This version adds JavaScript to check if targets exist before applying OOB updates.
-        Prevents htmx:targetError when DOM structure changes between requests.
-        
-        Args:
-            main_html (str): The main response HTML
-            oob_updates (dict): Dict of {target_id: content} for OOB updates
-        
-        Returns:
-            str: Complete HTML response with safe OOB updates
-        """
-        if not oob_updates:
-            return main_html
-        
-        # Build safe OOB updates with existence checks
-        safe_updates = []
-        for target_id, content in oob_updates.items():
-            # Escape the content for JavaScript
-            escaped_content = content.replace('\\', '\\\\').replace("'", "\\'").replace('\n', '\\n').replace('\r', '\\r')
-            
-            safe_update = f"""
-            <script>
-            (function() {{
-                const target = document.getElementById('{target_id}');
-                if (target) {{
-                    target.innerHTML = '{escaped_content}';
-                    console.log('✅ Safe OOB: Updated #{target_id}');
-                }} else {{
-                    console.warn('⚠️ Safe OOB: Target #{target_id} not found - skipping update');
-                }}
-            }})();
-            </script>
-            """
-            safe_updates.append(safe_update)
-        
-        return f'{main_html}{"".join(safe_updates)}'
     
     def build_standard_ui_refresh_response(self, request, organization_id, main_html=""):
         """

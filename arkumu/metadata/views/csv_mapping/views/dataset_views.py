@@ -143,8 +143,9 @@ class ToggleDatasetSelectionView(
             enhanced_datasets_with_details = []
             analyzer = S3DirectDataAnalyzer()
             
-            # Get workspace columns for dataset-specific column selection info
-            workspace_columns = self.get_workspace_columns(request, organization_id)
+            # Get column selection state (not workspace) for dataset column selection info
+            selection_key = f"column_selection_{organization_id}"
+            column_selections = request.session.get(selection_key, {})
             
             for dataset in selected_datasets_with_details:
                 try:
@@ -159,21 +160,15 @@ class ToggleDatasetSelectionView(
                             break
                     
                     if dataset_preview and 'error' not in dataset_preview:
-                        # Get selected columns for this specific dataset using coordinator parsing
-                        dataset_selected_columns = []
-                        for col_dict in workspace_columns:
-                            # Extract the column ID string from the dictionary
-                            col_id = col_dict.get('id') if isinstance(col_dict, dict) else col_dict
-                            if col_id:
-                                parsed = self.parse_column_id(col_id)
-                                if parsed['dataset'] == dataset['name'] and parsed['source'] == organization_id:
-                                    dataset_selected_columns.append(parsed['column'])
+                        # Get selected columns from column selection session (not workspace)
+                        dataset_key = f"{dataset['name']}::{dataset['source']}"
+                        dataset_selected_columns = column_selections.get(dataset_key, [])
                         
                         # Transform to match template expectations
                         enhanced_dataset = {
                             **dataset,  # Keep original data
                             'cell_count': dataset_preview.get('row_count', 0) * dataset_preview.get('column_count', 0),
-                            'dataset_selected_columns': dataset_selected_columns,  # ADD THIS
+                            'dataset_selected_columns': dataset_selected_columns,  # From selection session
                             'preview': {
                                 'colHeaders': dataset_preview.get('columns', []),
                                 'data': dataset_preview.get('sample_data', []),
@@ -198,7 +193,7 @@ class ToggleDatasetSelectionView(
                 'datasets': csv_datasets,  # For dataset badges
                 'csv_datasets': csv_datasets,  # For template compatibility
                 'selected_datasets': selected_datasets_new,  # Updated selection list
-                'selected_columns': workspace_columns,  # Global selected columns
+                'selected_columns': columns_affected,  # Global selected columns
                 'organization_id': organization_id,
                 'csrf_token': request.META.get('CSRF_COOKIE'),
                 'was_added': was_added,
@@ -207,7 +202,7 @@ class ToggleDatasetSelectionView(
             
             # Handle different actions for pure HTMX approach
             if action == 'add' and was_added:
-                # Return only the single new dataset card for prepending
+                # Return only the single new dataset card for prepending with OOB badge update
                 new_dataset = None
                 for dataset in enhanced_datasets_with_details:
                     if dataset['name'] == dataset_name:
@@ -222,8 +217,11 @@ class ToggleDatasetSelectionView(
                     }
                     single_card = render_to_string('csv_mapping/partials/dataset_card.html', single_context, request=request)
                     
-                    # Trigger event for badges to refresh themselves
-                    response_html = f'{single_card}<script>htmx.trigger(document.body, "badgesUpdated");</script>'
+                    # Use template helper for OOB badge update (pure HTMX)
+                    badges_html = self.render_dataset_badges_template(request, organization_id)
+                    oob_updates = {'dataset-badges': badges_html}
+                    response_html = self.build_oob_response(single_card, oob_updates)
+                    
                     return HttpResponse(response_html)
             
             elif action == 'remove' and not was_added:
@@ -231,19 +229,28 @@ class ToggleDatasetSelectionView(
                 # Check if no datasets remain, show empty state
                 if not enhanced_datasets_with_details:
                     empty_state = self.render_table_content_template(request, organization_id, [])
-                    # Trigger event for badges to refresh themselves
-                    response_html = f'{empty_state}<script>htmx.trigger(document.body, "badgesUpdated");</script>'
+                    
+                    # Use template helper for OOB badge update (pure HTMX)
+                    badges_html = self.render_dataset_badges_template(request, organization_id)
+                    oob_updates = {'dataset-badges': badges_html}
+                    response_html = self.build_oob_response(empty_state, oob_updates)
+                    
                     return HttpResponse(response_html)
                 else:
-                    # Just trigger badges update event
-                    response_html = '<script>htmx.trigger(document.body, "badgesUpdated");</script>'
+                    # Just return OOB badge update
+                    badges_html = self.render_dataset_badges_template(request, organization_id)
+                    oob_updates = {'dataset-badges': badges_html}
+                    response_html = self.build_oob_response("", oob_updates)
+                    
                     return HttpResponse(response_html)
             
             # Fallback: return full table content (for 'toggle' or error cases)
             table_content = self.render_table_content_template(request, organization_id, enhanced_datasets_with_details)
             
-            # Trigger event for badges to refresh themselves
-            response_html = f'{table_content}<script>htmx.trigger(document.body, "badgesUpdated");</script>'
+            # Use template helper for OOB badge update (pure HTMX)
+            badges_html = self.render_dataset_badges_template(request, organization_id)
+            oob_updates = {'dataset-badges': badges_html}
+            response_html = self.build_oob_response(table_content, oob_updates)
             
             return HttpResponse(response_html)
             

@@ -1,6 +1,6 @@
 {% if selected_datasets_with_details %}
     {% for dataset in selected_datasets_with_details %}
-        {% include 'csv_mapping/partials/dataset_card.html' with dataset=dataset organization_id=organization_id %}
+        {% include 'csv_mapping/partials/dataset_card.html' with dataset=dataset organization_id=organization_id dataset_selected_columns=dataset.dataset_selected_columns %}
     {% endfor %}
 {% else %}
     <!-- Initial state - multi-dataset accumulation view -->

@@ -70,12 +70,16 @@ class AddColumnToWorkspaceView(
                 request, organization_id, dataset_name, source_name
             )
             
-            # PURE HTMX: Only return column badges, workspace self-refreshes via event
-            # The workspace listens for 'workspaceUpdated' events and refreshes itself
+            # WORKSPACE OPERATION: Update both column badges AND workspace
+            workspace_html = self.render_workspace_template(request, organization_id)
             
-            # Add workspace update trigger for both workspace and JSON view synchronization
-            final_response = self.add_workspace_update_trigger(column_badges_html)
-            return HttpResponse(final_response)
+            # Build OOB response - this is a workspace operation so it should update workspace
+            oob_updates = {
+                'selected-columns-workspace': workspace_html
+            }
+            response = self.build_oob_response(column_badges_html, oob_updates)
+            
+            return HttpResponse(response)
             
         except Exception as e:
             logger.error(f"ADD_COLUMN: Error adding column to workspace: {e}", exc_info=True)
@@ -131,17 +135,16 @@ class RemoveColumnFromWorkspaceView(
                 request, organization_id, dataset_name, source_name
             )
             
-            # Render workspace update using template helper
+            # WORKSPACE OPERATION: Update both column badges AND workspace
             workspace_html = self.render_workspace_template(request, organization_id)
             
-            # Use template helper to build OOB response
-            response = self.build_oob_response(column_badges_html, {
+            # Build OOB response - this is a workspace operation so it should update workspace
+            oob_updates = {
                 'selected-columns-workspace': workspace_html
-            })
+            }
+            response = self.build_oob_response(column_badges_html, oob_updates)
             
-            # Add workspace update trigger for JSON view synchronization
-            final_response = self.add_workspace_update_trigger(response)
-            return HttpResponse(final_response)
+            return HttpResponse(response)
             
         except Exception as e:
             logger.error(f"REMOVE_COLUMN: Error removing column from workspace: {e}", exc_info=True)
@@ -212,12 +215,16 @@ class SelectAllDatasetColumnsView(
                 request, organization_id, dataset_name, source_name, dataset_preview
             )
             
-            # PURE HTMX: Only return column badges, workspace self-refreshes via event
-            # The workspace listens for 'workspaceUpdated' events and refreshes itself
+            # WORKSPACE OPERATION: Update both column badges AND workspace
+            workspace_html = self.render_workspace_template(request, organization_id)
             
-            # Add workspace update trigger for both workspace and JSON view synchronization
-            final_response = self.add_workspace_update_trigger(column_badges_html)
-            return HttpResponse(final_response)
+            # Build OOB response - this is a workspace operation so it should update workspace
+            oob_updates = {
+                'selected-columns-workspace': workspace_html
+            }
+            response = self.build_oob_response(column_badges_html, oob_updates)
+            
+            return HttpResponse(response)
             
         except Exception as e:
             logger.error(f"SELECT_ALL_DATASET_COLUMNS: Error selecting all columns: {e}", exc_info=True)
@@ -272,34 +279,16 @@ class DeselectAllDatasetColumnsView(
                 request, organization_id, dataset_name, source_name
             )
             
-            # Get updated workspace columns and filter for this dataset (should be empty now)
-            updated_workspace_columns = self.get_workspace_columns(request, organization_id)
-            dataset_selected_columns = []
-            for col_dict in updated_workspace_columns:
-                # Extract the column ID string from the dictionary
-                col_id = col_dict.get('id') if isinstance(col_dict, dict) else col_dict
-                if col_id:
-                    parsed = self.parse_column_id(col_id)
-                    if parsed['dataset'] == dataset_name and parsed['source'] == source_name:
-                        dataset_selected_columns.append(parsed['column'])
+            # WORKSPACE OPERATION: Update both column badges AND workspace
+            workspace_html = self.render_workspace_template(request, organization_id)
             
-            # For deselect all: if no columns left, remove the entire dataset section
-            # Otherwise, update the specific dataset section to preserve FK forms in other sections
-            if not dataset_selected_columns:
-                # Dataset section should be removed entirely
-                from django.utils.text import slugify
-                dataset_section_remove = f'<div id="dataset-workspace-{slugify(dataset_name)}" hx-swap-oob="delete"></div>'
-                combined_response = f'{column_badges_html}{dataset_section_remove}'
-            else:
-                # Update the workspace using template helper
-                workspace_html = self.render_workspace_template(request, organization_id)
-                combined_response = self.build_oob_response(column_badges_html, {
-                    'selected-columns-workspace': workspace_html
-                })
+            # Build OOB response - this is a workspace operation so it should update workspace
+            oob_updates = {
+                'selected-columns-workspace': workspace_html
+            }
+            response = self.build_oob_response(column_badges_html, oob_updates)
             
-            # Add workspace update trigger for JSON view synchronization
-            final_response = self.add_workspace_update_trigger(combined_response)
-            return HttpResponse(final_response)
+            return HttpResponse(response)
             
         except Exception as e:
             logger.error(f"DESELECT_ALL_DATASET_COLUMNS: Error deselecting all columns: {e}", exc_info=True)
@@ -356,9 +345,7 @@ class SetAnchorColumnView(
             # Return just the updated column item using template helper
             column_html = self.render_column_item_template(request, organization_id, target_column)
             
-            # Add workspace update trigger for JSON view synchronization
-            final_response = self.add_workspace_update_trigger(column_html)
-            return HttpResponse(final_response)
+            return HttpResponse(column_html)
             
         except Exception as e:
             logger.error(f"Error setting anchor column: {e}", exc_info=True)
@@ -414,10 +401,240 @@ class ToggleMultiValueColumnView(
             # Return just the updated column item using template helper
             column_html = self.render_column_item_template(request, organization_id, updated_column)
             
-            # Add workspace update trigger for JSON view synchronization
-            final_response = self.add_workspace_update_trigger(column_html)
-            return HttpResponse(final_response)
+            return HttpResponse(column_html)
             
         except Exception as e:
             logger.error(f"Error toggling multi-value column: {e}", exc_info=True)
-            return HttpResponse(f'<div class="alert alert-error">Error: {str(e)}</div>') 
+            return HttpResponse(f'<div class="alert alert-error">Error: {str(e)}</div>')
+
+
+# ==============================================================================
+# Pure Selection Interface Views (No Workspace Operations)
+# ==============================================================================
+
+class ToggleColumnSelectionView(
+    OrganizationMixin, 
+    CSVMappingCoordinatorMixin, 
+    CSVMappingTemplateHelperMixin,
+    View
+):
+    """
+    Toggle column selection in the browsing interface ONLY.
+    
+    This is pure selection interface - does not affect workspace.
+    Stores selection state in session under a separate key.
+    """
+    
+    def post(self, request):
+        """Handle POST requests for toggling column selection (browsing only)."""
+        try:
+            organization_id = self.get_organization_id_from_request(request)
+            column_name = request.POST.get('column')
+            dataset_name = request.POST.get('dataset')
+            source_name = request.POST.get('source')
+            
+            logger.info(f"🔄 TOGGLE_COLUMN_SELECTION: org={organization_id}, dataset={dataset_name}, source={source_name}, column={column_name}")
+            
+            if not all([column_name, dataset_name, source_name]):
+                return HttpResponse('<div class="alert alert-error">Column, dataset, and source parameters required</div>')
+            
+            # Use separate session key for column selection (not workspace)
+            selection_key = f"column_selection_{organization_id}"
+            column_selections = request.session.get(selection_key, {})
+            
+            # Dataset-specific selections
+            dataset_key = f"{dataset_name}::{source_name}"
+            if dataset_key not in column_selections:
+                column_selections[dataset_key] = []
+            
+            # Toggle column selection
+            was_selected = column_name in column_selections[dataset_key]
+            if was_selected:
+                column_selections[dataset_key].remove(column_name)
+                action = "REMOVED"
+            else:
+                column_selections[dataset_key].append(column_name)
+                action = "ADDED"
+            
+            # Save to session
+            request.session[selection_key] = column_selections
+            request.session.modified = True
+            
+            # Get updated selection state
+            dataset_selected_columns = column_selections.get(dataset_key, [])
+            
+            logger.info(f"🔄 TOGGLE_COLUMN_SELECTION: {action} '{column_name}' - Now {len(dataset_selected_columns)} columns selected: {dataset_selected_columns}")
+            
+            # Return updated column badges (selection interface only)
+            column_badges_html = self.render_column_badges_template(
+                request, organization_id, dataset_name, source_name
+            )
+            
+            return HttpResponse(column_badges_html)
+            
+        except Exception as e:
+            logger.error(f"TOGGLE_COLUMN_SELECTION: Error: {e}", exc_info=True)
+            return HttpResponse(f'<div class="alert alert-error">Error: {str(e)}</div>')
+
+
+class SelectAllColumnsView(
+    OrganizationMixin, 
+    CSVMappingCoordinatorMixin, 
+    CSVMappingTemplateHelperMixin,
+    View
+):
+    """
+    Select all columns in dataset (browsing interface only).
+    
+    This is pure selection interface - does not affect workspace.
+    """
+    
+    def post(self, request):
+        """Handle POST requests for selecting all columns (browsing only)."""
+        try:
+            organization_id = self.get_organization_id_from_request(request)
+            dataset_name = request.POST.get('dataset')
+            source_name = request.POST.get('source')
+            
+            if not dataset_name or not source_name:
+                return HttpResponse('<div class="alert alert-error">Dataset and source parameters required</div>')
+            
+            # Get all columns from dataset
+            analyzer = S3DirectDataAnalyzer()
+            source_summary = analyzer.get_s3_source_summary(organization_id, source_name)
+            
+            dataset_preview = None
+            for dataset_info in source_summary.get('datasets', []):
+                if dataset_info.get('name') == dataset_name:
+                    dataset_preview = dataset_info
+                    break
+            
+            if not dataset_preview:
+                return HttpResponse('<div class="alert alert-error">Dataset not found</div>')
+            
+            # Use separate session key for column selection (not workspace)
+            selection_key = f"column_selection_{organization_id}"
+            column_selections = request.session.get(selection_key, {})
+            
+            # Dataset-specific selections - select all columns
+            dataset_key = f"{dataset_name}::{source_name}"
+            column_selections[dataset_key] = dataset_preview.get('columns', [])
+            
+            # Save to session
+            request.session[selection_key] = column_selections
+            request.session.modified = True
+            
+            # Return updated column badges (selection interface only)
+            column_badges_html = self.render_column_badges_template(
+                request, organization_id, dataset_name, source_name, dataset_preview
+            )
+            
+            return HttpResponse(column_badges_html)
+            
+        except Exception as e:
+            logger.error(f"SELECT_ALL_COLUMNS: Error: {e}", exc_info=True)
+            return HttpResponse(f'<div class="alert alert-error">Error: {str(e)}</div>')
+
+
+class DeselectAllColumnsView(
+    OrganizationMixin, 
+    CSVMappingCoordinatorMixin, 
+    CSVMappingTemplateHelperMixin,
+    View
+):
+    """
+    Deselect all columns in dataset (browsing interface only).
+    
+    This is pure selection interface - does not affect workspace.
+    """
+    
+    def post(self, request):
+        """Handle POST requests for deselecting all columns (browsing only)."""
+        try:
+            organization_id = self.get_organization_id_from_request(request)
+            dataset_name = request.POST.get('dataset')
+            source_name = request.POST.get('source')
+            
+            if not dataset_name or not source_name:
+                return HttpResponse('<div class="alert alert-error">Dataset and source parameters required</div>')
+            
+            # Use separate session key for column selection (not workspace)
+            selection_key = f"column_selection_{organization_id}"
+            column_selections = request.session.get(selection_key, {})
+            
+            # Dataset-specific selections - clear all
+            dataset_key = f"{dataset_name}::{source_name}"
+            column_selections[dataset_key] = []
+            
+            # Save to session
+            request.session[selection_key] = column_selections
+            request.session.modified = True
+            
+            # Return updated column badges (selection interface only)
+            column_badges_html = self.render_column_badges_template(
+                request, organization_id, dataset_name, source_name
+            )
+            
+            return HttpResponse(column_badges_html)
+            
+        except Exception as e:
+            logger.error(f"DESELECT_ALL_COLUMNS: Error: {e}", exc_info=True)
+            return HttpResponse(f'<div class="alert alert-error">Error: {str(e)}</div>')
+
+
+class AddSelectedColumnsToWorkspaceView(
+    OrganizationMixin, 
+    CSVMappingCoordinatorMixin, 
+    CSVMappingTemplateHelperMixin,
+    View
+):
+    """
+    Add selected columns to workspace (workspace operation only).
+    
+    This transfers columns from selection interface to workspace.
+    Only affects workspace, not selection interface.
+    """
+    
+    def post(self, request):
+        """Handle POST requests for adding selected columns to workspace."""
+        try:
+            organization_id = self.get_organization_id_from_request(request)
+            dataset_name = request.POST.get('dataset')
+            source_name = request.POST.get('source')
+            selected_columns = request.POST.getlist('columns')
+            
+            logger.info(f"➕ ADD_SELECTED_TO_WORKSPACE: org={organization_id}, dataset={dataset_name}, source={source_name}")
+            logger.info(f"➕ ADD_SELECTED_TO_WORKSPACE: columns={selected_columns}")
+            
+            if not dataset_name or not source_name or not selected_columns:
+                logger.error(f"➕ ADD_SELECTED_TO_WORKSPACE: Missing required parameters")
+                return HttpResponse('<div class="alert alert-error">Dataset, source, and columns parameters required</div>')
+            
+            # Add columns to workspace using coordinator
+            total_added = 0
+            errors = []
+            
+            for column_name in selected_columns:
+                success, new_column, total_columns, error_message = self.safe_add_column_with_validation(
+                    request, organization_id, column_name, dataset_name, source_name
+                )
+                if success:
+                    total_added += 1
+                    logger.info(f"➕ ADD_SELECTED_TO_WORKSPACE: Successfully added '{column_name}'")
+                else:
+                    errors.append(f"{column_name}: {error_message}")
+                    logger.error(f"➕ ADD_SELECTED_TO_WORKSPACE: Failed to add '{column_name}': {error_message}")
+            
+            logger.info(f"➕ ADD_SELECTED_TO_WORKSPACE: Added {total_added}/{len(selected_columns)} columns")
+            
+            # Return updated workspace (workspace operation only)
+            workspace_html = self.render_workspace_template(request, organization_id)
+            
+            return HttpResponse(workspace_html)
+            
+        except Exception as e:
+            logger.error(f"ADD_SELECTED_TO_WORKSPACE: Error: {e}", exc_info=True)
+            return HttpResponse(f'<div class="alert alert-error">Error: {str(e)}</div>')
+
+
+# ============================================================================== 

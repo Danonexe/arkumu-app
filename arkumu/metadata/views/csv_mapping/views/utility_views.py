@@ -71,14 +71,14 @@ class ClearSelectedDatasetsView(
             # Render empty table content (no selected datasets to show)
             table_content_html = self.render_table_content_template(request, organization_id, [])
             
-            # Build response that ONLY updates selection interface, leaves workspace alone
-            response = self.build_oob_response(badges_html, {
+            # Build response using template helper (pure HTMX)
+            oob_updates = {
+                'dataset-badges': badges_html,
                 'table-content': table_content_html
-            })
+            }
+            response = self.build_oob_response("", oob_updates)
             
-            # Add workspace update trigger for JSON view synchronization
-            final_response = self.add_workspace_update_trigger(response)
-            return HttpResponse(final_response)
+            return HttpResponse(response)
             
         except Exception as e:
             logger.error(f"CLEAR_DATASETS: Error clearing selected datasets: {e}", exc_info=True)
@@ -111,12 +111,17 @@ class ClearWorkspaceColumnsView(
             
             logger.info(f"CLEAR_WORKSPACE: Cleared {columns_cleared} workspace columns, preserved {datasets_preserved} selected datasets")
             
-            # Use template helper for complete UI refresh
-            response = self.build_standard_ui_refresh_response(request, organization_id)
+            # CORRECTED: Only update the workspace component, NOT the dataset selection interface
+            # This preserves selected datasets and column selections in the browsing interface
+            workspace_html = self.render_workspace_template(request, organization_id)
             
-            # Add workspace update trigger for JSON view synchronization
-            final_response = self.add_workspace_update_trigger(response)
-            return HttpResponse(final_response)
+            # Build response with only workspace update
+            oob_updates = {
+                'selected-columns-workspace': workspace_html
+            }
+            response = self.build_oob_response("", oob_updates)
+            
+            return HttpResponse(response)
             
         except Exception as e:
             logger.error(f"CLEAR_WORKSPACE: Error clearing workspace columns: {e}", exc_info=True)
@@ -152,9 +157,7 @@ class ClearAllMappingStateView(
             # Use template helper for complete UI refresh (everything will be empty)
             response = self.build_standard_ui_refresh_response(request, organization_id)
             
-            # Add workspace update trigger for JSON view synchronization
-            final_response = self.add_workspace_update_trigger(response)
-            return HttpResponse(final_response)
+            return HttpResponse(response)
             
         except Exception as e:
             logger.error(f"CLEAR_ALL: Error clearing all mapping state: {e}", exc_info=True)

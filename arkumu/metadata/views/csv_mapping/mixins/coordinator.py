@@ -1310,21 +1310,7 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         return validation_result
     
     # ==========================================================================
-    # JSON View Synchronization Helper
+    # Pure HTMX Helper Methods (no JavaScript)
     # ==========================================================================
-    
-    def add_workspace_update_trigger(self, response_html):
-        """
-        Add JavaScript trigger to notify JSON view that workspace has been updated.
-        
-        This ensures that the JSON view stays in sync with workspace changes
-        by triggering a 'workspaceUpdated' event on the document body.
-        
-        Args:
-            response_html (str): The original response HTML
-            
-        Returns:
-            str: Response HTML with workspace update trigger added
-        """
-        trigger_script = '<script>htmx.trigger(document.body, "workspaceUpdated");</script>'
-        return f'{response_html}{trigger_script}'
+    # Note: Previously had add_workspace_update_trigger method but removed
+    # for pure HTMX approach with component separation

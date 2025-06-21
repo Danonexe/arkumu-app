@@ -157,6 +157,12 @@ urlpatterns = [
     path('csv-select-all-dataset-columns/', column_views.SelectAllDatasetColumnsView.as_view(), name='csv_select_all_dataset_columns'),
     path('csv-deselect-all-dataset-columns/', column_views.DeselectAllDatasetColumnsView.as_view(), name='csv_deselect_all_dataset_columns'),
     
+    # Pure Selection Interface URLs (separated from workspace operations)
+    path('csv-toggle-column-selection/', column_views.ToggleColumnSelectionView.as_view(), name='csv_toggle_column_selection'),
+    path('csv-select-all-columns/', column_views.SelectAllColumnsView.as_view(), name='csv_select_all_columns'),
+    path('csv-deselect-all-columns/', column_views.DeselectAllColumnsView.as_view(), name='csv_deselect_all_columns'),
+    path('csv-add-selected-to-workspace/', column_views.AddSelectedColumnsToWorkspaceView.as_view(), name='csv_add_selected_columns_to_workspace'),
+    
     # Step 4: FK configuration URLs (placeholder for now)
     path('csv-configure-fk/', relationship_views.ConfigureFKRelationshipView.as_view(), name='configure_fk_relationship'),
     
