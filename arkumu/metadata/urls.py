@@ -1,6 +1,7 @@
 from django.urls import path
 from arkumu.metadata.views import dashboard_views, resource_views, triple_views, graph_views, bulk_editor_views, data_discovery_views, data_explorer_views, split_views, direct_data_views
-from arkumu.metadata.views.csv_mapping import csv_mapping_views, saved_mappings_api, saved_mappings_ui
+from arkumu.metadata.views.csv_mapping import saved_mappings_api, saved_mappings_ui
+from arkumu.metadata.views.csv_mapping.views import core_editor_views, dataset_views, column_views, utility_views, relationship_views, ontology_views
 
 app_name = 'metadata'
 
@@ -142,29 +143,29 @@ urlpatterns = [
     # ==============================================================================
     
     # Main CSV Mapping Editor
-    path('csv-mapping-editor/', csv_mapping_views.csv_mapping_editor_view, name='csv_mapping_editor'),
+    path('csv-mapping-editor/', core_editor_views.csv_mapping_editor_view, name='csv_mapping_editor'),
     
     # Step 2: Dataset card views (implemented with coordinator)
-    path('csv-dataset-card/', csv_mapping_views.CSVDatasetCardView.as_view(), name='csv_dataset_card'),
-    path('toggle-csv-dataset/', csv_mapping_views.ToggleDatasetSelectionView.as_view(), name='csv_toggle_dataset_card'),
-    path('csv-load-more-rows/', csv_mapping_views.LoadMoreDatasetRowsView.as_view(), name='csv_load_more_dataset_rows'),
+    path('csv-dataset-card/', dataset_views.CSVDatasetCardView.as_view(), name='csv_dataset_card'),
+    path('toggle-csv-dataset/', dataset_views.ToggleDatasetSelectionView.as_view(), name='csv_toggle_dataset_card'),
+    path('csv-load-more-rows/', dataset_views.LoadMoreDatasetRowsView.as_view(), name='csv_load_more_dataset_rows'),
     
     # Step 3: Column workspace management URLs (implemented with coordinator)
-    path('csv-add-column/', csv_mapping_views.AddColumnToWorkspaceView.as_view(), name='csv_add_column_to_workspace'),
-    path('csv-remove-column/', csv_mapping_views.RemoveColumnFromWorkspaceView.as_view(), name='csv_remove_column_from_workspace'),
-    path('csv-select-all-dataset-columns/', csv_mapping_views.SelectAllDatasetColumnsView.as_view(), name='csv_select_all_dataset_columns'),
-    path('csv-deselect-all-dataset-columns/', csv_mapping_views.DeselectAllDatasetColumnsView.as_view(), name='csv_deselect_all_dataset_columns'),
+    path('csv-add-column/', column_views.AddColumnToWorkspaceView.as_view(), name='csv_add_column_to_workspace'),
+    path('csv-remove-column/', column_views.RemoveColumnFromWorkspaceView.as_view(), name='csv_remove_column_from_workspace'),
+    path('csv-select-all-dataset-columns/', column_views.SelectAllDatasetColumnsView.as_view(), name='csv_select_all_dataset_columns'),
+    path('csv-deselect-all-dataset-columns/', column_views.DeselectAllDatasetColumnsView.as_view(), name='csv_deselect_all_dataset_columns'),
     
     # Step 4: FK configuration URLs (placeholder for now)
-    path('csv-configure-fk/', csv_mapping_views.ConfigureFKRelationshipView.as_view(), name='configure_fk_relationship'),
+    path('csv-configure-fk/', relationship_views.ConfigureFKRelationshipView.as_view(), name='configure_fk_relationship'),
     
     # Clear operation URLs (separated by responsibility)
-    path('csv-clear-selected-datasets/', csv_mapping_views.ClearSelectedDatasetsView.as_view(), name='csv_clear_selected_datasets'),
-    path('csv-clear-workspace-columns/', csv_mapping_views.ClearWorkspaceColumnsView.as_view(), name='csv_clear_workspace_columns'),
-    path('csv-clear-all-mapping-state/', csv_mapping_views.ClearAllMappingStateView.as_view(), name='csv_clear_all_mapping_state'),
+    path('csv-clear-selected-datasets/', utility_views.ClearSelectedDatasetsView.as_view(), name='csv_clear_selected_datasets'),
+    path('csv-clear-workspace-columns/', utility_views.ClearWorkspaceColumnsView.as_view(), name='csv_clear_workspace_columns'),
+    path('csv-clear-all-mapping-state/', utility_views.ClearAllMappingStateView.as_view(), name='csv_clear_all_mapping_state'),
     
     # Legacy clear URL (now delegates to ClearSelectedDatasetsView for backward compatibility)
-    path('csv-clear-all-datasets/', csv_mapping_views.ClearAllDatasetsView.as_view(), name='csv_clear_all_datasets'),
+    path('csv-clear-all-datasets/', utility_views.ClearAllDatasetsView.as_view(), name='csv_clear_all_datasets'),
     
     # Mapping persistence endpoints (JSON API)
     path('csv-save-mapping/', saved_mappings_api.SaveMappingView.as_view(), name='csv_save_mapping'),
@@ -183,33 +184,33 @@ urlpatterns = [
     path('csv-refresh-dataset-badges/', saved_mappings_ui.RefreshDatasetBadgesView.as_view(), name='csv_refresh_dataset_badges'),
     
     # Step 4: FK Configuration URLs (now using proper CSV mapping views with coordinator mixins)
-    path('csv-toggle-fk-form/', csv_mapping_views.ToggleFKFormView.as_view(), name='csv_toggle_fk_form'),
-    path('csv-hide-fk-form/', csv_mapping_views.HideFKFormView.as_view(), name='csv_hide_fk_form'),
-    path('csv-update-fk-target-columns/', csv_mapping_views.UpdateFKTargetColumnsView.as_view(), name='csv_update_fk_target_columns'),
-    path('csv-save-inline-fk-config/', csv_mapping_views.SaveInlineFKConfigView.as_view(), name='csv_save_inline_fk_config'),
-    path('csv-remove-fk-config/', csv_mapping_views.RemoveFKConfigView.as_view(), name='remove_fk_config'),
+    path('csv-toggle-fk-form/', relationship_views.ToggleFKFormView.as_view(), name='csv_toggle_fk_form'),
+    path('csv-hide-fk-form/', relationship_views.HideFKFormView.as_view(), name='csv_hide_fk_form'),
+    path('csv-update-fk-target-columns/', relationship_views.UpdateFKTargetColumnsView.as_view(), name='csv_update_fk_target_columns'),
+    path('csv-save-inline-fk-config/', relationship_views.SaveInlineFKConfigView.as_view(), name='csv_save_inline_fk_config'),
+    path('csv-remove-fk-config/', relationship_views.RemoveFKConfigView.as_view(), name='remove_fk_config'),
     
     # Column configuration URLs (anchor and multi-value using coordinator mixins)
-    path('csv-set-anchor-column/', csv_mapping_views.SetAnchorColumnView.as_view(), name='csv_set_anchor_column'),
-    path('csv-toggle-multi-value-column/', csv_mapping_views.ToggleMultiValueColumnView.as_view(), name='csv_toggle_multi_value_column'),
+    path('csv-set-anchor-column/', column_views.SetAnchorColumnView.as_view(), name='csv_set_anchor_column'),
+    path('csv-toggle-multi-value-column/', column_views.ToggleMultiValueColumnView.as_view(), name='csv_toggle_multi_value_column'),
     
     # Step 5: Relationship Context Configuration URLs (junction tables with attributes)
-    path('csv-toggle-relationship-context-form/', csv_mapping_views.ToggleRelationshipContextFormView.as_view(), name='csv_toggle_relationship_context_form'),
-    path('csv-hide-relationship-context-form/', csv_mapping_views.HideRelationshipContextFormView.as_view(), name='csv_hide_relationship_context_form'),
-    path('csv-update-relationship-context-columns/', csv_mapping_views.UpdateRelationshipContextColumnsView.as_view(), name='csv_update_relationship_context_columns'),
-    path('csv-save-relationship-context/', csv_mapping_views.SaveInlineRelationshipContextView.as_view(), name='csv_save_relationship_context'),
-    path('csv-remove-relationship-context/', csv_mapping_views.RemoveRelationshipContextView.as_view(), name='csv_remove_relationship_context'),
+    path('csv-toggle-relationship-context-form/', relationship_views.ToggleRelationshipContextFormView.as_view(), name='csv_toggle_relationship_context_form'),
+    path('csv-hide-relationship-context-form/', relationship_views.HideRelationshipContextFormView.as_view(), name='csv_hide_relationship_context_form'),
+    path('csv-update-relationship-context-columns/', relationship_views.UpdateRelationshipContextColumnsView.as_view(), name='csv_update_relationship_context_columns'),
+    path('csv-save-relationship-context/', relationship_views.SaveInlineRelationshipContextView.as_view(), name='csv_save_relationship_context'),
+    path('csv-remove-relationship-context/', relationship_views.RemoveRelationshipContextView.as_view(), name='csv_remove_relationship_context'),
     
     # JSON Export URLs (for mapping configuration serialization)
-    path('csv-mapping/export-json/', csv_mapping_views.ExportMappingJSONView.as_view(), name='csv_export_mapping_json'),
-    path('csv-mapping/json-content/', csv_mapping_views.GetMappingJSONContentView.as_view(), name='csv_get_mapping_json_content'),
-    path('csv-mapping/json-view/', csv_mapping_views.GetMappingJSONViewView.as_view(), name='csv_get_mapping_json_view'),
+    path('csv-mapping/export-json/', utility_views.ExportMappingJSONView.as_view(), name='csv_export_mapping_json'),
+    path('csv-mapping/json-content/', utility_views.GetMappingJSONContentView.as_view(), name='csv_get_mapping_json_content'),
+    path('csv-mapping/json-view/', utility_views.GetMappingJSONViewView.as_view(), name='csv_get_mapping_json_view'),
     
     # External Ontology Views
-    path('csv-toggle-external-ontology-form/', csv_mapping_views.ToggleExternalOntologyFormView.as_view(), name='csv_toggle_external_ontology_form'),
-    path('csv-hide-external-ontology-form/', csv_mapping_views.HideExternalOntologyFormView.as_view(), name='csv_hide_external_ontology_form'),
-    path('csv-save-external-ontology/', csv_mapping_views.SaveInlineExternalOntologyView.as_view(), name='csv_save_external_ontology'),
-    path('csv-remove-external-ontology/', csv_mapping_views.RemoveExternalOntologyView.as_view(), name='csv_remove_external_ontology'),
-    path('csv-validate-external-ontology-identifier/', csv_mapping_views.ValidateExternalOntologyIdentifierView.as_view(), name='csv_validate_external_ontology_identifier'),
+    path('csv-toggle-external-ontology-form/', ontology_views.ToggleExternalOntologyFormView.as_view(), name='csv_toggle_external_ontology_form'),
+    path('csv-hide-external-ontology-form/', ontology_views.HideExternalOntologyFormView.as_view(), name='csv_hide_external_ontology_form'),
+    path('csv-save-external-ontology/', ontology_views.SaveInlineExternalOntologyView.as_view(), name='csv_save_external_ontology'),
+    path('csv-remove-external-ontology/', ontology_views.RemoveExternalOntologyView.as_view(), name='csv_remove_external_ontology'),
+    path('csv-validate-external-ontology-identifier/', ontology_views.ValidateExternalOntologyIdentifierView.as_view(), name='csv_validate_external_ontology_identifier'),
     
     ]
