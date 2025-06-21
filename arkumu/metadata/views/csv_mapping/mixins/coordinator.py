@@ -783,6 +783,7 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
     def clear_selected_datasets_only(self, request, organization_id):
         """
         Clear ONLY selected datasets (keep workspace columns intact).
+        Also clears column selection state to prevent conflicts.
         
         SPECIFIC OPERATION: This is for the dataset badges "Clear Selected" button.
         Only removes dataset selections but preserves all workspace columns and their configurations.
@@ -804,10 +805,22 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         self.clear_selected_datasets(request, organization_id)
         datasets_cleared = len(selected_datasets)
         
+        # CRITICAL: Also clear ALL column selection state to prevent conflicts
+        # When datasets are cleared, any lingering column selections can cause htmx:targetError
+        # when new datasets are selected and try to update non-existent elements
+        selection_key = f"column_selection_{organization_id}"
+        column_selections = request.session.get(selection_key, {})
+        columns_selections_cleared = len(column_selections)
+        
+        if column_selections:
+            request.session[selection_key] = {}
+            request.session.modified = True
+            logger.info(f"🗂️ COORDINATOR: Cleared {columns_selections_cleared} column selection states to prevent conflicts")
+        
         # Workspace remains untouched
         workspace_preserved_count = len(workspace_columns)
         
-        logger.info(f"🗂️ COORDINATOR: DATASETS ONLY CLEAR - Cleared {datasets_cleared} datasets, preserved {workspace_preserved_count} workspace columns")
+        logger.info(f"🗂️ COORDINATOR: DATASETS ONLY CLEAR - Cleared {datasets_cleared} datasets and {columns_selections_cleared} column selections, preserved {workspace_preserved_count} workspace columns")
         
         return datasets_cleared, workspace_preserved_count
 
