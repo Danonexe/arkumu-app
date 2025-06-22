@@ -211,6 +211,30 @@ class CSVMappingTemplateHelperMixin:
         
         return f'{main_html}{oob_html}'
     
+    def add_workspace_update_trigger(self, html_content):
+        """
+        Add workspace update trigger for JSON view synchronization.
+        
+        This method adds an HX-Trigger header to fire a 'refreshJson' event
+        that the JSON view listens for to update its content when workspace changes occur.
+        
+        Args:
+            html_content (str): The HTML content to wrap in an HttpResponse
+            
+        Returns:
+            HttpResponse: Response with HX-Trigger header for JSON synchronization
+        """
+        from django.http import HttpResponse
+        import json
+        
+        response = HttpResponse(html_content)
+        # Add HX-Trigger header to fire refreshJson event for JSON view synchronization
+        trigger_data = {
+            'refreshJson': True
+        }
+        response['HX-Trigger'] = json.dumps(trigger_data)
+        return response
+    
     def build_standard_ui_refresh_response(self, request, organization_id, main_html=""):
         """
         Build a standard response that refreshes all major UI components.

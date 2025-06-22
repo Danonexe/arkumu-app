@@ -273,9 +273,7 @@ class SaveInlineExternalOntologyView(
             # Return just the updated column item using template helper
             column_html = self.render_column_item_template(request, organization_id, updated_column)
             
-            # Add workspace update trigger for JSON view synchronization
-            final_response = self.add_workspace_update_trigger(column_html)
-            return HttpResponse(final_response)
+            return HttpResponse(column_html)
             
         except Exception as e:
             logger.error(f"CSV_SAVE_EXTERNAL_ONTOLOGY: Error saving configuration: {e}", exc_info=True)
@@ -351,9 +349,7 @@ class RemoveExternalOntologyView(
             # Return updated workspace using template helper
             workspace_html = self.render_workspace_template(request, organization_id)
             
-            # Add workspace update trigger for JSON view synchronization
-            final_response = self.add_workspace_update_trigger(workspace_html)
-            return HttpResponse(final_response)
+            return HttpResponse(workspace_html)
             
         except Exception as e:
             logger.error(f"CSV_REMOVE_EXTERNAL_ONTOLOGY: Error removing configuration: {e}", exc_info=True)
