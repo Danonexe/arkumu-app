@@ -2,6 +2,11 @@ from django.urls import path
 from arkumu.metadata.views import dashboard_views, resource_views, triple_views, graph_views, bulk_editor_views, data_discovery_views, data_explorer_views, split_views, direct_data_views
 from arkumu.metadata.views.csv_mapping import saved_mappings_api, saved_mappings_ui
 from arkumu.metadata.views.csv_mapping.views import core_editor_views, dataset_views, column_views, utility_views, relationship_views, ontology_views
+from arkumu.metadata.views.csv_mapping.views.execution_views import (
+    ExecuteGUIMappingView,
+    GetMappingExecutionStatusView, 
+    ValidateMappingExecutionView
+)
 
 app_name = 'metadata'
 
@@ -219,5 +224,10 @@ urlpatterns = [
     path('csv-save-external-ontology/', ontology_views.SaveInlineExternalOntologyView.as_view(), name='csv_save_external_ontology'),
     path('csv-remove-external-ontology/', ontology_views.RemoveExternalOntologyView.as_view(), name='csv_remove_external_ontology'),
     path('csv-validate-external-ontology-identifier/', ontology_views.ValidateExternalOntologyIdentifierView.as_view(), name='csv_validate_external_ontology_identifier'),
+    
+    # CSV Mapping Execution URLs
+    path('csv-mapping/execute/', ExecuteGUIMappingView.as_view(), name='execute_gui_mapping'),
+    path('csv-mapping/execution-status/', GetMappingExecutionStatusView.as_view(), name='mapping_execution_status'),
+    path('csv-mapping/validate-execution/', ValidateMappingExecutionView.as_view(), name='validate_mapping_execution'),
     
     ]

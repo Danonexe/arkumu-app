@@ -774,4 +774,114 @@ class S3DirectDataAnalyzer:
                 'object_key': source_info.object_key,
                 'size_bytes': source_info.size_bytes
             }
-        } 
+        }
+
+    def get_full_dataset_data(self, organization_id: str, dataset_name: str, 
+                             source_name: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Load complete CSV dataset data (not just preview) for processing.
+        
+        This method loads the entire dataset into memory for processing by 
+        SmartBulkUpdaterPolars or other components that need full data access.
+        
+        Args:
+            organization_id: Organization ID to determine S3 bucket
+            dataset_name: Name of the dataset to load
+            source_name: Optional source name to narrow search
+            
+        Returns:
+            List of dictionaries representing all rows in the dataset
+            
+        Raises:
+            ValueError: If dataset is not found or cannot be loaded
+        """
+        logger.info(f"Loading full dataset data: {dataset_name} for org: {organization_id}")
+        
+        try:
+            # Discover available data sources
+            available_sources = self.discover_s3_data_sources(organization_id)
+            
+            # Find the source containing the requested dataset
+            target_source = None
+            for source in available_sources:
+                if source_name and source.name != source_name:
+                    continue  # Skip if source name specified and doesn't match
+                
+                try:
+                    datasets = self.get_dataset_names_from_s3_source(source)
+                    if dataset_name in datasets:
+                        target_source = source
+                        break
+                except Exception as e:
+                    logger.warning(f"Could not check datasets in source {source.name}: {e}")
+                    continue
+            
+            if not target_source:
+                available_datasets = []
+                for source in available_sources:
+                    try:
+                        datasets = self.get_dataset_names_from_s3_source(source)
+                        available_datasets.extend(datasets)
+                    except:
+                        pass
+                
+                raise ValueError(
+                    f"Dataset '{dataset_name}' not found in organization '{organization_id}'. "
+                    f"Available datasets: {available_datasets}"
+                )
+            
+            # Load the complete dataset using eager reading
+            logger.info(f"Loading complete dataset from source: {target_source.name}")
+            df = self._read_s3_source_eager_sample(
+                target_source, 
+                dataset_name, 
+                n_rows=None  # Load all rows - no limit
+            )
+            
+            # Convert to list of dictionaries
+            dataset_rows = df.to_dicts()
+            
+            logger.info(f"Successfully loaded {len(dataset_rows)} rows from dataset: {dataset_name}")
+            logger.info(f"Dataset columns: {df.columns}")
+            
+            return dataset_rows
+            
+        except Exception as e:
+            logger.error(f"Error loading full dataset {dataset_name}: {e}", exc_info=True)
+            raise ValueError(f"Failed to load dataset '{dataset_name}': {str(e)}")
+
+    def get_multiple_datasets_data(self, organization_id: str, 
+                                  dataset_names: List[str]) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Load multiple complete datasets efficiently.
+        
+        Args:
+            organization_id: Organization ID
+            dataset_names: List of dataset names to load
+            
+        Returns:
+            Dictionary mapping dataset names to their data
+        """
+        logger.info(f"Loading {len(dataset_names)} datasets for org: {organization_id}")
+        
+        datasets_data = {}
+        errors = {}
+        
+        for dataset_name in dataset_names:
+            try:
+                dataset_data = self.get_full_dataset_data(organization_id, dataset_name)
+                datasets_data[dataset_name] = dataset_data
+                logger.info(f"Loaded dataset '{dataset_name}': {len(dataset_data)} rows")
+            except Exception as e:
+                logger.error(f"Failed to load dataset '{dataset_name}': {e}")
+                errors[dataset_name] = str(e)
+        
+        if errors and not datasets_data:
+            # All datasets failed
+            raise ValueError(f"Failed to load any datasets. Errors: {errors}")
+        elif errors:
+            # Some datasets failed - log warnings but continue
+            logger.warning(f"Some datasets failed to load: {errors}")
+        
+        logger.info(f"Successfully loaded {len(datasets_data)} out of {len(dataset_names)} datasets")
+        return datasets_data 

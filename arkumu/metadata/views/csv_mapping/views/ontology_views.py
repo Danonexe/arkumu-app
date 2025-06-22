@@ -102,6 +102,78 @@ class ToggleExternalOntologyFormView(
                     'example': '0000000121032683',
                     'description': 'International Standard Name Identifier'
                 },
+                
+                # === VOCABULARIES / ONTOLOGIES ===
+                'dublin_core': {
+                    'name': 'Dublin Core Terms',
+                    'uri_template': 'http://purl.org/dc/terms/{identifier}',
+                    'identifier_pattern': r'^[a-zA-Z][a-zA-Z0-9_]*$',
+                    'example': 'title',
+                    'description': 'Dublin Core Metadata Terms vocabulary'
+                },
+                'foaf': {
+                    'name': 'FOAF (Friend of a Friend)',
+                    'uri_template': 'http://xmlns.com/foaf/0.1/{identifier}',
+                    'identifier_pattern': r'^[a-zA-Z][a-zA-Z0-9_]*$',
+                    'example': 'name',
+                    'description': 'FOAF vocabulary for describing people and relationships'
+                },
+                'skos': {
+                    'name': 'SKOS (Simple Knowledge Organization System)',
+                    'uri_template': 'http://www.w3.org/2004/02/skos/core#{identifier}',
+                    'identifier_pattern': r'^[a-zA-Z][a-zA-Z0-9_]*$',
+                    'example': 'prefLabel',
+                    'description': 'SKOS vocabulary for organizing knowledge'
+                },
+                'schema_org': {
+                    'name': 'Schema.org',
+                    'uri_template': 'https://schema.org/{identifier}',
+                    'identifier_pattern': r'^[a-zA-Z][a-zA-Z0-9_]*$',
+                    'example': 'Person',
+                    'description': 'Schema.org structured data vocabulary'
+                },
+                'bibframe': {
+                    'name': 'BIBFRAME',
+                    'uri_template': 'http://id.loc.gov/ontologies/bibframe/{identifier}',
+                    'identifier_pattern': r'^[a-zA-Z][a-zA-Z0-9_]*$',
+                    'example': 'Work',
+                    'description': 'Bibliographic Framework vocabulary'
+                },
+                'dcat': {
+                    'name': 'DCAT (Data Catalog Vocabulary)',
+                    'uri_template': 'http://www.w3.org/ns/dcat#{identifier}',
+                    'identifier_pattern': r'^[a-zA-Z][a-zA-Z0-9_]*$',
+                    'example': 'Dataset',
+                    'description': 'W3C Data Catalog vocabulary'
+                },
+                'prov': {
+                    'name': 'PROV-O (Provenance Ontology)',
+                    'uri_template': 'http://www.w3.org/ns/prov#{identifier}',
+                    'identifier_pattern': r'^[a-zA-Z][a-zA-Z0-9_]*$',
+                    'example': 'Activity',
+                    'description': 'W3C Provenance ontology'
+                },
+                'void': {
+                    'name': 'VoID (Vocabulary of Interlinked Datasets)',
+                    'uri_template': 'http://rdfs.org/ns/void#{identifier}',
+                    'identifier_pattern': r'^[a-zA-Z][a-zA-Z0-9_]*$',
+                    'example': 'Dataset',
+                    'description': 'Vocabulary for describing linked datasets'
+                },
+                'org': {
+                    'name': 'ORG (Organization Ontology)',
+                    'uri_template': 'http://www.w3.org/ns/org#{identifier}',
+                    'identifier_pattern': r'^[a-zA-Z][a-zA-Z0-9_]*$',
+                    'example': 'Organization',
+                    'description': 'W3C Organization ontology'
+                },
+                'time': {
+                    'name': 'OWL-Time',
+                    'uri_template': 'http://www.w3.org/2006/time#{identifier}',
+                    'identifier_pattern': r'^[a-zA-Z][a-zA-Z0-9_]*$',
+                    'example': 'Instant',
+                    'description': 'W3C Time ontology'
+                },
                 'custom': {
                     'name': 'Custom Ontology',
                     'uri_template': '',
