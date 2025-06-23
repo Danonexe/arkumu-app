@@ -63,9 +63,37 @@
 <script>
 // Global HTMX error handling for the CSV mapping interface
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('🔧 CSV Mapping Editor: Initializing global HTMX error handling');
+    console.log('🔧 CSV Mapping Editor: Initializing enhanced HTMX error handling');
     
-    // Global HTMX error handler
+    // HTMX Target Error Handler (this is what we're getting!)
+    document.addEventListener('htmx:targetError', function(evt) {
+        console.error('🎯 HTMX Target Error:', {
+            target: evt.target,
+            detail: evt.detail,
+            targetId: evt.target?.id,
+            targetClass: evt.target?.className,
+            requestConfig: evt.detail?.requestConfig,
+            targetSelector: evt.detail?.target,
+            message: 'Target element not found or invalid'
+        });
+        
+        // Show specific error
+        showErrorToast(`Target error: ${evt.detail?.target || 'Unknown target'}`);
+    });
+    
+    // HTMX Swap Error Handler
+    document.addEventListener('htmx:swapError', function(evt) {
+        console.error('🔄 HTMX Swap Error:', {
+            target: evt.target,
+            detail: evt.detail,
+            error: evt.detail?.error,
+            message: 'Failed to swap content'
+        });
+        
+        showErrorToast('Content swap failed');
+    });
+    
+    // Global HTMX response error handler
     document.addEventListener('htmx:responseError', function(evt) {
         console.error('🔥 HTMX Response Error:', {
             detail: evt.detail,
@@ -107,6 +135,16 @@ document.addEventListener('DOMContentLoaded', function() {
         const disabledButtons = document.querySelectorAll('button[disabled]');
         disabledButtons.forEach(btn => {
             btn.disabled = false;
+        });
+    });
+    
+    // HTMX Trigger Debug Handler
+    document.addEventListener('htmx:trigger', function(evt) {
+        console.log('🎯 HTMX Trigger Fired:', {
+            trigger: evt.detail.trigger,
+            target: evt.target,
+            targetId: evt.target?.id,
+            targetExists: document.contains(evt.target)
         });
     });
     

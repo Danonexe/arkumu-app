@@ -1,6 +1,7 @@
 from django.urls import path
 from arkumu.metadata.views import dashboard_views, resource_views, triple_views, graph_views, bulk_editor_views, data_discovery_views, data_explorer_views, split_views, direct_data_views
-from arkumu.metadata.views.csv_mapping import saved_mappings_api, saved_mappings_ui
+from arkumu.metadata.views.csv_mapping import saved_mappings_api
+from arkumu.metadata.views.csv_mapping.views import mapping_validation_views, mapping_save_views, mapping_load_views, mapping_delete_views
 from arkumu.metadata.views.csv_mapping.views import core_editor_views, dataset_views, column_views, utility_views, relationship_views, ontology_views
 from arkumu.metadata.views.csv_mapping.views.execution_views import (
     ExecuteGUIMappingView,
@@ -187,13 +188,11 @@ urlpatterns = [
     path('csv-delete-mapping/', saved_mappings_api.DeleteMappingView.as_view(), name='csv_delete_mapping'),
     
     # Mapping persistence endpoints (HTMX UI)
-    path('csv-validate-mapping-name/', saved_mappings_ui.ValidateMappingNameView.as_view(), name='csv_validate_mapping_name'),
-    path('csv-update-button-state/', saved_mappings_ui.UpdateButtonStateView.as_view(), name='csv_update_button_state'),
-    path('csv-save-mapping-htmx/', saved_mappings_ui.SaveMappingHTMXView.as_view(), name='csv_save_mapping_htmx'),
-    path('csv-load-mapping-htmx/', saved_mappings_ui.LoadMappingHTMXView.as_view(), name='csv_load_mapping_htmx'),
-    path('csv-delete-mapping-htmx/', saved_mappings_ui.DeleteMappingHTMXView.as_view(), name='csv_delete_mapping_htmx'),
-    path('csv-refresh-workspace/', saved_mappings_ui.RefreshWorkspaceView.as_view(), name='csv_refresh_workspace'),
-    path('csv-refresh-dataset-badges/', saved_mappings_ui.RefreshDatasetBadgesView.as_view(), name='csv_refresh_dataset_badges'),
+    path('csv-validate-mapping-name/', mapping_validation_views.ValidateMappingNameView.as_view(), name='csv_validate_mapping_name'),
+    path('csv-update-button-state/', mapping_validation_views.UpdateButtonStateView.as_view(), name='csv_update_button_state'),
+    path('csv-save-mapping-htmx/', mapping_save_views.SaveMappingHTMXView.as_view(), name='csv_save_mapping_htmx'),
+    path('csv-load-mapping-htmx/', mapping_load_views.LoadMappingHTMXView.as_view(), name='csv_load_mapping_htmx'),
+    path('csv-delete-mapping-htmx/', mapping_delete_views.DeleteMappingHTMXView.as_view(), name='csv_delete_mapping_htmx'),
     
     # Step 4: FK Configuration URLs (now using proper CSV mapping views with coordinator mixins)
     path('csv-toggle-fk-form/', relationship_views.ToggleFKFormView.as_view(), name='csv_toggle_fk_form'),

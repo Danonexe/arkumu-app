@@ -75,11 +75,12 @@ class AddColumnToWorkspaceView(
             
             # Build OOB response - this is a workspace operation so it should update workspace
             oob_updates = {
-                'selected-columns-workspace': workspace_html
+                'workspace-content': workspace_html
             }
-            response = self.build_oob_response(column_badges_html, oob_updates)
+            response_html = self.build_oob_response(column_badges_html, oob_updates)
             
-            return HttpResponse(response)
+            # Add trigger for JSON tab refresh
+            return self.add_workspace_update_trigger(response_html)
             
         except Exception as e:
             logger.error(f"ADD_COLUMN: Error adding column to workspace: {e}", exc_info=True)
@@ -145,7 +146,7 @@ class RemoveColumnFromWorkspaceView(
             
             # Build OOB response - this is a workspace operation so it should update workspace
             oob_updates = {
-                'selected-columns-workspace': workspace_html
+                'workspace-content': workspace_html
             }
             
             # If we cleared a loaded mapping, just show a status message instead of updating the save section
@@ -160,9 +161,10 @@ class RemoveColumnFromWorkspaceView(
                 except Exception as e:
                     logger.warning(f"REMOVE_COLUMN: Failed to update mapping status: {str(e)}")
             
-            response = self.build_oob_response(column_badges_html, oob_updates)
+            response_html = self.build_oob_response(column_badges_html, oob_updates)
             
-            return HttpResponse(response)
+            # Add trigger for JSON tab refresh
+            return self.add_workspace_update_trigger(response_html)
             
         except Exception as e:
             logger.error(f"REMOVE_COLUMN: Error removing column from workspace: {e}", exc_info=True)
@@ -240,9 +242,10 @@ class SelectAllDatasetColumnsView(
             oob_updates = {
                 'selected-columns-workspace': workspace_html
             }
-            response = self.build_oob_response(column_badges_html, oob_updates)
+            response_html = self.build_oob_response(column_badges_html, oob_updates)
             
-            return HttpResponse(response)
+            # Add trigger for JSON tab refresh
+            return self.add_workspace_update_trigger(response_html)
             
         except Exception as e:
             logger.error(f"SELECT_ALL_DATASET_COLUMNS: Error selecting all columns: {e}", exc_info=True)
@@ -304,9 +307,10 @@ class DeselectAllDatasetColumnsView(
             oob_updates = {
                 'selected-columns-workspace': workspace_html
             }
-            response = self.build_oob_response(column_badges_html, oob_updates)
+            response_html = self.build_oob_response(column_badges_html, oob_updates)
             
-            return HttpResponse(response)
+            # Add trigger for JSON tab refresh
+            return self.add_workspace_update_trigger(response_html)
             
         except Exception as e:
             logger.error(f"DESELECT_ALL_DATASET_COLUMNS: Error deselecting all columns: {e}", exc_info=True)
@@ -648,10 +652,8 @@ class AddSelectedColumnsToWorkspaceView(
             # Return updated workspace (workspace operation only)
             workspace_html = self.render_workspace_template(request, organization_id)
             
-            # Wrap in proper container for hx-target="#selected-columns-workspace"
-            wrapped_html = f'<div id="selected-columns-workspace" class="h-full overflow-y-auto flex-1 flex flex-col bg-base-50/30 rounded-lg border border-base-300/50">{workspace_html}</div>'
-            
-            return HttpResponse(wrapped_html)
+            # Add trigger for JSON tab refresh since this modifies workspace
+            return self.add_workspace_update_trigger(workspace_html)
             
         except Exception as e:
             logger.error(f"ADD_SELECTED_TO_WORKSPACE: Error: {e}", exc_info=True)

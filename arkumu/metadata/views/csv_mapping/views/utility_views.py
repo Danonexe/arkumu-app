@@ -117,7 +117,7 @@ class ClearWorkspaceColumnsView(
             
             # Build response with only workspace update
             oob_updates = {
-                'selected-columns-workspace': workspace_html
+                'workspace-content': workspace_html
             }
             response = self.build_oob_response("", oob_updates)
             

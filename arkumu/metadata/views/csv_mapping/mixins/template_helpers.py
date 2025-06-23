@@ -249,7 +249,7 @@ class CSVMappingTemplateHelperMixin:
         
         # Build OOB updates
         oob_updates = {
-            'selected-columns-workspace': workspace_html,
+            'workspace-content': workspace_html,
             'dataset-badges': badges_html,
             'table-content': table_html,
         }

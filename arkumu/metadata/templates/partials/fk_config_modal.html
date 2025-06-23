@@ -7,7 +7,7 @@
         </h3>
         
         <form hx-post="{% url 'metadata:save_fk_config' %}" 
-              hx-target="#selected-columns-workspace"
+              hx-target="#workspace-content"
               hx-swap="innerHTML">
             
             {% csrf_token %}
@@ -65,7 +65,7 @@
                 <button type="button" class="btn btn-error" 
                         hx-post="{% url 'metadata:remove_fk_config' %}"
                         hx-vals='{"column_id": "{{ column.id }}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
-                        hx-target="#selected-columns-workspace"
+                        hx-target="#workspace-content"
                         hx-swap="innerHTML">
                     Remove FK
                 </button>

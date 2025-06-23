@@ -52,7 +52,7 @@ Actual workspace operations happen via separate "Add to Workspace" buttons
                 id="add-to-workspace-{{ dataset.name|slugify }}"
                 hx-post="{% url 'metadata:csv_add_selected_columns_to_workspace' %}"
                 hx-include="#add-to-workspace-form-{{ dataset.name|slugify }}"
-                hx-target="#selected-columns-workspace"
+                hx-target="#workspace-content"
                 hx-swap="innerHTML"
                 hx-on::htmx:before-request="document.querySelectorAll('.column-operation-btn').forEach(btn => btn.disabled = true)"
                 hx-on::htmx:after-request="document.querySelectorAll('.column-operation-btn').forEach(btn => btn.disabled = false)"

@@ -24,11 +24,119 @@
             <span class="text-sm text-base-content opacity-70">{{ organization_id }}</span>
             {% endif %}
         </div>
+
+        <!-- Inline Mapping Controls -->
+        {% if organization_id %}
+        <div class="flex items-center gap-4">
+            <div class="h-5 w-px bg-base-300"></div>
+            
+            <!-- Quick Load Section -->
+            <div class="flex items-center gap-2">
+                <span class="text-sm font-medium">📥 Load:</span>
+                <select id="mapping-select" 
+                        name="mapping_id"
+                        class="select select-bordered select-sm w-48"
+                        hx-get="{% url 'metadata:csv_list_mappings' %}"
+                        hx-vals='{"organization": "{{ organization_id }}"}'
+                        hx-trigger="load, refreshMappings from:body"
+                        hx-target="this"
+                        hx-swap="innerHTML"
+                        hx-on:change="
+                            const mappingId = this.value;
+                            const organization = '{{ organization_id }}';
+                            
+                            // Update load button state
+                            htmx.ajax('GET', '{% url 'metadata:csv_update_button_state' %}', {
+                                values: {button: 'load', mapping_id: mappingId, organization: organization},
+                                target: '#load-mapping-btn',
+                                swap: 'outerHTML'
+                            });
+                            
+                            // Update delete button state  
+                            htmx.ajax('GET', '{% url 'metadata:csv_update_button_state' %}', {
+                                values: {button: 'delete', mapping_id: mappingId, organization: organization},
+                                target: '#delete-mapping-btn',
+                                swap: 'outerHTML'
+                            });
+                        ">
+                    <option value="">🔍 Select saved mapping...</option>
+                </select>
+                
+                <button class="btn btn-sm btn-info" 
+                        id="load-mapping-btn"
+                        hx-post="{% url 'metadata:csv_load_mapping_htmx' %}"
+                        hx-vals='{"organization": "{{ organization_id }}", "csrfmiddlewaretoken": "{{ csrf_token }}", "button": "load"}'
+                        hx-include="#mapping-select"
+                        hx-target="#mapping-status"
+                        hx-swap="innerHTML"
+                        hx-confirm="Replace current mapping?"
+                        hx-trigger="click"
+                        disabled>
+                    Load
+                    <span class="loading loading-spinner loading-xs htmx-indicator ml-1"></span>
+                </button>
+                
+                <button class="btn btn-sm btn-error" 
+                        id="delete-mapping-btn"
+                        hx-post="{% url 'metadata:csv_delete_mapping_htmx' %}"
+                        hx-vals='{"organization": "{{ organization_id }}", "csrfmiddlewaretoken": "{{ csrf_token }}", "button": "delete"}'
+                        hx-include="#mapping-select"
+                        hx-target="#mapping-status"
+                        hx-swap="innerHTML"
+                        hx-confirm="Delete permanently?"
+                        hx-trigger="click"
+                        disabled>
+                    🗑️
+                    <span class="loading loading-spinner loading-xs htmx-indicator ml-1"></span>
+                </button>
+            </div>
+            
+            <div class="h-5 w-px bg-base-300"></div>
+            
+            <!-- Quick Save Section -->
+            <div class="flex items-center gap-2">
+                <span class="text-sm font-medium">💾 Save:</span>
+                
+                <!-- Hidden input to track currently loaded mapping -->
+                <input type="hidden" id="current-mapping-id" name="current_mapping_id" value="{{ current_mapping_id|default:'' }}">
+                
+                <input type="text" 
+                       id="mapping-name-input"
+                       name="mapping_name"
+                       placeholder="Enter mapping name..."
+                       value="{{ current_mapping_name|default:'' }}"
+                       class="input input-bordered input-sm w-40"
+                       hx-get="{% url 'metadata:csv_validate_mapping_name' %}"
+                       hx-vals='{"organization": "{{ organization_id }}"}'
+                       hx-include="#current-mapping-id"
+                       hx-trigger="keyup changed delay:300ms, load{% if current_mapping_name %} delay:100ms{% endif %}"
+                       hx-target="#save-mapping-btn"
+                       hx-swap="outerHTML">
+                
+                <button class="btn btn-sm {% if current_mapping_name %}btn-success{% else %}btn-disabled{% endif %}" 
+                        id="save-mapping-btn"
+                        hx-post="{% url 'metadata:csv_save_mapping_htmx' %}"
+                        hx-vals='{"organization": "{{ organization_id }}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
+                        hx-include="#mapping-name-input, #current-mapping-id"
+                        hx-target="#mapping-status"
+                        hx-swap="innerHTML"
+                        {% if not current_mapping_name %}disabled{% endif %}>
+                    {% if current_mapping_id %}✏️ Update{% else %}💾 Save{% endif %}
+                    <span class="loading loading-spinner loading-xs htmx-indicator ml-1"></span>
+                </button>
+            </div>
+        </div>
+        {% endif %}
         
         <div class="loading-indicator htmx-indicator flex items-center gap-2 ml-auto" style="display: none;">
             <span class="loading loading-spinner loading-sm"></span>
             <span class="text-sm">Loading...</span>
         </div>
+    </div>
+    
+    <!-- Hidden Status Messages -->
+    <div id="mapping-status" class="hidden">
+        <!-- Success/error messages will appear here but stay hidden -->
     </div>
 </div>
 
@@ -36,11 +144,9 @@
 {% if organization_id %}
 <!-- Dataset Labels -->
 <div class="bg-base-100 px-4 py-3 border-b border-base-300">
-    <div class="flex flex-wrap gap-2" id="dataset-badges"
-         hx-get="{% url 'metadata:csv_refresh_dataset_badges' %}?organization={{ organization_id }}"
-         hx-trigger="refreshBadges"
-         hx-swap="innerHTML">
+        <div class="flex flex-wrap gap-2" id="dataset-badges-container">
         {% include 'csv_mapping/partials/dataset_badges.html' with datasets=csv_datasets selected_datasets=selected_datasets organization_id=organization_id csrf_token=csrf_token %}
+    </div>
     </div>
 </div>
 
@@ -68,17 +174,12 @@
         <div class="card bg-base-100 shadow-xl h-[calc(100vh-160px)]" style="min-width: 0;">
             <div class="card-body p-4 flex flex-col h-full overflow-hidden" style="min-width: 0; min-height: 0;">
                     
-                <!-- Mapping Controls -->
-                <div class="flex-shrink-0 mb-4">
-                        {% include 'csv_mapping/partials/mapping_controls.html' with organization_id=organization_id csrf_token=csrf_token %}
-                    </div>
-                    
                 <!-- Mapping Workspace - Contained -->
                 <div class="flex-1 bg-base-50 rounded-lg border border-base-300 overflow-hidden flex flex-col" style="min-width: 0; min-height: 0;">
                     <div class="p-3 border-b border-base-300 bg-base-100">
                         <h3 class="font-semibold text-sm">Mapping Workspace</h3>
                     </div>
-                    <div id="mapping-workspace-container" class="flex-1 overflow-hidden" style="min-width: 0; min-height: 0;">
+                    <div id="selected-columns-workspace" class="flex-1 overflow-hidden" style="min-width: 0; min-height: 0;">
                         {% include 'csv_mapping/partials/mapping_workspace.html' with datasets=csv_datasets organization_id=organization_id selected_columns=selected_columns active_datasets=selected_datasets_with_details csrf_token=csrf_token import_strategy=import_strategy %}
                     </div>
                 </div>
