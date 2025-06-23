@@ -53,7 +53,10 @@ Actual workspace operations happen via separate "Add to Workspace" buttons
                 hx-post="{% url 'metadata:csv_add_selected_columns_to_workspace' %}"
                 hx-include="#add-to-workspace-form-{{ dataset.name|slugify }}"
                 hx-target="#selected-columns-workspace"
-                hx-swap="innerHTML">
+                hx-swap="innerHTML"
+                hx-on::htmx:before-request="document.querySelectorAll('.column-operation-btn').forEach(btn => btn.disabled = true)"
+                hx-on::htmx:after-request="document.querySelectorAll('.column-operation-btn').forEach(btn => btn.disabled = false)"
+                hx-on::htmx:response-error="document.querySelectorAll('.column-operation-btn').forEach(btn => btn.disabled = false)">
             Add to Workspace ({{ dataset_selected_columns|length }})
         </button>
         {% else %}
@@ -83,7 +86,10 @@ Actual workspace operations happen via separate "Add to Workspace" buttons
                 hx-post="{% url 'metadata:csv_select_all_columns' %}"
                 hx-include="#dataset-action-form-{{ dataset.name|slugify }}"
                 hx-target="#column-badges-{{ dataset.name|slugify }}"
-                hx-swap="innerHTML">
+                hx-swap="innerHTML"
+                hx-on::htmx:before-request="document.querySelectorAll('[data-dataset-name=\'{{ dataset.name }}\']').forEach(el => el.style.pointerEvents = 'none')"
+                hx-on::htmx:after-request="document.querySelectorAll('[data-dataset-name=\'{{ dataset.name }}\']').forEach(el => el.style.pointerEvents = 'auto')"
+                hx-on::htmx:response-error="document.querySelectorAll('[data-dataset-name=\'{{ dataset.name }}\']').forEach(el => el.style.pointerEvents = 'auto')"
             Select All ({{ dataset.preview.colHeaders|length }})
         </button>
         {% endif %}

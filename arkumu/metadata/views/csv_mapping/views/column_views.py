@@ -648,7 +648,10 @@ class AddSelectedColumnsToWorkspaceView(
             # Return updated workspace (workspace operation only)
             workspace_html = self.render_workspace_template(request, organization_id)
             
-            return HttpResponse(workspace_html)
+            # Wrap in proper container for hx-target="#selected-columns-workspace"
+            wrapped_html = f'<div id="selected-columns-workspace" class="h-full overflow-y-auto flex-1 flex flex-col bg-base-50/30 rounded-lg border border-base-300/50">{workspace_html}</div>'
+            
+            return HttpResponse(wrapped_html)
             
         except Exception as e:
             logger.error(f"ADD_SELECTED_TO_WORKSPACE: Error: {e}", exc_info=True)

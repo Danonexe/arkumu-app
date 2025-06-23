@@ -168,7 +168,7 @@
                 <div class="btn-group">
                     <!-- FK Configuration -->
                     <div class="tooltip tooltip-left" data-tip="{% if column.is_fk %}Edit Foreign Key{% else %}Create Foreign Key{% endif %}">
-                        <button class="btn btn-sm {% if column.is_fk %}btn-secondary{% else %}btn-outline btn-secondary{% endif %}" 
+                        <button class="btn btn-sm {% if column.is_fk %}btn-secondary{% else %}btn-outline btn-secondary{% endif %} column-operation-btn" 
                                 hx-post="{% url 'metadata:csv_toggle_fk_form' %}"
                                 hx-include="#fk-data-form-{{ column.id|slugify }}"
                                 hx-target="#fk-form-{{ column.id|slugify }}"
@@ -183,7 +183,7 @@
                     
                     <!-- Multi-value Toggle -->
                     <div class="tooltip tooltip-left" data-tip="{% if column.is_multi_value %}Remove Multi-value{% else %}Mark as Multi-value{% endif %}">
-                        <button class="btn btn-sm {% if column.is_multi_value %}btn-accent{% else %}btn-outline btn-accent{% endif %}" 
+                        <button class="btn btn-sm {% if column.is_multi_value %}btn-accent{% else %}btn-outline btn-accent{% endif %} column-operation-btn" 
                                 hx-post="{% url 'metadata:csv_toggle_multi_value_column' %}"
                                 hx-include="#multi-value-data-form-{{ column.id|slugify }}"
                                 hx-target="#column-{{ column.id|slugify }}"
@@ -194,7 +194,7 @@
                     
                     <!-- Relationship Context Button -->
                     <div class="tooltip tooltip-left" data-tip="{% if column.is_relationship_context %}Edit Relationship Context{% else %}Configure as Relationship Context{% endif %}">
-                        <button class="btn btn-sm {% if column.is_relationship_context %}btn-info{% else %}btn-outline btn-info{% endif %}" 
+                        <button class="btn btn-sm {% if column.is_relationship_context %}btn-info{% else %}btn-outline btn-info{% endif %} column-operation-btn" 
                                 hx-post="{% url 'metadata:csv_toggle_relationship_context_form' %}"
                                 hx-include="#relationship-context-data-form-{{ column.id|slugify }}"
                                 hx-target="#relationship-context-form-{{ column.id|slugify }}"
@@ -205,7 +205,7 @@
                     
                     <!-- External Ontology Button -->
                     <div class="tooltip tooltip-left" data-tip="{% if column.is_external_ontology %}Edit External Ontology{% else %}Configure as External Ontology{% endif %}">
-                        <button class="btn btn-sm {% if column.is_external_ontology %}btn-success{% else %}btn-outline btn-success{% endif %}" 
+                        <button class="btn btn-sm {% if column.is_external_ontology %}btn-success{% else %}btn-outline btn-success{% endif %} column-operation-btn" 
                                 hx-post="{% url 'metadata:csv_toggle_external_ontology_form' %}"
                                 hx-include="#external-ontology-data-form-{{ column.id|slugify }}"
                                 hx-target="#external-ontology-form-{{ column.id|slugify }}"
@@ -216,7 +216,7 @@
                     
                     <!-- Anchor Button -->
                     <div class="tooltip tooltip-left" data-tip="{% if column.is_anchor %}Remove Anchor{% else %}Set as Anchor Column{% endif %}">
-                        <button class="btn btn-sm {% if column.is_anchor %}btn-warning{% else %}btn-outline btn-warning{% endif %}" 
+                        <button class="btn btn-sm {% if column.is_anchor %}btn-warning{% else %}btn-outline btn-warning{% endif %} column-operation-btn" 
                                 hx-post="{% url 'metadata:csv_set_anchor_column' %}"
                                 hx-include="#anchor-data-form-{{ column.id|slugify }}"
                                 hx-target="#column-{{ column.id|slugify }}"
@@ -227,7 +227,7 @@
                     
                     <!-- Remove Button -->
                     <div class="tooltip tooltip-left" data-tip="Remove column from workspace">
-                        <button class="btn btn-sm btn-outline btn-error" 
+                        <button class="btn btn-sm btn-outline btn-error column-operation-btn" 
                                 hx-post="{% url 'metadata:csv_remove_column_from_workspace' %}"
                                 hx-include="#remove-data-form-{{ column.id|slugify }}"
                                 hx-target="#column-badges-{{ column.dataset|slugify }}"

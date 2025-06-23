@@ -561,7 +561,7 @@ class LoadMappingHTMXView(CSVMappingCoordinatorMixin, View):
         table_html = self._get_table_content(organization_id)
         oob_html += f'''
         <div id="table-content" hx-swap-oob="innerHTML">
-            {table_html}
+                {table_html}
         </div>
         '''
         
