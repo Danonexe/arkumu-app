@@ -290,3 +290,6 @@ local_backups/
 
 # Theme
 theme/static/css/output.css
+
+# Markdown notes
+md_notes/
