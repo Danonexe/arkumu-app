@@ -69,25 +69,22 @@ Actual workspace operations happen via separate "Add to Workspace" buttons
         </form>
         
         {% if dataset_selected_columns|default_if_none:''|length == dataset.preview.colHeaders|length and dataset.preview.colHeaders|length > 0 %}
-        <button class="btn btn-xs btn-primary hover:btn-primary-focus transition-all duration-200 text-xs font-medium" 
-                id="select-all-{{ dataset.name|slugify }}"
+        <button class="btn btn-xs btn-primary text-xs font-medium" 
+                id="deselect-all-{{ dataset.name|slugify }}"
                 hx-post="{% url 'metadata:csv_deselect_all_columns' %}"
                 hx-include="#dataset-action-form-{{ dataset.name|slugify }}"
                 hx-target="#column-badges-{{ dataset.name|slugify }}"
                 hx-swap="innerHTML">
-            Deselect All ({{ dataset.preview.colHeaders|length }})
+            Deselect All
         </button>
         {% else %}
-        <button class="btn btn-xs btn-outline btn-accent hover:btn-accent transition-all duration-200 text-xs font-medium" 
+        <button class="btn btn-xs btn-outline btn-accent text-xs font-medium" 
                 id="select-all-{{ dataset.name|slugify }}"
                 hx-post="{% url 'metadata:csv_select_all_columns' %}"
                 hx-include="#dataset-action-form-{{ dataset.name|slugify }}"
                 hx-target="#column-badges-{{ dataset.name|slugify }}"
-                hx-swap="innerHTML"
-                hx-on::htmx:before-request="document.querySelectorAll('[data-dataset-name=\'{{ dataset.name }}\']').forEach(el => el.style.pointerEvents = 'none')"
-                hx-on::htmx:after-request="document.querySelectorAll('[data-dataset-name=\'{{ dataset.name }}\']').forEach(el => el.style.pointerEvents = 'auto')"
-                hx-on::htmx:response-error="document.querySelectorAll('[data-dataset-name=\'{{ dataset.name }}\']').forEach(el => el.style.pointerEvents = 'auto')"
-            Select All ({{ dataset.preview.colHeaders|length }})
+                hx-swap="innerHTML">
+            Select All
         </button>
         {% endif %}
     </div>
