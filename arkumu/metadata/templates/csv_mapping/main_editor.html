@@ -9,11 +9,10 @@
 <div class="min-h-screen bg-base-200 p-0 m-0 w-full">
 
     <!-- Top Navigation Bar with Org Dropdown -->
-    <div class="navbar bg-base-100 border-b border-base-300">
+    <div class="navbar bg-base-100 border-b border-base-300 min-h-16 px-4">
         <div class="navbar-start">
             <div class="flex items-center gap-4">
                 <h1 class="text-xl font-semibold">CSV Mapping Editor</h1>
-                <div class="divider divider-horizontal mx-0"></div>
                 <div class="flex items-center gap-3">
                     <span class="text-sm font-medium">Organization:</span>
                     <select name="organization" 
@@ -34,10 +33,13 @@
                 </div>
             </div>
         </div>
-        <div class="navbar-center">
-        </div>
+        <div class="divider divider-horizontal mx-1"></div>
+
         <div class="navbar-end" id="navbar-end">
-            <!-- Mapping controls will be injected here via HTMX OOB -->
+            <div class="flex items-center gap-3">
+                <div class="divider divider-horizontal mx-0"></div>
+                <!-- Mapping controls will be injected here via HTMX OOB -->
+            </div>
         </div>
     </div>
     

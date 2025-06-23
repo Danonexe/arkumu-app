@@ -1,55 +1,89 @@
-<!-- Current Mapping Info -->
-{% if current_mapping_id %}
-    <div class="flex items-center gap-2">
-        <span class="text-sm font-medium">{{ current_mapping_name }}</span>
-        {% if current_mapping_updated %}
-            <span class="text-xs opacity-60">• Updated {{ current_mapping_updated }}</span>
-        {% endif %}
-    </div>
-    <!-- Save Button -->
-    <button class="btn btn-neutral btn-sm"
-            hx-post="{% url 'metadata:csv_save_mapping_htmx' %}"
-            hx-vals='{"organization": "{{ organization_id }}", "csrfmiddlewaretoken": "{{ csrf_token }}", "action": "update", "mapping_name": "{{ current_mapping_name }}"}'
-            hx-include="#current-mapping-id"
-            hx-target="#save-feedback"
-            hx-swap="innerHTML">
-Save
-    </button>
-    <input type="hidden" id="current-mapping-id" name="current_mapping_id" value="{{ current_mapping_id }}">
-{% else %}
-    <!-- Save New -->
-    <input type="text" 
-           id="new-mapping-name"
-           name="mapping_name"
-           placeholder="New mapping name"
-           class="input input-bordered input-sm w-48">
-    <button class="btn btn-neutral btn-sm"
-            hx-post="{% url 'metadata:csv_save_mapping_htmx' %}"
-            hx-vals='{"organization": "{{ organization_id }}", "csrfmiddlewaretoken": "{{ csrf_token }}", "action": "create"}'
-            hx-include="#new-mapping-name"
-            hx-target="#save-feedback"
-            hx-swap="innerHTML">
-        Save New
-    </button>
-{% endif %}
+<!-- Responsive Mapping Controls Container -->
+<div class="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-4 min-w-0">
+    
+    {% if current_mapping_id %}
+        <!-- Current Mapping Save Section - 2x2 Table -->
+        <div class="grid grid-cols-2 gap-2 items-center flex-shrink-0">
+            <!-- Row 1, Col 1: Current mapping name -->
+            <div class="flex items-center gap-2">
+                <span class="text-sm font-medium truncate">{{ current_mapping_name }}</span>
+                {% if current_mapping_updated %}
+                    <span class="text-xs opacity-60 hidden sm:inline">• {{ current_mapping_updated }}</span>
+                {% endif %}
+            </div>
+            
+            <!-- Row 1, Col 2: Save button -->
+            <button class="btn btn-neutral btn-xs"
+                    hx-post="{% url 'metadata:csv_save_mapping_htmx' %}"
+                    hx-vals='{"organization": "{{ organization_id }}", "csrfmiddlewaretoken": "{{ csrf_token }}", "action": "update", "mapping_name": "{{ current_mapping_name }}"}'
+                    hx-include="#current-mapping-id"
+                    hx-target="#save-feedback"
+                    hx-swap="innerHTML">
+                Save
+            </button>
+            
+            <!-- Row 2, Col 1: Save as input -->
+            <input type="text" 
+                   id="save-as-name"
+                   name="mapping_name"
+                   placeholder="Save as new name..."
+                   class="input input-bordered input-sm">
+            
+            <!-- Row 2, Col 2: Save As button -->
+            <button class="btn btn-outline btn-xs"
+                    hx-post="{% url 'metadata:csv_save_mapping_htmx' %}"
+                    hx-vals='{"organization": "{{ organization_id }}", "csrfmiddlewaretoken": "{{ csrf_token }}", "action": "create"}'
+                    hx-include="#save-as-name"
+                    hx-target="#save-feedback"
+                    hx-swap="innerHTML"
+                    hx-on::after-request="if(event.detail.xhr.status === 200) { htmx.trigger('#load-mapping-select', 'load'); document.getElementById('save-as-name').value = ''; }">
+                Save As
+            </button>
+        </div>
+        
+        <input type="hidden" id="current-mapping-id" name="current_mapping_id" value="{{ current_mapping_id }}">
+    {% else %}
+        <!-- Save New Row -->
+        <div class="flex items-center gap-2">
+            <input type="text" 
+                   id="new-mapping-name"
+                   name="mapping_name"
+                   placeholder="New mapping name"
+                   class="input input-bordered input-sm w-36 min-w-0">
+            <button class="btn btn-neutral btn-xs flex-shrink-0"
+                    hx-post="{% url 'metadata:csv_save_mapping_htmx' %}"
+                    hx-vals='{"organization": "{{ organization_id }}", "csrfmiddlewaretoken": "{{ csrf_token }}", "action": "create"}'
+                    hx-include="#new-mapping-name"
+                    hx-target="#save-feedback"
+                    hx-swap="innerHTML">
+                Save New
+            </button>
+        </div>
+    {% endif %}
 
-<!-- Load Mapping -->
-<select id="load-mapping-select" 
-        name="mapping_id"
-        class="select select-bordered select-sm w-48"
-        hx-get="{% url 'metadata:csv_list_mappings' %}"
-        hx-vals='{"organization": "{{ organization_id }}"}'
-        hx-trigger="load"
-        hx-target="this"
-        hx-swap="innerHTML">
-    <option value="">Load mapping...</option>
-</select>
-<button class="btn btn-warning btn-sm" 
-        hx-post="{% url 'metadata:csv_load_mapping_htmx' %}"
-        hx-vals='{"organization": "{{ organization_id }}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
-        hx-include="#load-mapping-select"
-        hx-target="#mapping-status"
-        hx-swap="innerHTML"
-        hx-confirm="Replace current work?">
-    Load
-</button> 
+    <!-- Divider (hidden on mobile) -->
+    <div class="divider divider-horizontal mx-1 hidden lg:flex"></div>
+
+    <!-- Load Mapping Row -->
+    <div class="flex items-center gap-2">
+        <select id="load-mapping-select" 
+                name="mapping_id"
+                class="select select-bordered select-sm w-36 min-w-0"
+                hx-get="{% url 'metadata:csv_list_mappings' %}"
+                hx-vals='{"organization": "{{ organization_id }}"}'
+                hx-trigger="load"
+                hx-target="this"
+                hx-swap="innerHTML">
+            <option value="">Select</option>
+        </select>
+        <button class="btn btn-warning btn-sm flex-shrink-0" 
+                hx-post="{% url 'metadata:csv_load_mapping_htmx' %}"
+                hx-vals='{"organization": "{{ organization_id }}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
+                hx-include="#load-mapping-select"
+                hx-target="#mapping-status"
+                hx-swap="innerHTML"
+                hx-confirm="Replace current work?">
+            Load
+        </button>
+    </div>
+</div> 
