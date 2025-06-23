@@ -44,44 +44,60 @@ class LoadMappingHTMXView(CSVMappingCoordinatorMixin, CSVMappingTemplateHelperMi
         organization_id = request.POST.get('organization', '')
         mapping_id = request.POST.get('mapping_id', '')
         
+        logger.info(f"🔵 LOAD_MAPPING_HTMX: Starting load request - org={organization_id}, mapping_id={mapping_id}")
+        
         # Validate inputs
         if not organization_id:
+            logger.error(f"🔴 LOAD_MAPPING_HTMX: Missing organization_id")
             return self._render_error_response("Organization ID is required")
         
         if not mapping_id:
+            logger.error(f"🔴 LOAD_MAPPING_HTMX: Missing mapping_id")
             return self._render_error_response("Mapping ID is required")
         
         try:
             # Execute load operation via LoadMappingView (uses coordinator)
+            logger.info(f"🔵 LOAD_MAPPING_HTMX: Executing load via LoadMappingView...")
             json_response = self._execute_load(request)
+            logger.info(f"🔵 LOAD_MAPPING_HTMX: LoadMappingView returned status_code={json_response.status_code}")
             
             # Process response with consolidated UI updates
+            logger.info(f"🔵 LOAD_MAPPING_HTMX: Processing load response...")
             return self._process_load_response(json_response, organization_id, mapping_id)
             
         except Exception as e:
-            logger.error(f"LOAD_MAPPING_HTMX: Error processing request: {str(e)}")
+            logger.error(f"🔴 LOAD_MAPPING_HTMX: Error processing request: {str(e)}", exc_info=True)
             return self._render_error_response(f"Failed to load mapping: {str(e)}")
     
     def _execute_load(self, request):
         """Execute load operation via LoadMappingView"""
+        logger.info(f"🔵 LOAD_MAPPING_HTMX: Creating LoadMappingView instance...")
         load_view = LoadMappingView()
-        return load_view.post(request)
+        logger.info(f"🔵 LOAD_MAPPING_HTMX: Calling LoadMappingView.post()...")
+        response = load_view.post(request)
+        logger.info(f"🔵 LOAD_MAPPING_HTMX: LoadMappingView.post() completed with status {response.status_code}")
+        return response
     
     def _process_load_response(self, json_response, organization_id, mapping_id):
         """Process load response and return comprehensive consolidated HTMX updates"""
         try:
+            logger.info(f"🔵 LOAD_MAPPING_HTMX: Parsing JSON response...")
             if hasattr(json_response, 'content'):
                 data = json.loads(json_response.content)
+                logger.info(f"🔵 LOAD_MAPPING_HTMX: Parsed JSON data: success={data.get('success')}, keys={list(data.keys())}")
             else:
                 data = {}
+                logger.warning(f"🟡 LOAD_MAPPING_HTMX: No content in response")
             
             if json_response.status_code == 200 and data.get('success'):
+                logger.info(f"🟢 LOAD_MAPPING_HTMX: Success response - rendering UI updates...")
                 return self._render_consolidated_load_success_response(data, organization_id)
             else:
+                logger.error(f"🔴 LOAD_MAPPING_HTMX: Error response - status={json_response.status_code}, data={data}")
                 return self._render_load_error_response(data)
                 
         except Exception as e:
-            logger.error(f"Error processing load response: {str(e)}")
+            logger.error(f"🔴 LOAD_MAPPING_HTMX: Error processing load response: {str(e)}", exc_info=True)
             return self._render_error_response("Failed to process load response")
     
     def _render_consolidated_load_success_response(self, data, organization_id):
@@ -89,40 +105,64 @@ class LoadMappingHTMXView(CSVMappingCoordinatorMixin, CSVMappingTemplateHelperMi
         mapping_id = data.get('mapping_id', '')
         mapping_name = data.get('mapping_name', 'Unknown')
         
+        logger.info(f"🟢 LOAD_MAPPING_HTMX: Building success response for mapping '{mapping_name}' (ID: {mapping_id})")
+        
         # Build main status message (goes to #mapping-status target)
+        logger.info(f"🔵 LOAD_MAPPING_HTMX: Building status message...")
         status_html = self._build_load_status_message(data, data.get('summary', {}), data.get('warnings', []))
         
         # Generate consolidated OOB updates for all affected UI components
+        logger.info(f"🔵 LOAD_MAPPING_HTMX: Generating OOB updates...")
         oob_updates = self._generate_consolidated_load_oob_updates(
             organization_id, mapping_id, mapping_name
         )
         
         # Combine main response with all OOB updates
         complete_response = status_html + oob_updates
+        logger.info(f"🟢 LOAD_MAPPING_HTMX: Complete response length: {len(complete_response)} chars")
         
         return HttpResponse(complete_response)
     
     def _generate_consolidated_load_oob_updates(self, organization_id, mapping_id, mapping_name):
-        """Generate all necessary OOB updates using template helpers"""
+        """Generate necessary OOB updates for mapping load (workspace and save section only)"""
+        logger.info(f"🔵 LOAD_MAPPING_HTMX: Rendering workspace template...")
+        
         # Use template helper methods for consistent rendering
-        workspace_html = self.render_workspace_template(self.request, organization_id)
-        badges_html = self.render_dataset_badges_template(self.request, organization_id)
-        table_html = self.render_table_content_template(self.request, organization_id)
+        try:
+            workspace_html = self.render_workspace_template(self.request, organization_id)
+            logger.info(f"🔵 LOAD_MAPPING_HTMX: Workspace template rendered - length: {len(workspace_html)} chars")
+        except Exception as e:
+            logger.error(f"🔴 LOAD_MAPPING_HTMX: Error rendering workspace template: {str(e)}", exc_info=True)
+            workspace_html = '<div class="alert alert-error">Failed to render workspace</div>'
+        
+        logger.info(f"🔵 LOAD_MAPPING_HTMX: Rendering save section template...")
         
         # Render save section with loaded mapping context
-        save_section_html = self._render_save_section_content(
-            organization_id, mapping_id, mapping_name
-        )
+        try:
+            save_section_html = self._render_save_section_content(
+                organization_id, mapping_id, mapping_name
+            )
+            logger.info(f"🔵 LOAD_MAPPING_HTMX: Save section template rendered - length: {len(save_section_html)} chars")
+        except Exception as e:
+            logger.error(f"🔴 LOAD_MAPPING_HTMX: Error rendering save section template: {str(e)}", exc_info=True)
+            save_section_html = '<div class="alert alert-error">Failed to render save section</div>'
         
-        # Use template helper to build OOB response
+        # Load mapping should only update workspace and save section
+        # Dataset selection interface should remain unchanged
         oob_updates = {
             'save-section': save_section_html,
             'workspace-content': workspace_html,
-            'dataset-badges-container': badges_html,
-            'table-content': table_html,
         }
         
-        return self.build_oob_response("", oob_updates)
+        logger.info(f"🔵 LOAD_MAPPING_HTMX: Building OOB response with {len(oob_updates)} updates")
+        
+        try:
+            oob_response = self.build_oob_response("", oob_updates)
+            logger.info(f"🔵 LOAD_MAPPING_HTMX: OOB response built - length: {len(oob_response)} chars")
+            return oob_response
+        except Exception as e:
+            logger.error(f"🔴 LOAD_MAPPING_HTMX: Error building OOB response: {str(e)}", exc_info=True)
+            return '<div class="alert alert-error">Failed to build response</div>'
     
     def _build_load_status_message(self, data, summary, warnings):
         """Build the main status message for successful load"""

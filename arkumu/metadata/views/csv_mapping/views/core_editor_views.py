@@ -106,13 +106,13 @@ class CSVMappingEditorView(
                 # Check if this is a tab request
                 tab = request.GET.get('tab')
                 if tab == 'workspace':
-                    # Return just the workspace content for tab switching using template helper
-                    workspace_context = {
-                        'datasets_with_columns': self._prepare_datasets_with_columns(selected_columns),
-                        'organization_id': organization_id,
-                        'csrf_token': request.META.get('CSRF_COOKIE'),
-                    }
-                    return render(request, 'csv_mapping/partials/selected_columns_workspace.html', workspace_context)
+                    # Use template helper to render workspace content properly
+                    workspace_content = self.render_workspace_template(request, organization_id)
+                    
+                    # Wrap in the workspace-content div that HTMX targets expect
+                    wrapped_content = f'<div id="workspace-content" class="h-full overflow-y-auto flex-1 flex flex-col bg-base-50/30 rounded-lg border border-base-300/50">{workspace_content}</div>'
+                    from django.http import HttpResponse
+                    return HttpResponse(wrapped_content)
                 else:
                     # Return main content for other HTMX requests
                     return render(request, 'csv_mapping/partials/main_content.html', context)

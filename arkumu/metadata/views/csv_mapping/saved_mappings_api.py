@@ -426,18 +426,22 @@ class LoadMappingView(CSVMappingCoordinatorMixin, View):
     
     def post(self, request):
         """Load and restore mapping configuration from Mapping model"""
-        logger.info("LOAD_MAPPING: Starting load operation")
+        organization_id = request.POST.get('organization')
+        mapping_id = request.POST.get('mapping_id')
+        
+        logger.info(f"🟡 LOAD_MAPPING_API: Starting load operation - org={organization_id}, mapping_id={mapping_id}")
         
         try:
             # Get parameters
-            organization_id = request.POST.get('organization')
-            mapping_id = request.POST.get('mapping_id')
-            
             if not organization_id:
+                logger.error(f"🔴 LOAD_MAPPING_API: Missing organization_id")
                 return JsonResponse({'error': 'Organization ID is required'}, status=400)
                 
             if not mapping_id:
+                logger.error(f"🔴 LOAD_MAPPING_API: Missing mapping_id")
                 return JsonResponse({'error': 'Mapping ID is required'}, status=400)
+            
+            logger.info(f"🟡 LOAD_MAPPING_API: Querying database for mapping...")
             
             # Get mapping record
             try:
@@ -445,22 +449,31 @@ class LoadMappingView(CSVMappingCoordinatorMixin, View):
                     id=mapping_id,
                     organization_id=organization_id
                 )
+                logger.info(f"🟡 LOAD_MAPPING_API: Found mapping '{mapping.name}' in database")
             except Mapping.DoesNotExist:
+                logger.error(f"🔴 LOAD_MAPPING_API: Mapping not found in database")
                 return JsonResponse({
                     'error': f'Mapping with ID {mapping_id} not found for organization {organization_id}'
                 }, status=404)
+            
+            logger.info(f"🟡 LOAD_MAPPING_API: Validating mapping compatibility...")
             
             # Validate compatibility before loading
             validation_result = self.validate_mapping_compatibility(
                 request, organization_id, mapping.mapping_config
             )
             
+            logger.info(f"🟡 LOAD_MAPPING_API: Validation result - valid={validation_result['is_valid']}, warnings={len(validation_result.get('warnings', []))}, errors={len(validation_result.get('errors', []))}")
+            
             if not validation_result['is_valid']:
+                logger.error(f"🔴 LOAD_MAPPING_API: Mapping validation failed")
                 return JsonResponse({
                     'error': 'Mapping is not compatible with current datasets',
                     'validation_errors': validation_result['errors'],
                     'missing_datasets': validation_result['missing_datasets']
                 }, status=400)
+            
+            logger.info(f"🟡 LOAD_MAPPING_API: Deserializing mapping state...")
             
             # Restore mapping state
             summary = self.deserialize_mapping_state(
@@ -468,7 +481,8 @@ class LoadMappingView(CSVMappingCoordinatorMixin, View):
                 mapping_id=str(mapping.id), mapping_name=mapping.name
             )
             
-            logger.info(f"LOAD_MAPPING: Successfully loaded mapping '{mapping.name}' with ID {mapping.id}")
+            logger.info(f"🟢 LOAD_MAPPING_API: Successfully loaded mapping '{mapping.name}' with ID {mapping.id}")
+            logger.info(f"🟢 LOAD_MAPPING_API: Summary: {summary}")
             
             # Return success response that triggers UI refresh
             response_data = {
@@ -482,11 +496,13 @@ class LoadMappingView(CSVMappingCoordinatorMixin, View):
             # Add validation warnings if any
             if validation_result['warnings']:
                 response_data['warnings'] = validation_result['warnings']
+                logger.info(f"🟡 LOAD_MAPPING_API: Added {len(validation_result['warnings'])} warnings to response")
             
+            logger.info(f"🟢 LOAD_MAPPING_API: Returning success response")
             return JsonResponse(response_data)
             
         except Exception as e:
-            logger.error(f"LOAD_MAPPING: Error loading mapping: {str(e)}")
+            logger.error(f"🔴 LOAD_MAPPING_API: Error loading mapping: {str(e)}", exc_info=True)
             return JsonResponse({
                 'error': f'Failed to load mapping: {str(e)}'
             }, status=500)

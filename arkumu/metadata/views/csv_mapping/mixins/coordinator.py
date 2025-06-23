@@ -1222,14 +1222,20 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         Returns:
             dict: Summary of restored state
         """
-        logger.info(f"DESERIALIZE_MAPPING: Starting deserialization for organization {organization_id}")
+        logger.info(f"🟡 DESERIALIZE_MAPPING: Starting deserialization for organization {organization_id}")
+        logger.info(f"🟡 DESERIALIZE_MAPPING: Mapping config keys: {list(mapping_config.keys()) if mapping_config else 'None'}")
         
         # Validate mapping config
         if not mapping_config or mapping_config.get('organization_id') != organization_id:
+            logger.error(f"🔴 DESERIALIZE_MAPPING: Invalid mapping config - org mismatch or no config")
             raise ValueError(f"Invalid mapping config for organization {organization_id}")
+        
+        logger.info(f"🟡 DESERIALIZE_MAPPING: Clearing current state...")
         
         # Clear current state first
         self.reset_all_coordinator_state(request, organization_id)
+        
+        logger.info(f"🟡 DESERIALIZE_MAPPING: Tracking loaded mapping context...")
         
         # Track loaded mapping context
         if mapping_id and mapping_name:
@@ -1239,28 +1245,40 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
                 'mapping_name': mapping_name,
                 'loaded_at': timezone.now().isoformat()
             }
-            logger.info(f"DESERIALIZE_MAPPING: Tracking loaded mapping '{mapping_name}' (ID: {mapping_id})")
+            logger.info(f"🟡 DESERIALIZE_MAPPING: Tracking loaded mapping '{mapping_name}' (ID: {mapping_id})")
         
-        # Restore selected datasets
+        # NOTE: Do NOT restore selected datasets from mapping
+        # Selected datasets are UI browsing state, not mapping configuration state
+        # Loading a mapping should only restore workspace columns, not change dataset browsing
         selected_datasets = mapping_config.get('selected_datasets', [])
-        if selected_datasets:
-            selected_datasets_key = f"selected_datasets_{organization_id}"
-            request.session[selected_datasets_key] = selected_datasets
-            logger.info(f"DESERIALIZE_MAPPING: Restored {len(selected_datasets)} selected datasets")
+        logger.info(f"🟡 DESERIALIZE_MAPPING: Found {len(selected_datasets)} datasets in mapping (but not restoring to UI)")
+        
+        logger.info(f"🟡 DESERIALIZE_MAPPING: Restoring workspace columns...")
         
         # Restore workspace columns (convert dict back to list format)
         workspace_columns_dict = mapping_config.get('workspace_columns', {})
+        logger.info(f"🟡 DESERIALIZE_MAPPING: Found {len(workspace_columns_dict)} workspace columns in mapping")
+        
         if workspace_columns_dict:
             # Convert dict back to list format expected by workspace
             workspace_columns_list = list(workspace_columns_dict.values())
             workspace_key = f"workspace_columns_{organization_id}"
             request.session[workspace_key] = workspace_columns_list
-            logger.info(f"DESERIALIZE_MAPPING: Restored {len(workspace_columns_list)} workspace columns")
+            logger.info(f"🟢 DESERIALIZE_MAPPING: Restored {len(workspace_columns_list)} workspace columns to session")
+            
+            # Debug: Log first few columns
+            for i, col in enumerate(workspace_columns_list[:3]):
+                logger.info(f"🟡 DESERIALIZE_MAPPING: Column {i}: {col.get('id', 'unknown')} from {col.get('dataset', 'unknown')}")
         else:
             workspace_columns_list = []
+            logger.info(f"🟡 DESERIALIZE_MAPPING: No workspace columns to restore")
+        
+        logger.info(f"🟡 DESERIALIZE_MAPPING: Saving session changes...")
         
         # Save session changes
         request.session.modified = True
+        
+        logger.info(f"🟡 DESERIALIZE_MAPPING: Building restoration summary...")
         
         # Build restoration summary
         fk_relationships = mapping_config.get('fk_relationships', {})
@@ -1279,7 +1297,7 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
             'version': mapping_config.get('version', 'Unknown')
         }
         
-        logger.info(f"DESERIALIZE_MAPPING: Successfully restored mapping '{summary['mapping_name']}' with {summary['datasets_restored']} datasets, {summary['columns_restored']} columns, {summary['fk_relationships_restored']} FK relationships, {summary['relationship_contexts_restored']} relationship contexts, and {summary['external_ontologies_restored']} external ontologies")
+        logger.info(f"🟢 DESERIALIZE_MAPPING: Successfully restored mapping '{summary['mapping_name']}' with {summary['datasets_restored']} datasets, {summary['columns_restored']} columns, {summary['fk_relationships_restored']} FK relationships, {summary['relationship_contexts_restored']} relationship contexts, and {summary['external_ontologies_restored']} external ontologies")
         return summary
     
     def validate_mapping_compatibility(self, request, organization_id, mapping_config):
