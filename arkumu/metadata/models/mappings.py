@@ -43,9 +43,9 @@ class Mapping(UUIDModel):
         return len(self.source_datasets)
     
     def get_column_count(self):
-        """Get total number of columns across all datasets"""
+        """Get total number of columns in workspace (selected columns only)"""
         workspace_columns = self.mapping_config.get('workspace_columns', {})
-        return sum(len(columns) for columns in workspace_columns.values())
+        return len(workspace_columns)
     
     def get_relationship_count(self):
         """Get number of FK relationships configured"""
