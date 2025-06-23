@@ -1,0 +1,59 @@
+<!-- Current Mapping Info -->
+{% if current_mapping_id %}
+    <div class="flex items-center gap-2">
+        <div class="badge badge-success badge-sm">LOADED</div>
+        <span class="text-sm font-medium">{{ current_mapping_name }}</span>
+        {% if current_mapping_updated %}
+            <span class="text-xs opacity-60">• Updated {{ current_mapping_updated }}</span>
+        {% endif %}
+        {% if current_mapping_status %}
+            <div class="badge badge-outline badge-xs">{{ current_mapping_status }}</div>
+        {% endif %}
+    </div>
+    <!-- Save Button -->
+    <button class="btn btn-success btn-sm"
+            hx-post="{% url 'metadata:csv_save_mapping_htmx' %}"
+            hx-vals='{"organization": "{{ organization_id }}", "csrfmiddlewaretoken": "{{ csrf_token }}", "action": "update", "mapping_name": "{{ current_mapping_name }}"}'
+            hx-include="#current-mapping-id"
+            hx-target="#save-feedback"
+            hx-swap="innerHTML">
+        Save
+    </button>
+    <input type="hidden" id="current-mapping-id" name="current_mapping_id" value="{{ current_mapping_id }}">
+{% else %}
+    <!-- Save New -->
+    <input type="text" 
+           id="new-mapping-name"
+           name="mapping_name"
+           placeholder="New mapping name"
+           class="input input-bordered input-sm w-48">
+    <button class="btn btn-success btn-sm"
+            hx-post="{% url 'metadata:csv_save_mapping_htmx' %}"
+            hx-vals='{"organization": "{{ organization_id }}", "csrfmiddlewaretoken": "{{ csrf_token }}", "action": "create"}'
+            hx-include="#new-mapping-name"
+            hx-target="#save-feedback"
+            hx-swap="innerHTML">
+        Save New
+    </button>
+{% endif %}
+
+<!-- Load Mapping -->
+<select id="load-mapping-select" 
+        name="mapping_id"
+        class="select select-bordered select-sm w-48"
+        hx-get="{% url 'metadata:csv_list_mappings' %}"
+        hx-vals='{"organization": "{{ organization_id }}"}'
+        hx-trigger="load"
+        hx-target="this"
+        hx-swap="innerHTML">
+    <option value="">Load mapping...</option>
+</select>
+<button class="btn btn-info btn-sm" 
+        hx-post="{% url 'metadata:csv_load_mapping_htmx' %}"
+        hx-vals='{"organization": "{{ organization_id }}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
+        hx-include="#load-mapping-select"
+        hx-target="#mapping-status"
+        hx-swap="innerHTML"
+        hx-confirm="Replace current work?">
+    Load
+</button> 

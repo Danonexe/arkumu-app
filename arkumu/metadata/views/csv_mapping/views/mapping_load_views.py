@@ -101,27 +101,56 @@ class LoadMappingHTMXView(CSVMappingCoordinatorMixin, CSVMappingTemplateHelperMi
             return self._render_error_response("Failed to process load response")
     
     def _render_consolidated_load_success_response(self, data, organization_id):
-        """Render load success with consolidated OOB updates for complete UI restoration"""
+        """Render load success - just update workspace and mapping controls"""
         mapping_id = data.get('mapping_id', '')
         mapping_name = data.get('mapping_name', 'Unknown')
         
         logger.info(f"🟢 LOAD_MAPPING_HTMX: Building success response for mapping '{mapping_name}' (ID: {mapping_id})")
         
-        # Build main status message (goes to #mapping-status target)
-        logger.info(f"🔵 LOAD_MAPPING_HTMX: Building status message...")
-        status_html = self._build_load_status_message(data, data.get('summary', {}), data.get('warnings', []))
+        # Just render the workspace since that's what has the loaded columns
+        workspace_html = self.render_workspace_template(self.request, organization_id)
         
-        # Generate consolidated OOB updates for all affected UI components
-        logger.info(f"🔵 LOAD_MAPPING_HTMX: Generating OOB updates...")
-        oob_updates = self._generate_consolidated_load_oob_updates(
-            organization_id, mapping_id, mapping_name
+        # Get actual mapping from database for real updated time
+        from arkumu.metadata.models.mappings import Mapping
+        try:
+            mapping_obj = Mapping.objects.get(id=mapping_id)
+            updated_time = mapping_obj.updated_at.strftime('%Y-%m-%d %H:%M')
+            validation_status = mapping_obj.validation_status
+        except Mapping.DoesNotExist:
+            updated_time = "Unknown"
+            validation_status = "draft"
+        
+        # Render navbar controls with loaded mapping info
+        navbar_context = {
+            'organization_id': organization_id,
+            'current_mapping_id': mapping_id,
+            'current_mapping_name': mapping_name,
+            'current_mapping_updated': updated_time,
+            'current_mapping_status': validation_status,
+            'csrf_token': get_token(self.request),
+        }
+        logger.info(f"🔍 LOAD_MAPPING: Rendering navbar with context: {navbar_context}")
+        
+        navbar_html = render_to_string(
+            'csv_mapping/partials/navbar_mapping_controls.html',
+            navbar_context,
+            request=self.request
         )
+        logger.info(f"🔍 LOAD_MAPPING: Navbar HTML length: {len(navbar_html)} chars")
+        logger.info(f"🔍 LOAD_MAPPING: Navbar HTML preview: {navbar_html[:200]}...")
         
-        # Combine main response with all OOB updates
-        complete_response = status_html + oob_updates
-        logger.info(f"🟢 LOAD_MAPPING_HTMX: Complete response length: {len(complete_response)} chars")
+        # Build OOB updates for workspace and navbar
+        oob_updates = {
+            'workspace-content': workspace_html,
+            'navbar-end': navbar_html,
+        }
+        logger.info(f"🔍 LOAD_MAPPING: Building OOB response with targets: {list(oob_updates.keys())}")
         
-        return HttpResponse(complete_response)
+        final_response = self.build_oob_response("", oob_updates)
+        logger.info(f"🔍 LOAD_MAPPING: Final response length: {len(final_response)} chars")
+        logger.info(f"🔍 LOAD_MAPPING: Final response preview: {final_response[:300]}...")
+        
+        return HttpResponse(final_response)
     
     def _generate_consolidated_load_oob_updates(self, organization_id, mapping_id, mapping_name):
         """Generate necessary OOB updates for mapping load (workspace and save section only)"""
@@ -147,10 +176,9 @@ class LoadMappingHTMXView(CSVMappingCoordinatorMixin, CSVMappingTemplateHelperMi
             logger.error(f"🔴 LOAD_MAPPING_HTMX: Error rendering save section template: {str(e)}", exc_info=True)
             save_section_html = '<div class="alert alert-error">Failed to render save section</div>'
         
-        # Load mapping should only update workspace and save section
-        # Dataset selection interface should remain unchanged
+        # Load mapping should only update workspace - mapping controls will get updated via main-content refresh
+        # Dataset selection interface should remain unchanged  
         oob_updates = {
-            'save-section': save_section_html,
             'workspace-content': workspace_html,
         }
         
@@ -198,6 +226,31 @@ class LoadMappingHTMXView(CSVMappingCoordinatorMixin, CSVMappingTemplateHelperMi
         </div>
         '''
     
+    def _render_main_content_with_loaded_mapping(self, organization_id, mapping_id, mapping_name):
+        """Render main content with loaded mapping context using template helpers"""
+        try:
+            # Use template helper method to build standard UI refresh with loaded mapping context
+            main_html = ""  # No main HTML needed, just OOB updates
+            
+            # Get context from existing view context (since main_content.html already has everything)
+            # Just update the specific parts that need the loaded mapping info
+            context = {
+                'organization_id': organization_id,
+                'current_mapping_id': mapping_id,
+                'current_mapping_name': mapping_name,
+                'csrf_token': get_token(self.request),
+            }
+            
+            # Use the existing context to render just the mapping controls with updated info
+            return render_to_string(
+                'csv_mapping/partials/mapping_controls.html',
+                context,
+                request=self.request
+            )
+        except Exception as e:
+            logger.error(f"Error rendering mapping controls with loaded mapping: {str(e)}", exc_info=True)
+            return '<div class="alert alert-error">Failed to render mapping controls</div>'
+
     def _render_save_section_content(self, organization_id, current_mapping_id=None, current_mapping_name=None):
         """Render save section with current context"""
         try:

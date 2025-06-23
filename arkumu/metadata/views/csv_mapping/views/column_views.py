@@ -149,17 +149,9 @@ class RemoveColumnFromWorkspaceView(
                 'workspace-content': workspace_html
             }
             
-            # If we cleared a loaded mapping, just show a status message instead of updating the save section
-            # Updating the save section via OOB can cause HTMX targeting issues
+            # If we cleared a loaded mapping, silently continue
             if cleared_mapping:
-                try:
-                    # Just show a status message that the mapping context was cleared
-                    status_message = f'<div class="alert alert-info mt-2"><span>Mapping context cleared due to workspace modification. You can now save as a new mapping.</span></div>'
-                    oob_updates['mapping-status'] = status_message
-                    
-                    logger.info(f"REMOVE_COLUMN: Cleared loaded mapping '{cleared_mapping.get('mapping_name')}' - showing status message")
-                except Exception as e:
-                    logger.warning(f"REMOVE_COLUMN: Failed to update mapping status: {str(e)}")
+                logger.info(f"REMOVE_COLUMN: Cleared loaded mapping '{cleared_mapping.get('mapping_name')}' due to workspace modification")
             
             response_html = self.build_oob_response(column_badges_html, oob_updates)
             

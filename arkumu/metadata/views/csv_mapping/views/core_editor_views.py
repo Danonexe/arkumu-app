@@ -87,6 +87,39 @@ class CSVMappingEditorView(
             # Get enhanced workspace summary using coordinator
             workspace_summary = self.get_workspace_summary(request, organization_id)
             
+            # Get current mapping info for navbar
+            current_mapping_id = None
+            current_mapping_name = None
+            current_mapping_description = None
+            current_mapping_updated = None
+            current_mapping_status = None
+            
+            # Check if there's a loaded mapping in session
+            mapping_key = f"loaded_mapping_{organization_id}"
+            logger.info(f"🔍 CORE_EDITOR: Checking for mapping session key: {mapping_key}")
+            logger.info(f"🔍 CORE_EDITOR: Session keys: {list(request.session.keys())}")
+            
+            if mapping_key in request.session:
+                mapping_info = request.session[mapping_key]
+                current_mapping_id = mapping_info.get('mapping_id')
+                current_mapping_name = mapping_info.get('mapping_name')
+                current_mapping_description = mapping_info.get('description', '')
+                
+                # Get actual mapping from database for real updated time
+                if current_mapping_id:
+                    from arkumu.metadata.models.mappings import Mapping
+                    try:
+                        mapping_obj = Mapping.objects.get(id=current_mapping_id)
+                        current_mapping_updated = mapping_obj.updated_at.strftime('%Y-%m-%d %H:%M')
+                        current_mapping_status = mapping_obj.validation_status
+                    except Mapping.DoesNotExist:
+                        current_mapping_updated = "Unknown"
+                        current_mapping_status = "draft"
+                
+                logger.info(f"🟢 CORE_EDITOR: Found loaded mapping: {current_mapping_name} (ID: {current_mapping_id}) updated: {current_mapping_updated}")
+            else:
+                logger.info(f"🟡 CORE_EDITOR: No loaded mapping found in session")
+            
             # Build complete context
             context = {
                 **org_context,
@@ -98,6 +131,11 @@ class CSVMappingEditorView(
                 'import_strategy': import_strategy,
                 'import_strategy_summary': import_strategy_summary,
                 'workspace_summary': workspace_summary,
+                'current_mapping_id': current_mapping_id,
+                'current_mapping_name': current_mapping_name,
+                'current_mapping_description': current_mapping_description,
+                'current_mapping_updated': current_mapping_updated,
+                'current_mapping_status': current_mapping_status,
                 'csrf_token': request.META.get('CSRF_COOKIE'),
             }
             
@@ -114,8 +152,32 @@ class CSVMappingEditorView(
                     from django.http import HttpResponse
                     return HttpResponse(wrapped_content)
                 else:
-                    # Return main content for other HTMX requests
-                    return render(request, 'csv_mapping/partials/main_content.html', context)
+                    # Return main content for other HTMX requests + inject navbar controls
+                    from django.template.loader import render_to_string
+                    from django.http import HttpResponse
+                    
+                    # Render main content
+                    main_content = render(request, 'csv_mapping/partials/main_content.html', context).content.decode()
+                    
+                    # Render navbar controls
+                    navbar_context = {
+                        'organization_id': organization_id,
+                        'current_mapping_id': current_mapping_id,
+                        'current_mapping_name': current_mapping_name,
+                        'current_mapping_updated': current_mapping_updated,
+                        'current_mapping_status': current_mapping_status,
+                        'csrf_token': context['csrf_token'],
+                    }
+                    navbar_controls = render_to_string(
+                        'csv_mapping/partials/navbar_mapping_controls.html',
+                        navbar_context,
+                        request=request
+                    )
+                    
+                    # Build OOB response to inject controls into navbar
+                    response_html = f'{main_content}<div id="navbar-end" hx-swap-oob="innerHTML">{navbar_controls}</div><div id="save-feedback" class="absolute top-12 right-0 z-50 w-80"></div><div id="mapping-status" class="absolute top-12 right-0 z-50 w-80"></div>'
+                    
+                    return HttpResponse(response_html)
             else:
                 return render(request, self.template_name, context)
             

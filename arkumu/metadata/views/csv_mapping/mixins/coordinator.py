@@ -1278,12 +1278,18 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         # Track loaded mapping context
         if mapping_id and mapping_name:
             loaded_mapping_key = f"loaded_mapping_{organization_id}"
-            request.session[loaded_mapping_key] = {
+            mapping_data = {
                 'mapping_id': mapping_id,
                 'mapping_name': mapping_name,
                 'loaded_at': timezone.now().isoformat()
             }
-            logger.info(f"🟡 DESERIALIZE_MAPPING: Tracking loaded mapping '{mapping_name}' (ID: {mapping_id})")
+            request.session[loaded_mapping_key] = mapping_data
+            request.session.modified = True
+            logger.info(f"🟢 DESERIALIZE_MAPPING: SET SESSION - Key: {loaded_mapping_key}")
+            logger.info(f"🟢 DESERIALIZE_MAPPING: SET SESSION - Data: {mapping_data}")
+            logger.info(f"🟢 DESERIALIZE_MAPPING: SET SESSION - Session now has: {list(request.session.keys())}")
+        else:
+            logger.warning(f"🟡 DESERIALIZE_MAPPING: No mapping_id or mapping_name provided - not setting session")
         
         # NOTE: Do NOT restore selected datasets from mapping
         # Selected datasets are UI browsing state, not mapping configuration state

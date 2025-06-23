@@ -114,7 +114,7 @@
                 <!-- Sample Values -->
                 {% if column.sample_values %}
                 <div class="flex items-center gap-1 text-xs text-base-content/60">
-                    💾
+                    <span class="badge badge-neutral badge-xs">SAVE</span>
                     <span class="truncate max-w-[150px]" title="Sample values: {{ column.sample_values|join:', ' }}">
                         {{ column.sample_values.0|default:'' }}{% if column.sample_values|length > 1 %}, {{ column.sample_values.1|default:'' }}{% if column.sample_values|length > 2 %}...{% endif %}{% endif %}
                     </span>

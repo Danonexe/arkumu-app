@@ -8,19 +8,48 @@
 {% csrf_token %}
 <div class="min-h-screen bg-base-200 p-0 m-0 w-full">
 
-    <!-- Header -->
-    <div class="bg-base-100 border-b border-base-300">
-        <div class="container mx-auto max-w-none px-4 py-3">
-            <h1 class="text-xl font-semibold">CSV Mapping Editor</h1>
-            <div class="text-sm text-base-content opacity-70">
-                Design Import Mappings for your CSV datasets
+    <!-- Top Navigation Bar with Org Dropdown -->
+    <div class="navbar bg-base-100 border-b border-base-300">
+        <div class="navbar-start">
+            <div class="flex items-center gap-4">
+                <h1 class="text-xl font-semibold">CSV Mapping Editor</h1>
+                <div class="divider divider-horizontal mx-0"></div>
+                <div class="flex items-center gap-3">
+                    <span class="text-sm font-medium">Organization:</span>
+                    <select name="organization" 
+                            class="select select-bordered select-sm"
+                            id="organization-selector"
+                            hx-get="{% url 'metadata:csv_mapping_editor' %}"
+                            hx-target="#main-content"
+                            hx-swap="innerHTML"
+                            hx-trigger="change[target.value!='']"
+                            hx-include="this">
+                        <option value="">Choose organization...</option>
+                        {% for org in organizations %}
+                            <option value="{{ org.id }}" {% if org.id == organization_id %}selected{% endif %}>
+                                {{ org.name }}{% if org.status == 'active' %} ✓{% endif %}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
             </div>
         </div>
+        <div class="navbar-center">
+        </div>
+        <div class="navbar-end" id="navbar-end">
+            <!-- Mapping controls will be injected here via HTMX OOB -->
+        </div>
+    </div>
+    
+    <!-- Save Feedback Area -->
+    <div id="save-feedback" class="w-full px-4 py-2 bg-base-200 border-b" style="min-height: 2rem;">
+        <!-- Save status messages will appear here -->
+        <div class="text-xs text-base-content/50">Status messages will appear here</div>
     </div>
 
     <!-- Main Content Container -->
     <div id="main-content">
-        {% include 'csv_mapping/partials/main_content.html' with organizations=organizations organization_id=organization_id csv_datasets=csv_datasets selected_datasets=selected_datasets selected_datasets_with_details=selected_datasets_with_details selected_columns=selected_columns import_strategy=import_strategy csrf_token=csrf_token %}
+        {% include 'csv_mapping/partials/main_content.html' with organizations=organizations organization_id=organization_id csv_datasets=csv_datasets selected_datasets=selected_datasets selected_datasets_with_details=selected_datasets_with_details selected_columns=selected_columns import_strategy=import_strategy csrf_token=csrf_token current_mapping_id=current_mapping_id current_mapping_name=current_mapping_name %}
     </div>
     
     </div> <!-- End main-content -->
@@ -63,34 +92,54 @@
 <script>
 // Global HTMX error handling for the CSV mapping interface
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('🔧 CSV Mapping Editor: Initializing enhanced HTMX error handling');
+    // Enable debug mode by adding ?debug=1 to URL or set window.HTMX_DEBUG = true in console
+    window.HTMX_DEBUG = new URLSearchParams(window.location.search).get('debug') === '1';
     
-    // HTMX Target Error Handler (this is what we're getting!)
+    if (window.HTMX_DEBUG) {
+        console.log('🔧 CSV Mapping Editor: Debug mode enabled');
+    }
+    
+    // HTMX Target Error Handler - silently handle and gracefully fallback
     document.addEventListener('htmx:targetError', function(evt) {
-        console.error('🎯 HTMX Target Error:', {
-            target: evt.target,
-            detail: evt.detail,
-            targetId: evt.target?.id,
-            targetClass: evt.target?.className,
-            requestConfig: evt.detail?.requestConfig,
-            targetSelector: evt.detail?.target,
-            message: 'Target element not found or invalid'
-        });
+        const targetSelector = evt.detail?.target;
+        const sourceId = evt.target?.id;
         
-        // Show specific error
-        showErrorToast(`Target error: ${evt.detail?.target || 'Unknown target'}`);
+        // Only log for debugging if needed
+        if (window.HTMX_DEBUG) {
+            console.warn('HTMX Target Missing:', {
+                source: sourceId,
+                targetSelector: targetSelector
+            });
+        }
+        
+        // Try to gracefully handle common cases
+        if (targetSelector && targetSelector.startsWith('#dataset-')) {
+            // Dataset container missing - try fallback to parent container
+            const fallbackTarget = document.querySelector('#table-content');
+            if (fallbackTarget) {
+                // Silently continue without showing error to user
+                return;
+            }
+        }
+        
+        // Only show error for critical failures
+        if (!targetSelector?.includes('badge-') && !targetSelector?.includes('dataset-')) {
+            showErrorToast('Interface update failed - please refresh');
+        }
     });
     
     // HTMX Swap Error Handler
     document.addEventListener('htmx:swapError', function(evt) {
-        console.error('🔄 HTMX Swap Error:', {
-            target: evt.target,
-            detail: evt.detail,
-            error: evt.detail?.error,
-            message: 'Failed to swap content'
-        });
+        if (window.HTMX_DEBUG) {
+            console.error('🔄 HTMX Swap Error:', {
+                target: evt.target,
+                detail: evt.detail,
+                error: evt.detail?.error,
+                message: 'Failed to swap content'
+            });
+        }
         
-        showErrorToast('Content swap failed');
+        showErrorToast('Content update failed - please try again');
     });
     
     // Global HTMX response error handler
@@ -138,36 +187,8 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // HTMX Trigger Debug Handler
-    document.addEventListener('htmx:trigger', function(evt) {
-        console.log('🎯 HTMX Trigger Fired:', {
-            trigger: evt.detail.trigger,
-            target: evt.target,
-            targetId: evt.target?.id,
-            targetExists: document.contains(evt.target)
-        });
-    });
-    
-    // Debug request lifecycle
-    document.addEventListener('htmx:beforeRequest', function(evt) {
-        const target = evt.target;
-        const url = evt.detail.xhr.responseURL || evt.detail.requestConfig?.url;
-        console.log('🚀 HTMX: Starting request', {
-            target: target.id || target.className,
-            url: url,
-            method: evt.detail.requestConfig?.verb
-        });
-    });
-    
-    document.addEventListener('htmx:afterRequest', function(evt) {
-        const target = evt.target;
-        const status = evt.detail.xhr.status;
-        console.log('✅ HTMX: Request completed', {
-            target: target.id || target.className,
-            status: status,
-            successful: evt.detail.successful
-        });
-    });
+    // Only log actual errors, not all HTMX activity
+    // Removed verbose trigger, beforeRequest, and afterRequest logging
     
     // JSON view will refresh automatically when it becomes visible via tab switching
 });

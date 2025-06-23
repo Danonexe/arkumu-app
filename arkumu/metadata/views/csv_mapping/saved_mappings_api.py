@@ -237,6 +237,8 @@ class SaveMappingView(CSVMappingCoordinatorMixin, View):
                 'mapping_id': str(mapping.id),
                 'mapping_name': mapping_name,
                 'created': True,  # Always true now since we only create
+                'updated_at': mapping.updated_at.isoformat(),
+                'validation_status': mapping.validation_status,
                 'message': f'Mapping "{mapping_name}" created successfully'
             })
             
@@ -424,6 +426,8 @@ class UpdateMappingView(CSVMappingCoordinatorMixin, View):
                 'mapping_id': str(mapping.id),
                 'mapping_name': mapping_name,
                 'updated': True,
+                'updated_at': mapping.updated_at.isoformat(),
+                'validation_status': mapping.validation_status,
                 'message': f'Mapping "{mapping_name}" updated successfully'
             })
             
