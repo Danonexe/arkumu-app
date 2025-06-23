@@ -720,9 +720,21 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
                 
                 logger.info(f"🔍 COORDINATOR: Added column '{column_id}' to dataset group '{dataset_key}'")
         
-        # Convert to list and sort by dataset name
+        # Convert to list and sort by most recent workspace activity
         datasets_with_columns = list(datasets_map.values())
-        datasets_with_columns.sort(key=lambda x: x['name'])
+        
+        # Sort by the most recent column addition to workspace (newest workspace activity first)
+        def get_latest_workspace_activity(dataset_group):
+            latest_timestamp = None
+            for col in dataset_group['columns']:
+                added_at = col.get('added_at')
+                if added_at:
+                    if latest_timestamp is None or added_at > latest_timestamp:
+                        latest_timestamp = added_at
+            # Fallback: if no timestamps, sort alphabetically  
+            return latest_timestamp or '0000-00-00T00:00:00'
+        
+        datasets_with_columns.sort(key=get_latest_workspace_activity, reverse=True)
         
         logger.info(f"🔍 COORDINATOR: Prepared {len(datasets_with_columns)} dataset groups with total {len(column_ids_seen)} unique columns")
         
@@ -1120,9 +1132,16 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         """
         logger.info(f"SERIALIZE_MAPPING: Starting serialization for organization {organization_id}")
         
-        # Get current state
-        selected_datasets = self.get_selected_dataset_names(request, organization_id)
+        # Get current workspace state
         workspace_columns = self.get_workspace_columns(request, organization_id)
+        
+        # Extract datasets that actually have columns in workspace (not UI browsing state)
+        workspace_datasets = set()
+        for column_data in workspace_columns:
+            dataset_name = column_data.get('dataset')
+            if dataset_name:
+                workspace_datasets.add(dataset_name)
+        workspace_datasets = list(workspace_datasets)
         
         # Serialize FK relationships and relationship contexts from workspace columns
         fk_relationships = {}
@@ -1186,14 +1205,14 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
             'version': '1.2',  # Updated version to include external ontologies
             'created_at': timezone.now().isoformat(),
             'organization_id': organization_id,
-            'selected_datasets': selected_datasets,
+            'workspace_datasets': workspace_datasets,  # Only datasets with actual workspace columns
             'workspace_columns': workspace_columns_dict,  # Store as dict for easier lookup
             'fk_relationships': fk_relationships,
             'relationship_contexts': relationship_contexts,  # New: relationship context configurations
             'external_ontologies': external_ontologies,  # New: external ontology configurations
             'entity_mappings': entity_mappings,
             'metadata': {
-                'total_datasets': len(selected_datasets),
+                'total_datasets': len(workspace_datasets),  # Only count datasets that have columns
                 'total_columns': len(workspace_columns),
                 'total_fk_relationships': len(fk_relationships),
                 'total_relationship_contexts': len(relationship_contexts),
@@ -1202,7 +1221,7 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
             }
         }
         
-        logger.info(f"SERIALIZE_MAPPING: Serialized {len(selected_datasets)} datasets, {len(workspace_columns)} columns, {len(fk_relationships)} FK relationships, {len(relationship_contexts)} relationship contexts, {len(external_ontologies)} external ontologies")
+        logger.info(f"SERIALIZE_MAPPING: Serialized {len(workspace_datasets)} workspace datasets, {len(workspace_columns)} columns, {len(fk_relationships)} FK relationships, {len(relationship_contexts)} relationship contexts, {len(external_ontologies)} external ontologies")
         return mapping_config
     
     def deserialize_mapping_state(self, request, organization_id, mapping_config, mapping_id=None, mapping_name=None):
@@ -1250,8 +1269,9 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         # NOTE: Do NOT restore selected datasets from mapping
         # Selected datasets are UI browsing state, not mapping configuration state
         # Loading a mapping should only restore workspace columns, not change dataset browsing
-        selected_datasets = mapping_config.get('selected_datasets', [])
-        logger.info(f"🟡 DESERIALIZE_MAPPING: Found {len(selected_datasets)} datasets in mapping (but not restoring to UI)")
+        # Support both old format (selected_datasets) and new format (workspace_datasets)
+        workspace_datasets = mapping_config.get('workspace_datasets', mapping_config.get('selected_datasets', []))
+        logger.info(f"🟡 DESERIALIZE_MAPPING: Found {len(workspace_datasets)} workspace datasets in mapping (but not restoring to UI)")
         
         logger.info(f"🟡 DESERIALIZE_MAPPING: Restoring workspace columns...")
         
@@ -1287,7 +1307,7 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         metadata = mapping_config.get('metadata', {})
         
         summary = {
-            'datasets_restored': len(selected_datasets),
+            'datasets_restored': len(workspace_datasets),
             'columns_restored': len(workspace_columns_list),
             'fk_relationships_restored': len(fk_relationships),
             'relationship_contexts_restored': len(relationship_contexts),
@@ -1297,7 +1317,7 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
             'version': mapping_config.get('version', 'Unknown')
         }
         
-        logger.info(f"🟢 DESERIALIZE_MAPPING: Successfully restored mapping '{summary['mapping_name']}' with {summary['datasets_restored']} datasets, {summary['columns_restored']} columns, {summary['fk_relationships_restored']} FK relationships, {summary['relationship_contexts_restored']} relationship contexts, and {summary['external_ontologies_restored']} external ontologies")
+        logger.info(f"🟢 DESERIALIZE_MAPPING: Successfully restored mapping '{summary['mapping_name']}' with {summary['datasets_restored']} workspace datasets, {summary['columns_restored']} columns, {summary['fk_relationships_restored']} FK relationships, {summary['relationship_contexts_restored']} relationship contexts, and {summary['external_ontologies_restored']} external ontologies")
         return summary
     
     def validate_mapping_compatibility(self, request, organization_id, mapping_config):
@@ -1334,8 +1354,8 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
             validation_result['is_valid'] = False
             return validation_result
         
-        # Check dataset availability
-        required_datasets = mapping_config.get('selected_datasets', [])
+        # Check dataset availability (support both old and new format)
+        required_datasets = mapping_config.get('workspace_datasets', mapping_config.get('selected_datasets', []))
         for dataset_name in required_datasets:
             if dataset_name not in available_dataset_names:
                 validation_result['missing_datasets'].append(dataset_name)

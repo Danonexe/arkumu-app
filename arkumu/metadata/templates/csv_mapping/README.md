@@ -123,9 +123,13 @@ partials/table_rows.html
 3. Backend can send OOB updates to sync left side
 
 ### Workspace Organization
-- **Datasets**: Newest added datasets appear at TOP
-- **Columns**: Within each dataset, newest columns appear at TOP
-- **No scrolling required** to see latest additions
+- **Datasets**: Datasets with most recent workspace activity appear at TOP
+  - Based on `workspace_columns` data, not `selected_datasets` browsing
+  - Sorted by latest `added_at` timestamp of any column in that dataset
+  - Only datasets that actually have columns in workspace are shown
+- **Columns**: Within each dataset, order determined by backend processing
+- **No scrolling required** to see latest workspace additions
+- **Workspace-centric**: Organized around actual mapping work, not browsing state
 
 ## 🎨 Styling Patterns
 

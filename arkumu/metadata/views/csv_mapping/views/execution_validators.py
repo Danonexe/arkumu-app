@@ -95,14 +95,19 @@ class ExecutionValidator:
         
         try:
             # 1. Structure validation
-            required_keys = ['workspace_columns', 'selected_datasets', 'metadata']
+            required_keys = ['workspace_columns', 'metadata']
             for key in required_keys:
                 if key not in mapping_config:
                     result['errors'].append(f"Missing required key: {key}")
                     result['is_valid'] = False
             
-            # 2. Dataset availability validation
-            selected_datasets = mapping_config.get('selected_datasets', [])
+            # Check that at least one datasets key exists (backward compatibility)
+            if 'selected_datasets' not in mapping_config and 'workspace_datasets' not in mapping_config:
+                result['errors'].append("Missing datasets configuration: need either 'selected_datasets' or 'workspace_datasets'")
+                result['is_valid'] = False
+            
+            # 2. Dataset availability validation (support both old and new format)
+            selected_datasets = mapping_config.get('workspace_datasets', mapping_config.get('selected_datasets', []))
             if not selected_datasets:
                 result['errors'].append("No datasets selected")
                 result['is_executable'] = False
@@ -182,8 +187,8 @@ class ExecutionAnalyzer:
         processor = GUIMappingProcessor()
         execution_plan = processor.analyze_gui_mapping_config(mapping_config)
         
-        # Check data availability
-        selected_datasets = mapping_config.get('selected_datasets', [])
+        # Check data availability (support both old and new format)
+        selected_datasets = mapping_config.get('workspace_datasets', mapping_config.get('selected_datasets', []))
         analyzer = S3DirectDataAnalyzer()
         
         dataset_analysis = {}

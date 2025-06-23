@@ -45,14 +45,19 @@ class SaveMappingView(CSVMappingCoordinatorMixin, View):
         
         try:
             # 1. Check that mapping_config has required structure
-            required_keys = ['selected_datasets', 'workspace_columns', 'fk_relationships', 'metadata']
+            required_keys = ['workspace_columns', 'fk_relationships', 'metadata']
             for key in required_keys:
                 if key not in mapping_config:
                     validation_result['errors'].append(f"Missing required configuration key: {key}")
                     validation_result['is_valid'] = False
             
-            # 2. Validate selected datasets exist
-            selected_datasets = mapping_config.get('selected_datasets', [])
+            # Check that at least one datasets key exists (backward compatibility)
+            if 'selected_datasets' not in mapping_config and 'workspace_datasets' not in mapping_config:
+                validation_result['errors'].append("Missing datasets configuration: need either 'selected_datasets' or 'workspace_datasets'")
+                validation_result['is_valid'] = False
+            
+            # 2. Validate datasets exist (support both old and new format)
+            selected_datasets = mapping_config.get('workspace_datasets', mapping_config.get('selected_datasets', []))
             if not selected_datasets:
                 validation_result['warnings'].append("No datasets selected - mapping will be empty")
             else:
@@ -276,11 +281,16 @@ class UpdateMappingView(CSVMappingCoordinatorMixin, View):
         
         try:
             # 1. Check basic required structure
-            required_keys = ['selected_datasets', 'workspace_columns', 'fk_relationships', 'metadata']
+            required_keys = ['workspace_columns', 'fk_relationships', 'metadata']
             for key in required_keys:
                 if key not in mapping_config:
                     validation_result['errors'].append(f"Missing required configuration key: {key}")
                     validation_result['is_valid'] = False
+            
+            # Check that at least one datasets key exists (backward compatibility)
+            if 'selected_datasets' not in mapping_config and 'workspace_datasets' not in mapping_config:
+                validation_result['errors'].append("Missing datasets configuration: need either 'selected_datasets' or 'workspace_datasets'")
+                validation_result['is_valid'] = False
             
             # 2. Get all datasets referenced in workspace (more flexible approach)
             workspace_columns = mapping_config.get('workspace_columns', {})
@@ -297,10 +307,13 @@ class UpdateMappingView(CSVMappingCoordinatorMixin, View):
                 except Exception:
                     validation_result['warnings'].append(f"Could not parse column ID: {column_id}")
             
-            # 3. Update selected_datasets to match what's actually in workspace
+            # 3. Update workspace_datasets to match what's actually in workspace (new format)
             if datasets_in_workspace:
-                mapping_config['selected_datasets'] = list(datasets_in_workspace)
-                logger.info(f"VALIDATE_UPDATE: Updated selected_datasets to match workspace: {datasets_in_workspace}")
+                mapping_config['workspace_datasets'] = list(datasets_in_workspace)
+                # Keep selected_datasets for backward compatibility if it exists
+                if 'selected_datasets' in mapping_config:
+                    mapping_config['selected_datasets'] = list(datasets_in_workspace)
+                logger.info(f"VALIDATE_UPDATE: Updated workspace_datasets to match workspace: {datasets_in_workspace}")
             
             # 4. Verify all referenced datasets are available
             try:
@@ -399,7 +412,7 @@ class UpdateMappingView(CSVMappingCoordinatorMixin, View):
             
             # Update mapping fields
             mapping.name = mapping_name
-            mapping.source_datasets = mapping_config.get('selected_datasets', [])
+            mapping.source_datasets = mapping_config.get('workspace_datasets', mapping_config.get('selected_datasets', []))
             mapping.mapping_config = mapping_config
             mapping.validation_status = 'draft'  # Reset to draft on update
             mapping.save()
