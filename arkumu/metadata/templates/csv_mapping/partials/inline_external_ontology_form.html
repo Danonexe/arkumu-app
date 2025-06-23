@@ -100,9 +100,11 @@ function updateOntologyPreset(ontologyType, columnId) {
         const template = selectedOption.dataset.template;
         templateField.value = template;
         
-        if (ontologyType === 'custom') {
+        if (ontologyType === 'custom' || ontologyType === 'cidoc_crm' || ontologyType === 'arkumu') {
             templateField.removeAttribute('readonly');
-            templateField.focus();
+            if (ontologyType === 'custom') {
+                templateField.focus();
+            }
         } else {
             templateField.setAttribute('readonly', true);
         }

@@ -60,6 +60,20 @@ class ToggleExternalOntologyFormView(
             
             # Define common ontology types with their templates and patterns
             ontology_presets = {
+                'arkumu': {
+                    'name': 'Arkumu',
+                    'uri_template': 'https://arkumu.nrw/',
+                    'identifier_pattern': r'^[a-zA-Z][a-zA-Z0-9_]*$',
+                    'example': 'hasTitle',
+                    'description': 'Arkumu ontology with fixed property URI (column values become object values)'
+                },
+                'cidoc_crm': {
+                    'name': 'CIDOC-CRM',
+                    'uri_template': 'http://www.cidoc-crm.org/cidoc-crm/',
+                    'identifier_pattern': r'^(E\d+|P\d+[i]?)$',
+                    'example': 'P14_carried_out_by',
+                    'description': 'CIDOC-CRM with fixed property/class URI (column values become object values)'
+                },
                 'orcid': {
                     'name': 'ORCID',
                     'uri_template': 'https://orcid.org/{identifier}',
