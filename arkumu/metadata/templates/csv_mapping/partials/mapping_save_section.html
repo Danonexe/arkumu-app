@@ -1,0 +1,52 @@
+{% load i18n %}
+
+<!-- Dynamic Save Section that updates based on current state -->
+<div id="save-section" class="bg-base-100 rounded-lg p-4 mb-4 border border-base-300">
+    <div class="flex items-center gap-2 mb-3">
+        <div class="badge badge-success badge-sm">
+            <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+            </svg>
+            <span>{% if current_mapping_id %}{% trans "Update Mapping" %}{% else %}{% trans "Quick Save" %}{% endif %}</span>
+        </div>
+    </div>
+    <div class="flex gap-3">
+        <!-- Hidden input to track currently loaded mapping -->
+        <input type="hidden" id="current-mapping-id" name="current_mapping_id" value="{{ current_mapping_id|default:'' }}">
+        
+        <div class="form-control flex-1">
+            <input type="text" 
+                   id="mapping-name-input"
+                   name="mapping_name"
+                   placeholder="{% trans 'Enter mapping name...' %}"
+                   value="{{ current_mapping_name|default:'' }}"
+                   class="input input-bordered input-sm focus:input-primary"
+                   {% if organization_id %}
+                   hx-get="{% url 'metadata:csv_validate_mapping_name' %}"
+                   hx-vals='{"organization": "{{ organization_id }}"}'
+                   hx-include="#current-mapping-id"
+                   hx-trigger="keyup changed delay:300ms, load{% if current_mapping_name %} delay:100ms{% endif %}"
+                   hx-target="#save-mapping-btn"
+                   hx-swap="outerHTML"
+                   {% else %}
+                   disabled
+                   {% endif %}>
+        </div>
+        <button class="btn btn-sm {% if not organization_id %}btn-disabled{% elif current_mapping_name %}btn-success{% else %}btn-disabled{% endif %}" 
+                id="save-mapping-btn"
+                {% if organization_id %}
+                hx-post="{% url 'metadata:csv_save_mapping_htmx' %}"
+                hx-vals='{"organization": "{{ organization_id }}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
+                hx-include="#mapping-name-input, #current-mapping-id"
+                hx-target="#mapping-status"
+                hx-swap="innerHTML"
+                {% endif %}
+                {% if not organization_id or not current_mapping_name %}disabled{% endif %}>
+            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="{% if current_mapping_id %}M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0l-4 4m4-4v12{% else %}M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3-3m0 0l-3 3m3-3v12{% endif %}"></path>
+            </svg>
+            <span>{% if current_mapping_id %}{% trans "Update" %}{% else %}{% trans "Save" %}{% endif %}</span>
+            <span class="loading loading-spinner loading-xs htmx-indicator ml-1"></span>
+        </button>
+    </div>
+</div> 

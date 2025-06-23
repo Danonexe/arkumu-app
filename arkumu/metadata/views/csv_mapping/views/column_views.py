@@ -130,6 +130,11 @@ class RemoveColumnFromWorkspaceView(
                         updated_columns.append(col)
             self.update_workspace_columns(request, organization_id, updated_columns)
             
+            # Clear loaded mapping context since workspace has been modified
+            cleared_mapping = self.clear_loaded_mapping_context(request, organization_id)
+            if cleared_mapping:
+                logger.info(f"REMOVE_COLUMN: Cleared loaded mapping '{cleared_mapping.get('mapping_name')}' due to workspace modification")
+            
             # Return updated column badges HTML with workspace update via hx-swap-oob using template helpers
             column_badges_html = self.render_column_badges_template(
                 request, organization_id, dataset_name, source_name
@@ -142,6 +147,31 @@ class RemoveColumnFromWorkspaceView(
             oob_updates = {
                 'selected-columns-workspace': workspace_html
             }
+            
+            # If we cleared a loaded mapping, also update the save section to reset to create mode
+            if cleared_mapping:
+                try:
+                    from django.template.loader import render_to_string
+                    from django.middleware.csrf import get_token
+                    
+                    save_section_context = {
+                        'organization_id': organization_id,
+                        'csrf_token': get_token(request),
+                        'current_mapping_id': None,  # Reset to create mode
+                        'current_mapping_name': None,
+                    }
+                    
+                    save_section_html = render_to_string(
+                        'csv_mapping/partials/mapping_save_section.html',
+                        save_section_context,
+                        request=request
+                    )
+                    
+                    oob_updates['save-section'] = save_section_html
+                    logger.info(f"REMOVE_COLUMN: Updated save section to reset from loaded mapping mode")
+                except Exception as e:
+                    logger.warning(f"REMOVE_COLUMN: Failed to update save section: {str(e)}")
+            
             response = self.build_oob_response(column_badges_html, oob_updates)
             
             return HttpResponse(response)

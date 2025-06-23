@@ -251,6 +251,100 @@ class SaveMappingView(CSVMappingCoordinatorMixin, View):
 class UpdateMappingView(CSVMappingCoordinatorMixin, View):
     """Update existing mapping with current state"""
     
+    def validate_mapping_for_update(self, request, organization_id, mapping_config):
+        """
+        More flexible validation for mapping updates that allows workspace changes.
+        
+        Unlike the strict validation used for new mappings, this allows:
+        - Adding new datasets to the workspace
+        - Adding new columns from existing or new datasets
+        - Modifying FK relationships
+        
+        Only validates that:
+        - Required config structure exists
+        - Referenced datasets are actually available
+        - Column IDs have valid format
+        - FK relationships reference valid datasets
+        """
+        logger.info(f"VALIDATE_UPDATE: Starting flexible validation for organization {organization_id}")
+        
+        validation_result = {
+            'is_valid': True,
+            'errors': [],
+            'warnings': []
+        }
+        
+        try:
+            # 1. Check basic required structure
+            required_keys = ['selected_datasets', 'workspace_columns', 'fk_relationships', 'metadata']
+            for key in required_keys:
+                if key not in mapping_config:
+                    validation_result['errors'].append(f"Missing required configuration key: {key}")
+                    validation_result['is_valid'] = False
+            
+            # 2. Get all datasets referenced in workspace (more flexible approach)
+            workspace_columns = mapping_config.get('workspace_columns', {})
+            datasets_in_workspace = set()
+            
+            for column_id in workspace_columns.keys():
+                try:
+                    parts = column_id.split('::', 2)
+                    if len(parts) == 3:
+                        source, dataset_name, column_name = parts
+                        datasets_in_workspace.add(dataset_name)
+                    else:
+                        validation_result['warnings'].append(f"Column ID has unusual format: {column_id}")
+                except Exception:
+                    validation_result['warnings'].append(f"Could not parse column ID: {column_id}")
+            
+            # 3. Update selected_datasets to match what's actually in workspace
+            if datasets_in_workspace:
+                mapping_config['selected_datasets'] = list(datasets_in_workspace)
+                logger.info(f"VALIDATE_UPDATE: Updated selected_datasets to match workspace: {datasets_in_workspace}")
+            
+            # 4. Verify all referenced datasets are available
+            try:
+                available_datasets = self.get_csv_datasets_for_organization(organization_id)
+                available_names = {ds.get('name') for ds in available_datasets if ds.get('name')}
+                
+                missing_datasets = datasets_in_workspace - available_names
+                if missing_datasets:
+                    validation_result['errors'].extend([
+                        f"Dataset '{ds}' is no longer available" for ds in missing_datasets
+                    ])
+                    validation_result['is_valid'] = False
+            except Exception as e:
+                validation_result['warnings'].append(f"Could not verify dataset availability: {str(e)}")
+            
+            # 5. Validate FK relationships (but allow missing references)
+            fk_relationships = mapping_config.get('fk_relationships', {})
+            for fk_id, fk_config in fk_relationships.items():
+                if not isinstance(fk_config, dict):
+                    validation_result['warnings'].append(f"Invalid FK relationship config for '{fk_id}' - will be skipped")
+                    continue
+                
+                target_dataset = fk_config.get('target_dataset')
+                if target_dataset and target_dataset not in datasets_in_workspace:
+                    validation_result['warnings'].append(f"FK relationship '{fk_id}' references dataset '{target_dataset}' not in workspace")
+            
+            # 6. Update metadata to reflect current state
+            metadata = mapping_config.get('metadata', {})
+            metadata.update({
+                'total_datasets': len(datasets_in_workspace),
+                'total_columns': len(workspace_columns),
+                'total_fk_relationships': len(fk_relationships),
+                'last_validated': 'updated',
+            })
+            mapping_config['metadata'] = metadata
+            logger.info(f"VALIDATE_UPDATE: Updated metadata")
+            
+        except Exception as e:
+            validation_result['errors'].append(f"Validation error: {str(e)}")
+            validation_result['is_valid'] = False
+        
+        logger.info(f"VALIDATE_UPDATE: Validation complete - Valid: {validation_result['is_valid']}, Errors: {len(validation_result['errors'])}, Warnings: {len(validation_result['warnings'])}")
+        return validation_result
+    
     def post(self, request):
         """Update existing mapping configuration"""
         logger.info("UPDATE_MAPPING: Starting update operation")
@@ -293,9 +387,8 @@ class UpdateMappingView(CSVMappingCoordinatorMixin, View):
                 request, organization_id, mapping_name
             )
             
-            # Validate mapping before updating (reuse validation from SaveMappingView)
-            save_view = SaveMappingView()
-            validation_result = save_view.validate_mapping_before_save(request, organization_id, mapping_config)
+            # Use more flexible validation for updates that allows workspace changes
+            validation_result = self.validate_mapping_for_update(request, organization_id, mapping_config)
             
             if not validation_result['is_valid']:
                 return JsonResponse({
@@ -371,7 +464,8 @@ class LoadMappingView(CSVMappingCoordinatorMixin, View):
             
             # Restore mapping state
             summary = self.deserialize_mapping_state(
-                request, organization_id, mapping.mapping_config
+                request, organization_id, mapping.mapping_config, 
+                mapping_id=str(mapping.id), mapping_name=mapping.name
             )
             
             logger.info(f"LOAD_MAPPING: Successfully loaded mapping '{mapping.name}' with ID {mapping.id}")

@@ -1,17 +1,24 @@
 """
-CSV Mapping HTMX Views
+Enhanced CSV Mapping HTMX Views with Full Coordinator Integration
 
-This module contains pure HTMX views for UI state management in the CSV mapping interface.
-These views complement the JSON-based persistence views by providing HTML responses 
-for button states, status messages, and other UI elements.
+This module provides HTMX-enabled views for mapping management that properly
+integrate with the CSVMappingCoordinatorMixin for state consistency.
+
+Architecture:
+- Pure HTMX (no JavaScript)
+- Full coordinator mixin integration  
+- Proper state validation and updates
+- Clean separation of concerns
 """
 
 import json
 import logging
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.views import View
 from django.template.loader import render_to_string
 from django.utils.translation import gettext as _
+from django.middleware.csrf import get_token
+
 from arkumu.metadata.models.mappings import Mapping
 from arkumu.metadata.views.csv_mapping.saved_mappings_api import (
     SaveMappingView, UpdateMappingView, LoadMappingView, DeleteMappingView
@@ -21,65 +28,136 @@ from arkumu.metadata.views.csv_mapping.mixins.coordinator import CSVMappingCoord
 logger = logging.getLogger(__name__)
 
 
-class ValidateMappingNameView(View):
-    """Validate mapping name and return save button with appropriate state"""
+class ValidateMappingNameView(CSVMappingCoordinatorMixin, View):
+    """
+    Validate mapping names with full coordinator context awareness.
+    
+    This view properly handles both create and update scenarios by:
+    1. Checking current workspace state via coordinator
+    2. Validating name uniqueness with proper exclusions
+    3. Determining appropriate button state and text
+    """
     
     def get(self, request):
-        """Return save button HTML with enabled/disabled state based on name validation"""
+        """Validate mapping name and return dynamic save button HTML"""
+        # Extract parameters
         mapping_name = request.GET.get('mapping_name', '').strip()
         organization_id = request.GET.get('organization')
+        current_mapping_id = request.GET.get('current_mapping_id', '').strip()
         
-        # Check if name is valid
-        is_valid = bool(mapping_name)
+        # Validate inputs
+        if not organization_id:
+            return self._render_error_button("Organization required")
+        
+        # Determine operation mode
+        is_update_mode = bool(current_mapping_id)
+        is_name_valid = bool(mapping_name)
+        
+        # Check for duplicates with proper exclusion logic
         is_duplicate = False
-        
-        if is_valid and organization_id:
-            # Check for duplicates (avoid accessing description field)
-            is_duplicate = Mapping.objects.filter(
+        if is_name_valid:
+            duplicate_query = Mapping.objects.filter(
                 organization_id=organization_id,
                 name=mapping_name
-            ).exists()
+            )
+            
+            # Exclude current mapping in update mode
+            if is_update_mode:
+                duplicate_query = duplicate_query.exclude(id=current_mapping_id)
+            
+            is_duplicate = duplicate_query.exists()
+        
+        # Get workspace state for additional validation
+        workspace_columns = self.get_workspace_columns(request, organization_id)
+        has_workspace_content = len(workspace_columns) > 0
         
         # Determine button state
-        if not is_valid:
-            button_class = "btn btn-xs btn-primary btn-disabled"
-            disabled = True
-        elif is_duplicate:
-            button_class = "btn btn-xs btn-error"
-            disabled = True
-        else:
-            button_class = "btn btn-xs btn-primary"
-            disabled = False
+        button_config = self._determine_button_config(
+            is_name_valid, is_duplicate, is_update_mode, has_workspace_content
+        )
         
-        # Render button HTML
-        context = {
-            'button_class': button_class,
-            'disabled': disabled,
-            'is_duplicate': is_duplicate,
-            'organization_id': organization_id,
-            'csrf_token': request.META.get('CSRF_COOKIE')
+        # Render button
+        return self._render_save_button(
+            button_config, organization_id, current_mapping_id, mapping_name
+        )
+    
+    def _determine_button_config(self, is_name_valid, is_duplicate, is_update_mode, has_workspace_content):
+        """Determine button configuration based on validation state"""
+        
+        # Invalid name
+        if not is_name_valid:
+            return {
+                'enabled': False,
+                'text': _("Update") if is_update_mode else _("Save"),
+                'class': 'btn btn-sm btn-disabled',
+                'message': _("Enter mapping name")
+            }
+        
+        # Duplicate name
+        if is_duplicate:
+            return {
+                'enabled': False, 
+                'text': _("Update") if is_update_mode else _("Save"),
+                'class': 'btn btn-sm btn-error',
+                'message': _("Name already exists")
+            }
+        
+        # Empty workspace (warn but allow)
+        if not has_workspace_content:
+            return {
+                'enabled': True,
+                'text': _("Update") if is_update_mode else _("Save"), 
+                'class': 'btn btn-sm btn-warning',
+                'message': _("Workspace is empty")
+            }
+        
+        # Valid state
+        return {
+            'enabled': True,
+            'text': _("Update") if is_update_mode else _("Save"),
+            'class': 'btn btn-sm btn-success',
+            'message': None
         }
+    
+    def _render_save_button(self, config, organization_id, current_mapping_id, mapping_name):
+        """Render the save button with proper HTMX configuration"""
+        csrf_token = get_token(self.request) if hasattr(self, 'request') else ''
         
         button_html = f'''
-        <button class="{button_class}" 
+        <button class="{config['class']}" 
                 id="save-mapping-btn"
                 hx-post="/metadata/csv-save-mapping-htmx/"
-                hx-vals='{{"organization": "{organization_id}", "csrfmiddlewaretoken": "{context['csrf_token']}"}}'
-                hx-include="#mapping-name-input"
+                hx-vals='{{"organization": "{organization_id}", "csrfmiddlewaretoken": "{csrf_token}"}}'
+                hx-include="#mapping-name-input, #current-mapping-id"
                 hx-target="#mapping-status"
                 hx-swap="innerHTML"
-                {'disabled' if disabled else ''}>
-            {_("Save")}
-            {'<span class="text-xs ml-1">(' + _("Name already exists") + ')</span>' if is_duplicate else ''}
-            <span class="loading loading-spinner loading-xs htmx-indicator"></span>
+                {'disabled' if not config['enabled'] else ''}>
+            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                      d="{'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0l-4 4m4-4v12' if current_mapping_id else 'M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3-3m0 0l-3 3m3-3v12'}"></path>
+            </svg>
+            {config['text']}
+            {f'<span class="text-xs ml-1">({config["message"]})</span>' if config.get('message') else ''}
+            <span class="loading loading-spinner loading-xs htmx-indicator ml-1"></span>
         </button>
         '''
         
         return HttpResponse(button_html)
+    
+    def _render_error_button(self, message):
+        """Render disabled button with error message"""
+        return HttpResponse(f'''
+        <button class="btn btn-sm btn-disabled" disabled>
+            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            {message}
+        </button>
+        ''')
 
 
 class UpdateButtonStateView(View):
-    """Update button states based on selection"""
+    """Update load/delete button states based on mapping selection"""
     
     def get(self, request):
         """Return button HTML with enabled/disabled state based on selection"""
@@ -87,163 +165,439 @@ class UpdateButtonStateView(View):
         mapping_id = request.GET.get('mapping_id', '')
         organization_id = request.GET.get('organization')
         
-        has_selection = bool(mapping_id)
-        
-        if button_type == 'load':
-            if has_selection:
-                button_class = "btn btn-xs btn-secondary flex-1"
-                disabled = False
-            else:
-                button_class = "btn btn-xs btn-secondary flex-1 btn-disabled"
-                disabled = True
-                
-            button_html = f'''
-            <button class="{button_class}" 
-                    id="load-mapping-btn"
-                    hx-post="/metadata/csv-load-mapping-htmx/"
-                    hx-vals='{{"organization": "{organization_id}", "csrfmiddlewaretoken": "{request.META.get('CSRF_COOKIE')}"}}'
-                    hx-include="#mapping-select"
-                    hx-target="#mapping-status"
-                    hx-swap="innerHTML"
-                    hx-confirm="{_('This will replace your current mapping configuration. Continue?')}"
-                    {'disabled' if disabled else ''}>
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
-                </svg>
-                {_("Load")}
-                <span class="loading loading-spinner loading-xs htmx-indicator"></span>
-            </button>
-            '''
-            
-        elif button_type == 'delete':
-            if has_selection:
-                button_class = "btn btn-xs btn-error btn-outline"
-                disabled = False
-            else:
-                button_class = "btn btn-xs btn-error btn-outline btn-disabled"
-                disabled = True
-                
-            button_html = f'''
-            <button class="{button_class}" 
-                    id="delete-mapping-btn"
-                    hx-post="/metadata/csv-delete-mapping-htmx/"
-                    hx-vals='{{"organization": "{organization_id}", "csrfmiddlewaretoken": "{request.META.get('CSRF_COOKIE')}"}}'
-                    hx-include="#mapping-select"
-                    hx-target="#mapping-status"
-                    hx-swap="innerHTML"
-                    hx-confirm="{_('Are you sure you want to delete this mapping? This action cannot be undone.')}"
-                    {'disabled' if disabled else ''}>
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                </svg>
-                {_("Delete")}
-                <span class="loading loading-spinner loading-xs htmx-indicator"></span>
-            </button>
-            '''
-        else:
+        if button_type not in ['load', 'delete']:
             return HttpResponse("Invalid button type", status=400)
         
-        return HttpResponse(button_html)
+        has_selection = bool(mapping_id)
+        csrf_token = get_token(request)
+        
+        if button_type == 'load':
+            return self._render_load_button(has_selection, organization_id, csrf_token)
+        else:
+            return self._render_delete_button(has_selection, organization_id, csrf_token)
+    
+    def _render_load_button(self, enabled, organization_id, csrf_token):
+        """Render load button with proper state"""
+        button_class = "btn btn-sm btn-info flex-1" if enabled else "btn btn-sm btn-info flex-1 btn-disabled"
+        
+        return HttpResponse(f'''
+        <button class="{button_class}" 
+                id="load-mapping-btn"
+                hx-post="/metadata/csv-load-mapping-htmx/"
+                hx-vals='{{"organization": "{organization_id}", "csrfmiddlewaretoken": "{csrf_token}"}}'
+                hx-include="#mapping-select"
+                hx-target="#mapping-status"
+                hx-swap="innerHTML"
+                hx-confirm="{_('This will replace your current mapping configuration. Continue?')}"
+                {'disabled' if not enabled else ''}>
+            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"></path>
+            </svg>
+            {_("Load")}
+            <span class="loading loading-spinner loading-xs htmx-indicator ml-1"></span>
+        </button>
+        ''')
+    
+    def _render_delete_button(self, enabled, organization_id, csrf_token):
+        """Render delete button with proper state"""
+        button_class = "btn btn-sm btn-error btn-outline" if enabled else "btn btn-sm btn-error btn-outline btn-disabled"
+        
+        return HttpResponse(f'''
+        <button class="{button_class}" 
+                id="delete-mapping-btn"
+                hx-post="/metadata/csv-delete-mapping-htmx/"
+                hx-vals='{{"organization": "{organization_id}", "csrfmiddlewaretoken": "{csrf_token}"}}'
+                hx-include="#mapping-select"
+                hx-target="#mapping-status"
+                hx-swap="innerHTML"
+                hx-confirm="{_('Are you sure you want to delete this mapping? This action cannot be undone.')}"
+                {'disabled' if not enabled else ''}>
+            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+            </svg>
+            <span class="hidden sm:inline">{_("Delete")}</span>
+            <span class="loading loading-spinner loading-xs htmx-indicator ml-1"></span>
+        </button>
+        ''')
 
 
-class SaveMappingHTMXView(View):
-    """HTMX wrapper for save mapping that returns HTML status"""
+class SaveMappingHTMXView(CSVMappingCoordinatorMixin, View):
+    """
+    HTMX wrapper for save/update mapping with full coordinator integration.
+    
+    This view:
+    1. Detects create vs update mode via current_mapping_id
+    2. Delegates to appropriate backend view (SaveMappingView or UpdateMappingView)
+    3. Returns proper HTMX responses with out-of-band updates
+    4. Maintains UI state consistency
+    """
     
     def post(self, request):
-        """Save mapping and return HTML status message"""
-        # Call the original JSON view
-        save_view = SaveMappingView()
-        json_response = save_view.post(request)
+        """Process save/update request and return HTMX response"""
+        # Extract parameters
+        current_mapping_id = request.POST.get('current_mapping_id', '').strip()
+        organization_id = request.POST.get('organization', '')
+        mapping_name = request.POST.get('mapping_name', '').strip()
         
-        # Convert JSON response to HTML status
+        # Validate inputs
+        if not organization_id:
+            return self._render_error_response("Organization ID is required")
+        
+        if not mapping_name:
+            return self._render_error_response("Mapping name is required")
+        
+        # Determine operation mode and delegate
+        is_update = bool(current_mapping_id)
+        
+        try:
+            if is_update:
+                json_response = self._execute_update(request, current_mapping_id)
+            else:
+                json_response = self._execute_create(request)
+            
+            # Process response
+            return self._process_backend_response(
+                json_response, organization_id, is_update, mapping_name
+            )
+            
+        except Exception as e:
+            logger.error(f"SAVE_MAPPING_HTMX: Error processing request: {str(e)}")
+            return self._render_error_response(f"Failed to save mapping: {str(e)}")
+    
+    def _execute_update(self, request, mapping_id):
+        """Execute update operation via UpdateMappingView"""
+        # Prepare request for UpdateMappingView
+        request.POST = request.POST.copy()
+        request.POST['mapping_id'] = mapping_id
+        
+        update_view = UpdateMappingView()
+        return update_view.post(request)
+    
+    def _execute_create(self, request):
+        """Execute create operation via SaveMappingView"""
+        save_view = SaveMappingView()
+        return save_view.post(request)
+    
+    def _process_backend_response(self, json_response, organization_id, is_update, mapping_name):
+        """Process backend JSON response and return HTMX HTML response"""
         try:
             data = json_response.json() if hasattr(json_response, 'json') else {}
             
             if json_response.status_code == 200 and data.get('success'):
-                # Extract additional information for better feedback
-                mapping_name = data.get('mapping_name', 'Unknown')
-                mapping_id = data.get('mapping_id', '')
-                was_created = data.get('created', False)
-                
-                status_html = f'''
-                <div class="alert alert-success alert-sm">
-                    <div class="flex items-center gap-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                        </svg>
-                        <span>{data['message']}</span>
-                    </div>
-                    <div class="text-xs mt-1 opacity-75">
-                        {'Created new mapping' if was_created else 'Updated existing mapping'}: <strong>{mapping_name}</strong>
-                    </div>
-                </div>
-                '''
-                
-                # Create response with HTMX trigger headers
-                response = HttpResponse(status_html)
-                trigger_data = {
-                    'clearMappingInput': True,
-                    'refreshMappings': True,
-                    'mappingSaved': {
-                        'mapping_id': mapping_id,
-                        'mapping_name': mapping_name,
-                        'created': was_created
-                    }
-                }
-                response['HX-Trigger-After-Swap'] = json.dumps(trigger_data)
-                return response
+                return self._render_success_response(data, organization_id, is_update)
             else:
-                error_msg = data.get('error', 'Unknown error occurred')
-                validation_errors = data.get('validation_errors', [])
-                validation_warnings = data.get('validation_warnings', [])
+                return self._render_validation_error_response(data)
                 
-                # Build detailed error message
-                error_details = ''
-                if validation_errors:
-                    error_list = ''.join([f'<li class="text-sm">{err}</li>' for err in validation_errors])
-                    error_details += f'<ul class="mt-2 ml-4 list-disc">{error_list}</ul>'
-                
-                if validation_warnings:
-                    warning_list = ''.join([f'<li class="text-sm">{warn}</li>' for warn in validation_warnings])
-                    error_details += f'<div class="mt-2"><strong>Warnings:</strong><ul class="ml-4 list-disc">{warning_list}</ul></div>'
-                
-                status_html = f'''
-                <div class="alert alert-error alert-sm">
-                    <div class="flex items-center gap-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
-                        <span>{error_msg}</span>
-                    </div>
-                    {error_details}
-                </div>
-                '''
-                return HttpResponse(status_html)
         except Exception as e:
-            logger.error(f"SAVE_MAPPING_HTMX: Error processing save response: {str(e)}")
-            status_html = f'''
-            <div class="alert alert-error alert-sm">
-                <span>Failed to save mapping: {str(e)}</span>
+            logger.error(f"Error processing backend response: {str(e)}")
+            return self._render_error_response("Failed to process response")
+    
+    def _render_success_response(self, data, organization_id, is_update):
+        """Render success response with proper out-of-band updates"""
+        mapping_id = data.get('mapping_id', '')
+        mapping_name = data.get('mapping_name', 'Unknown')
+        action_text = 'Updated' if is_update else 'Created'
+        
+        # Build main status message
+        status_html = f'''
+        <div class="alert alert-success alert-sm">
+            <div class="flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+                <span>{data['message']}</span>
             </div>
-            '''
-        return HttpResponse(status_html)
+            <div class="text-xs mt-1 opacity-75">
+                {action_text} mapping: <strong>{mapping_name}</strong>
+            </div>
+        </div>
+        '''
+        
+        # Add out-of-band updates
+        oob_updates = self._generate_oob_updates(organization_id, is_update, mapping_id, mapping_name)
+        
+        # Combine main response with out-of-band updates
+        complete_response = status_html + oob_updates
+        
+        # Create response with HTMX triggers
+        response = HttpResponse(complete_response)
+        response['HX-Trigger-After-Swap'] = json.dumps({
+            'mappingSaved': {
+                'mapping_id': mapping_id,
+                'mapping_name': mapping_name, 
+                'is_update': is_update
+            },
+            'refreshMappings': True
+        })
+        
+        return response
+    
+    def _generate_oob_updates(self, organization_id, is_update, mapping_id, mapping_name):
+        """Generate out-of-band HTML updates for UI consistency"""
+        oob_html = ""
+        
+        # Update save section based on operation
+        if is_update:
+            # Keep in update mode
+            save_section_html = self._render_save_section(organization_id, mapping_id, mapping_name)
+        else:
+            # Reset to create mode
+            save_section_html = self._render_save_section(organization_id)
+        
+        oob_html += f'''
+        <div id="save-section" hx-swap-oob="outerHTML">
+            {save_section_html}
+        </div>
+        '''
+        
+        return oob_html
+    
+    def _render_save_section(self, organization_id, current_mapping_id=None, current_mapping_name=None):
+        """Render save section with current context"""
+        try:
+            context = {
+                'organization_id': organization_id,
+                'csrf_token': get_token(self.request) if hasattr(self, 'request') else '',
+                'current_mapping_id': current_mapping_id,
+                'current_mapping_name': current_mapping_name,
+            }
+            
+            return render_to_string(
+                'csv_mapping/partials/mapping_save_section.html',
+                context,
+                request=getattr(self, 'request', None)
+            )
+        except Exception as e:
+            logger.error(f"Error rendering save section: {str(e)}")
+            return '<div class="alert alert-error">Failed to render save section</div>'
+    
+    def _render_validation_error_response(self, data):
+        """Render validation error response"""
+        error_msg = data.get('error', 'Unknown error occurred')
+        validation_errors = data.get('validation_errors', [])
+        validation_warnings = data.get('validation_warnings', [])
+        
+        # Build error details
+        error_details = ''
+        if validation_errors:
+            error_list = ''.join([f'<li class="text-sm">{err}</li>' for err in validation_errors])
+            error_details += f'<ul class="mt-2 ml-4 list-disc text-error">{error_list}</ul>'
+        
+        if validation_warnings:
+            warning_list = ''.join([f'<li class="text-sm">{warn}</li>' for warn in validation_warnings])
+            error_details += f'<div class="mt-2"><strong>Warnings:</strong><ul class="ml-4 list-disc text-warning">{warning_list}</ul></div>'
+        
+        return HttpResponse(f'''
+        <div class="alert alert-error alert-sm">
+            <div class="flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <span>{error_msg}</span>
+            </div>
+            {error_details}
+        </div>
+        ''')
+    
+    def _render_error_response(self, message):
+        """Render generic error response"""
+        return HttpResponse(f'''
+        <div class="alert alert-error alert-sm">
+            <span>{message}</span>
+        </div>
+        ''')
 
 
 class LoadMappingHTMXView(CSVMappingCoordinatorMixin, View):
-    """HTMX wrapper for load mapping that returns HTML status"""
+    """
+    HTMX wrapper for load mapping with full coordinator integration.
     
-    def _get_workspace_content(self, request, organization_id):
-        """Get workspace content for out-of-band update"""
+    This view:
+    1. Loads mapping via LoadMappingView (which uses coordinator.deserialize_mapping_state)
+    2. Returns comprehensive HTMX response with multiple out-of-band updates
+    3. Updates save section to show "update" mode with loaded mapping context
+    4. Refreshes all UI components to reflect loaded state
+    """
+    
+    def post(self, request):
+        """Load mapping and return comprehensive HTMX response"""
+        # Extract parameters
+        organization_id = request.POST.get('organization', '')
+        mapping_id = request.POST.get('mapping_id', '')
+        
+        # Validate inputs
+        if not organization_id:
+            return self._render_error_response("Organization ID is required")
+        
+        if not mapping_id:
+            return self._render_error_response("Mapping ID is required")
+        
         try:
-            workspace_columns = self.get_workspace_columns(request, organization_id)
-            selected_datasets = self.get_selected_dataset_names(request, organization_id)
+            # Execute load operation via LoadMappingView (uses coordinator)
+            json_response = self._execute_load(request)
+            
+            # Process response
+            return self._process_load_response(json_response, organization_id, mapping_id)
+            
+        except Exception as e:
+            logger.error(f"LOAD_MAPPING_HTMX: Error processing request: {str(e)}")
+            return self._render_error_response(f"Failed to load mapping: {str(e)}")
+    
+    def _execute_load(self, request):
+        """Execute load operation via LoadMappingView"""
+        load_view = LoadMappingView()
+        return load_view.post(request)
+    
+    def _process_load_response(self, json_response, organization_id, mapping_id):
+        """Process load response and return comprehensive HTMX updates"""
+        try:
+            if hasattr(json_response, 'content'):
+                import json
+                data = json.loads(json_response.content)
+            else:
+                data = {}
+            
+            if json_response.status_code == 200 and data.get('success'):
+                return self._render_load_success_response(data, organization_id)
+            else:
+                return self._render_load_error_response(data)
+                
+        except Exception as e:
+            logger.error(f"Error processing load response: {str(e)}")
+            return self._render_error_response("Failed to process load response")
+    
+    def _render_load_success_response(self, data, organization_id):
+        """Render success response with comprehensive out-of-band updates"""
+        mapping_id = data.get('mapping_id', '')
+        mapping_name = data.get('mapping_name', 'Unknown')
+        summary = data.get('summary', {})
+        warnings = data.get('warnings', [])
+        
+        # Build main status message
+        status_html = self._build_load_status_message(data, summary, warnings)
+        
+        # Generate all out-of-band updates
+        oob_updates = self._generate_load_oob_updates(organization_id, mapping_id, mapping_name)
+        
+        # Combine response
+        complete_response = status_html + oob_updates
+        
+        # Create response with HTMX triggers
+        response = HttpResponse(complete_response)
+        response['HX-Trigger-After-Swap'] = json.dumps({
+            'mappingLoaded': {
+                'mapping_id': mapping_id,
+                'mapping_name': mapping_name,
+                'organization_id': organization_id
+            },
+            'refreshMappings': True
+        })
+        
+        return response
+    
+    def _build_load_status_message(self, data, summary, warnings):
+        """Build the main status message for successful load"""
+        warnings_html = ''
+        if warnings:
+            warnings_list = ''.join([f'<li class="text-sm">{w}</li>' for w in warnings])
+            warnings_html = f'<ul class="text-sm mt-2 ml-4 list-disc text-warning">{warnings_list}</ul>'
+        
+        # Build summary information
+        summary_html = ''
+        if summary:
+            summary_items = []
+            if summary.get('datasets_restored', 0) > 0:
+                summary_items.append(f"{summary['datasets_restored']} datasets")
+            if summary.get('columns_restored', 0) > 0:
+                summary_items.append(f"{summary['columns_restored']} columns")
+            if summary.get('fk_relationships_restored', 0) > 0:
+                summary_items.append(f"{summary['fk_relationships_restored']} FK relationships")
+            
+            if summary_items:
+                summary_html = f'<div class="text-sm text-success mt-1">Restored: {", ".join(summary_items)}</div>'
+        
+        return f'''
+        <div class="alert alert-success alert-sm">
+            <div class="flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+                <span>{data['message']}</span>
+            </div>
+            {summary_html}
+            {warnings_html}
+        </div>
+        '''
+    
+    def _generate_load_oob_updates(self, organization_id, mapping_id, mapping_name):
+        """Generate all out-of-band updates for successful mapping load"""
+        oob_html = ""
+        
+        # 1. Update save section to show "update" mode
+        save_section_html = self._render_save_section(organization_id, mapping_id, mapping_name)
+        oob_html += f'''
+        <div id="save-section" hx-swap-oob="outerHTML">
+            {save_section_html}
+        </div>
+        '''
+        
+        # 2. Update workspace content
+        workspace_html = self._get_workspace_content(organization_id)
+        oob_html += f'''
+        <div id="selected-columns-workspace" hx-swap-oob="innerHTML">
+            {workspace_html}
+        </div>
+        '''
+        
+        # 3. Update dataset badges
+        badges_html = self._get_badges_content(organization_id)
+        oob_html += f'''
+        <div id="dataset-badges" hx-swap-oob="innerHTML">
+            {badges_html}
+        </div>
+        '''
+        
+        # 4. Update table content (dataset cards)
+        table_html = self._get_table_content(organization_id)
+        oob_html += f'''
+        <div id="table-content" hx-swap-oob="innerHTML">
+            {table_html}
+        </div>
+        '''
+        
+        return oob_html
+    
+    def _render_save_section(self, organization_id, current_mapping_id=None, current_mapping_name=None):
+        """Render save section with current context"""
+        try:
+            context = {
+                'organization_id': organization_id,
+                'csrf_token': get_token(self.request) if hasattr(self, 'request') else '',
+                'current_mapping_id': current_mapping_id,
+                'current_mapping_name': current_mapping_name,
+            }
+            
+            return render_to_string(
+                'csv_mapping/partials/mapping_save_section.html',
+                context,
+                request=getattr(self, 'request', None)
+            )
+        except Exception as e:
+            logger.error(f"Error rendering save section: {str(e)}")
+            return '<div class="alert alert-error">Failed to render save section</div>'
+    
+    def _get_workspace_content(self, organization_id):
+        """Get workspace content using coordinator methods"""
+        try:
+            # Use coordinator to get current workspace state
+            workspace_columns = self.get_workspace_columns(self.request, organization_id)
+            selected_datasets = self.get_selected_dataset_names(self.request, organization_id)
             datasets_with_columns = self._prepare_datasets_with_columns(workspace_columns)
             
-            from django.middleware.csrf import get_token
             context = {
                 'datasets_with_columns': datasets_with_columns,
                 'organization_id': organization_id,
-                'csrf_token': get_token(request),
+                'csrf_token': get_token(self.request),
                 'selected_datasets': selected_datasets,
                 'workspace_columns': workspace_columns
             }
@@ -251,39 +605,58 @@ class LoadMappingHTMXView(CSVMappingCoordinatorMixin, View):
             return render_to_string(
                 'csv_mapping/partials/selected_columns_workspace.html',
                 context,
-                request=request
+                request=self.request
             )
         except Exception as e:
             logger.error(f"Error getting workspace content: {str(e)}")
             return '<div class="alert alert-error">Failed to load workspace</div>'
     
-    def _get_badges_content(self, request, organization_id):
+    def _get_badges_content(self, organization_id):
         """Get badges content for out-of-band update"""
         try:
-            selected_datasets = self.get_selected_dataset_names(request, organization_id)
+            selected_datasets = self.get_selected_dataset_names(self.request, organization_id)
             all_datasets = self.get_csv_datasets_for_organization(organization_id)
             
-            from django.middleware.csrf import get_token
             context = {
                 'datasets': all_datasets,
                 'selected_datasets': selected_datasets,
                 'organization_id': organization_id,
-                'csrf_token': get_token(request),
+                'csrf_token': get_token(self.request),
             }
             
             return render_to_string(
                 'csv_mapping/partials/dataset_badges.html',
                 context,
-                request=request
+                request=self.request
             )
         except Exception as e:
             logger.error(f"Error getting badges content: {str(e)}")
             return '<div class="alert alert-error">Failed to load badges</div>'
     
-    def _get_table_content(self, request, organization_id):
+    def _get_save_section_content(self, request, organization_id, current_mapping_id=None, current_mapping_name=None):
+        """Get save section content with current mapping context"""
+        try:
+            from django.middleware.csrf import get_token
+            context = {
+                'organization_id': organization_id,
+                'csrf_token': get_token(request),
+                'current_mapping_id': current_mapping_id,
+                'current_mapping_name': current_mapping_name,
+            }
+            
+            return render_to_string(
+                'csv_mapping/partials/mapping_save_section.html',
+                context,
+                request=request
+            )
+        except Exception as e:
+            logger.error(f"Error getting save section content: {str(e)}")
+            return '<div class="alert alert-error">Failed to load save section</div>'
+
+    def _get_table_content(self, organization_id):
         """Get table content (dataset cards) for out-of-band update"""
         try:
-            selected_datasets = self.get_selected_dataset_names(request, organization_id)
+            selected_datasets = self.get_selected_dataset_names(self.request, organization_id)
             
             # Get detailed dataset info for selected datasets
             selected_datasets_with_details = []
@@ -337,13 +710,12 @@ class LoadMappingHTMXView(CSVMappingCoordinatorMixin, View):
                         selected_datasets_with_details.append(dataset_info)
             
             # Get selected columns for highlighting in dataset cards
-            workspace_columns = self.get_workspace_columns(request, organization_id)
+            workspace_columns = self.get_workspace_columns(self.request, organization_id)
             
             # Prepare dataset-specific selected columns for each dataset
             dataset_selected_columns_map = {}
             for dataset in selected_datasets_with_details:
                 dataset_name = dataset.get('name')
-                source_name = dataset.get('source')
                 
                 # Filter to get only columns from this specific dataset using coordinator's parse method
                 columns_for_dataset = []
@@ -362,11 +734,10 @@ class LoadMappingHTMXView(CSVMappingCoordinatorMixin, View):
                 dataset_name = dataset.get('name')
                 dataset_selected_columns = dataset_selected_columns_map.get(dataset_name, [])
                 
-                from django.middleware.csrf import get_token
                 context = {
                     'dataset': dataset,
                     'organization_id': organization_id,
-                    'csrf_token': get_token(request),
+                    'csrf_token': get_token(self.request),
                     'selected_columns': workspace_columns,
                     'dataset_selected_columns': dataset_selected_columns,
                 }
@@ -374,7 +745,7 @@ class LoadMappingHTMXView(CSVMappingCoordinatorMixin, View):
                 dataset_card_html = render_to_string(
                     'csv_mapping/partials/dataset_card.html',
                     context,
-                    request=request
+                    request=self.request
                 )
                 dataset_cards_html += dataset_card_html
             
@@ -383,95 +754,7 @@ class LoadMappingHTMXView(CSVMappingCoordinatorMixin, View):
             logger.error(f"Error getting table content: {str(e)}")
             return f'<div class="alert alert-error">Failed to load dataset cards: {str(e)}</div>'
     
-    def post(self, request):
-        """Load mapping and return HTML status message"""
-        # Call the original JSON view
-        load_view = LoadMappingView()
-        json_response = load_view.post(request)
-        
-        # Convert JSON response to HTML status
-        try:
-            if hasattr(json_response, 'content'):
-                import json
-                data = json.loads(json_response.content)
-            else:
-                data = {}
-            
-            if json_response.status_code == 200 and data.get('success'):
-                warnings_html = ''
-                if data.get('warnings'):
-                    warnings_list = ''.join([f'<li class="text-sm">{w}</li>' for w in data['warnings']])
-                    warnings_html = f'<ul class="text-sm mt-2 ml-4 list-disc">{warnings_list}</ul>'
-                
-                # Add summary information from the load operation
-                summary = data.get('summary', {})
-                summary_html = ''
-                if summary:
-                    summary_items = []
-                    if summary.get('datasets_restored', 0) > 0:
-                        summary_items.append(f"{summary['datasets_restored']} datasets")
-                    if summary.get('columns_restored', 0) > 0:
-                        summary_items.append(f"{summary['columns_restored']} columns")
-                    if summary.get('fk_relationships_restored', 0) > 0:
-                        summary_items.append(f"{summary['fk_relationships_restored']} FK relationships")
-                    if summary.get('relationship_contexts_restored', 0) > 0:
-                        summary_items.append(f"{summary['relationship_contexts_restored']} relationship contexts")
-                    
-                    if summary_items:
-                        summary_html = f'<div class="text-sm text-success-content mt-1">Restored: {", ".join(summary_items)}</div>'
-                
-                # Get organization ID for UI refresh
-                organization_id = request.POST.get('organization', '')
-                
-                # Get fresh workspace and badges content for out-of-band updates
-                workspace_content = self._get_workspace_content(request, organization_id)
-                badges_content = self._get_badges_content(request, organization_id)
-                table_content = self._get_table_content(request, organization_id)
-                
-                status_html = f'''
-                <div class="alert alert-success alert-sm">
-                    <span>{data['message']}</span>
-                    {summary_html}
-                    {warnings_html}
-                </div>
-                <div id="selected-columns-workspace" hx-swap-oob="innerHTML">
-                    {workspace_content}
-                </div>
-                <div id="dataset-badges" hx-swap-oob="innerHTML">
-                    {badges_content}
-                </div>
-                <div id="table-content" hx-swap-oob="innerHTML">
-                    {table_content}
-                </div>
-                '''
-                
-                # Create HttpResponse with HTMX trigger headers
-                response = HttpResponse(status_html)
-                # Use HX-Trigger header to trigger events after swap
-                trigger_data = {
-                    'mappingLoaded': {'organization': organization_id},
-                    'refreshMappings': True,
-                    'clearMappingInput': True
-                }
-                response['HX-Trigger-After-Swap'] = json.dumps(trigger_data)
-                return response
-            else:
-                error_msg = data.get('error', 'Unknown error occurred')
-                status_html = f'''
-                <div class="alert alert-error alert-sm">
-                    <span>{error_msg}</span>
-                </div>
-                '''
-                return HttpResponse(status_html)
-        except Exception as e:
-            # Add detailed error information for debugging
-            status_html = f'''
-            <div class="alert alert-error alert-sm">
-                <span>Failed to load mapping: {str(e)}</span>
-                <br><small>Status: {json_response.status_code}, Content: {json_response.content[:200]}</small>
-            </div>
-            '''
-        return HttpResponse(status_html)
+
 
 
 class DeleteMappingHTMXView(View):

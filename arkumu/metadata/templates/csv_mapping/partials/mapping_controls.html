@@ -22,51 +22,8 @@
         </div>
         
         <div class="collapse-content px-4 pb-4">
-            <!-- Quick Save Section -->
-            <div class="bg-base-100 rounded-lg p-4 mb-4 border border-base-300">
-                <div class="flex items-center gap-2 mb-3">
-                    <div class="badge badge-success badge-sm">
-                        <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                        </svg>
-                        {% trans "Quick Save" %}
-                    </div>
-                </div>
-                <div class="flex gap-3">
-                    <div class="form-control flex-1">
-                        <input type="text" 
-                               id="mapping-name-input"
-                               name="mapping_name"
-                               placeholder="{% trans 'Enter mapping name...' %}"
-                               class="input input-bordered input-sm focus:input-primary"
-                               {% if organization_id %}
-                               hx-get="{% url 'metadata:csv_validate_mapping_name' %}"
-                               hx-vals='{"organization": "{{ organization_id }}"}'
-                               hx-trigger="keyup changed delay:300ms"
-                               hx-target="#save-mapping-btn"
-                               hx-swap="outerHTML"
-                               {% else %}
-                               disabled
-                               {% endif %}>
-                    </div>
-                    <button class="btn btn-sm {% if not organization_id %}btn-disabled{% else %}btn-success{% endif %}" 
-                            id="save-mapping-btn"
-                            {% if organization_id %}
-                            hx-post="{% url 'metadata:csv_save_mapping_htmx' %}"
-                            hx-vals='{"organization": "{{ organization_id }}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
-                            hx-include="#mapping-name-input"
-                            hx-target="#mapping-status"
-                            hx-swap="innerHTML"
-                            {% endif %}
-                            disabled>
-                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3-3m0 0l-3 3m3-3v12"></path>
-                        </svg>
-                        {% trans "Save" %}
-                        <span class="loading loading-spinner loading-xs htmx-indicator ml-1"></span>
-                    </button>
-                </div>
-            </div>
+            <!-- Dynamic Save Section -->
+            {% include "csv_mapping/partials/mapping_save_section.html" %}
             
             <!-- Load/Manage Section -->
             <div class="bg-base-100 rounded-lg p-4 border border-base-300">
@@ -172,11 +129,7 @@
             </div>
             
             <!-- Status Messages -->
-            <div id="mapping-status" class="hidden mt-4"
-                 hx-on:htmx:afterSettle="setTimeout(() => { this.classList.add('hidden'); this.innerHTML = ''; }, 4000)"
-                 hx-on:clearMappingInput="document.getElementById('mapping-name-input').value = ''"
-                 hx-on:clearMappingSelection="document.getElementById('mapping-select').value = ''"
-                 hx-on:refreshMappings="htmx.trigger('#mapping-select', 'load')">
+            <div id="mapping-status" class="hidden mt-4">
                 <!-- Success/error messages will appear here -->
             </div>
         </div>

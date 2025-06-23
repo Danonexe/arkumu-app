@@ -1205,7 +1205,7 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         logger.info(f"SERIALIZE_MAPPING: Serialized {len(selected_datasets)} datasets, {len(workspace_columns)} columns, {len(fk_relationships)} FK relationships, {len(relationship_contexts)} relationship contexts, {len(external_ontologies)} external ontologies")
         return mapping_config
     
-    def deserialize_mapping_state(self, request, organization_id, mapping_config):
+    def deserialize_mapping_state(self, request, organization_id, mapping_config, mapping_id=None, mapping_name=None):
         """
         Restore coordinator state from a mapping configuration.
         
@@ -1216,6 +1216,8 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
             request: Django request object
             organization_id (str): Organization ID
             mapping_config (dict): Mapping configuration from Mapping.mapping_config
+            mapping_id (str, optional): ID of the loaded mapping for tracking
+            mapping_name (str, optional): Name of the loaded mapping for tracking
             
         Returns:
             dict: Summary of restored state
@@ -1228,6 +1230,16 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         
         # Clear current state first
         self.reset_all_coordinator_state(request, organization_id)
+        
+        # Track loaded mapping context
+        if mapping_id and mapping_name:
+            loaded_mapping_key = f"loaded_mapping_{organization_id}"
+            request.session[loaded_mapping_key] = {
+                'mapping_id': mapping_id,
+                'mapping_name': mapping_name,
+                'loaded_at': timezone.now().isoformat()
+            }
+            logger.info(f"DESERIALIZE_MAPPING: Tracking loaded mapping '{mapping_name}' (ID: {mapping_id})")
         
         # Restore selected datasets
         selected_datasets = mapping_config.get('selected_datasets', [])
@@ -1346,6 +1358,46 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         
         logger.info(f"VALIDATE_MAPPING: Validation result - Valid: {validation_result['is_valid']}, Warnings: {len(validation_result['warnings'])}, Errors: {len(validation_result['errors'])}")
         return validation_result
+    
+    # ==========================================================================
+    # Loaded Mapping Context Management
+    # ==========================================================================
+    
+    def get_loaded_mapping_context(self, request, organization_id):
+        """
+        Get currently loaded mapping context from session.
+        
+        Returns:
+            dict: Loaded mapping info with keys: mapping_id, mapping_name, loaded_at
+                  or None if no mapping is loaded
+        """
+        loaded_mapping_key = f"loaded_mapping_{organization_id}"
+        return request.session.get(loaded_mapping_key)
+    
+    def clear_loaded_mapping_context(self, request, organization_id):
+        """
+        Clear loaded mapping context from session.
+        
+        This should be called when workspace is modified to indicate
+        the session state no longer matches the loaded mapping.
+        """
+        loaded_mapping_key = f"loaded_mapping_{organization_id}"
+        if loaded_mapping_key in request.session:
+            mapping_info = request.session[loaded_mapping_key]
+            del request.session[loaded_mapping_key]
+            request.session.modified = True
+            logger.info(f"CLEAR_LOADED_MAPPING: Cleared loaded mapping context for '{mapping_info.get('mapping_name', 'unknown')}'")
+            return mapping_info
+        return None
+    
+    def is_mapping_loaded(self, request, organization_id):
+        """
+        Check if a mapping is currently loaded.
+        
+        Returns:
+            bool: True if a mapping is loaded, False otherwise
+        """
+        return self.get_loaded_mapping_context(request, organization_id) is not None
     
     # ==========================================================================
     # Pure HTMX Helper Methods (no JavaScript)
