@@ -230,8 +230,8 @@
                         <button class="btn btn-sm btn-outline btn-error column-operation-btn" 
                                 hx-post="{% url 'metadata:csv_remove_column_from_workspace' %}"
                                 hx-include="#remove-data-form-{{ column.id|slugify }}"
-                                hx-target="#column-badges-{{ column.dataset|slugify }}"
-                                hx-swap="innerHTML">
+                                hx-target="#column-{{ column.id|slugify }}"
+                                hx-swap="delete">
                             ✕
                         </button>
                     </div>
