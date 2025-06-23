@@ -226,30 +226,6 @@ class LoadMappingHTMXView(CSVMappingCoordinatorMixin, CSVMappingTemplateHelperMi
         </div>
         '''
     
-    def _render_main_content_with_loaded_mapping(self, organization_id, mapping_id, mapping_name):
-        """Render main content with loaded mapping context using template helpers"""
-        try:
-            # Use template helper method to build standard UI refresh with loaded mapping context
-            main_html = ""  # No main HTML needed, just OOB updates
-            
-            # Get context from existing view context (since main_content.html already has everything)
-            # Just update the specific parts that need the loaded mapping info
-            context = {
-                'organization_id': organization_id,
-                'current_mapping_id': mapping_id,
-                'current_mapping_name': mapping_name,
-                'csrf_token': get_token(self.request),
-            }
-            
-            # Use the existing context to render just the mapping controls with updated info
-            return render_to_string(
-                'csv_mapping/partials/mapping_controls.html',
-                context,
-                request=self.request
-            )
-        except Exception as e:
-            logger.error(f"Error rendering mapping controls with loaded mapping: {str(e)}", exc_info=True)
-            return '<div class="alert alert-error">Failed to render mapping controls</div>'
 
     def _render_save_section_content(self, organization_id, current_mapping_id=None, current_mapping_name=None):
         """Render save section with current context"""

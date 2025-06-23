@@ -549,6 +549,11 @@ class ListMappingsView(CSVMappingCoordinatorMixin, View):
                 metadata = mapping.mapping_config.get('metadata', {})
                 relationship_contexts = mapping.mapping_config.get('relationship_contexts', {})
                 
+                # Get actual workspace data from mapping_config instead of computed values
+                workspace_datasets = mapping.mapping_config.get('workspace_datasets', mapping.mapping_config.get('selected_datasets', []))
+                workspace_columns = mapping.mapping_config.get('workspace_columns', {})
+                fk_relationships = mapping.mapping_config.get('fk_relationships', {})
+                
                 mapping_list.append({
                     'id': str(mapping.id),
                     'name': mapping.name,
@@ -556,10 +561,10 @@ class ListMappingsView(CSVMappingCoordinatorMixin, View):
                     'validation_status': mapping.get_validation_status_display(),
                     'created_at': mapping.created_at.isoformat(),
                     'created_by': mapping.created_by.username if mapping.created_by else 'Unknown',
-                    'source_datasets': mapping.source_datasets,
-                    'total_datasets': len(mapping.source_datasets),
-                    'total_columns': mapping.get_column_count(),
-                    'total_fk_relationships': mapping.get_relationship_count(),
+                    'source_datasets': workspace_datasets,  # Use actual workspace datasets
+                    'total_datasets': len(workspace_datasets),  # Count actual workspace datasets
+                    'total_columns': len(workspace_columns),  # Count actual workspace columns
+                    'total_fk_relationships': len(fk_relationships),  # Count actual FK relationships
                     'total_relationship_contexts': len(relationship_contexts),
                     'mapping_version': mapping.mapping_config.get('version', '1.0'),
                     'last_executed': mapping.last_executed.isoformat() if mapping.last_executed else None
