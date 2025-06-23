@@ -688,6 +688,14 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         
         logger.info(f"🔍 COORDINATOR: _prepare_datasets_with_columns() called with {len(workspace_columns)} columns")
         
+        # Log all incoming columns with timestamps
+        for i, col_dict in enumerate(workspace_columns):
+            if isinstance(col_dict, dict):
+                column_id = col_dict.get('id')
+                dataset_name = col_dict.get('dataset')
+                added_at = col_dict.get('added_at')
+                logger.info(f"🔍 COORDINATOR: Input column {i}: '{column_id}' from '{dataset_name}' added at '{added_at}'")
+        
         for col_dict in workspace_columns:
             if isinstance(col_dict, dict):
                 column_id = col_dict.get('id')
@@ -718,23 +726,34 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
                 datasets_map[dataset_key]['columns'].append(col_dict)
                 datasets_map[dataset_key]['selected_count'] += 1
                 
-                logger.info(f"🔍 COORDINATOR: Added column '{column_id}' to dataset group '{dataset_key}'")
+                logger.info(f"🔍 COORDINATOR: Added column '{column_id}' to dataset group '{dataset_key}' (group now has {datasets_map[dataset_key]['selected_count']} columns)")
         
         # Convert to list and sort by most recent workspace activity
         datasets_with_columns = list(datasets_map.values())
         
+        logger.info(f"🔍 COORDINATOR: Before sorting - {len(datasets_with_columns)} dataset groups:")
+        for i, dataset_group in enumerate(datasets_with_columns):
+            latest_col = max(dataset_group['columns'], key=lambda c: c.get('added_at', '0000'), default={})
+            latest_time = latest_col.get('added_at', 'No timestamp')
+            logger.info(f"  {i+1}. '{dataset_group['name']}' ({dataset_group['selected_count']} columns) - latest: {latest_time}")
+        
         # Sort by the most recent column addition to workspace (newest workspace activity first)
         def get_latest_workspace_activity(dataset_group):
-            latest_timestamp = None
+            latest_timestamp = '0000-00-00T00:00:00'  # Default very old timestamp
             for col in dataset_group['columns']:
                 added_at = col.get('added_at')
-                if added_at:
-                    if latest_timestamp is None or added_at > latest_timestamp:
-                        latest_timestamp = added_at
-            # Fallback: if no timestamps, sort alphabetically  
-            return latest_timestamp or '0000-00-00T00:00:00'
+                if added_at and added_at > latest_timestamp:
+                    latest_timestamp = added_at
+            return latest_timestamp
         
+        # Sort with explicit reverse=True to ensure newest datasets appear first
         datasets_with_columns.sort(key=get_latest_workspace_activity, reverse=True)
+        
+        # Add debug logging to verify sorting
+        logger.info(f"🔍 COORDINATOR: Dataset sorting order:")
+        for i, dataset_group in enumerate(datasets_with_columns):
+            latest_activity = get_latest_workspace_activity(dataset_group)
+            logger.info(f"  {i+1}. '{dataset_group['name']}' - latest activity: {latest_activity}")
         
         logger.info(f"🔍 COORDINATOR: Prepared {len(datasets_with_columns)} dataset groups with total {len(column_ids_seen)} unique columns")
         

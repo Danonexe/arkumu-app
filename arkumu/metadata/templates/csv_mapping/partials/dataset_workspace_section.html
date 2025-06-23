@@ -43,7 +43,7 @@
     <!-- Collapse Content (Selected Columns) -->
     <div class="collapse-content bg-success/5 border-t border-success/20">
         <!-- Columns from coordinator (already filtered by dataset) -->
-        {% for column in dataset_group.columns reversed %}
+        {% for column in dataset_group.columns %}
             <div class="p-2 border-b border-success/10 last:border-b-0">
                 {% include 'csv_mapping/partials/column_item.html' with column=column organization_id=organization_id csrf_token=csrf_token %}
             </div>

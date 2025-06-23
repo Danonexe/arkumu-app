@@ -65,7 +65,7 @@ partials/mapping_workspace.html
 partials/selected_columns_workspace.html
 ├── Workspace Header (stats, clear button)
 └── Workspace Container: #workspace-datasets-container
-    └── for each dataset_group in datasets_with_columns (REVERSED):
+    └── for each dataset_group in datasets_with_columns (backend-sorted newest first):
         └── includes: partials/dataset_workspace_section.html
 ```
 
@@ -74,7 +74,7 @@ partials/selected_columns_workspace.html
 partials/dataset_workspace_section.html
 ├── Collapsible Dataset Header
 └── Dataset Columns Container
-    └── for each column in dataset_group.columns (REVERSED):
+    └── for each column in dataset_group.columns (backend-sorted):
         └── includes: partials/column_item.html
 ```
 
@@ -115,7 +115,7 @@ partials/table_rows.html
 2. Updates `#column-badges-{dataset}` (left side)
 3. User clicks "Add to Workspace" button
 4. Updates `#workspace-content` (right side)
-5. New columns appear at **TOP** of workspace (reversed order)
+5. New columns appear at **TOP** of workspace (backend-sorted by timestamp)
 
 ### Removing Columns from Workspace  
 1. User clicks ✕ button in `column_item.html`
@@ -124,10 +124,13 @@ partials/table_rows.html
 
 ### Workspace Organization
 - **Datasets**: Datasets with most recent workspace activity appear at TOP
+  - Backend-sorted by latest `added_at` timestamp of any column in that dataset
   - Based on `workspace_columns` data, not `selected_datasets` browsing
-  - Sorted by latest `added_at` timestamp of any column in that dataset
   - Only datasets that actually have columns in workspace are shown
-- **Columns**: Within each dataset, order determined by backend processing
+  - Uses `coordinator._prepare_datasets_with_columns()` with `reverse=True` sorting
+- **Columns**: Within each dataset, preserves backend column ordering
+  - Templates do NOT use `reversed` filter - rely on backend sorting
+  - Column order determined by coordinator processing logic
 - **No scrolling required** to see latest workspace additions
 - **Workspace-centric**: Organized around actual mapping work, not browsing state
 
@@ -161,10 +164,17 @@ partials/table_rows.html
 - **No scroll jumping**: Interface stays in current position during operations
 - **Clean targeting**: Uses reliable HTMX targets and swap methods
 
+### Ordering & Sorting
+- **Backend-driven ordering**: Removed template-level `reversed` filters
+- **Timestamp-based sorting**: Uses `added_at` timestamps for proper chronological order
+- **Coordinator-controlled**: All workspace ordering logic centralized in backend
+- **Template transparency**: Templates preserve backend order without modification
+
 ### Error Handling
 - Defensive HTMX targeting to avoid target errors
 - Graceful fallbacks for missing elements
 - Comprehensive error logging in main_editor.html
+- Extensive coordinator and workspace logging for debugging
 
 ## 📝 Template Naming Convention
 

@@ -34,7 +34,13 @@ class CSVMappingTemplateHelperMixin:
         if workspace_columns is None:
             workspace_columns = self.get_workspace_columns(request, organization_id)
         
+        logger.info(f"🎨 TEMPLATE_HELPER: render_workspace_template called with {len(workspace_columns)} workspace columns")
+        
         datasets_with_columns = self._prepare_datasets_with_columns(workspace_columns)
+        
+        logger.info(f"🎨 TEMPLATE_HELPER: Final template render order - {len(datasets_with_columns)} datasets:")
+        for i, dataset_group in enumerate(datasets_with_columns):
+            logger.info(f"  Template position {i+1}: '{dataset_group['name']}' ({dataset_group['selected_count']} columns)")
         
         context = {
             'datasets_with_columns': datasets_with_columns,

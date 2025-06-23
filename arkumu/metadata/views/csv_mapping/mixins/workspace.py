@@ -118,7 +118,8 @@ class MappingWorkspaceMixin:
             existing_column = next((col for col in existing_columns if col.get('id') == column_id), None)
             return False, existing_column, len(existing_columns)
         
-        # Create new column entry
+        # Create new column entry with precise timestamp
+        timestamp = datetime.now().isoformat()
         new_column = {
             'id': column_id,
             'name': column_name,
@@ -128,10 +129,12 @@ class MappingWorkspaceMixin:
             'is_fk': False,
             'is_anchor': False,
             'is_multi_value': False,
-            'added_at': datetime.now().isoformat()
+            'added_at': timestamp
         }
         
         existing_columns.append(new_column)
+        
+        logger.info(f"🔥 WORKSPACE_MIXIN: Created new column '{column_id}' for dataset '{dataset_name}' with timestamp '{timestamp}'")
         
         # Debug: Log ALL configurations after adding new column
         fk_columns_after = [col for col in existing_columns if col.get('is_fk', False)]

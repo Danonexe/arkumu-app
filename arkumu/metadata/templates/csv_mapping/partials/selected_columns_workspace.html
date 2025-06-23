@@ -44,7 +44,7 @@
     <!-- Workspace Content -->
     <div id="workspace-datasets-container" class="flex-1 overflow-y-auto p-4 space-y-4">
         {% if datasets_with_columns %}
-            {% for dataset_group in datasets_with_columns reversed %}
+            {% for dataset_group in datasets_with_columns %}
                 <!-- Dataset Workspace Section -->
                 <div class="w-full">
                     {% include 'csv_mapping/partials/dataset_workspace_section.html' with dataset_group=dataset_group organization_id=organization_id csrf_token=csrf_token %}
