@@ -148,29 +148,17 @@ class RemoveColumnFromWorkspaceView(
                 'selected-columns-workspace': workspace_html
             }
             
-            # If we cleared a loaded mapping, also update the save section to reset to create mode
+            # If we cleared a loaded mapping, just show a status message instead of updating the save section
+            # Updating the save section via OOB can cause HTMX targeting issues
             if cleared_mapping:
                 try:
-                    from django.template.loader import render_to_string
-                    from django.middleware.csrf import get_token
+                    # Just show a status message that the mapping context was cleared
+                    status_message = f'<div class="alert alert-info mt-2"><span>Mapping context cleared due to workspace modification. You can now save as a new mapping.</span></div>'
+                    oob_updates['mapping-status'] = status_message
                     
-                    save_section_context = {
-                        'organization_id': organization_id,
-                        'csrf_token': get_token(request),
-                        'current_mapping_id': None,  # Reset to create mode
-                        'current_mapping_name': None,
-                    }
-                    
-                    save_section_html = render_to_string(
-                        'csv_mapping/partials/mapping_save_section.html',
-                        save_section_context,
-                        request=request
-                    )
-                    
-                    oob_updates['save-section'] = save_section_html
-                    logger.info(f"REMOVE_COLUMN: Updated save section to reset from loaded mapping mode")
+                    logger.info(f"REMOVE_COLUMN: Cleared loaded mapping '{cleared_mapping.get('mapping_name')}' - showing status message")
                 except Exception as e:
-                    logger.warning(f"REMOVE_COLUMN: Failed to update save section: {str(e)}")
+                    logger.warning(f"REMOVE_COLUMN: Failed to update mapping status: {str(e)}")
             
             response = self.build_oob_response(column_badges_html, oob_updates)
             
