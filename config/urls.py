@@ -14,23 +14,44 @@ from django.conf.urls.i18n import i18n_patterns
 from django.contrib.staticfiles.urls import staticfiles_urlpatterns
 
 urlpatterns = [
+    # ============================================================================
+    # BACKEND APPLICATION URLS (with navbar)
+    # ============================================================================
     path("", TemplateView.as_view(template_name="pages/home.html"), name="home"),
-    path("design/", TemplateView.as_view(template_name="pages/prueba.html"), name="design"),
-    path("components/", TemplateView.as_view(template_name="pages/components.html"), name="components"),
     path(
         "about/",
         TemplateView.as_view(template_name="pages/about.html"),
         name="about",
     ),
+    
+    # ============================================================================
+    # DESIGN SHOWCASE URLS (clean layout)
+    # ============================================================================
+    path("design/", TemplateView.as_view(template_name="pages/prueba.html"), name="design"),
+    path("components/", TemplateView.as_view(template_name="pages/components.html"), name="components"),
+    path("documentation/", TemplateView.as_view(template_name="pages/documentation.html"), name="documentation"),
+    path("projekt/", TemplateView.as_view(template_name="pages/projekt.html"), name="projekt"),
+    
+    # ============================================================================
+    # ADMIN & USER MANAGEMENT
+    # ============================================================================
     # Django Admin, use {% url 'admin:index' %}
     path(settings.ADMIN_URL, admin.site.urls),
     # User management
     path("users/", include("arkumu.users.urls", namespace="users")),
     path("accounts/", include("allauth.urls")),
+    
+    # ============================================================================
+    # APPLICATION MODULES
+    # ============================================================================
     # Your stuff: custom urls includes go here
     path('metadata/', include('arkumu.metadata.urls', namespace='metadata')),
     path('storage/', include('arkumu.storage.urls', namespace='storage')),
     path('importer/', include('arkumu.importer.urls', namespace='importer')),
+    
+    # ============================================================================
+    # MEDIA & INTERNATIONALIZATION
+    # ============================================================================
     # Media files
     *static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT),    
     # i18n
