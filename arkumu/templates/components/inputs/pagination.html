@@ -1,0 +1,112 @@
+<!-- Pagination Component with Dynamic Active State -->
+<div class="pagination-component w-full mb-8">
+  
+  <!-- Results Info -->
+  <div class="flex items-center justify-center mb-4">
+    <div class="font-mono text-sm transition-colors
+                text-arkumu-dark
+                theme-dark:text-arkumu-light
+                theme-blue:text-arkumu-blue">
+      Ergebnisse {{ start_result|default:"1" }}-{{ end_result|default:"20" }} von {{ total_results|default:"126" }}
+    </div>
+  </div>
+  
+  <!-- Pagination Buttons -->
+  <div class="flex items-center justify-between w-full">
+    
+    <!-- Zurück Button -->
+    <button class="flex items-center space-x-2 font-mono text-sm transition-colors
+                  text-arkumu-dark
+                  theme-dark:text-arkumu-light
+                  theme-blue:text-arkumu-blue
+                  hover:opacity-70">
+      <span class="text-3xl">‹</span>
+      <span>zurück</span>
+    </button>
+    
+    <!-- Page Numbers -->
+    <div class="flex items-center space-x-1">
+      
+      <!-- Page 1 -->
+      <button class="w-8 h-8 font-mono text-sm transition-colors flex items-center justify-center
+                    {% if current_page == '1' or current_page == 1 %}
+                      bg-arkumu-dark text-arkumu-light 
+                      theme-dark:bg-arkumu-light theme-dark:text-arkumu-dark
+                      theme-blue:bg-arkumu-blue theme-blue:text-arkumu-light
+                    {% else %}
+                      border border-arkumu-dark text-arkumu-dark bg-arkumu-light
+                      theme-dark:border-arkumu-light theme-dark:text-arkumu-light theme-dark:bg-arkumu-dark
+                      theme-blue:border-arkumu-blue theme-blue:text-arkumu-blue theme-blue:bg-arkumu-light
+                      hover:bg-opacity-10
+                    {% endif %}">
+        1
+      </button>
+      
+      <!-- Page 2 -->
+      <button class="w-8 h-8 font-mono text-sm transition-colors flex items-center justify-center
+                    {% if current_page == '2' or current_page == 2 %}
+                      bg-arkumu-dark text-arkumu-light 
+                      theme-dark:bg-arkumu-light theme-dark:text-arkumu-dark
+                      theme-blue:bg-arkumu-blue theme-blue:text-arkumu-light
+                    {% else %}
+                      border border-arkumu-dark text-arkumu-dark bg-arkumu-light
+                      theme-dark:border-arkumu-light theme-dark:text-arkumu-light theme-dark:bg-arkumu-dark
+                      theme-blue:border-arkumu-blue theme-blue:text-arkumu-blue theme-blue:bg-arkumu-light
+                      hover:bg-opacity-10
+                    {% endif %}">
+        2
+      </button>
+      
+      <!-- Page 3 -->
+      <button class="w-8 h-8 font-mono text-sm transition-colors flex items-center justify-center
+                    {% if current_page == '3' or current_page == 3 %}
+                      bg-arkumu-dark text-arkumu-light 
+                      theme-dark:bg-arkumu-light theme-dark:text-arkumu-dark
+                      theme-blue:bg-arkumu-blue theme-blue:text-arkumu-light
+                    {% else %}
+                      border border-arkumu-dark text-arkumu-dark bg-arkumu-light
+                      theme-dark:border-arkumu-light theme-dark:text-arkumu-light theme-dark:bg-arkumu-dark
+                      theme-blue:border-arkumu-blue theme-blue:text-arkumu-blue theme-blue:bg-arkumu-light
+                      hover:bg-opacity-10
+                    {% endif %}">
+        3
+      </button>
+      
+      <!-- Ellipsis -->
+      <button class="w-8 h-8 font-mono text-sm transition-colors flex items-center justify-center
+                    border border-arkumu-dark text-arkumu-dark bg-arkumu-light
+                    theme-dark:border-arkumu-light theme-dark:text-arkumu-light theme-dark:bg-arkumu-dark
+                    theme-blue:border-arkumu-blue theme-blue:text-arkumu-blue theme-blue:bg-arkumu-light
+                    hover:bg-opacity-10">
+        ...
+      </button>
+      
+      <!-- Page 11 -->
+      <button class="w-8 h-8 font-mono text-sm transition-colors flex items-center justify-center
+                    {% if current_page == '11' or current_page == 11 %}
+                      bg-arkumu-dark text-arkumu-light 
+                      theme-dark:bg-arkumu-light theme-dark:text-arkumu-dark
+                      theme-blue:bg-arkumu-blue theme-blue:text-arkumu-light
+                    {% else %}
+                      border border-arkumu-dark text-arkumu-dark bg-arkumu-light
+                      theme-dark:border-arkumu-light theme-dark:text-arkumu-light theme-dark:bg-arkumu-dark
+                      theme-blue:border-arkumu-blue theme-blue:text-arkumu-blue theme-blue:bg-arkumu-light
+                      hover:bg-opacity-10
+                    {% endif %}">
+        11
+      </button>
+      
+    </div>
+    
+    <!-- Weiter Button -->
+    <button class="flex items-center space-x-2 font-mono text-sm transition-colors
+                  text-arkumu-dark
+                  theme-dark:text-arkumu-light
+                  theme-blue:text-arkumu-blue
+                  hover:opacity-70">
+      <span>weiter</span>
+      <span class="text-3xl">›</span>
+    </button>
+    
+  </div>
+</div>

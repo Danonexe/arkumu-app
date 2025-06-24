@@ -1,25 +1,31 @@
 <!-- Color Selection Buttons with Theme Switching -->
 <div class="flex space-x-4 p-4 rounded-lg">
-  <!-- Blue Button - Fixed appearance -->
+  <!-- Blue Button -->
   <button type="button" 
-    class="theme-button px-6 py-2 rounded-full font-mono transition-colors
-      border border-arkumu-blue text-arkumu-blue bg-white hover:bg-blue-50"
+    class="theme-button px-4 py-1.5 rounded-full font-mono transition-colors
+      bg-arkumu-light text-arkumu-blue border border-arkumu-blue hover:bg-blue-50
+      theme-dark:bg-transparent theme-dark:text-arkumu-blue theme-dark:border-arkumu-blue theme-dark:hover:bg-opacity-10
+      theme-blue:bg-arkumu-light theme-blue:text-arkumu-blue theme-blue:border-arkumu-blue theme-blue:hover:bg-blue-50"
     data-theme="blue">
     Blau
   </button>
   
-  <!-- Light Button - Fixed appearance -->
+  <!-- Light Button -->
   <button type="button" 
-    class="theme-button px-6 py-2 rounded-full font-mono transition-colors
-      border border-gray-400 text-gray-700 bg-arkumu-hell hover:bg-gray-100"
+    class="theme-button px-4 py-1.5 rounded-full font-mono transition-colors
+      bg-arkumu-light text-arkumu-dark border border-arkumu-dark hover:bg-gray-100
+      theme-dark:bg-transparent theme-dark:text-arkumu-light theme-dark:border-arkumu-light theme-dark:hover:bg-opacity-10
+      theme-blue:bg-arkumu-light theme-blue:text-arkumu-blue theme-blue:border-arkumu-blue theme-blue:hover:bg-gray-100"
     data-theme="light">
     Hell
   </button>
   
-  <!-- Dark Button - Fixed appearance -->
+  <!-- Dark Button -->
   <button type="button" 
-    class="theme-button px-6 py-2 rounded-full font-mono transition-colors
-      border-none text-white bg-arkumu-dunkel hover:bg-opacity-90"
+    class="theme-button px-4 py-1.5 rounded-full font-mono transition-colors
+      bg-arkumu-dark text-arkumu-light border-none hover:bg-arkumu-dark-hover
+      theme-dark:bg-white theme-dark:text-arkumu-dark theme-dark:border theme-dark:border-arkumu-dark theme-dark:hover:bg-gray-100
+      theme-blue:bg-arkumu-dark theme-blue:text-arkumu-light theme-blue:border-none theme-blue:hover:bg-arkumu-dark-hover"
     data-theme="dark">
     Dunkel
   </button>

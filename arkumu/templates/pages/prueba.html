@@ -1,15 +1,31 @@
 {% extends "base2.html" %}
-
+{% load static %}
 {% block title %}arkumu{% endblock title %}
 
 {% block content %}
 <div class="w-full min-h-screen">
-  <!-- Header with moderate vertical padding -->
-  <header class="w-full py-8 px-4">
-    <div class="flex items-center justify-between w-full max-w-[1400px] mx-auto">
-      <!-- Left side: Logo placeholder -->
-      <div class="w-40">
-        <!-- Logo placeholder - ignore as requested -->
+  <!-- Header con el contenido existente sin cambios -->
+  <header class="w-full py-8 px-4 transition-colors
+               text-arkumu-dark
+               theme-dark:text-arkumu-light
+               theme-blue:text-arkumu-light">
+    <div class="flex items-center justify-between w-full">
+      <!-- Left side: Logo placeholder con tamaño adaptativo más grande -->
+      <div class="w-48 md:w-56 lg:w-64 transition-all duration-300">
+        <!-- Logo con variantes para cada tema -->
+        <a href="/" class="block">
+          <!-- Logo para tema predeterminado (claro) -->
+          <img src="{% static 'images/arkumu-logo-light.svg' %}" alt="arkumu logo" 
+               class="w-full h-auto transition-all duration-300 block theme-dark:hidden theme-blue:hidden">
+          
+          <!-- Logo para tema oscuro -->
+          <img src="{% static 'images/arkumu-logo-dark.svg' %}" alt="arkumu logo" 
+               class="w-full h-auto transition-all duration-300 hidden theme-dark:block theme-blue:hidden">
+          
+          <!-- Logo para tema azul -->
+          <img src="{% static 'images/arkumu-logo-blue.svg' %}" alt="arkumu logo" 
+               class="w-full h-auto transition-all duration-300 hidden theme-dark:hidden theme-blue:block">
+        </a>
       </div>
       
       <!-- Right side: Theme buttons and icons -->
@@ -20,16 +36,16 @@
         </div>
         
         <!-- Extra spacing between theme buttons and icons -->
-        <div class="w-10"></div>
+        <div class="w-6 md:w-8 lg:w-10 transition-all duration-300"></div>
         
         <!-- Search and Menu icons with labels -->
-        <div class="flex items-center space-x-6">
+        <div class="flex items-center space-x-4 md:space-x-5 lg:space-x-6 transition-all duration-300">
           <div class="flex flex-col items-center">
             {% include 'components/header/search_button.html' %}
             <span class="text-xs mt-1 font-mono 
             text-arkumu-dark
             theme-dark:text-arkumu-light
-            theme-blue:text-arkumu-blue ">Suche</span>
+            theme-blue:text-arkumu-blue">Suche</span>
           </div>
           <div class="flex flex-col items-center">
             {% include 'components/header/menu_button.html' %}
@@ -43,44 +59,41 @@
     </div>
   </header>
 
-  <!-- Main Content Area with balanced vertical spacing and TRULY wider content -->
+  <!-- Main Content Area con el resto del código igual que antes -->
   <main class="w-full px-4">
-    <div class="max-w-[1400px] mx-auto">
-      <!-- Description Text with wider max width -->
-      <div class="w-full max-w-[1200px] mx-auto mt-20 mb-24">
-        {% include 'components/text/arkumu_text.html' %}
-      </div>
-      
-      <!-- Search Bar with wider max width -->
-      <div class="w-full max-w-[1200px] mx-auto mb-24">
-        {% include 'components/inputs/navbar.html' with placeholder_text="Suchbegriff" %}
+    <div class="w-full">
+      <!-- Unified container for Description Text and Search Bar - aumentado para pantallas grandes -->
+      <div class="w-full max-w-[800px] lg:max-w-[1000px] xl:max-w-[1200px] mx-auto mt-20 mb-24">
+        <!-- Description Text -->
+        <div class="mb-10">
+          {% include 'components/text/arkumu_text.html' %}
+        </div>
+        
+        <!-- Search Bar -->
+        <div>
+          {% include 'components/inputs/navbar.html' with placeholder_text="Suchbegriff" %}
+        </div>
       </div>
       
       <!-- Dotted Line with Text -->
       <div class="w-full mb-24">
         {% include 'components/text/text_dotted_line.html' with text="Teilnehmende Hochschulen" %}
         
-        <!-- Schools in three columns with balanced vertical spacing -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-y-4 gap-x-8 mt-8">
+        <!-- Responsive Schools Grid con separación extremadamente grande entre columnas -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-y-10 gap-x-24 mt-8">
           <!-- Column 1 -->
           <div>
-            {% include 'components/labels/tag.html' with label_text="Folkwang Universität der Künste" %}
-            <div class="mb-4"></div>
-            {% include 'components/labels/tag.html' with label_text="Universität zu Köln" %}
+            {% include 'components/labels/tag.html' with label_text="Folkwang Universität der Künste Universität zu Köln" %}
           </div>
           
           <!-- Column 2 -->
           <div>
-            {% include 'components/labels/tag.html' with label_text="Hochschule für Musik Detmold" %}
-            <div class="mb-4"></div>
-            {% include 'components/labels/tag.html' with label_text="Kunsthochschule für Medien Köln" %}
+            {% include 'components/labels/tag.html' with label_text="Hochschule für Musik Detmold Kunsthochschule für Medien Köln" %}
           </div>
           
           <!-- Column 3 -->
           <div>
-            {% include 'components/labels/tag.html' with label_text="Robert Schumann Hochschule Düsseldorf" %}
-            <div class="mb-4"></div>
-            {% include 'components/labels/tag.html' with label_text="Hochschule für Musik und Tanz Köln" %}
+            {% include 'components/labels/tag.html' with label_text="Robert Schumann Hochschule Düsseldorf Hochschule für Musik und Tanz Köln" %}
           </div>
         </div>
       </div>
