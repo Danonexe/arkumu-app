@@ -94,7 +94,35 @@
     {% block modal %}{% endblock modal %}
     
     {% block inline_javascript %}
-      <!-- Additional inline JavaScript can be added here -->
+      <script>
+        // Theme switcher functionality for design pages
+        document.addEventListener('DOMContentLoaded', function() {
+          // Initialize theme from localStorage
+          const savedTheme = localStorage.getItem('arkumu-theme') || 'light';
+          document.body.classList.add('theme-' + savedTheme);
+          
+          // Theme switching function
+          function switchTheme(theme) {
+            // Remove existing theme classes
+            document.body.classList.remove('theme-light', 'theme-dark', 'theme-blue');
+            
+            // Add new theme class
+            document.body.classList.add('theme-' + theme);
+            
+            // Store in localStorage
+            localStorage.setItem('arkumu-theme', theme);
+          }
+          
+          // Setup theme switching for component buttons (.theme-button)
+          const themeButtons = document.querySelectorAll('.theme-button');
+          themeButtons.forEach(button => {
+            button.addEventListener('click', function() {
+              const theme = this.getAttribute('data-theme');
+              switchTheme(theme);
+            });
+          });
+        });
+      </script>
     {% endblock inline_javascript %}
   </body>
 </html>
