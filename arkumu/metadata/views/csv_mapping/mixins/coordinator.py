@@ -1193,14 +1193,20 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
                     'context_predicate': column_data['relationship_context'].get('context_predicate')
                 }
             
-            # Extract external ontology configurations
-            if column_data.get('is_external_ontology') and column_data.get('external_ontology'):
-                external_ontologies[column_id] = {
-                    'ontology_type': column_data['external_ontology'].get('ontology_type'),
-                    'uri_template': column_data['external_ontology'].get('uri_template'),
-                    'identifier_pattern': column_data['external_ontology'].get('identifier_pattern'),
-                    'validation_enabled': column_data['external_ontology'].get('validation_enabled', True)
-                }
+            # Extract external ontology configurations (support multiple ontologies)
+            if column_data.get('is_external_ontology'):
+                # Support both single (legacy) and multiple ontologies format
+                if column_data.get('external_ontologies'):
+                    # New format: multiple ontologies
+                    external_ontologies[column_id] = column_data['external_ontologies']
+                elif column_data.get('external_ontology'):
+                    # Legacy format: single ontology - convert to list
+                    external_ontologies[column_id] = [{
+                        'ontology_type': column_data['external_ontology'].get('ontology_type'),
+                        'uri_template': column_data['external_ontology'].get('uri_template'),
+                        'identifier_pattern': column_data['external_ontology'].get('identifier_pattern'),
+                        'validation_enabled': column_data['external_ontology'].get('validation_enabled', True)
+                    }]
             
             # Extract RDF predicate mappings (if any)
             if column_data.get('rdf_predicate'):

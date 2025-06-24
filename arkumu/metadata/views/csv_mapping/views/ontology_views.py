@@ -260,19 +260,43 @@ class SaveInlineExternalOntologyView(
             # Get current workspace using coordinator methods
             existing_columns = self.get_workspace_columns(request, organization_id)
             
-            # Find and update the column with external ontology configuration
+            # Find and update the column with external ontology configuration (support multiple)
             updated_column = None
             for col in existing_columns:
                 if col.get('id') == column_id:
                     col['is_external_ontology'] = True
-                    col['external_ontology'] = {
+                    
+                    # Initialize external_ontologies list if not exists
+                    if 'external_ontologies' not in col:
+                        col['external_ontologies'] = []
+                        # Migrate existing single ontology to list format if needed
+                        if col.get('external_ontology'):
+                            col['external_ontologies'].append(col['external_ontology'])
+                            del col['external_ontology']
+                    
+                    # Create new ontology configuration
+                    new_ontology = {
                         'ontology_type': ontology_type,
                         'uri_template': uri_template,
                         'identifier_pattern': identifier_pattern,
                         'validation_enabled': validation_enabled,
                     }
+                    
+                    # Check if this ontology type already exists (prevent duplicates)
+                    existing_types = [ont.get('ontology_type') for ont in col['external_ontologies']]
+                    if ontology_type in existing_types:
+                        # Update existing ontology of same type
+                        for i, ont in enumerate(col['external_ontologies']):
+                            if ont.get('ontology_type') == ontology_type:
+                                col['external_ontologies'][i] = new_ontology
+                                break
+                        logger.info(f"CSV_SAVE_EXTERNAL_ONTOLOGY: ✅ Updated existing '{ontology_type}' ontology for column '{column_id}'")
+                    else:
+                        # Add new ontology
+                        col['external_ontologies'].append(new_ontology)
+                        logger.info(f"CSV_SAVE_EXTERNAL_ONTOLOGY: ✅ Added new '{ontology_type}' ontology to column '{column_id}' (total: {len(col['external_ontologies'])})")
+                    
                     updated_column = col
-                    logger.info(f"CSV_SAVE_EXTERNAL_ONTOLOGY: ✅ Updated column '{column_id}' with external ontology config")
                     break
             
             if not updated_column:
@@ -343,14 +367,16 @@ class RemoveExternalOntologyView(
             # Get current workspace using coordinator methods
             existing_columns = self.get_workspace_columns(request, organization_id)
             
-            # Find and update the column to remove external ontology configuration
+            # Find and update the column to remove ALL external ontology configurations
             updated_column = None
             for col in existing_columns:
                 if col.get('id') == column_id:
                     col['is_external_ontology'] = False
+                    # Clear both old and new format
                     col['external_ontology'] = {}
+                    col['external_ontologies'] = []
                     updated_column = col
-                    logger.info(f"CSV_REMOVE_EXTERNAL_ONTOLOGY: ✅ Removed external ontology config from column '{column_id}'")
+                    logger.info(f"CSV_REMOVE_EXTERNAL_ONTOLOGY: ✅ Removed ALL external ontology configs from column '{column_id}'")
                     break
             
             if not updated_column:
@@ -368,6 +394,77 @@ class RemoveExternalOntologyView(
         except Exception as e:
             logger.error(f"CSV_REMOVE_EXTERNAL_ONTOLOGY: Error removing configuration: {e}", exc_info=True)
             return HttpResponse('<div class="text-error text-xs p-2">Error removing external ontology configuration</div>')
+
+
+class RemoveIndividualExternalOntologyView(
+    OrganizationMixin, 
+    CSVMappingCoordinatorMixin, 
+    CSVMappingTemplateHelperMixin,
+    View
+):
+    """
+    Remove individual external ontology from a column's ontology list.
+    """
+    
+    def post(self, request):
+        """Handle POST requests for removing individual external ontology configurations."""
+        try:
+            organization_id = self.get_organization_id_from_request(request)
+            column_id = request.POST.get('column_id')
+            ontology_type = request.POST.get('ontology_type')
+            
+            logger.info(f"CSV_REMOVE_INDIVIDUAL_ONTOLOGY: column_id='{column_id}', type='{ontology_type}', org='{organization_id}'")
+            
+            if not all([column_id, ontology_type]):
+                missing = []
+                if not column_id: missing.append('column_id')
+                if not ontology_type: missing.append('ontology_type')
+                error_msg = f'Missing required fields: {", ".join(missing)}'
+                return HttpResponse(f'<div class="text-error text-xs p-2">{error_msg}</div>')
+            
+            # Get current workspace using coordinator methods
+            existing_columns = self.get_workspace_columns(request, organization_id)
+            
+            # Find and update the column to remove specific ontology
+            updated_column = None
+            for col in existing_columns:
+                if col.get('id') == column_id:
+                    if 'external_ontologies' in col and col['external_ontologies']:
+                        # Remove the specific ontology type
+                        col['external_ontologies'] = [
+                            ont for ont in col['external_ontologies'] 
+                            if ont.get('ontology_type') != ontology_type
+                        ]
+                        
+                        # If no ontologies left, mark as not having external ontology
+                        if not col['external_ontologies']:
+                            col['is_external_ontology'] = False
+                        
+                        logger.info(f"CSV_REMOVE_INDIVIDUAL_ONTOLOGY: ✅ Removed '{ontology_type}' from column '{column_id}' (remaining: {len(col['external_ontologies'])})")
+                    elif col.get('external_ontology') and col['external_ontology'].get('ontology_type') == ontology_type:
+                        # Legacy format - remove if types match
+                        col['is_external_ontology'] = False
+                        col['external_ontology'] = {}
+                        logger.info(f"CSV_REMOVE_INDIVIDUAL_ONTOLOGY: ✅ Removed legacy '{ontology_type}' from column '{column_id}'")
+                    
+                    updated_column = col
+                    break
+            
+            if not updated_column:
+                logger.error(f"CSV_REMOVE_INDIVIDUAL_ONTOLOGY: Column '{column_id}' not found in workspace")
+                return HttpResponse('<div class="text-error text-xs p-2">Column not found in workspace</div>')
+            
+            # Save back to session using coordinator methods
+            self.update_workspace_columns(request, organization_id, existing_columns)
+            
+            # Return just the updated column item using template helper
+            column_html = self.render_column_item_template(request, organization_id, updated_column)
+            
+            return HttpResponse(column_html)
+            
+        except Exception as e:
+            logger.error(f"CSV_REMOVE_INDIVIDUAL_ONTOLOGY: Error removing individual ontology: {e}", exc_info=True)
+            return HttpResponse('<div class="text-error text-xs p-2">Error removing individual ontology configuration</div>')
 
 
 class ValidateExternalOntologyIdentifierView(

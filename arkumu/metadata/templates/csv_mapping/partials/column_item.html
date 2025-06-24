@@ -1,3 +1,4 @@
+{% load metadata_tags %}
 <!-- Enhanced Column Item with DaisyUI Card -->
 <div class="card card-compact bg-base-100 border border-base-300 hover:border-primary/50 hover:shadow-md transition-all duration-200 w-full" 
      data-column-id="{{ column.id }}"
@@ -32,9 +33,45 @@
                     </div>
                     {% endif %}
                     {% if column.is_external_ontology %}
-                    <div class="badge badge-success badge-sm gap-1" title="External Ontology: {{ column.external_ontology.ontology_type|default:'external ontology'|capfirst }} reference">
-                        🌐 {{ column.external_ontology.ontology_type|upper|default:'EXT' }}
-                    </div>
+                        {% if column.external_ontologies %}
+                            <!-- Multiple ontologies - show each as a separate badge -->
+                            {% for ontology in column.external_ontologies %}
+                            <div class="badge badge-outline badge-sm gap-1 mr-1" 
+                                 title="External Ontology: {{ ontology.ontology_type|capfirst }}{% if ontology.uri_template %} ({{ ontology.uri_template|truncatechars:50 }}){% endif %}">
+                                🌐 {{ ontology.ontology_type|upper }}
+                                <form style="display: inline;" class="ml-1">
+                                    <input type="hidden" name="column_id" value="{{ column.id }}">
+                                    <input type="hidden" name="ontology_type" value="{{ ontology.ontology_type }}">
+                                    <input type="hidden" name="organization" value="{{ organization_id }}">
+                                    <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+                                    <button class="btn btn-xs btn-ghost btn-error p-0 w-4 h-4" 
+                                            hx-post="{% url 'metadata:csv_remove_individual_external_ontology' %}"
+                                            hx-include="closest form"
+                                            hx-target="#column-{{ column.id|slugify }}"
+                                            hx-swap="outerHTML"
+                                            title="Remove {{ ontology.ontology_type }} ontology">✕</button>
+                                </form>
+                            </div>
+                            {% endfor %}
+                        {% elif column.external_ontology %}
+                            <!-- Legacy single ontology -->
+                            <div class="badge badge-outline badge-sm gap-1" 
+                                 title="External Ontology: {{ column.external_ontology.ontology_type|capfirst }}{% if column.external_ontology.uri_template %} ({{ column.external_ontology.uri_template|truncatechars:50 }}){% endif %}">
+                                🌐 {{ column.external_ontology.ontology_type|upper }}
+                                <form style="display: inline;" class="ml-1">
+                                    <input type="hidden" name="column_id" value="{{ column.id }}">
+                                    <input type="hidden" name="ontology_type" value="{{ column.external_ontology.ontology_type }}">
+                                    <input type="hidden" name="organization" value="{{ organization_id }}">
+                                    <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+                                    <button class="btn btn-xs btn-ghost btn-error p-0 w-4 h-4" 
+                                            hx-post="{% url 'metadata:csv_remove_individual_external_ontology' %}"
+                                            hx-include="closest form"
+                                            hx-target="#column-{{ column.id|slugify }}"
+                                            hx-swap="outerHTML"
+                                            title="Remove {{ column.external_ontology.ontology_type }} ontology">✕</button>
+                                </form>
+                            </div>
+                        {% endif %}
                     {% endif %}
                 </div>
                 
@@ -90,26 +127,7 @@
                 </div>
                 {% endif %}
                 
-                <!-- External Ontology Info -->
-                {% if column.is_external_ontology and column.external_ontology %}
-                <div class="mb-2 p-2 bg-success/10 rounded border-l-2 border-success">
-                    <div class="text-xs font-medium text-success mb-1">🌐 External Ontology:</div>
-                    <div class="text-xs text-base-content/80">
-                        {% if column.external_ontology.ontology_type %}
-                        <div class="mb-1">
-                            <span class="font-semibold">Type:</span> 
-                            <span class="font-mono bg-base-200 px-1 rounded">{{ column.external_ontology.ontology_type|capfirst }}</span>
-                        </div>
-                        {% endif %}
-                        {% if column.external_ontology.uri_template %}
-                        <div class="mb-1">
-                            <span class="font-semibold">URI Template:</span> 
-                            <span class="font-mono bg-base-200 px-1 rounded text-xs">{{ column.external_ontology.uri_template|truncatechars:40 }}</span>
-                        </div>
-                        {% endif %}
-                    </div>
-                </div>
-                {% endif %}
+
                 
                 <!-- Sample Values -->
                 {% if column.sample_values %}
@@ -205,7 +223,7 @@
                     
                     <!-- External Ontology Button -->
                     <div class="tooltip tooltip-left" data-tip="{% if column.is_external_ontology %}Edit External Ontology{% else %}Configure as External Ontology{% endif %}">
-                        <button class="btn btn-sm {% if column.is_external_ontology %}btn-success{% else %}btn-outline btn-success{% endif %} column-operation-btn" 
+                        <button class="btn btn-sm {% if column.is_external_ontology %}btn-outline{% else %}btn-outline btn-neutral{% endif %} column-operation-btn" 
                                 hx-post="{% url 'metadata:csv_toggle_external_ontology_form' %}"
                                 hx-include="#external-ontology-data-form-{{ column.id|slugify }}"
                                 hx-target="#external-ontology-form-{{ column.id|slugify }}"

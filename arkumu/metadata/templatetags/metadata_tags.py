@@ -59,4 +59,23 @@ def get_dataset_columns(context, dataset_name):
                 return column_list
         return []
     except Exception as e:
-        return [] 
+        return []
+
+@register.filter
+def join_ontology_types(external_ontologies):
+    """Join external ontology types with comma separation."""
+    try:
+        if not external_ontologies:
+            return ""
+        
+        # Handle both list of objects and list of dicts
+        types = []
+        for ontology in external_ontologies:
+            if hasattr(ontology, 'ontology_type'):
+                types.append(ontology.ontology_type)
+            elif isinstance(ontology, dict) and 'ontology_type' in ontology:
+                types.append(ontology['ontology_type'])
+        
+        return ', '.join(types) if types else ""
+    except Exception:
+        return "" 

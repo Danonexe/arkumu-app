@@ -222,6 +222,7 @@ urlpatterns = [
     path('csv-hide-external-ontology-form/', ontology_views.HideExternalOntologyFormView.as_view(), name='csv_hide_external_ontology_form'),
     path('csv-save-external-ontology/', ontology_views.SaveInlineExternalOntologyView.as_view(), name='csv_save_external_ontology'),
     path('csv-remove-external-ontology/', ontology_views.RemoveExternalOntologyView.as_view(), name='csv_remove_external_ontology'),
+    path('csv-remove-individual-external-ontology/', ontology_views.RemoveIndividualExternalOntologyView.as_view(), name='csv_remove_individual_external_ontology'),
     path('csv-validate-external-ontology-identifier/', ontology_views.ValidateExternalOntologyIdentifierView.as_view(), name='csv_validate_external_ontology_identifier'),
     
     # CSV Mapping Execution URLs

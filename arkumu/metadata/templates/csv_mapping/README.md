@@ -17,6 +17,7 @@ csv_mapping/
 │   ├── dataset_card.html          # Individual dataset card (left side)
 │   ├── column_badges.html         # Column selection badges
 │   ├── table_rows.html            # Dataset table rows
+│   ├── navbar_mapping_controls.html # Mapping save/load controls for navbar
 │   └── [other partials...]
 └── README.md                      # This file
 ```
@@ -92,6 +93,12 @@ partials/column_badges.html
 
 partials/table_rows.html
 └── Individual table rows for dataset preview
+
+partials/navbar_mapping_controls.html
+├── Current Mapping Save/Update Controls (when mapping exists)
+├── Save As New Mapping Controls
+├── Load Existing Mapping Dropdown
+└── Responsive 2x2 Grid Layout for Mobile/Desktop
 ```
 
 ## 🎯 Key HTMX Targets
@@ -107,6 +114,9 @@ partials/table_rows.html
 | `#column-badges-{dataset}` | column_badges.html | Column selection badges |
 | `#dataset-{dataset}` | dataset_card.html | Individual dataset card |
 | `#column-{column_id}` | column_item.html | Individual workspace column |
+| `#save-feedback` | navbar_mapping_controls.html | Save operation feedback |
+| `#load-mapping-select` | navbar_mapping_controls.html | Load mapping dropdown |
+| `#mapping-status` | navbar_mapping_controls.html | Load operation status |
 
 ## 🔄 Data Flow
 
@@ -121,6 +131,15 @@ partials/table_rows.html
 1. User clicks ✕ button in `column_item.html`
 2. Uses `hx-swap="delete"` to remove column element
 3. Backend can send OOB updates to sync left side
+
+### Mapping Save/Load Operations
+1. **Saving Current Mapping**: User clicks "Save" in `navbar_mapping_controls.html`
+2. **Save As New**: User enters name and clicks "Save As"
+3. **Loading Mapping**: 
+   - Dropdown auto-populates on page load via `hx-trigger="load"`
+   - User selects mapping and clicks "Load" (with confirmation)
+   - Updates `#mapping-status` with load results
+4. **Dynamic Updates**: Save As triggers reload of mapping dropdown
 
 ### Workspace Organization
 - **Datasets**: Datasets with most recent workspace activity appear at TOP
