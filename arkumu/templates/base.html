@@ -56,8 +56,9 @@
           <li><a href="{% url 'home' %}" class="{% if request.path == '/' %}active{% endif %}">Home</a></li>
           {% if request.user.is_authenticated %}
             <li><a href="{% url 'storage:archivist_dashboard' %}">Archivist Dashboard</a></li>
-            <li><a href="{% url 'metadata:metadata_dashboard' %}">Metadata Dashboard</a></li>
             <li><a href="{% url 'metadata:csv_mapping_editor' %}">CSV Mapping Editor</a></li>
+            <li><a href="{% url 'metadata:metadata_dashboard' %}">Metadata Dashboard</a></li>
+
             <li><a href="{% url 'account_logout' %}">{% translate "Sign Out" %}</a></li>
           {% else %}
             <li><a id="log-in-link" href="{% url 'account_login' %}">{% translate "Sign In" %}</a></li>
@@ -72,8 +73,9 @@
         <li><a href="{% url 'home' %}" class="{% if request.path == '/' %}active{% endif %}">Home</a></li>
         {% if request.user.is_authenticated %}
           <li><a href="{% url 'storage:archivist_dashboard' %}">Archivist Dashboard</a></li>
-          <li><a href="{% url 'metadata:metadata_dashboard' %}">Metadata Dashboard</a></li>
           <li><a href="{% url 'metadata:csv_mapping_editor' %}">CSV Mapping Editor</a></li>
+          <li><a href="{% url 'metadata:metadata_dashboard' %}">Metadata Dashboard</a></li>
+
         {% endif %}
       </ul>
     </div>
