@@ -805,7 +805,7 @@ def direct_analyze_column(request):
             for row in full_preview.data_rows:
                 # Ensure all rows have the same number of columns
                 padded_row = row + [None] * (len(full_preview.column_headers) - len(row))
-                row_str = ','.join([f'"{str(cell).replace('"', '""')}"' if cell is not None else '' for cell in padded_row])
+                row_str = ','.join([f'"{str(cell).replace("\"", "\"\"")}"' if cell is not None else '' for cell in padded_row])
                 temp_file.write(row_str + '\n')
             temp_csv_path = temp_file.name
         
@@ -1763,7 +1763,7 @@ def _run_auto_discovery(analyzer, organization_id, datasets, sample_size=500):
                     for row in preview.data_rows:
                         # Ensure all rows have the same number of columns
                         padded_row = row + [''] * (len(preview.column_headers) - len(row))
-                        row_str = ','.join([f'"{str(cell).replace('"', '""')}"' if cell else '' for cell in padded_row])
+                        row_str = ','.join([f'"{str(cell).replace("\"", "\"\"")}"' if cell else '' for cell in padded_row])
                         temp_file.write(row_str + '\n')
                     
                     # Add to list of temporary files with dataset info
@@ -1913,7 +1913,7 @@ def run_relationship_discovery(request):
                     for row in preview.data_rows:
                         # Ensure all rows have the same number of columns
                         padded_row = row + [''] * (len(preview.column_headers) - len(row))
-                        row_str = ','.join([f'"{str(cell).replace('"', '""')}"' if cell else '' for cell in padded_row])
+                        row_str = ','.join([f'"{str(cell).replace("\"", "\"\"")}"' if cell else '' for cell in padded_row])
                         temp_file.write(row_str + '\n')
                     
                     # Add to list of temporary files with dataset info

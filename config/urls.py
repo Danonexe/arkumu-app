@@ -5,7 +5,7 @@ from django.contrib import admin
 from django.urls import include
 from django.urls import path
 from django.views import defaults as default_views
-from django.views.generic import TemplateView
+from django.views.generic import TemplateView, RedirectView
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 from rest_framework.authtoken.views import obtain_auth_token
 from django.conf.urls.i18n import i18n_patterns
@@ -40,6 +40,8 @@ urlpatterns = [
     # User management
     path("users/", include("arkumu.users.urls", namespace="users")),
     path("accounts/", include("allauth.urls")),
+    # Override signup to redirect to login
+    path("accounts/signup/", RedirectView.as_view(url="/accounts/login/", permanent=True)),
     
     # ============================================================================
     # APPLICATION MODULES
