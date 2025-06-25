@@ -51,12 +51,15 @@ Template for displaying organization folder contents with lazy loading
                         </div>
                     </div>
                     
-                    <div class="folder-contents pl-6 mt-1 hidden" data-folder-path="{{ item.path }}" data-organization="{{ organization }}">
-                        <div class="loading-indicator htmx-indicator" data-folder-path="{{ item.path }}">
-                            <div class="flex items-center justify-center py-2">
-                                <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
-                            </div>
+                    <!-- Loading indicator outside the folder contents div so it exists before the HTMX request -->
+                    <div class="loading-indicator htmx-indicator" data-folder-path="{{ item.path }}">
+                        <div class="flex items-center justify-center py-2">
+                            <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
                         </div>
+                    </div>
+                    
+                    <div class="folder-contents pl-6 mt-1 hidden" data-folder-path="{{ item.path }}" data-organization="{{ organization }}">
+                        <!-- Folder contents will be loaded here -->
                     </div>
                 </li>
             {% elif item.type == 'file' %}

@@ -9,38 +9,32 @@ def common_resources(db):
     subject_iri = Resource.objects.create(
         uri="http://example.org/subject/1",
         resource_type=ResourceType.IRI,
-        source="test_triples",
-        source_field="subject_id_1"
+        source="test_triples"
     )
     predicate_prop = Resource.objects.create(
         uri="http://example.org/property/hasName",
         resource_type=ResourceType.PROPERTY,
-        source="test_triples",
-        source_field="predicate_hasName"
+        source="test_triples"
     )
     object_literal = Resource.objects.create(
         resource_type=ResourceType.LITERAL,
-        literal_value="Test Name",
-        source="test_triples",
-        source_field="name_value"
+        value="Test Name",
+        source="test_triples"
     )
     object_iri = Resource.objects.create(
         uri="http://example.org/object/1",
         resource_type=ResourceType.IRI,
-        source="test_triples",
-        source_field="object_id_1"
+        source="test_triples"
     )
     literal_subject_attempt = Resource.objects.create( # For testing invalid subject
         resource_type=ResourceType.LITERAL,
-        literal_value="Invalid Subject",
-        source="test_triples",
-        source_field="invalid_subject"
+        value="Invalid Subject",
+        source="test_triples"
     )
     non_property_predicate = Resource.objects.create( # For testing invalid predicate
         uri="http://example.org/class/SomeClass", # Using a class as a predicate
         resource_type=ResourceType.CLASS,
-        source="test_triples",
-        source_field="class_id"
+        source="test_triples"
     )
     return {
         "subject_iri": subject_iri,

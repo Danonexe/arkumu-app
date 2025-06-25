@@ -1,6 +1,6 @@
 from django.db import models
 from django.conf import settings
-from arkumu.metadata.models.cidoc import UUIDModel
+from arkumu.metadata.models.base import UUIDModel
 
 
 class Mapping(UUIDModel):
