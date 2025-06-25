@@ -25,7 +25,7 @@ services:
       - ./.envs/.local/.django
       - ./.envs/.local/.postgres
     ports:
-      - '8000:8000'
+      - '127.0.0.1:8000:8000'  # Only bind to localhost
     command: /start
     environment:
       # DISABLE_CACHE: 1 = cache disabled (no caching), 0 = cache enabled (with caching)
@@ -45,6 +45,7 @@ services:
       - arkumu_local_postgres_data_backups:/backups
     env_file:
       - ./.envs/.local/.postgres
+    # No ports exposed - only accessible internally
     networks:
       - arkumu_network
 
@@ -53,8 +54,8 @@ services:
     container_name: arkumu_minio
     restart: unless-stopped
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:9000:9000"  # Only bind to localhost
+      - "127.0.0.1:9001:9001"  # Only bind to localhost
     volumes:
       - minio_data:/data
     environment:
@@ -79,7 +80,6 @@ services:
     networks:
       - arkumu_network
 
-
   redis:
     image: "redis:latest"
     container_name: arkumu_redis
@@ -87,31 +87,29 @@ services:
     volumes:
       - arkumu_local_redis_data:/data
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"  # Only bind to localhost
     networks:
       - arkumu_network
     command: redis-server --appendonly yes
 
-
   huey:
-      build:
-        context: .
-        dockerfile: ./compose/local/django/Dockerfile
-      image: lacos_local_huey
-      container_name: arkumu_local_huey
-      depends_on:
-        - django
-        - redis
-      volumes:
-        - .:/app:z
-      env_file:
-        - ./.envs/.local/.django
-        - ./.envs/.local/.postgres
-      command: /bin/sh -c "python manage.py run_huey"
-      networks:
-        - arkumu_network
-
-
+    build:
+      context: .
+      dockerfile: ./compose/local/django/Dockerfile
+    image: lacos_local_huey
+    container_name: arkumu_local_huey
+    depends_on:
+      - django
+      - redis
+    volumes:
+      - .:/app:z
+    env_file:
+      - ./.envs/.local/.django
+      - ./.envs/.local/.postgres
+    command: /bin/sh -c "python manage.py run_huey"
+    # No ports exposed - only accessible internally
+    networks:
+      - arkumu_network
 
   node:
     image: node:latest
@@ -124,5 +122,6 @@ services:
       - .:/app:z
     command: /bin/sh -c "npm install && npm run dev"
     tty: true
+    # No ports exposed - only accessible internally
     networks:
       - arkumu_network
