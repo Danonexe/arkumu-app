@@ -322,30 +322,14 @@ class GetMappingJSONContentView(
             # Format JSON with proper indentation
             formatted_json = json.dumps(mapping_config, indent=2, cls=DjangoJSONEncoder)
             
-            # Return as HTML with proper formatting
+            # Return JSON content only (export buttons are in the template)
             html_content = f'''
-            <div class="bg-gray-50 border rounded-lg p-4">
-                <div class="flex justify-between items-center mb-3">
-                    <h3 class="text-lg font-semibold text-gray-800">Current Mapping Configuration</h3>
-                    <div class="flex gap-2">
-                        <button onclick="copyJsonToClipboard()" class="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700">
-                            📋 Copy JSON
-                        </button>
-                        <a href="/metadata/csv-mapping/export-json/?organization={organization_id}" 
-                           class="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 no-underline">
-                            💾 Download JSON
-                        </a>
-                    </div>
-                </div>
-                <div class="bg-white border rounded p-3 max-h-96 overflow-auto">
-                    <pre id="json-content" class="text-sm text-gray-800 whitespace-pre-wrap"><code>{formatted_json}</code></pre>
-                </div>
-                <div class="mt-3 text-xs text-gray-600">
-                    Generated: {timezone.now().strftime('%Y-%m-%d %H:%M:%S')} | 
-                    Datasets: {len(mapping_config.get('selected_datasets', []))} | 
-                    Columns: {len(mapping_config.get('workspace_columns', {}))} |
-                    FK Relations: {len(mapping_config.get('fk_relationships', {}))}
-                </div>
+            <pre id="json-content" class="text-sm text-gray-800 whitespace-pre-wrap"><code>{formatted_json}</code></pre>
+            <div class="mt-3 text-xs text-gray-600">
+                Generated: {timezone.now().strftime('%Y-%m-%d %H:%M:%S')} | 
+                Datasets: {len(mapping_config.get('selected_datasets', []))} | 
+                Columns: {len(mapping_config.get('workspace_columns', {}))} |
+                FK Relations: {len(mapping_config.get('fk_relationships', {}))}
             </div>
             '''
             
