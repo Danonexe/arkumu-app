@@ -9,17 +9,26 @@ This is the repository for [arkumu.nrw](https://www.dh.nrw/kooperationen/arkumu.
 
 License: MIT
 
+**To get the newest version of this repository, run:**
+```
+$ git pull origin dev
+```
+
 ## Quick Start with Docker
 
 To get the application running locally:
-
-    $ docker compose -f docker-compose.local.yml up
+```
+$ docker compose -f docker-compose.local.yml up
+```
 
 Create a superuser account:
+```
+$ docker compose -f docker-compose.local.yml run --rm django python manage.py createsuperuser
+```
 
-    $ docker compose -f docker-compose.local.yml run --rm django python manage.py createsuperuser
+**You can access the main page at:**
+http://localhost:8080
 
-Once created, you can login with your superuser credentials at `http://localhost:8000/admin/` to access the Django admin interface.
 
 ## Development
 
