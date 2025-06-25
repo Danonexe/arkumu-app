@@ -16,6 +16,7 @@ from django.http import HttpResponse
 from django.views import View
 from django.utils.translation import gettext as _
 from django.middleware.csrf import get_token
+from arkumu.users.mixins import GeneralLoginRequiredMixin
 
 from arkumu.metadata.models.mappings import Mapping
 from arkumu.metadata.views.csv_mapping.mixins.coordinator import CSVMappingCoordinatorMixin
@@ -24,7 +25,7 @@ from arkumu.metadata.views.csv_mapping.mixins.template_helpers import CSVMapping
 logger = logging.getLogger(__name__)
 
 
-class ValidateMappingNameView(CSVMappingCoordinatorMixin, CSVMappingTemplateHelperMixin, View):
+class ValidateMappingNameView(GeneralLoginRequiredMixin, CSVMappingCoordinatorMixin, CSVMappingTemplateHelperMixin, View):
     """
     Validate mapping names with full coordinator context awareness.
     
@@ -152,7 +153,7 @@ class ValidateMappingNameView(CSVMappingCoordinatorMixin, CSVMappingTemplateHelp
         ''')
 
 
-class UpdateButtonStateView(View):
+class UpdateButtonStateView(GeneralLoginRequiredMixin, View):
     """Update load/delete button states based on mapping selection"""
     
     def get(self, request):

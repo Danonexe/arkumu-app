@@ -20,6 +20,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.template.loader import render_to_string
 from django.core.serializers.json import DjangoJSONEncoder
+from arkumu.users.mixins import general_login_required
 
 from arkumu.metadata.services.data_analysis.s3_direct_data_analyzer import S3DirectDataAnalyzer
 from arkumu.metadata.services.relationship_discovery.service import RelationshipDiscoveryService
@@ -61,6 +62,7 @@ def get_organization_id_from_request(request):
     return 'default-org'
 
 
+@general_login_required
 def get_workspace_columns(request, organization_id):
     """
     Get workspace columns from session (single source of truth).
@@ -70,6 +72,7 @@ def get_workspace_columns(request, organization_id):
     return request.session.get(workspace_key, [])
 
 
+@general_login_required
 def update_workspace_columns(request, organization_id, columns):
     """
     Update workspace columns in session.
@@ -81,6 +84,7 @@ def update_workspace_columns(request, organization_id, columns):
     logger.info(f"WORKSPACE: Updated workspace with {len(columns)} columns for org={organization_id}")
 
 
+@general_login_required
 def clear_workspace_columns(request, organization_id):
     """
     Clear all workspace columns.
@@ -95,6 +99,7 @@ def clear_workspace_columns(request, organization_id):
 
 
 
+@general_login_required
 def direct_split_table_graph_view(request):
     """
     Split view showing datasets directly from S3 source files with table previews and graph visualization.
@@ -261,6 +266,7 @@ def direct_split_table_graph_view(request):
 
 
 
+@general_login_required
 def direct_load_source_data(request):
     """
     HTMX endpoint to load source data directly from S3 files using S3DirectDataAnalyzer.
@@ -343,6 +349,7 @@ def direct_load_source_data(request):
 
 
 
+@general_login_required
 def direct_load_all_datasets(request):
     """
     HTMX endpoint to load all available datasets from S3 for the dataset browser.
@@ -442,6 +449,7 @@ def direct_load_all_datasets(request):
 
 
 
+@general_login_required
 def direct_get_dataset_card(request):
     """Get a dataset card with preview using direct S3 file analysis."""
     source_name = request.GET.get('source', '')
@@ -529,6 +537,7 @@ def direct_get_dataset_card(request):
 
 
 
+@general_login_required
 def direct_load_more_dataset_rows(request):
     """Load more rows using S3DirectDataAnalyzer pagination."""
     logger.info("=== LOAD MORE ROWS VIEW CALLED ===")
@@ -598,6 +607,7 @@ def direct_load_more_dataset_rows(request):
 
 
 
+@general_login_required
 def direct_analyze_dataset_relationships(request):
     """
     Analyze relationships in a dataset using direct S3 file analysis.
@@ -652,6 +662,7 @@ def direct_analyze_dataset_relationships(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
+@general_login_required
 def toggle_dataset_card(request):
     """
     Server-side toggle for dataset cards. Manages state in session.
@@ -731,6 +742,7 @@ def toggle_dataset_card(request):
         return HttpResponseBadRequest(f"Error: {str(e)}")
 
 
+@general_login_required
 def direct_get_import_preview(request):
     """
     Get a preview of what would happen if we imported this S3 dataset.
@@ -757,6 +769,7 @@ def direct_get_import_preview(request):
 
 
 
+@general_login_required
 def direct_analyze_column(request):
     """
     Analyze a specific column from a dataset using direct S3 file analysis.
@@ -1438,6 +1451,7 @@ def _extract_column_relationship_insights(column_name, dataset_analysis):
 
 
 
+@general_login_required
 def direct_dataset_linking_view(request):
     """
     View for manually linking columns between different datasets.
@@ -1542,6 +1556,7 @@ def direct_dataset_linking_view(request):
 
 
 
+@general_login_required
 def save_dataset_links(request):
     """
     AJAX endpoint to save manually created links between datasets.
@@ -1585,6 +1600,7 @@ def save_dataset_links(request):
 
 
 
+@general_login_required
 def get_saved_dataset_links(request):
     """
     AJAX endpoint to retrieve saved links between datasets.
@@ -1610,6 +1626,7 @@ def get_saved_dataset_links(request):
 
 
 
+@general_login_required
 def direct_relationship_discovery_view(request):
     """
     View for automated cross-dataset relationship discovery.
@@ -1830,6 +1847,7 @@ def _run_auto_discovery(analyzer, organization_id, datasets, sample_size=500):
 
 
 
+@general_login_required
 def run_relationship_discovery(request):
     """
     AJAX endpoint to run automated relationship discovery across selected datasets.
@@ -2026,6 +2044,7 @@ def run_relationship_discovery(request):
 
 
 
+@general_login_required
 def get_discovery_results(request):
     """
     AJAX endpoint to retrieve the results of a previous relationship discovery run.
@@ -2072,6 +2091,7 @@ def get_discovery_results(request):
 
 
 
+@general_login_required
 def get_loaded_datasets(request):
     """
     AJAX endpoint to get the datasets currently loaded in the left panel.
@@ -2125,6 +2145,7 @@ def get_loaded_datasets(request):
 
 
 
+@general_login_required
 def track_loaded_dataset(request):
     """
     AJAX endpoint to track when a dataset is loaded in the left panel.
@@ -2182,6 +2203,7 @@ def track_loaded_dataset(request):
 
 
 
+@general_login_required
 def add_column_to_workspace(request):
     """
     HTMX endpoint to add a column to the relationship building workspace.
@@ -2396,6 +2418,7 @@ def add_column_to_workspace(request):
 
 
 
+@general_login_required
 def remove_column_from_workspace(request):
     """
     HTMX endpoint to remove a column from the relationship builder workspace.
@@ -2542,6 +2565,7 @@ def remove_column_from_workspace(request):
 
 
 
+@general_login_required
 def create_mapping(request):
     """
     HTMX endpoint to create a new mapping definition.
@@ -2641,6 +2665,7 @@ def create_mapping(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
+@general_login_required
 def preview_mapping(request):
     """
     HTMX endpoint to generate a JSON preview of the mapping configuration.
@@ -2884,6 +2909,7 @@ def clear_workspace(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
+@general_login_required
 def deselect_all_columns(request):
     """
     HTMX endpoint to deselect all columns from workspace without affecting dataset badges.
@@ -2954,6 +2980,7 @@ def deselect_all_columns(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
+@general_login_required
 def clear_all_datasets(request):
     """
     HTMX endpoint to clear all selected datasets from active state.
@@ -3041,6 +3068,7 @@ def clear_all_datasets(request):
 
 
 
+@general_login_required
 def set_anchor_column(request):
     """
     HTMX endpoint to set/unset a column as the anchor column.
@@ -3174,6 +3202,7 @@ def set_anchor_column(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
+@general_login_required
 def toggle_all_columns(request):
     """
     HTMX endpoint to toggle all columns from a dataset in/out of the workspace.
@@ -3352,6 +3381,7 @@ def toggle_all_columns(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
+@general_login_required
 def export_mappings(request):
     """
     Export saved column mappings as JSON for download.
@@ -3390,6 +3420,7 @@ def export_mappings(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
+@general_login_required
 def toggle_multi_value_column(request):
     """
     HTMX endpoint to toggle the multi-value status of a column.
@@ -3508,6 +3539,7 @@ def toggle_multi_value_column(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
+@general_login_required
 def filter_workspace(request):
     """
     HTMX endpoint to filter workspace columns by dataset.
@@ -3544,6 +3576,7 @@ def filter_workspace(request):
         return HttpResponse('<div class="text-error text-sm">Error filtering workspace</div>')
 
 
+@general_login_required
 def expand_dataset(request):
     """
     HTMX endpoint to expand/collapse dataset columns in the Active Datasets panel.
@@ -3635,6 +3668,7 @@ def expand_dataset(request):
         return HttpResponse('<div class="text-error text-xs p-2">Error loading dataset columns</div>')
 
 
+@general_login_required
 def mapping_config(request):
     """
     Simple view that loads mapping configuration based on type.
@@ -3696,6 +3730,7 @@ def mapping_config(request):
     return render(request, 'partials/mapping_config_loader.html', context)
 
 
+@general_login_required
 def tooltip_view(request):
     """
     Simple HTMX view to serve tooltip content based on type parameter.
@@ -3725,6 +3760,7 @@ def tooltip_view(request):
         return HttpResponse('<div class="text-error text-xs">Error loading tooltip</div>')
 
 
+@general_login_required
 def toggle_fk_column(request):
     """
     HTMX endpoint to toggle the FK (foreign key) status of a column.
@@ -3805,6 +3841,7 @@ def toggle_fk_column(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
+@general_login_required
 def configure_fk(request):
     """
     HTMX endpoint to open FK configuration modal for a specific column.
@@ -3865,6 +3902,7 @@ def configure_fk(request):
         return HttpResponse('<div class="text-error text-sm">Error opening FK configuration</div>')
 
 
+@general_login_required
 def update_fk_columns(request):
     """
     HTMX endpoint to update available columns when target dataset changes.
@@ -3920,6 +3958,7 @@ def update_fk_columns(request):
         return HttpResponse('<div class="text-error text-sm">Error updating FK columns</div>')
 
 
+@general_login_required
 def save_fk_config(request):
     """
     HTMX endpoint to save FK configuration for a column.
@@ -4049,6 +4088,7 @@ def save_fk_config(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
+@general_login_required
 def remove_fk_config(request):
     """
     HTMX endpoint to remove FK configuration from a column.
@@ -4122,6 +4162,7 @@ def remove_fk_config(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
+@general_login_required
 def close_fk_modal(request):
     """
     HTMX endpoint to close the FK configuration modal.
@@ -4129,6 +4170,7 @@ def close_fk_modal(request):
     return HttpResponse('')  # Empty response to clear the modal
 
 
+@general_login_required
 def update_fk_targets(request):
     """
     HTMX endpoint to update FK targets section when direction changes.
@@ -4199,6 +4241,7 @@ def update_fk_targets(request):
         return HttpResponse('<div class="text-error text-sm">Error updating FK targets</div>')
 
 
+@general_login_required
 def toggle_fk_form(request):
     """
     HTMX endpoint to toggle inline FK configuration form for a column.
@@ -4290,6 +4333,7 @@ def toggle_fk_form(request):
         return HttpResponse('<div class="text-error text-sm">Error opening FK configuration</div>')
 
 
+@general_login_required
 def hide_fk_form(request):
     """
     HTMX endpoint to hide the inline FK configuration form.
@@ -4306,6 +4350,7 @@ def hide_fk_form(request):
         return HttpResponse('<div class="text-error text-sm">Error hiding FK form</div>')
 
 
+@general_login_required
 def update_fk_target_columns(request):
     """
     HTMX endpoint to update target columns when target dataset selection changes.
@@ -4374,6 +4419,7 @@ def update_fk_target_columns(request):
         return HttpResponse('<option value="">Error loading columns</option>')
 
 
+@general_login_required
 def refresh_fk_datasets_cache(request):
     """
     HTMX endpoint to refresh the cached FK datasets data.
@@ -4398,6 +4444,7 @@ def refresh_fk_datasets_cache(request):
         return HttpResponse('<div class="text-error text-sm">Error refreshing datasets cache</div>')
 
 
+@general_login_required
 def save_inline_fk_config(request):
     """
     HTMX endpoint to save FK configuration from the inline form.
@@ -4559,6 +4606,7 @@ def save_inline_fk_config(request):
         return HttpResponse('<div class="text-error text-xs p-2">Error saving FK configuration</div>')
 
 
+@general_login_required
 def get_organization_state(request, organization_id):
     """
     Helper function to get consolidated state for an organization.
@@ -4657,6 +4705,7 @@ def get_organization_state(request, organization_id):
         }
 
 
+@general_login_required
 def select_all_dataset_columns(request):
     """
     HTMX endpoint to select all columns from a specific dataset.
@@ -4793,6 +4842,7 @@ def select_all_dataset_columns(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
+@general_login_required
 def deselect_all_dataset_columns(request):
     """
     HTMX endpoint to deselect all columns from a specific dataset.

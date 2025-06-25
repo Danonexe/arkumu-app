@@ -14,13 +14,14 @@ import json
 import logging
 from django.http import HttpResponse
 from django.views import View
+from arkumu.users.mixins import GeneralLoginRequiredMixin
 
 from arkumu.metadata.views.csv_mapping.saved_mappings_api import DeleteMappingView
 
 logger = logging.getLogger(__name__)
 
 
-class DeleteMappingHTMXView(View):
+class DeleteMappingHTMXView(GeneralLoginRequiredMixin, View):
     """
     HTMX wrapper for delete mapping that returns HTML status.
     

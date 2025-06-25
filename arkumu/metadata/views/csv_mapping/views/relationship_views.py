@@ -14,6 +14,7 @@ import logging
 from django.http import HttpResponse
 from django.views import View
 from django.shortcuts import render
+from arkumu.users.mixins import GeneralLoginRequiredMixin
 
 from arkumu.metadata.views.csv_mapping.mixins.coordinator import CSVMappingCoordinatorMixin
 from arkumu.metadata.views.csv_mapping.mixins.base import OrganizationMixin
@@ -22,12 +23,10 @@ from arkumu.metadata.views.csv_mapping.mixins.template_helpers import CSVMapping
 logger = logging.getLogger(__name__)
 
 
-class ToggleFKFormView(
-    OrganizationMixin, 
+class ToggleFKFormView(GeneralLoginRequiredMixin, OrganizationMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
-    View
-):
+    View):
     """
     Toggle FK form view using coordinator-based architecture.
     
@@ -85,11 +84,9 @@ class ToggleFKFormView(
             return HttpResponse('<div class="text-error text-sm">Error opening FK configuration</div>')
 
 
-class HideFKFormView(
-    OrganizationMixin, 
+class HideFKFormView(GeneralLoginRequiredMixin, OrganizationMixin, 
     CSVMappingCoordinatorMixin, 
-    View
-):
+    View):
     """
     Hide FK form view using coordinator-based architecture.
     """
@@ -108,11 +105,9 @@ class HideFKFormView(
             return HttpResponse('<div class="text-error text-sm">Error hiding FK form</div>')
 
 
-class UpdateFKTargetColumnsView(
-    OrganizationMixin, 
+class UpdateFKTargetColumnsView(GeneralLoginRequiredMixin, OrganizationMixin, 
     CSVMappingCoordinatorMixin, 
-    View
-):
+    View):
     """
     Update FK target columns view using coordinator-based architecture.
     """
@@ -157,12 +152,10 @@ class UpdateFKTargetColumnsView(
             return HttpResponse('<option value="">Error loading columns</option>')
 
 
-class SaveInlineFKConfigView(
-    OrganizationMixin, 
+class SaveInlineFKConfigView(GeneralLoginRequiredMixin, OrganizationMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
-    View
-):
+    View):
     """
     Save inline FK configuration view using coordinator-based architecture.
     
@@ -226,12 +219,10 @@ class SaveInlineFKConfigView(
             return HttpResponse('<div class="text-error text-xs p-2">Error saving FK configuration</div>')
 
 
-class RemoveFKConfigView(
-    OrganizationMixin, 
+class RemoveFKConfigView(GeneralLoginRequiredMixin, OrganizationMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
-    View
-):
+    View):
     """
     Remove FK configuration view using coordinator-based architecture.
     
@@ -285,11 +276,9 @@ class RemoveFKConfigView(
 # Relationship Context Views (Junction Tables with Attributes)
 # ==============================================================================
 
-class ToggleRelationshipContextFormView(
-    OrganizationMixin, 
+class ToggleRelationshipContextFormView(GeneralLoginRequiredMixin, OrganizationMixin, 
     CSVMappingCoordinatorMixin, 
-    View
-):
+    View):
     """
     Toggle relationship context form view using coordinator-based architecture.
     
@@ -356,12 +345,10 @@ class ToggleRelationshipContextFormView(
             return HttpResponse('<div class="text-error text-sm">Error opening relationship context configuration</div>')
 
 
-class SaveInlineRelationshipContextView(
-    OrganizationMixin, 
+class SaveInlineRelationshipContextView(GeneralLoginRequiredMixin, OrganizationMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
-    View
-):
+    View):
     """
     Save inline relationship context configuration view using coordinator-based architecture.
     
@@ -429,11 +416,9 @@ class SaveInlineRelationshipContextView(
             return HttpResponse('<div class="text-error text-xs p-2">Error saving relationship context configuration</div>')
 
 
-class HideRelationshipContextFormView(
-    OrganizationMixin, 
+class HideRelationshipContextFormView(GeneralLoginRequiredMixin, OrganizationMixin, 
     CSVMappingCoordinatorMixin, 
-    View
-):
+    View):
     """
     Hide relationship context form view using coordinator-based architecture.
     """
@@ -454,12 +439,10 @@ class HideRelationshipContextFormView(
             return HttpResponse('<div class="text-error text-sm">Error hiding relationship context form</div>')
 
 
-class RemoveRelationshipContextView(
-    OrganizationMixin, 
+class RemoveRelationshipContextView(GeneralLoginRequiredMixin, OrganizationMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
-    View
-):
+    View):
     """
     Remove relationship context configuration view using coordinator-based architecture.
     
@@ -509,11 +492,9 @@ class RemoveRelationshipContextView(
             return HttpResponse('<div class="text-error text-xs p-2">Error removing relationship context configuration</div>')
 
 
-class UpdateRelationshipContextColumnsView(
-    OrganizationMixin, 
+class UpdateRelationshipContextColumnsView(GeneralLoginRequiredMixin, OrganizationMixin, 
     CSVMappingCoordinatorMixin, 
-    View
-):
+    View):
     """
     Update relationship context columns based on selected dataset (HTMX endpoint).
     """
@@ -574,11 +555,9 @@ class UpdateRelationshipContextColumnsView(
 # Legacy placeholder for unimplemented FK relationship configuration
 # ==============================================================================
 
-class ConfigureFKRelationshipView(
-    OrganizationMixin, 
+class ConfigureFKRelationshipView(GeneralLoginRequiredMixin, OrganizationMixin, 
     CSVMappingCoordinatorMixin, 
-    View
-):
+    View):
     """
     FK relationship configuration view using coordinator-based architecture.
     

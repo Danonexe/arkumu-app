@@ -5,6 +5,7 @@ from django.core.paginator import Paginator
 from django.core.exceptions import ValidationError
 import logging
 import re
+from arkumu.users.mixins import general_login_required
 
 from arkumu.metadata.models.resource import Resource, ResourceType
 from arkumu.metadata.models.triples import Triple
@@ -69,6 +70,7 @@ def _build_multi_field_search(fields, search_term, search_mode='contains'):
     return combined_q
 
 
+@general_login_required
 def data_explorer(request):
     """Unified data explorer for browsing resources and triples."""
     view_mode = request.GET.get('view', 'resources')

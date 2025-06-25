@@ -12,6 +12,7 @@ from rest_framework import status
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.views.decorators.http import require_POST
 from django.http import HttpResponse
+from arkumu.users.mixins import ge, GeneralLoginRequiredMixinneral_login_required
 
 from arkumu.importer.services.importer.import_workflow import ImportWorkflowService
 from arkumu.importer.services.file_upload.s3_upload_service import S3UploadService
@@ -23,6 +24,7 @@ DEFAULT_FILE_COLUMNS_CONFIG_PATH = os.path.join(settings.BASE_DIR, 'file_columns
 
 # Dashboard ingest view
 @require_POST
+@general_login_required
 def ingest_file(request):
     """View for ingesting a file directly from the dashboard"""
     try:
@@ -74,7 +76,7 @@ def ingest_file(request):
         )
 
 
-class CSVImportView(APIView):
+class CSVImportView(GeneralLoginRequiredMixin, APIView):
     """API view for importing a single CSV file"""
     parser_classes = (MultiPartParser, FormParser)
     
@@ -149,7 +151,7 @@ class CSVImportView(APIView):
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-class DirectoryImportView(APIView):
+class DirectoryImportView(GeneralLoginRequiredMixin, APIView):
     """API view for importing a directory of CSV files"""
     parser_classes = (JSONParser,)
     
@@ -207,7 +209,7 @@ class DirectoryImportView(APIView):
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-class FileColumnsConfigView(APIView):
+class FileColumnsConfigView(GeneralLoginRequiredMixin, APIView):
     """API view for managing file columns configuration"""
     parser_classes = (JSONParser,)
     

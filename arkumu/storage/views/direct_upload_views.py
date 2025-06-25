@@ -10,11 +10,13 @@ from django.urls import reverse
 from arkumu.storage.services.upload_service import UploadService
 from django.views.decorators.csrf import csrf_exempt
 import requests
+from arkumu.users.mixins import general_login_required
 
 logger = logging.getLogger(__name__)
 
 
 
+@general_login_required
 def direct_upload(request):
     """Handle direct S3 uploads from the browser."""
     # If GET request, just show the form
@@ -224,6 +226,7 @@ def direct_upload(request):
 
 
 @require_http_methods(["POST"])
+@general_login_required
 def process_upload(request):
     """Process folder uploads using presigned URLs."""
     try:
@@ -400,6 +403,7 @@ def format_file_size(size_bytes):
 
 
 @require_http_methods(["POST"])
+@general_login_required
 def upload_complete(request):
     """Handle notification that all uploads are complete."""
     try:
@@ -452,6 +456,7 @@ def upload_complete(request):
 # Add a debug view to test presigned URL generation
 
 @require_http_methods(["GET"])
+@general_login_required
 def debug_presigned_url(request):
     """Debug endpoint to test presigned URL generation."""
     logger.info(f"Debug presigned URL requested by user: {request.user.username}")
@@ -580,6 +585,7 @@ def debug_presigned_url(request):
 
 @require_http_methods(["POST"])
 @csrf_exempt  # This is needed because some browsers may not include CSRF token in these requests
+@general_login_required
 def debug_upload_error(request):
     """
     Endpoint for logging client-side upload errors on the server.

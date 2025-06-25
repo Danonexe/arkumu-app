@@ -3,6 +3,7 @@ from django.contrib.auth.decorators import login_required
 from django.db.models import Q
 from django.core.paginator import Paginator
 import logging
+from arkumu.users.mixins import general_login_required
 
 from arkumu.metadata.models.resource import Resource
 from arkumu.metadata.models.triples import Triple
@@ -11,6 +12,7 @@ from arkumu.metadata.models.triples import Triple
 logger = logging.getLogger(__name__)
 
 
+@general_login_required
 def triple_search(request):
     """Search triples with advanced filtering."""
     subject = request.GET.get('subject', '')
@@ -76,6 +78,7 @@ def triple_search(request):
     })
 
 
+@general_login_required
 def triple_list(request):
     """Display a paginated list of all triples in the system."""
     # Get filter parameters

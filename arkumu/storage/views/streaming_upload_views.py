@@ -7,6 +7,7 @@ from django.views.decorators.http import require_http_methods
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 import time
+from arkumu.users.mixins import general_login_required
 
 from arkumu.storage.services.upload_service import UploadService
 from arkumu.storage.services.bucket_service import BucketService
@@ -47,6 +48,7 @@ logger = logging.getLogger(__name__)
 
 
 @require_http_methods(["GET", "POST"])
+@general_login_required
 def streaming_upload_form(request):
     """
     Handle streaming file uploads through Django to S3.
@@ -201,6 +203,7 @@ def streaming_upload_form(request):
 
 
 @require_http_methods(["POST"])
+@general_login_required
 def streaming_upload_api(request):
     """
     API endpoint for streaming file uploads through Django to S3.
@@ -284,6 +287,7 @@ def streaming_upload_api(request):
 
 
 @require_http_methods(["POST"])
+@general_login_required
 def streaming_upload_single(request):
     """
     Upload a single file via streaming.
@@ -435,6 +439,7 @@ def streaming_upload_single(request):
 
 
 @require_http_methods(["GET"])
+@general_login_required
 def file_info(request):
     """
     Get information about a specific file in the bucket.

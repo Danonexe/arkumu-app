@@ -16,6 +16,7 @@ from django.http import HttpResponse
 from django.views import View
 from django.template.loader import render_to_string
 from django.middleware.csrf import get_token
+from arkumu.users.mixins import GeneralLoginRequiredMixin
 
 from arkumu.metadata.views.csv_mapping.saved_mappings_api import LoadMappingView
 from arkumu.metadata.views.csv_mapping.mixins.coordinator import CSVMappingCoordinatorMixin
@@ -24,7 +25,7 @@ from arkumu.metadata.views.csv_mapping.mixins.template_helpers import CSVMapping
 logger = logging.getLogger(__name__)
 
 
-class LoadMappingHTMXView(CSVMappingCoordinatorMixin, CSVMappingTemplateHelperMixin, View):
+class LoadMappingHTMXView(GeneralLoginRequiredMixin, CSVMappingCoordinatorMixin, CSVMappingTemplateHelperMixin, View):
     """
     HTMX wrapper for load mapping with full coordinator integration.
     

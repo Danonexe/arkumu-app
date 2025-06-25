@@ -11,6 +11,7 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 import json
 import logging
+from arkumu.users.mixins import general_login_required
 
 from arkumu.storage.models import S3FileObject, UploadSession
 from arkumu.metadata.models import Resource
@@ -147,6 +148,7 @@ class DataDiscoveryView(LoginRequiredMixin, View):
 
 
 @require_http_methods(["GET"])
+@general_login_required
 def search_resources(request):
     """Search for resources that could be linked to files."""
     query = request.GET.get('q', '').strip()
@@ -170,6 +172,7 @@ def search_resources(request):
 
 
 @require_http_methods(["POST"])
+@general_login_required
 def link_file_to_resource(request):
     """Link a single file to a resource."""
     try:
@@ -215,6 +218,7 @@ def link_file_to_resource(request):
 
 
 @require_http_methods(["POST"])
+@general_login_required
 def batch_link_files(request):
     """Batch link multiple files using the automated service."""
     try:
@@ -266,6 +270,7 @@ def batch_link_files(request):
 
 
 @require_http_methods(["POST"])  
+@general_login_required
 def unlink_file(request):
     """Unlink a file from its resource."""
     try:
@@ -315,6 +320,7 @@ def unlink_file(request):
 
 
 @require_http_methods(["POST"])
+@general_login_required
 def auto_link_all(request):
     """Automatically link all unlinked files."""
     try:
@@ -366,6 +372,7 @@ def auto_link_all(request):
 
 
 @require_http_methods(["POST"])
+@general_login_required
 def rescan_s3_files(request):
     """Rescan S3 buckets for new files and sync them to the database."""
     try:

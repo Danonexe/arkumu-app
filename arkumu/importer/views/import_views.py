@@ -10,11 +10,13 @@ from arkumu.storage.services.bucket_service import BucketService
 from arkumu.importer.services.importer.smart_bulk_updater import UpdateStrategy
 from arkumu.importer.tasks.import_metadata import run_csv_import_workflow, run_csv_directory_import_workflow
 from arkumu.importer.models import IngestSession
+from arkumu.users.mixins import general_login_required
 
 logger = logging.getLogger(__name__)
 
 
 
+@general_login_required
 def ingest_file(request):
     """
     Ingest a CSV file using the ImportWorkflowService
@@ -118,6 +120,7 @@ def ingest_file(request):
 
 
 
+@general_login_required
 def reset_database(request):
     """
     Reset the database by deleting all Resource and Triple records.
@@ -175,6 +178,7 @@ def reset_database(request):
 
 
 
+@general_login_required
 def task_status_view(request, task_id):
     """
     Provides the status of a background task for HTMX polling.
@@ -210,6 +214,7 @@ def task_status_view(request, task_id):
 
 
 
+@general_login_required
 def clear_upload_sessions(request):
     """
     Clear all UploadSession records.
@@ -261,6 +266,7 @@ def clear_upload_sessions(request):
 
 
 
+@general_login_required
 def clear_ingest_sessions(request):
     """
     Clear all IngestSession records.
@@ -312,6 +318,7 @@ def clear_ingest_sessions(request):
 
 
 
+@general_login_required
 def start_directory_import(request):
     """
     Start a directory import for all CSV files in an S3 folder using the directory import Huey task

@@ -6,6 +6,7 @@ import zipfile
 import shutil
 from django.conf import settings
 from django.db import connection
+from arkumu.users.mixins import GeneralLoginRequiredMixin
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -26,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 
 @extend_schema(tags=['import'])
-class ImportViewSet(viewsets.GenericViewSet):
+class ImportViewSet(GeneralLoginRequiredMixin, viewsets.GenericViewSet):
     """
     API endpoint for importing CSV data from directories.
     """
@@ -252,7 +253,7 @@ class ImportViewSet(viewsets.GenericViewSet):
 
 
 @extend_schema(tags=['testing'])
-class TestingViewSet(viewsets.GenericViewSet):
+class TestingViewSet(GeneralLoginRequiredMixin, viewsets.GenericViewSet):
     """
     API endpoints for testing operations.
     """

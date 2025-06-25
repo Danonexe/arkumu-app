@@ -11,13 +11,14 @@ keep the codebase organized and maintainable.
 import logging
 from django.http import JsonResponse, HttpResponse
 from django.views import View
+from arkumu.users.mixins import GeneralLoginRequiredMixin
 from arkumu.metadata.models.mappings import Mapping
 from arkumu.metadata.views.csv_mapping.mixins.coordinator import CSVMappingCoordinatorMixin
 
 logger = logging.getLogger(__name__)
 
 
-class SaveMappingView(CSVMappingCoordinatorMixin, View):
+class SaveMappingView(GeneralLoginRequiredMixin, CSVMappingCoordinatorMixin, View):
     """Save current mapping state to database"""
     
     def validate_mapping_before_save(self, request, organization_id, mapping_config):
@@ -255,7 +256,7 @@ class SaveMappingView(CSVMappingCoordinatorMixin, View):
         return None
 
 
-class UpdateMappingView(CSVMappingCoordinatorMixin, View):
+class UpdateMappingView(GeneralLoginRequiredMixin, CSVMappingCoordinatorMixin, View):
     """Update existing mapping with current state"""
     
     def validate_mapping_for_update(self, request, organization_id, mapping_config):
@@ -438,7 +439,7 @@ class UpdateMappingView(CSVMappingCoordinatorMixin, View):
             }, status=500)
 
 
-class LoadMappingView(CSVMappingCoordinatorMixin, View):
+class LoadMappingView(GeneralLoginRequiredMixin, CSVMappingCoordinatorMixin, View):
     """Load existing mapping from database"""
     
     def post(self, request):
@@ -525,7 +526,7 @@ class LoadMappingView(CSVMappingCoordinatorMixin, View):
             }, status=500)
 
 
-class ListMappingsView(CSVMappingCoordinatorMixin, View):
+class ListMappingsView(GeneralLoginRequiredMixin, CSVMappingCoordinatorMixin, View):
     """List available mappings for organization"""
     
     def get(self, request):
@@ -618,7 +619,7 @@ class ListMappingsView(CSVMappingCoordinatorMixin, View):
             }, status=500)
 
 
-class DeleteMappingView(CSVMappingCoordinatorMixin, View):
+class DeleteMappingView(GeneralLoginRequiredMixin, CSVMappingCoordinatorMixin, View):
     """Delete existing mapping"""
     
     def post(self, request):

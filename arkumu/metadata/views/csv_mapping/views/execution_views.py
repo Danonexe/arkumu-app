@@ -112,6 +112,7 @@ from django.http import JsonResponse
 from django.views import View
 from django.utils import timezone
 from django.shortcuts import render
+from arkumu.users.mixins import GeneralLoginRequiredMixin
 from typing import Dict, List, Any
 
 from arkumu.metadata.models.mappings import Mapping
@@ -127,7 +128,7 @@ from arkumu.metadata.services.mapping import MappingCoordinator
 logger = logging.getLogger(__name__)
 
 
-class ExecuteGUIMappingView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
+class ExecuteGUIMappingView(GeneralLoginRequiredMixin, OrganizationMixin, CSVMappingCoordinatorMixin, View):
     """Execute CSV mapping using enhanced SmartBulkUpdaterPolars with full FK and ontology support."""
     
     def post(self, request):
@@ -376,7 +377,7 @@ class ExecuteGUIMappingView(OrganizationMixin, CSVMappingCoordinatorMixin, View)
         }
 
 
-class GetMappingExecutionStatusView(OrganizationMixin, CSVMappingCoordinatorMixin, View):
+class GetMappingExecutionStatusView(GeneralLoginRequiredMixin, OrganizationMixin, CSVMappingCoordinatorMixin, View):
     """Get execution status preview."""
     
     def get(self, request):
@@ -427,7 +428,7 @@ class GetMappingExecutionStatusView(OrganizationMixin, CSVMappingCoordinatorMixi
             }, status=500)
 
 
-class ValidateMappingExecutionView(OrganizationMixin, View):
+class ValidateMappingExecutionView(GeneralLoginRequiredMixin, OrganizationMixin, View):
     """Validate mapping for execution."""
     
     def post(self, request):

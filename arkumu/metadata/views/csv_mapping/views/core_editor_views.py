@@ -11,6 +11,7 @@ ARCHITECTURE: Uses coordinator-based architecture with template helpers to minim
 import logging
 from django.shortcuts import render
 from django.views import View
+from arkumu.users.mixins import GeneralLoginRequiredMixin, general_login_required
 
 from arkumu.metadata.views.csv_mapping.mixins.coordinator import CSVMappingCoordinatorMixin
 from arkumu.metadata.views.csv_mapping.mixins.base import OrganizationMixin
@@ -20,13 +21,11 @@ from arkumu.metadata.views.csv_mapping.mixins.template_helpers import CSVMapping
 logger = logging.getLogger(__name__)
 
 
-class CSVMappingEditorView(
-    OrganizationMixin, 
+class CSVMappingEditorView(GeneralLoginRequiredMixin, OrganizationMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
     ImportStrategyMixin, 
-    View
-):
+    View):
     """
     Main CSV mapping editor view using coordinator-based architecture.
     
@@ -194,6 +193,7 @@ class CSVMappingEditorView(
 # Function-based view wrapper for URL compatibility
 # ==============================================================================
 
+@general_login_required
 def csv_mapping_editor_view(request):
     """
     Function-based wrapper for the class-based CSVMappingEditorView.

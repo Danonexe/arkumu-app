@@ -16,6 +16,7 @@ from django.http import JsonResponse, HttpResponse
 from django.views import View
 from django.core.serializers.json import DjangoJSONEncoder
 from django.utils import timezone
+from arkumu.users.mixins import GeneralLoginRequiredMixin
 
 from arkumu.metadata.views.csv_mapping.mixins.coordinator import CSVMappingCoordinatorMixin
 from arkumu.metadata.views.csv_mapping.mixins.base import OrganizationMixin
@@ -29,12 +30,10 @@ logger = logging.getLogger(__name__)
 # Clear Operations (Separated by Responsibility)
 # ==============================================================================
 
-class ClearSelectedDatasetsView(
-    OrganizationMixin, 
+class ClearSelectedDatasetsView(GeneralLoginRequiredMixin, OrganizationMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
-    View
-):
+    View):
     """
     Clear ONLY selected datasets (preserve workspace columns).
     
@@ -81,12 +80,10 @@ class ClearSelectedDatasetsView(
             return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
 
-class ClearWorkspaceColumnsView(
-    OrganizationMixin, 
+class ClearWorkspaceColumnsView(GeneralLoginRequiredMixin, OrganizationMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
-    View
-):
+    View):
     """
     Clear ONLY workspace columns (preserve selected datasets).
     
@@ -124,12 +121,10 @@ class ClearWorkspaceColumnsView(
             return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
 
-class ClearAllMappingStateView(
-    OrganizationMixin, 
+class ClearAllMappingStateView(GeneralLoginRequiredMixin, OrganizationMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
-    View
-):
+    View):
     """
     Clear ALL mapping state (datasets AND workspace columns).
     
@@ -174,11 +169,9 @@ class ClearAllDatasetsView(ClearSelectedDatasetsView):
 # JSON Export View (Single Export Button)
 # ==============================================================================
 
-class ExportMappingJSONView(
-    OrganizationMixin, 
+class ExportMappingJSONView(GeneralLoginRequiredMixin, OrganizationMixin, 
     CSVMappingCoordinatorMixin, 
-    View
-):
+    View):
     """
     Export current mapping configuration as JSON.
     
@@ -234,11 +227,9 @@ class ExportMappingJSONView(
 # Import Strategy Management
 # ==============================================================================
 
-class UpdateImportStrategyView(
-    OrganizationMixin, 
+class UpdateImportStrategyView(GeneralLoginRequiredMixin, OrganizationMixin, 
     ImportStrategyMixin, 
-    View
-):
+    View):
     """
     Update import strategy configuration view using mixin-based architecture.
     

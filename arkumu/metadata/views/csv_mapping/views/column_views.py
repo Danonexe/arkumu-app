@@ -13,6 +13,7 @@ import logging
 from django.shortcuts import render
 from django.http import HttpResponse
 from django.views import View
+from arkumu.users.mixins import GeneralLoginRequiredMixin
 
 from arkumu.metadata.services.data_analysis.s3_direct_data_analyzer import S3DirectDataAnalyzer
 from arkumu.metadata.views.csv_mapping.mixins.coordinator import CSVMappingCoordinatorMixin
@@ -22,12 +23,10 @@ from arkumu.metadata.views.csv_mapping.mixins.template_helpers import CSVMapping
 logger = logging.getLogger(__name__)
 
 
-class AddColumnToWorkspaceView(
-    OrganizationMixin, 
+class AddColumnToWorkspaceView(GeneralLoginRequiredMixin, OrganizationMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
-    View
-):
+    View):
     """
     Add column to workspace view using coordinator-based architecture.
     
@@ -87,12 +86,10 @@ class AddColumnToWorkspaceView(
             return HttpResponse(f'<div class="alert alert-error">Error: {str(e)}</div>')
 
 
-class RemoveColumnFromWorkspaceView(
-    OrganizationMixin, 
+class RemoveColumnFromWorkspaceView(GeneralLoginRequiredMixin, OrganizationMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
-    View
-):
+    View):
     """
     Remove column from workspace view using coordinator-based architecture.
     
@@ -163,12 +160,10 @@ class RemoveColumnFromWorkspaceView(
             return HttpResponse(f'<div class="alert alert-error">Error: {str(e)}</div>')
 
 
-class SelectAllDatasetColumnsView(
-    OrganizationMixin, 
+class SelectAllDatasetColumnsView(GeneralLoginRequiredMixin, OrganizationMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
-    View
-):
+    View):
     """
     Select all columns from a dataset using coordinator-based architecture.
     
@@ -244,12 +239,10 @@ class SelectAllDatasetColumnsView(
             return HttpResponse(f'<div class="alert alert-error">Error: {str(e)}</div>')
 
 
-class DeselectAllDatasetColumnsView(
-    OrganizationMixin, 
+class DeselectAllDatasetColumnsView(GeneralLoginRequiredMixin, OrganizationMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
-    View
-):
+    View):
     """
     Deselect all columns from a dataset using coordinator-based architecture.
     
@@ -309,12 +302,10 @@ class DeselectAllDatasetColumnsView(
             return HttpResponse(f'<div class="alert alert-error">Error: {str(e)}</div>')
 
 
-class SetAnchorColumnView(
-    OrganizationMixin, 
+class SetAnchorColumnView(GeneralLoginRequiredMixin, OrganizationMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
-    View
-):
+    View):
     """
     Set a column as the anchor column using the coordinator mixin.
     Only one column can be anchor at a time.
@@ -366,12 +357,10 @@ class SetAnchorColumnView(
             return HttpResponse(f'<div class="alert alert-error">Error: {str(e)}</div>')
 
 
-class ToggleMultiValueColumnView(
-    OrganizationMixin, 
+class ToggleMultiValueColumnView(GeneralLoginRequiredMixin, OrganizationMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
-    View
-):
+    View):
     """
     Toggle the multi-value status of a column using the coordinator mixin.
     
@@ -426,12 +415,10 @@ class ToggleMultiValueColumnView(
 # Pure Selection Interface Views (No Workspace Operations)
 # ==============================================================================
 
-class ToggleColumnSelectionView(
-    OrganizationMixin, 
+class ToggleColumnSelectionView(GeneralLoginRequiredMixin, OrganizationMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
-    View
-):
+    View):
     """
     Toggle column selection in the browsing interface ONLY.
     
@@ -491,12 +478,10 @@ class ToggleColumnSelectionView(
             return HttpResponse(f'<div class="alert alert-error">Error: {str(e)}</div>')
 
 
-class SelectAllColumnsView(
-    OrganizationMixin, 
+class SelectAllColumnsView(GeneralLoginRequiredMixin, OrganizationMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
-    View
-):
+    View):
     """
     Select all columns in dataset (browsing interface only).
     
@@ -550,12 +535,10 @@ class SelectAllColumnsView(
             return HttpResponse(f'<div class="alert alert-error">Error: {str(e)}</div>')
 
 
-class DeselectAllColumnsView(
-    OrganizationMixin, 
+class DeselectAllColumnsView(GeneralLoginRequiredMixin, OrganizationMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
-    View
-):
+    View):
     """
     Deselect all columns in dataset (browsing interface only).
     
@@ -596,12 +579,10 @@ class DeselectAllColumnsView(
             return HttpResponse(f'<div class="alert alert-error">Error: {str(e)}</div>')
 
 
-class AddSelectedColumnsToWorkspaceView(
-    OrganizationMixin, 
+class AddSelectedColumnsToWorkspaceView(GeneralLoginRequiredMixin, OrganizationMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
-    View
-):
+    View):
     """
     Add selected columns to workspace (workspace operation only).
     

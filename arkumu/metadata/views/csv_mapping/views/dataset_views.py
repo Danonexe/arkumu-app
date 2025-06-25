@@ -14,6 +14,7 @@ from django.shortcuts import render
 from django.http import HttpResponse
 from django.views import View
 from django.template.loader import render_to_string
+from arkumu.users.mixins import GeneralLoginRequiredMixin
 
 from arkumu.metadata.services.data_analysis.s3_direct_data_analyzer import S3DirectDataAnalyzer
 from arkumu.metadata.views.csv_mapping.mixins.coordinator import CSVMappingCoordinatorMixin
@@ -23,12 +24,10 @@ from arkumu.metadata.views.csv_mapping.mixins.template_helpers import CSVMapping
 logger = logging.getLogger(__name__)
 
 
-class CSVDatasetCardView(
-    OrganizationMixin, 
+class CSVDatasetCardView(GeneralLoginRequiredMixin, OrganizationMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
-    View
-):
+    View):
     """
     CSV dataset card view using coordinator-based architecture.
     
@@ -101,12 +100,10 @@ class CSVDatasetCardView(
             return HttpResponse(f'<div class="text-danger">Error: {str(e)}</div>')
 
 
-class ToggleDatasetSelectionView(
-    OrganizationMixin, 
+class ToggleDatasetSelectionView(GeneralLoginRequiredMixin, OrganizationMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
-    View
-):
+    View):
     """
     Toggle dataset selection view using coordinator-based architecture.
     
@@ -261,11 +258,9 @@ class ToggleDatasetSelectionView(
             return HttpResponse(f'<div class="text-danger">Error: {str(e)}</div>')
 
 
-class LoadMoreDatasetRowsView(
-    OrganizationMixin, 
+class LoadMoreDatasetRowsView(GeneralLoginRequiredMixin, OrganizationMixin, 
     CSVMappingCoordinatorMixin, 
-    View
-):
+    View):
     """
     Load more dataset rows view using coordinator-based architecture.
     
@@ -323,12 +318,10 @@ class LoadMoreDatasetRowsView(
             return HttpResponse(f'<tr><td colspan="100%" class="text-danger">Error: {str(e)}</td></tr>')
 
 
-class GetDatasetBadgesView(
-    OrganizationMixin, 
+class GetDatasetBadgesView(GeneralLoginRequiredMixin, OrganizationMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
-    View
-):
+    View):
     """
     Get dataset badges view using template helpers.
     

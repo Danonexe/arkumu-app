@@ -6,11 +6,13 @@ from django.urls import reverse
 # Import views from their respective modules
 
 from arkumu.storage.views.streaming_upload_views import streaming_upload_form
+from arkumu.users.mixins import general_login_required
 
 logger = logging.getLogger(__name__)
 
 
 
+@general_login_required
 def upload_form(request):
     """
     Use the streaming upload form directly.
@@ -23,6 +25,7 @@ def upload_form(request):
 
 
 
+@general_login_required
 def upload_success(request):
     """
     Render the upload success page.

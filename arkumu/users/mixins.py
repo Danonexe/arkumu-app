@@ -76,6 +76,109 @@ class ArchivistRequiredMixin(LoginRequiredMixin):
         return super().dispatch(request, *args, **kwargs)
 
 
+class GeneralLoginRequiredMixin(LoginRequiredMixin):
+    """
+    General-purpose login required mixin for views that need authentication
+    but don't require specific role checks. This provides a base level of 
+    security for most application views.
+    """
+    pass
+
+
+# ============================================================================
+# FEATURE-SPECIFIC PERMISSION MIXINS
+# ============================================================================
+
+class DataManagementMixin(LoginRequiredMixin):
+    """
+    Mixin for views that handle data management operations.
+    Requires archivist role or above.
+    """
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.role not in ['archivist', 'manager', 'super_manager', 'system_admin']:
+            raise PermissionDenied("Data management access requires archivist role or above.")
+        return super().dispatch(request, *args, **kwargs)
+
+
+class FileUploadMixin(LoginRequiredMixin):
+    """
+    Mixin for file upload operations.
+    Any authenticated user can upload, but we can restrict this later.
+    """
+    def dispatch(self, request, *args, **kwargs):
+        # Currently allows any authenticated user
+        # Can be enhanced with specific upload permissions
+        return super().dispatch(request, *args, **kwargs)
+
+
+class MetadataEditorMixin(LoginRequiredMixin):
+    """
+    Mixin for metadata editing operations.
+    Requires archivist role or above.
+    """
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.role not in ['archivist', 'manager', 'super_manager', 'system_admin']:
+            raise PermissionDenied("Metadata editing requires archivist role or above.")
+        return super().dispatch(request, *args, **kwargs)
+
+
+class BulkOperationsMixin(LoginRequiredMixin):
+    """
+    Mixin for bulk data operations (imports, transformations).
+    Requires manager role or above.
+    """
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.role not in ['manager', 'super_manager', 'system_admin']:
+            raise PermissionDenied("Bulk operations require manager role or above.")
+        return super().dispatch(request, *args, **kwargs)
+
+
+class DangerousOperationsMixin(LoginRequiredMixin):
+    """
+    Mixin for potentially dangerous operations (database resets, deletions).
+    Requires system admin role.
+    """
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.role != 'system_admin':
+            raise PermissionDenied("Dangerous operations require system administrator access.")
+        return super().dispatch(request, *args, **kwargs)
+
+
+class ReadOnlyMixin(LoginRequiredMixin):
+    """
+    Mixin for read-only views (dashboards, viewing data).
+    Any authenticated user can access.
+    """
+    pass  # Just requires login, no additional restrictions
+
+
+# ============================================================================
+# DYNAMIC PERMISSION MIXIN
+# ============================================================================
+
+class PermissionRequiredMixin(LoginRequiredMixin):
+    """
+    Dynamic mixin that checks for specific permissions.
+    Set required_permissions as a class attribute or override get_required_permissions().
+    """
+    required_permissions = []
+    
+    def get_required_permissions(self):
+        """Override this method to dynamically determine required permissions."""
+        return self.required_permissions
+    
+    def dispatch(self, request, *args, **kwargs):
+        permissions = self.get_required_permissions()
+        for permission in permissions:
+            if not request.user.has_role_permission(permission):
+                raise PermissionDenied(f"Permission '{permission}' required.")
+        return super().dispatch(request, *args, **kwargs)
+
+
+# ============================================================================
+# DECORATORS FOR FUNCTION-BASED VIEWS
+# ============================================================================
+
 # Decorators for function-based views
 def role_required(roles=None, permissions=None):
     """Decorator for function-based views requiring specific roles/permissions."""
@@ -121,6 +224,80 @@ def manager_required(view_func):
         
         if request.user.role not in ['manager', 'super_manager', 'system_admin']:
             raise PermissionDenied("Manager access required")
+        
+        return view_func(request, *args, **kwargs)
+    return wrapper
+
+
+def general_login_required(view_func):
+    """
+    General-purpose login required decorator for function-based views.
+    Use this instead of @login_required for consistent error handling.
+    """
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            raise PermissionDenied("Authentication required")
+        
+        return view_func(request, *args, **kwargs)
+    return wrapper
+
+
+# ============================================================================
+# FEATURE-SPECIFIC DECORATORS
+# ============================================================================
+
+def data_management_required(view_func):
+    """Decorator for data management operations requiring archivist role or above."""
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            raise PermissionDenied("Authentication required")
+        
+        if request.user.role not in ['archivist', 'manager', 'super_manager', 'system_admin']:
+            raise PermissionDenied("Data management access requires archivist role or above.")
+        
+        return view_func(request, *args, **kwargs)
+    return wrapper
+
+
+def metadata_editor_required(view_func):
+    """Decorator for metadata editing operations requiring archivist role or above."""
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            raise PermissionDenied("Authentication required")
+        
+        if request.user.role not in ['archivist', 'manager', 'super_manager', 'system_admin']:
+            raise PermissionDenied("Metadata editing requires archivist role or above.")
+        
+        return view_func(request, *args, **kwargs)
+    return wrapper
+
+
+def bulk_operations_required(view_func):
+    """Decorator for bulk operations requiring manager role or above."""
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            raise PermissionDenied("Authentication required")
+        
+        if request.user.role not in ['manager', 'super_manager', 'system_admin']:
+            raise PermissionDenied("Bulk operations require manager role or above.")
+        
+        return view_func(request, *args, **kwargs)
+    return wrapper
+
+
+def dangerous_operations_required(view_func):
+    """Decorator for dangerous operations requiring system admin role."""
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            raise PermissionDenied("Authentication required")
+        
+        if request.user.role != 'system_admin':
+            raise PermissionDenied("Dangerous operations require system administrator access.")
         
         return view_func(request, *args, **kwargs)
     return wrapper

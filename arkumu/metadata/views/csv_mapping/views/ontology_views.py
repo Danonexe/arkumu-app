@@ -13,6 +13,7 @@ import logging
 from django.shortcuts import render
 from django.http import JsonResponse, HttpResponse
 from django.views import View
+from arkumu.users.mixins import GeneralLoginRequiredMixin
 
 from arkumu.metadata.views.csv_mapping.mixins.coordinator import CSVMappingCoordinatorMixin
 from arkumu.metadata.views.csv_mapping.mixins.base import OrganizationMixin
@@ -21,12 +22,10 @@ from arkumu.metadata.views.csv_mapping.mixins.template_helpers import CSVMapping
 logger = logging.getLogger(__name__)
 
 
-class ToggleExternalOntologyFormView(
-    OrganizationMixin, 
+class ToggleExternalOntologyFormView(GeneralLoginRequiredMixin, OrganizationMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
-    View
-):
+    View):
     """
     Toggle external ontology configuration form view using coordinator-based architecture.
     """
@@ -215,12 +214,10 @@ class ToggleExternalOntologyFormView(
             return HttpResponse('<div class="text-error text-sm">Error opening external ontology configuration</div>')
 
 
-class SaveInlineExternalOntologyView(
-    OrganizationMixin, 
+class SaveInlineExternalOntologyView(GeneralLoginRequiredMixin, OrganizationMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
-    View
-):
+    View):
     """
     Save inline external ontology configuration view using coordinator-based architecture.
     """
@@ -318,11 +315,9 @@ class SaveInlineExternalOntologyView(
             return HttpResponse('<div class="text-error text-xs p-2">Error saving external ontology configuration</div>')
 
 
-class HideExternalOntologyFormView(
-    OrganizationMixin, 
+class HideExternalOntologyFormView(GeneralLoginRequiredMixin, OrganizationMixin, 
     CSVMappingCoordinatorMixin, 
-    View
-):
+    View):
     """
     Hide external ontology form view using coordinator-based architecture.
     """
@@ -343,12 +338,10 @@ class HideExternalOntologyFormView(
             return HttpResponse('<div class="text-error text-sm">Error hiding external ontology form</div>')
 
 
-class RemoveExternalOntologyView(
-    OrganizationMixin, 
+class RemoveExternalOntologyView(GeneralLoginRequiredMixin, OrganizationMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
-    View
-):
+    View):
     """
     Remove external ontology configuration view using coordinator-based architecture.
     """
@@ -396,12 +389,10 @@ class RemoveExternalOntologyView(
             return HttpResponse('<div class="text-error text-xs p-2">Error removing external ontology configuration</div>')
 
 
-class RemoveIndividualExternalOntologyView(
-    OrganizationMixin, 
+class RemoveIndividualExternalOntologyView(GeneralLoginRequiredMixin, OrganizationMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
-    View
-):
+    View):
     """
     Remove individual external ontology from a column's ontology list.
     """
@@ -467,11 +458,9 @@ class RemoveIndividualExternalOntologyView(
             return HttpResponse('<div class="text-error text-xs p-2">Error removing individual ontology configuration</div>')
 
 
-class ValidateExternalOntologyIdentifierView(
-    OrganizationMixin, 
+class ValidateExternalOntologyIdentifierView(GeneralLoginRequiredMixin, OrganizationMixin, 
     CSVMappingCoordinatorMixin, 
-    View
-):
+    View):
     """
     Validate external ontology identifier view using coordinator-based architecture.
     """

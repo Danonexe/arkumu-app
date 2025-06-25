@@ -17,6 +17,7 @@ from django.views import View
 from django.template.loader import render_to_string
 from django.middleware.csrf import get_token
 from django.utils import timezone
+from arkumu.users.mixins import GeneralLoginRequiredMixin
 
 from arkumu.metadata.views.csv_mapping.saved_mappings_api import (
     SaveMappingView, UpdateMappingView
@@ -27,7 +28,7 @@ from arkumu.metadata.views.csv_mapping.mixins.template_helpers import CSVMapping
 logger = logging.getLogger(__name__)
 
 
-class SaveMappingHTMXView(CSVMappingCoordinatorMixin, CSVMappingTemplateHelperMixin, View):
+class SaveMappingHTMXView(GeneralLoginRequiredMixin, CSVMappingCoordinatorMixin, CSVMappingTemplateHelperMixin, View):
     """
     HTMX wrapper for save/update mapping with full coordinator integration.
     

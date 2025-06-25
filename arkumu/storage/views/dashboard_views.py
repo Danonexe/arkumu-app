@@ -4,10 +4,12 @@ from django.contrib.auth.decorators import login_required
 from arkumu.storage.services.bucket_service import BucketService
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.http import require_http_methods
+from arkumu.users.mixins import general_login_required
 
 logger = logging.getLogger(__name__)
 
 
+@general_login_required
 def storage_dashboard(request):
     """
     Main storage dashboard - redirects to the archivist dashboard 
@@ -17,6 +19,7 @@ def storage_dashboard(request):
     return redirect('storage:archivist_dashboard')
 
 
+@general_login_required
 def archivist_dashboard(request):
     """
     Dashboard for archivists to manage organization buckets.
@@ -80,6 +83,7 @@ def archivist_dashboard(request):
         })
 
 
+@general_login_required
 def load_folder_contents(request, bucket_type, folder_path):
     """
     Load contents of a specific folder when expanded.
@@ -112,6 +116,7 @@ def load_folder_contents(request, bucket_type, folder_path):
     )
 
 
+@general_login_required
 def dashboard_content(request, bucket_type):
     """
     Return only the structure content for a specific bucket type.
@@ -147,6 +152,7 @@ def dashboard_content(request, bucket_type):
 
 
 @require_http_methods(["POST"])
+@general_login_required
 def view_organization_bucket(request):
     """
     Handle organization bucket viewing, creating the bucket if it doesn't exist.

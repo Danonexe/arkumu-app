@@ -18,11 +18,13 @@ from django.contrib.auth import get_user_model
 
 # Django cache
 from django.core.cache import cache
+from arkumu.users.mixins import general_login_required
 
 logger = logging.getLogger(__name__)
 
 
 
+@general_login_required
 def organization_dashboard(request):
     """
     Display a dashboard of all organizations and their buckets.
@@ -92,6 +94,7 @@ def organization_dashboard(request):
 
 
 
+@general_login_required
 def organization_contents(request, organization=None):
     """
     Display the contents of an organization's bucket.
@@ -208,6 +211,7 @@ def organization_contents(request, organization=None):
 
 
 
+@general_login_required
 def file_content(request, bucket_type, file_path):
     """
     Retrieve and display the content of a file from a bucket.
@@ -257,6 +261,7 @@ def file_content(request, bucket_type, file_path):
 
 
 
+@general_login_required
 def delete_object(request, bucket_type, object_type, object_path):
     """
     Delete a file or folder from a bucket.
@@ -333,6 +338,7 @@ def delete_object(request, bucket_type, object_type, object_path):
 
 
 
+@general_login_required
 def csv_preview(request, bucket_type, file_path):
     """
     Preview CSV file content from S3 bucket.

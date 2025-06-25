@@ -9,13 +9,14 @@ from django.views.decorators.http import require_http_methods
 from django.contrib.auth.decorators import login_required
 from django.utils.decorators import method_decorator
 from django.views import View
+from arkumu.users.mixins import ge, GeneralLoginRequiredMixinneral_login_required
 
 from arkumu.storage.services.upload_service import UploadService
 from arkumu.storage.services.bucket_service import BucketService
 
 logger = logging.getLogger(__name__)
 
-class RawStreamUploadView(View):
+class RawStreamUploadView(GeneralLoginRequiredMixin, View):
     """
     Handle raw multipart stream upload without Django's file parsing.
     This bypasses the DATA_UPLOAD_MAX_NUMBER_FILES limit by streaming directly.
@@ -276,6 +277,7 @@ class RawStreamUploadView(View):
 
 # Function-based view wrapper for URL routing
 @require_http_methods(["POST"])
+@general_login_required
 def raw_stream_upload(request):
     """
     Function-based wrapper for the raw stream upload view.
