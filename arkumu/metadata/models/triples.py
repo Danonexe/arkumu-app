@@ -1,7 +1,6 @@
-# models.py
 from django.db import models
 from django.core.exceptions import ValidationError
-from arkumu.metadata.models.cidoc import UUIDModel
+from arkumu.metadata.models.base import UUIDModel
 from arkumu.metadata.models.resource import Resource, ResourceType
 
 

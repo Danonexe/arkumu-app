@@ -8,33 +8,29 @@ def test_create_resource(db):
     resource = Resource.objects.create(
         uri="http://example.org/resource/1",
         source="test",
-        source_field="original_id_123",
         resource_type=ResourceType.IRI
     )
     assert resource.id is not None
     assert resource.uri == "http://example.org/resource/1"
     assert resource.source == "test"
-    assert resource.source_field == "original_id_123"
     assert resource.resource_type == ResourceType.IRI
-    assert resource.literal_value is None
+    assert resource.value is None
     
 @pytest.mark.django_db
 def test_create_literal_resource(db):
     """Test creating a literal resource."""
     resource = Resource.objects.create(
         source="test",
-        source_field="original_value",
         resource_type=ResourceType.LITERAL,
-        literal_value="Test Value",
-        literal_datatype="xsd:string",
-        literal_language="en"
+        value="Test Value",
+        datatype="xsd:string",
+        language="en"
     )
     assert resource.id is not None
     assert resource.resource_type == ResourceType.LITERAL
-    assert resource.source_field == "original_value"
-    assert resource.literal_value == "Test Value"
-    assert resource.literal_datatype == "xsd:string"
-    assert resource.literal_language == "en"
+    assert resource.value == "Test Value"
+    assert resource.datatype == "xsd:string"
+    assert resource.language == "en"
 
 @pytest.mark.django_db
 def test_update_resource(db):
@@ -42,37 +38,32 @@ def test_update_resource(db):
     resource = Resource.objects.create(
         uri="http://example.org/resource/2",
         source="original",
-        source_field="original_data",
         resource_type=ResourceType.IRI
     )
     
     resource.source = "updated"
-    resource.source_field = "updated_data"
     resource.save()
     
     updated_resource = Resource.objects.get(id=resource.id)
     assert updated_resource.source == "updated"
-    assert updated_resource.source_field == "updated_data"
 
 @pytest.mark.django_db
-def test_source_field(db):
-    """Test the source_field attribute specifically."""
+def test_source_field_compatibility(db):
+    """Test the compatibility with alternative field names."""
     resource = Resource.objects.create(
         uri="http://example.org/resource/source-field-test",
         source="FUK",
-        source_field="Ereignistyp=Ausstellung",
         resource_type=ResourceType.IRI
     )
     
-    assert resource.source_field == "Ereignistyp=Ausstellung"
+    assert resource.source == "FUK"
     
-    # Test updating just the source_field
-    resource.source_field = "Ereignistyp=Performance"
+    # Test updating just the source
+    resource.source = "Updated_FUK"
     resource.save()
     
     updated = Resource.objects.get(id=resource.id)
-    assert updated.source_field == "Ereignistyp=Performance"
-    assert updated.source == "FUK"  # Original source shouldn't change
+    assert updated.source == "Updated_FUK"
 
 @pytest.mark.django_db
 def test_delete_resource(db):
@@ -104,7 +95,7 @@ def test_resource_str_literal_simple(db):
     """Test string representation of a simple literal resource."""
     resource = Resource.objects.create(
         resource_type=ResourceType.LITERAL,
-        literal_value="Simple Value"
+        value="Simple Value"
     )
     assert str(resource) == '"Simple Value"'
 
@@ -113,8 +104,8 @@ def test_resource_str_literal_with_datatype(db):
     """Test string representation with datatype."""
     resource = Resource.objects.create(
         resource_type=ResourceType.LITERAL,
-        literal_value="42",
-        literal_datatype="xsd:integer"
+        value="42",
+        datatype="xsd:integer"
     )
     assert str(resource) == '"42"^^xsd:integer'
 
@@ -123,8 +114,8 @@ def test_resource_str_literal_with_language(db):
     """Test string representation with language."""
     resource = Resource.objects.create(
         resource_type=ResourceType.LITERAL,
-        literal_value="Bonjour",
-        literal_language="fr"
+        value="Bonjour",
+        language="fr"
     )
     assert str(resource) == '"Bonjour"@fr'
 
@@ -150,13 +141,11 @@ def test_class_resource_creation(db):
     resource = Resource.objects.create(
         uri="http://example.org/class/Person",
         source="test",
-        source_field="original_class",
         resource_type=ResourceType.CLASS
     )
     assert resource.id is not None
     assert resource.resource_type == ResourceType.CLASS
     assert resource.uri == "http://example.org/class/Person"
-    assert resource.source_field == "original_class"
 
 @pytest.mark.django_db
 def test_property_resource_creation(db):
@@ -164,18 +153,16 @@ def test_property_resource_creation(db):
     resource = Resource.objects.create(
         uri="http://example.org/property/hasName",
         source="test",
-        source_field="original_property",
         resource_type=ResourceType.PROPERTY
     )
     assert resource.id is not None
     assert resource.resource_type == ResourceType.PROPERTY
     assert resource.uri == "http://example.org/property/hasName"
-    assert resource.source_field == "original_property"
 
 @pytest.mark.django_db
 def test_resource_type_constraint_validation(db):
     """Test constraint validation for resource types."""
-    # This should fail - LITERAL without literal_value
+    # This should fail - LITERAL without value
     with pytest.raises(Exception):
         Resource.objects.create(
             resource_type=ResourceType.LITERAL
