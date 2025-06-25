@@ -19,6 +19,7 @@
       (function() {
         var savedTheme = localStorage.getItem('arkumu-theme') || 'light';
         document.documentElement.classList.add('js-loaded');
+        document.documentElement.classList.add('theme-' + savedTheme);
         document.body.classList.add('theme-' + savedTheme);
       })();
     </script>
@@ -30,20 +31,22 @@
       
       <!-- Inline styles for theme background -->
       <style>
-        body {
+        html, body {
           transition: background-color 0.3s ease, color 0.3s ease;
           background-color: #FAF9F6; /* arkumu-light color - default background */
           color: #1E1E1E; /* arkumu-dark color - default text color */
+          min-height: 100vh;
+          height: 100%;
         }
         
         /* Dark theme specific styles */
-        body.theme-dark {
-          background-color: #1E1E1E; /* arkumu-dark color */
+        html.theme-dark, body.theme-dark {
+          background-color: #1E1E1E !important; /* arkumu-dark color */
           color: #FAF9F6; /* arkumu-light color */
         }
         
         /* Blue theme specific styles */
-        body.theme-blue {
+        html.theme-blue, body.theme-blue {
           background-color: #FAF9F6; /* Keep light background for blue theme */
           color: #2B7EF2; /* arkumu-blue color for text */
         }
@@ -104,9 +107,11 @@
           // Theme switching function
           function switchTheme(theme) {
             // Remove existing theme classes
+            document.documentElement.classList.remove('theme-light', 'theme-dark', 'theme-blue');
             document.body.classList.remove('theme-light', 'theme-dark', 'theme-blue');
             
             // Add new theme class
+            document.documentElement.classList.add('theme-' + theme);
             document.body.classList.add('theme-' + theme);
             
             // Store in localStorage
