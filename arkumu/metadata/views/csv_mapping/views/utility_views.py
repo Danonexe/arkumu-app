@@ -61,15 +61,11 @@ class ClearSelectedDatasetsView(
             # CORRECTED: Only update selection interface (badges + table), NOT the workspace
             # The workspace is independent and should only be cleared by its own "Clear Workspace" button
             
-            # Render dataset badges (now unselected)
-            badges_html = self.render_dataset_badges_template(
-                request, organization_id, 
-                context_data['csv_datasets'], 
-                context_data.get('selected_datasets', [])  # This will be empty after clear
-            )
+            # Render dataset badges (now unselected) using template helper
+            badges_html = self.render_dataset_badges_template(request, organization_id)
             
-            # Render empty table content (no selected datasets to show)
-            table_content_html = self.render_table_content_template(request, organization_id, [])
+            # Render empty table content (no selected datasets to show) using template helper
+            table_content_html = self.render_table_content_template(request, organization_id)
             
             # Build response using template helper (pure HTMX)
             oob_updates = {
@@ -175,7 +171,7 @@ class ClearAllDatasetsView(ClearSelectedDatasetsView):
 
 
 # ==============================================================================
-# JSON Serialization Views
+# JSON Export View (Single Export Button)
 # ==============================================================================
 
 class ExportMappingJSONView(
@@ -188,6 +184,7 @@ class ExportMappingJSONView(
     
     Uses the coordinator's serialize_current_mapping_state method to provide
     a comprehensive JSON representation of the current mapping configuration.
+    This opens in a new tab to keep the workspace in sync.
     """
     
     def get(self, request):
@@ -231,119 +228,6 @@ class ExportMappingJSONView(
                 'error': 'Export failed',
                 'message': str(e)
             }, status=500)
-
-
-class GetMappingJSONViewView(
-    OrganizationMixin, 
-    CSVMappingCoordinatorMixin, 
-    View
-):
-    """
-    Get JSON view partial template for HTMX tab switching.
-    
-    This view returns the JSON view partial template, following the HTMX pattern
-    used throughout the CSV mapping interface.
-    """
-    
-    def get(self, request):
-        """Handle GET requests for JSON view partial."""
-        try:
-            organization_id = self.get_organization_id_from_request(request)
-            
-            # Check if we have a valid organization
-            org_context = self.get_organization_context(request)
-            if not org_context['organization_exists']:
-                error_html = f'''
-                <div class="bg-red-50 border border-red-200 rounded-lg p-4">
-                    <h3 class="text-lg font-semibold text-red-800 mb-2">Invalid Organization</h3>
-                    <p class="text-red-700">Organization "{organization_id}" not found</p>
-                </div>
-                '''
-                return HttpResponse(error_html)
-            
-            # Prepare context for the JSON view template
-            context = {
-                'organization_id': organization_id,
-                'csrf_token': request.META.get('CSRF_COOKIE'),
-            }
-            
-            # Return the JSON view partial template
-            return render(request, 'csv_mapping/partials/json_view.html', context)
-            
-        except Exception as e:
-            logger.error(f"GET_MAPPING_JSON_VIEW: Error loading JSON view: {e}", exc_info=True)
-            error_html = f'''
-            <div class="bg-red-50 border border-red-200 rounded-lg p-4">
-                <h3 class="text-lg font-semibold text-red-800 mb-2">Error Loading JSON View</h3>
-                <p class="text-red-700">{str(e)}</p>
-            </div>
-            '''
-            return HttpResponse(error_html)
-
-
-class GetMappingJSONContentView(
-    OrganizationMixin, 
-    CSVMappingCoordinatorMixin, 
-    View
-):
-    """
-    Get current mapping configuration as JSON content for display in the UI.
-    
-    This view returns formatted JSON content suitable for displaying in the
-    JSON tab of the mapping workspace.
-    """
-    
-    def get(self, request):
-        """Handle GET requests for mapping JSON content."""
-        try:
-            organization_id = self.get_organization_id_from_request(request)
-            
-            # Check if we have a valid organization
-            org_context = self.get_organization_context(request)
-            if not org_context['organization_exists']:
-                error_json = {
-                    'error': 'Invalid organization',
-                    'message': f'Organization "{organization_id}" not found'
-                }
-                formatted_json = json.dumps(error_json, indent=2)
-                return HttpResponse(f'<pre class="bg-gray-100 p-4 rounded text-sm overflow-auto max-h-96"><code>{formatted_json}</code></pre>')
-            
-            # Use coordinator to serialize current mapping state
-            mapping_config = self.serialize_current_mapping_state(request, organization_id)
-            
-            # Add additional metadata for display
-            mapping_config['export_timestamp'] = timezone.now().isoformat()
-            mapping_config['exported_by'] = 'CSV Mapping Editor'
-            
-            # Get workspace summary for additional context
-            workspace_summary = self.get_workspace_summary(request, organization_id)
-            mapping_config['workspace_summary'] = workspace_summary
-            
-            # Format JSON with proper indentation
-            formatted_json = json.dumps(mapping_config, indent=2, cls=DjangoJSONEncoder)
-            
-            # Return JSON content only (export buttons are in the template)
-            html_content = f'''
-            <pre id="json-content" class="text-sm text-gray-800 whitespace-pre-wrap"><code>{formatted_json}</code></pre>
-            <div class="mt-3 text-xs text-gray-600">
-                Generated: {timezone.now().strftime('%Y-%m-%d %H:%M:%S')} | 
-                Datasets: {len(mapping_config.get('selected_datasets', []))} | 
-                Columns: {len(mapping_config.get('workspace_columns', {}))} |
-                FK Relations: {len(mapping_config.get('fk_relationships', {}))}
-            </div>
-            '''
-            
-            return HttpResponse(html_content)
-            
-        except Exception as e:
-            logger.error(f"GET_MAPPING_JSON_CONTENT: Error getting mapping JSON: {e}", exc_info=True)
-            error_html = f'''
-            <div class="bg-red-50 border border-red-200 rounded-lg p-4">
-                <h3 class="text-lg font-semibold text-red-800 mb-2">Error Loading JSON</h3>
-                <p class="text-red-700">{str(e)}</p>
-            </div>
-            '''
-            return HttpResponse(error_html)
 
 
 # ==============================================================================

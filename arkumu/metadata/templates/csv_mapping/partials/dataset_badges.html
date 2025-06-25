@@ -11,13 +11,8 @@
              data-dataset="{{ dataset.name }}"
              hx-post="{% url 'metadata:csv_toggle_dataset_card' %}"
              hx-vals='{"source": "{{ dataset.source }}", "dataset": "{{ dataset.name }}", "organization": "{{ organization_id }}", "action": "{% if dataset.name in selected_datasets %}remove{% else %}add{% endif %}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
-             {% if dataset.name in selected_datasets %}
-             hx-target="#dataset-{{ dataset.name|slugify }}"
-             hx-swap="delete"
-             {% else %}
              hx-target="#table-content"
-             hx-swap="afterbegin"
-             {% endif %}>
+             hx-swap="innerHTML">
             {{ dataset.name }}
         </div>
     {% endfor %}
@@ -27,7 +22,7 @@
         <button class="btn btn-xs btn-outline btn-error hover:btn-error transition-all duration-200 text-xs font-medium ml-2"
                 hx-post="{% url 'metadata:csv_clear_all_datasets' %}"
                 hx-vals='{"organization": "{{ organization_id }}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
-                hx-indicator=".loading-indicator"
+                
                 hx-on::"htmx:beforeRequest: this.disabled = true"
                 hx-on::"htmx:afterRequest: this.disabled = false"
                 hx-on::"htmx:responseError: console.error('Clear datasets failed:', event.detail); this.disabled = false"

@@ -24,20 +24,34 @@
         </div>
         
         <!-- Workspace Actions -->
-        {% comment %}Show clear button if there are datasets with columns OR if there are orphaned columns{% endcomment %}
-        <div id="workspace-actions" class="flex gap-2 {% if not datasets_with_columns and workspace_columns_count|default:0 == 0 %}hidden{% endif %}">
-            <button class="btn btn-sm btn-outline btn-error gap-2" 
-                    hx-post="{% url 'metadata:csv_clear_workspace_columns' %}"
-                    hx-vals='{"organization": "{{ organization_id }}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
-                    hx-target="#workspace-content"
-                    hx-swap="innerHTML"
-                    hx-indicator=".loading-indicator"
-                    title="Clear workspace columns (keep datasets selected)">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                </svg>
-                Clear Workspace
-            </button>
+        <div id="workspace-actions" class="flex gap-2">
+            {% comment %}Only show action buttons when there are columns in the workspace{% endcomment %}
+            {% if datasets_with_columns or workspace_columns_count|default:0 > 0 %}
+                <!-- Export JSON Button - Only available when there are columns to export -->
+                <a href="{% url 'metadata:csv_export_mapping_json' %}?organization={{ organization_id }}" 
+                   class="btn btn-sm btn-outline btn-primary gap-2" 
+                   target="_blank" 
+                   rel="noopener noreferrer"
+                   title="Export current mapping configuration as JSON">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 00-1-1h-2z"/>
+                    </svg>
+                    Export JSON
+                </a>
+                
+                <!-- Clear Workspace Button -->
+                <button class="btn btn-sm btn-outline btn-error gap-2" 
+                        hx-post="{% url 'metadata:csv_clear_workspace_columns' %}"
+                        hx-vals='{"organization": "{{ organization_id }}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
+                        hx-target="#workspace-content"
+                        hx-swap="innerHTML"
+                        title="Clear workspace columns (keep datasets selected)">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                    </svg>
+                    Clear Workspace
+                </button>
+            {% endif %}
         </div>
     </div>
 

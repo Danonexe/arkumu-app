@@ -36,9 +36,6 @@
                     
                 <!-- Mapping Workspace - Contained -->
                 <div class="flex-1 bg-base-50 rounded-lg border border-base-300 overflow-hidden flex flex-col" style="min-width: 0; min-height: 0;">
-                    <div class="p-3 border-b border-base-300 bg-base-100">
-                        <h3 class="font-semibold text-sm">Mapping Workspace</h3>
-                    </div>
                     <div id="selected-columns-workspace" class="flex-1 overflow-hidden" style="min-width: 0; min-height: 0;">
                         {% include 'csv_mapping/partials/mapping_workspace.html' with datasets=csv_datasets organization_id=organization_id selected_columns=selected_columns active_datasets=selected_datasets_with_details csrf_token=csrf_token import_strategy=import_strategy %}
                     </div>

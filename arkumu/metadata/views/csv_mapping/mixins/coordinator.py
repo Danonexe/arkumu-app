@@ -122,8 +122,19 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         """
         Toggle dataset selection and handle column cascade operations.
         
+        ⚠️  WARNING: CASCADE BEHAVIOR ⚠️
         When a dataset is deselected, all its columns are automatically removed
         from the workspace to maintain consistency.
+        
+        USE CASES:
+        - Database-style interfaces where dataset selection directly controls workspace
+        - Interfaces where dataset deselection should clear related workspace content
+        
+        DO NOT USE FOR:
+        - CSV mapping interfaces where dataset selection is just UI browsing state
+        - Interfaces where users build mappings from multiple datasets independently
+        
+        For CSV mapping, use toggle_dataset_selection() instead (no cascade).
         
         Args:
             request: Django request object

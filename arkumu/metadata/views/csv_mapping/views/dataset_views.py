@@ -76,21 +76,19 @@ class CSVDatasetCardView(
                 }
             }
             
-            # Get selected columns for this dataset using coordinator
-            selected_columns = self.get_workspace_columns(request, organization_id)
+            # Get column selection state for this dataset (browsing interface, not workspace)
+            selection_key = f"column_selection_{organization_id}"
+            column_selections = request.session.get(selection_key, {})
+            dataset_key = f"{dataset_name}::{source_name}"
+            dataset_selected_columns = column_selections.get(dataset_key, [])
             
-            # Filter to get only columns from this specific dataset using coordinator column ID format
-            dataset_selected_columns = []
-            for col_id in selected_columns:
-                # Parse the coordinator column ID format: "source::dataset.csv::column_name"
-                parsed = self.parse_column_id(col_id)
-                if parsed and parsed['dataset'] == dataset_name and parsed['source'] == organization_id:
-                    dataset_selected_columns.append(parsed['column'])
+            # Also get workspace columns for reference (but they're different from selected columns)
+            workspace_columns = self.get_workspace_columns(request, organization_id)
             
             context = {
                 'dataset': dataset,
-                'selected_columns': selected_columns,
-                'dataset_selected_columns': dataset_selected_columns,
+                'selected_columns': workspace_columns,  # For workspace reference
+                'dataset_selected_columns': dataset_selected_columns,  # For column badge highlighting
                 'organization_id': organization_id,
                 'csrf_token': request.META.get('CSRF_COOKIE'),
                 'is_direct_mode': True,  # For the template logic
@@ -127,10 +125,12 @@ class ToggleDatasetSelectionView(
             if not dataset_name:
                 return HttpResponse('<div class="text-danger">Dataset parameter required</div>')
             
-            # Use coordinator for dataset toggle with column cascade
-            selected_datasets, was_added, columns_affected = self.toggle_dataset_selection_with_cascade(
+            # Use coordinator for dataset toggle WITHOUT column cascade
+            # In CSV mapping, dataset selection (browsing) is independent of workspace content
+            selected_datasets, was_added = self.toggle_dataset_selection(
                 request, organization_id, dataset_name
             )
+            columns_affected = 0  # No columns affected since we don't cascade
             
             # Get updated datasets and workspace information
             workspace_summary = self.get_workspace_summary(request, organization_id)
@@ -228,7 +228,8 @@ class ToggleDatasetSelectionView(
                 # Return empty response - HTMX will delete the target element
                 # Check if no datasets remain, show empty state
                 if not enhanced_datasets_with_details:
-                    empty_state = self.render_table_content_template(request, organization_id, [])
+                    # Use template helper for empty table content
+                    empty_state = self.render_table_content_template(request, organization_id)
                     
                     # Use template helper for OOB badge update (pure HTMX)
                     badges_html = self.render_dataset_badges_template(request, organization_id)
@@ -245,6 +246,7 @@ class ToggleDatasetSelectionView(
                     return HttpResponse(response_html)
             
             # Fallback: return full table content (for 'toggle' or error cases)
+            # Use template helper with enhanced datasets
             table_content = self.render_table_content_template(request, organization_id, enhanced_datasets_with_details)
             
             # Use template helper for OOB badge update (pure HTMX)
@@ -338,23 +340,10 @@ class GetDatasetBadgesView(
         try:
             organization_id = self.get_organization_id_from_request(request)
             
-            # Use template helper to render badges content
-            csv_datasets = self.get_csv_datasets_for_organization(organization_id)
-            selected_datasets = self.get_selected_dataset_names(request, organization_id)
+            # Use template helper to render badges content consistently
+            badges_html = self.render_dataset_badges_template(request, organization_id)
             
-            context = {
-                'datasets': csv_datasets,
-                'selected_datasets': selected_datasets,
-                'organization_id': organization_id,
-                'csrf_token': request.META.get('CSRF_COOKIE'),
-            }
-            
-            # Render just the inner content for the HTMX refresh
-            return HttpResponse(render_to_string(
-                'csv_mapping/partials/dataset_badges_inner.html',
-                context,
-                request=request
-            ))
+            return HttpResponse(badges_html)
             
         except Exception as e:
             logger.error(f"GET_BADGES: Error getting dataset badges: {e}", exc_info=True)

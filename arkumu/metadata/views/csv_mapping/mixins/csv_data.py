@@ -174,9 +174,12 @@ class CSVDataMixin:
             was_added = False
             logger.info(f"CSV_DATA_MIXIN: Removed {dataset_name} from selection")
         else:
-            selected_datasets.append(dataset_name)
+            # Remove if already exists (move to front) and add to beginning for recency
+            if dataset_name in selected_datasets:
+                selected_datasets.remove(dataset_name)
+            selected_datasets.insert(0, dataset_name)  # Add to front for most recent
             was_added = True
-            logger.info(f"CSV_DATA_MIXIN: Added {dataset_name} to selection")
+            logger.info(f"CSV_DATA_MIXIN: Added {dataset_name} to selection (moved to front)")
         
         self.update_selected_datasets(request, organization_id, selected_datasets)
         return selected_datasets, was_added

@@ -212,10 +212,8 @@ urlpatterns = [
     path('csv-save-relationship-context/', relationship_views.SaveInlineRelationshipContextView.as_view(), name='csv_save_relationship_context'),
     path('csv-remove-relationship-context/', relationship_views.RemoveRelationshipContextView.as_view(), name='csv_remove_relationship_context'),
     
-    # JSON Export URLs (for mapping configuration serialization)
+    # JSON Export URL (single export button with target="_blank")
     path('csv-mapping/export-json/', utility_views.ExportMappingJSONView.as_view(), name='csv_export_mapping_json'),
-    path('csv-mapping/json-content/', utility_views.GetMappingJSONContentView.as_view(), name='csv_get_mapping_json_content'),
-    path('csv-mapping/json-view/', utility_views.GetMappingJSONViewView.as_view(), name='csv_get_mapping_json_view'),
     
     # External Ontology Views
     path('csv-toggle-external-ontology-form/', ontology_views.ToggleExternalOntologyFormView.as_view(), name='csv_toggle_external_ontology_form'),
