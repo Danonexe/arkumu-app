@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-05-27 09:47+0000\n"
+"POT-Creation-Date: 2025-06-25 10:16+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -31,6 +31,70 @@ msgstr ""
 
 #: arkumu/metadata/models/resource.py:10
 msgid "Literal"
+msgstr ""
+
+#: arkumu/metadata/templates/csv_mapping/partials/inline_external_ontology_form.html:8
+msgid "External Ontology Configuration"
+msgstr ""
+
+#: arkumu/metadata/templates/csv_mapping/partials/inline_external_ontology_form.html:32
+msgid "Column Information"
+msgstr ""
+
+#: arkumu/metadata/templates/csv_mapping/partials/inline_external_ontology_form.html:34
+msgid "Dataset"
+msgstr ""
+
+#: arkumu/metadata/templates/csv_mapping/partials/inline_external_ontology_form.html:35
+msgid "Column"
+msgstr ""
+
+#: arkumu/metadata/templates/csv_mapping/partials/inline_external_ontology_form.html:42
+msgid "Ontology Type"
+msgstr ""
+
+#: arkumu/metadata/templates/csv_mapping/partials/inline_external_ontology_form.html:49
+msgid "Select ontology type..."
+msgstr ""
+
+#: arkumu/metadata/templates/csv_mapping/partials/inline_external_ontology_form.html:66
+msgid "URI Template"
+msgstr ""
+
+#: arkumu/metadata/templates/csv_mapping/partials/inline_external_ontology_form.html:83
+msgid "Cancel"
+msgstr ""
+
+#: arkumu/metadata/templates/csv_mapping/partials/inline_external_ontology_form.html:87
+msgid "Save Configuration"
+msgstr ""
+
+#: arkumu/metadata/templates/csv_mapping/partials/mapping_save_section.html:10
+msgid "Update Mapping"
+msgstr ""
+
+#: arkumu/metadata/templates/csv_mapping/partials/mapping_save_section.html:10
+msgid "Quick Save"
+msgstr ""
+
+#: arkumu/metadata/templates/csv_mapping/partials/mapping_save_section.html:21
+msgid "Enter mapping name..."
+msgstr ""
+
+#: arkumu/metadata/templates/csv_mapping/partials/mapping_save_section.html:48
+#: arkumu/metadata/views/csv_mapping/views/mapping_validation_views.py:87
+#: arkumu/metadata/views/csv_mapping/views/mapping_validation_views.py:96
+#: arkumu/metadata/views/csv_mapping/views/mapping_validation_views.py:105
+#: arkumu/metadata/views/csv_mapping/views/mapping_validation_views.py:113
+msgid "Update"
+msgstr ""
+
+#: arkumu/metadata/templates/csv_mapping/partials/mapping_save_section.html:48
+#: arkumu/metadata/views/csv_mapping/views/mapping_validation_views.py:87
+#: arkumu/metadata/views/csv_mapping/views/mapping_validation_views.py:96
+#: arkumu/metadata/views/csv_mapping/views/mapping_validation_views.py:105
+#: arkumu/metadata/views/csv_mapping/views/mapping_validation_views.py:113
+msgid "Save"
 msgstr ""
 
 #: arkumu/metadata/validators.py:16 arkumu/metadata/validators.py:246
@@ -143,64 +207,35 @@ msgstr ""
 msgid "GeoJSON must have a \"type\" field"
 msgstr ""
 
-#: arkumu/templates/account/login.html:7
-#: arkumu/templates/account/login.html:14
-#: arkumu/templates/account/login.html:61
+#: arkumu/metadata/views/csv_mapping/views/mapping_validation_views.py:89
+msgid "Enter mapping name"
+msgstr ""
+
+#: arkumu/metadata/views/csv_mapping/views/mapping_validation_views.py:98
+msgid "Name already exists"
+msgstr ""
+
+#: arkumu/metadata/views/csv_mapping/views/mapping_validation_views.py:107
+msgid "Workspace is empty"
+msgstr ""
+
+#: arkumu/templates/account/login.html:7 arkumu/templates/account/login.html:14
+#: arkumu/templates/account/login.html:34
 #: arkumu/templates/allauth/layouts/entrance.html:8
-#: arkumu/templates/base.html:57 arkumu/templates/base.html:138
-#: arkumu/templates/pages/home.html:40
+#: arkumu/templates/base.html:63 arkumu/templates/base.html:143
+#: arkumu/templates/base.html:178 arkumu/templates/base.html:190
 msgid "Sign In"
 msgstr ""
 
-#: arkumu/templates/account/login.html:20
-#: arkumu/templates/users/shibboleth_login.html:6
-#: arkumu/templates/users/shibboleth_login.html:13
-msgid "Institutional Login"
-msgstr ""
-
-#: arkumu/templates/account/login.html:22
-msgid ""
-"If you are affiliated with a university, please use your institutional login "
-"credentials."
-msgstr ""
-
-#: arkumu/templates/account/login.html:32
-msgid "Local Account Login"
-msgstr ""
-
-#: arkumu/templates/account/login.html:37
-msgid "Please sign in with one of your existing third party accounts:"
-msgstr ""
-
-#: arkumu/templates/account/login.html:43
-msgid "or"
-msgstr ""
-
-#: arkumu/templates/account/login.html:58
-msgid "Forgot Password?"
-msgstr ""
-
-#: arkumu/templates/account/login.html:68
-msgid "Don't have a local account?"
-msgstr ""
-
-#: arkumu/templates/account/login.html:70 arkumu/templates/base.html:55
-msgid "Sign Up"
-msgstr ""
-
-#: arkumu/templates/base.html:51 arkumu/templates/base.html:71
-msgid "My Profile"
-msgstr ""
-
-#: arkumu/templates/base.html:52
+#: arkumu/templates/base.html:61
 msgid "Sign Out"
 msgstr ""
 
-#: arkumu/templates/base.html:171 arkumu/templates/pages/home.html:10
+#: arkumu/templates/base.html:196 arkumu/templates/pages/home.html:10
 msgid "arkumu_title"
 msgstr "arkumu.nrw - Archives of Art and Music Universities"
 
-#: arkumu/templates/base.html:174 arkumu/templates/pages/home.html:11
+#: arkumu/templates/base.html:199 arkumu/templates/pages/home.html:11
 msgid "arkumu_intro"
 msgstr ""
 "The art and music universities in North Rhine-Westphalia possess impressive "
@@ -210,34 +245,34 @@ msgstr ""
 "development, availability, and permanent archiving of these multimedia "
 "contents."
 
-#: arkumu/templates/base.html:176 arkumu/templates/pages/home.html:47
+#: arkumu/templates/base.html:201
 msgid "arkumu_core_tasks_heading"
 msgstr "Core tasks in the implementation include:"
 
-#: arkumu/templates/base.html:178
+#: arkumu/templates/base.html:203
 msgid "arkumu_task_1"
 msgstr ""
 "Transfer of data into the state's long-term availability storage structures"
 
-#: arkumu/templates/base.html:179
+#: arkumu/templates/base.html:204
 msgid "arkumu_task_2"
 msgstr ""
 "Standardization of professional indexing and storage according to library, "
 "archival, technical, and media-aesthetic-artistic standards"
 
-#: arkumu/templates/base.html:180
+#: arkumu/templates/base.html:205
 msgid "arkumu_task_3"
 msgstr ""
 "Creation of a user-friendly web interface for artistic, scientific, and "
 "public use"
 
-#: arkumu/templates/base.html:181
+#: arkumu/templates/base.html:206
 msgid "arkumu_task_4"
 msgstr ""
 "Multimedia-experienceable documentation of the excellent level of culture "
 "and science in NRW"
 
-#: arkumu/templates/base.html:184 arkumu/templates/pages/home.html:88
+#: arkumu/templates/base.html:209
 msgid "arkumu_consortium"
 msgstr ""
 "arkumu.nrw is a consortium project of the Folkwang University of the Arts "
@@ -248,25 +283,10 @@ msgstr ""
 "Library Service Centre. A future expansion of the consortium to include "
 "other interested universities or departments is explicitly desired."
 
-#: arkumu/templates/pages/home.html:52
-msgid "arkumu_task_1_title"
-msgstr "Organization Storage"
-
-#: arkumu/templates/pages/home.html:60
-msgid "arkumu_task_2_title"
-msgstr "Optimized Uploads"
-
-#: arkumu/templates/pages/home.html:68
-msgid "arkumu_task_3_title"
-msgstr "Metadata Management"
-
-#: arkumu/templates/pages/home.html:76
-msgid "arkumu_task_4_title"
-msgstr "Archive Management"
-
-#: arkumu/templates/pages/home.html:86
-msgid "arkumu_consortium_title"
-msgstr "About the Consortium"
+#: arkumu/templates/users/shibboleth_login.html:6
+#: arkumu/templates/users/shibboleth_login.html:13
+msgid "Institutional Login"
+msgstr ""
 
 #: arkumu/templates/users/shibboleth_login.html:19
 msgid "Enter your institutional credentials to sign in."
@@ -325,3 +345,18 @@ msgstr ""
 #: config/settings/base.py:35
 msgid "French"
 msgstr ""
+
+#~ msgid "arkumu_task_1_title"
+#~ msgstr "Organization Storage"
+
+#~ msgid "arkumu_task_2_title"
+#~ msgstr "Optimized Uploads"
+
+#~ msgid "arkumu_task_3_title"
+#~ msgstr "Metadata Management"
+
+#~ msgid "arkumu_task_4_title"
+#~ msgstr "Archive Management"
+
+#~ msgid "arkumu_consortium_title"
+#~ msgstr "About the Consortium"
