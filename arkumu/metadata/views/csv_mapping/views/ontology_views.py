@@ -115,6 +115,21 @@ class ToggleExternalOntologyFormView(GeneralLoginRequiredMixin, OrganizationMixi
                     'example': '0000000121032683',
                     'description': 'International Standard Name Identifier'
                 },
+                # ... im Dictionary ontology_presets ergänzen:
+                'lido': {
+                    'name': 'LIDO Terminology',
+                    'uri_template': 'http://terminology.lido-schema.org/{identifier}',
+                    'identifier_pattern': r'^[a-zA-Z][a-zA-Z0-9_]*$',
+                    'example': 'eventType',
+                    'description': 'LIDO Terminology für Museumsdaten'
+                },
+                'filmportal_vocnet': {
+                    'name': 'Filmportal vocnet',
+                    'uri_template': 'https://filmportal.vocnet.org/category/{identifier}',
+                    'identifier_pattern': r'^[a-zA-Z][a-zA-Z0-9_]*$',
+                    'example': 'director',
+                    'description': 'Filmportal vocnet Vokabular'
+                },
                 
                 # === VOCABULARIES / ONTOLOGIES ===
                 'dublin_core': {
