@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-06-25 10:16+0000\n"
+"POT-Creation-Date: 2025-06-26 09:24+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -31,6 +31,18 @@ msgstr ""
 
 #: arkumu/metadata/models/resource.py:10
 msgid "Literal"
+msgstr ""
+
+#: arkumu/metadata/models/resource.py:15
+msgid "Private - Organization only"
+msgstr ""
+
+#: arkumu/metadata/models/resource.py:16
+msgid "Restricted - Authenticated users only"
+msgstr ""
+
+#: arkumu/metadata/models/resource.py:17
+msgid "Public - Catalog display allowed"
 msgstr ""
 
 #: arkumu/metadata/templates/csv_mapping/partials/inline_external_ontology_form.html:8
@@ -82,18 +94,18 @@ msgid "Enter mapping name..."
 msgstr ""
 
 #: arkumu/metadata/templates/csv_mapping/partials/mapping_save_section.html:48
-#: arkumu/metadata/views/csv_mapping/views/mapping_validation_views.py:87
-#: arkumu/metadata/views/csv_mapping/views/mapping_validation_views.py:96
-#: arkumu/metadata/views/csv_mapping/views/mapping_validation_views.py:105
-#: arkumu/metadata/views/csv_mapping/views/mapping_validation_views.py:113
+#: arkumu/metadata/views/csv_mapping/views/mapping_validation_views.py:88
+#: arkumu/metadata/views/csv_mapping/views/mapping_validation_views.py:97
+#: arkumu/metadata/views/csv_mapping/views/mapping_validation_views.py:106
+#: arkumu/metadata/views/csv_mapping/views/mapping_validation_views.py:114
 msgid "Update"
 msgstr ""
 
 #: arkumu/metadata/templates/csv_mapping/partials/mapping_save_section.html:48
-#: arkumu/metadata/views/csv_mapping/views/mapping_validation_views.py:87
-#: arkumu/metadata/views/csv_mapping/views/mapping_validation_views.py:96
-#: arkumu/metadata/views/csv_mapping/views/mapping_validation_views.py:105
-#: arkumu/metadata/views/csv_mapping/views/mapping_validation_views.py:113
+#: arkumu/metadata/views/csv_mapping/views/mapping_validation_views.py:88
+#: arkumu/metadata/views/csv_mapping/views/mapping_validation_views.py:97
+#: arkumu/metadata/views/csv_mapping/views/mapping_validation_views.py:106
+#: arkumu/metadata/views/csv_mapping/views/mapping_validation_views.py:114
 msgid "Save"
 msgstr ""
 
@@ -207,35 +219,35 @@ msgstr ""
 msgid "GeoJSON must have a \"type\" field"
 msgstr ""
 
-#: arkumu/metadata/views/csv_mapping/views/mapping_validation_views.py:89
+#: arkumu/metadata/views/csv_mapping/views/mapping_validation_views.py:90
 msgid "Enter mapping name"
 msgstr ""
 
-#: arkumu/metadata/views/csv_mapping/views/mapping_validation_views.py:98
+#: arkumu/metadata/views/csv_mapping/views/mapping_validation_views.py:99
 msgid "Name already exists"
 msgstr ""
 
-#: arkumu/metadata/views/csv_mapping/views/mapping_validation_views.py:107
+#: arkumu/metadata/views/csv_mapping/views/mapping_validation_views.py:108
 msgid "Workspace is empty"
 msgstr ""
 
 #: arkumu/templates/account/login.html:7 arkumu/templates/account/login.html:14
 #: arkumu/templates/account/login.html:34
 #: arkumu/templates/allauth/layouts/entrance.html:8
-#: arkumu/templates/base.html:63 arkumu/templates/base.html:143
-#: arkumu/templates/base.html:178 arkumu/templates/base.html:190
+#: arkumu/templates/base.html:64 arkumu/templates/base.html:145
+#: arkumu/templates/base.html:180 arkumu/templates/base.html:192
 msgid "Sign In"
 msgstr ""
 
-#: arkumu/templates/base.html:61
+#: arkumu/templates/base.html:62
 msgid "Sign Out"
 msgstr ""
 
-#: arkumu/templates/base.html:196 arkumu/templates/pages/home.html:10
+#: arkumu/templates/base.html:198 arkumu/templates/pages/home.html:10
 msgid "arkumu_title"
 msgstr "arkumu.nrw - Archives of Art and Music Universities"
 
-#: arkumu/templates/base.html:199 arkumu/templates/pages/home.html:11
+#: arkumu/templates/base.html:201 arkumu/templates/pages/home.html:11
 msgid "arkumu_intro"
 msgstr ""
 "The art and music universities in North Rhine-Westphalia possess impressive "
@@ -245,34 +257,34 @@ msgstr ""
 "development, availability, and permanent archiving of these multimedia "
 "contents."
 
-#: arkumu/templates/base.html:201
+#: arkumu/templates/base.html:203
 msgid "arkumu_core_tasks_heading"
 msgstr "Core tasks in the implementation include:"
 
-#: arkumu/templates/base.html:203
+#: arkumu/templates/base.html:205
 msgid "arkumu_task_1"
 msgstr ""
 "Transfer of data into the state's long-term availability storage structures"
 
-#: arkumu/templates/base.html:204
+#: arkumu/templates/base.html:206
 msgid "arkumu_task_2"
 msgstr ""
 "Standardization of professional indexing and storage according to library, "
 "archival, technical, and media-aesthetic-artistic standards"
 
-#: arkumu/templates/base.html:205
+#: arkumu/templates/base.html:207
 msgid "arkumu_task_3"
 msgstr ""
 "Creation of a user-friendly web interface for artistic, scientific, and "
 "public use"
 
-#: arkumu/templates/base.html:206
+#: arkumu/templates/base.html:208
 msgid "arkumu_task_4"
 msgstr ""
 "Multimedia-experienceable documentation of the excellent level of culture "
 "and science in NRW"
 
-#: arkumu/templates/base.html:209
+#: arkumu/templates/base.html:211
 msgid "arkumu_consortium"
 msgstr ""
 "arkumu.nrw is a consortium project of the Folkwang University of the Arts "
@@ -310,11 +322,19 @@ msgstr ""
 msgid "Personal info"
 msgstr ""
 
+#: arkumu/users/admin.py:25
+msgid "Organization & Role"
+msgstr ""
+
 #: arkumu/users/admin.py:26
+msgid "Shibboleth Integration"
+msgstr ""
+
+#: arkumu/users/admin.py:38
 msgid "Permissions"
 msgstr ""
 
-#: arkumu/users/admin.py:37
+#: arkumu/users/admin.py:49
 msgid "Important dates"
 msgstr ""
 
@@ -326,7 +346,35 @@ msgstr ""
 msgid "This username has already been taken."
 msgstr ""
 
-#: arkumu/users/models.py:13
+#: arkumu/users/models.py:35
+msgid "Researcher"
+msgstr ""
+
+#: arkumu/users/models.py:36
+msgid "Media Documentarian"
+msgstr ""
+
+#: arkumu/users/models.py:37
+msgid "Manager"
+msgstr ""
+
+#: arkumu/users/models.py:38
+msgid "Super Manager"
+msgstr ""
+
+#: arkumu/users/models.py:39
+msgid "System Administrator"
+msgstr ""
+
+#: arkumu/users/models.py:43
+msgid "Local Authentication"
+msgstr ""
+
+#: arkumu/users/models.py:44
+msgid "Shibboleth Federation"
+msgstr ""
+
+#: arkumu/users/models.py:48
 msgid "Name of User"
 msgstr ""
 
