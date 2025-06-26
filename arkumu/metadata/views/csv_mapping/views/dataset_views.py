@@ -136,6 +136,12 @@ class ToggleDatasetSelectionView(GeneralLoginRequiredMixin, OrganizationMixin,
                 request, organization_id, csv_datasets
             )
             
+            # DEBUG: Log what we got from selected datasets
+            logger.info(f"🔍 DEBUG: selected_datasets_new = {selected_datasets_new}")
+            logger.info(f"🔍 DEBUG: selected_datasets_with_details count = {len(selected_datasets_with_details)}")
+            for i, ds in enumerate(selected_datasets_with_details):
+                logger.info(f"🔍 DEBUG:   {i+1}. {ds.get('name')} from {ds.get('source')}")
+            
             # ENHANCEMENT: Load full preview data for each selected dataset
             enhanced_datasets_with_details = []
             analyzer = S3DirectDataAnalyzer()
@@ -199,33 +205,21 @@ class ToggleDatasetSelectionView(GeneralLoginRequiredMixin, OrganizationMixin,
             
             # Handle different actions for pure HTMX approach
             if action == 'add' and was_added:
-                # Return only the single new dataset card for prepending with OOB badge update
-                new_dataset = None
-                for dataset in enhanced_datasets_with_details:
-                    if dataset['name'] == dataset_name:
-                        new_dataset = dataset
-                        break
+                # Return ALL dataset cards to maintain visibility of previously selected datasets
+                # This ensures that when adding a new dataset, all previously selected datasets remain visible
+                table_content = self.render_table_content_template(request, organization_id, enhanced_datasets_with_details)
                 
-                if new_dataset:
-                    single_context = {
-                        **context,
-                        'dataset': new_dataset,
-                        'dataset_selected_columns': new_dataset.get('dataset_selected_columns', [])
-                    }
-                    single_card = render_to_string('csv_mapping/partials/dataset_card.html', single_context, request=request)
-                    
-                    # Use template helper for OOB badge update (pure HTMX)
-                    badges_html = self.render_dataset_badges_template(request, organization_id)
-                    oob_updates = {'dataset-badges': badges_html}
-                    response_html = self.build_oob_response(single_card, oob_updates)
-                    
-                    return HttpResponse(response_html)
+                # Use template helper for OOB badge update (pure HTMX)
+                badges_html = self.render_dataset_badges_template(request, organization_id)
+                oob_updates = {'dataset-badges': badges_html}
+                response_html = self.build_oob_response(table_content, oob_updates)
+                
+                return HttpResponse(response_html)
             
             elif action == 'remove' and not was_added:
-                # Return empty response - HTMX will delete the target element
-                # Check if no datasets remain, show empty state
+                # When removing dataset, always return updated table content with remaining datasets
                 if not enhanced_datasets_with_details:
-                    # Use template helper for empty table content
+                    # Use template helper for empty table content when no datasets remain
                     empty_state = self.render_table_content_template(request, organization_id)
                     
                     # Use template helper for OOB badge update (pure HTMX)
@@ -235,10 +229,13 @@ class ToggleDatasetSelectionView(GeneralLoginRequiredMixin, OrganizationMixin,
                     
                     return HttpResponse(response_html)
                 else:
-                    # Just return OOB badge update
+                    # Return updated table content showing remaining selected datasets
+                    table_content = self.render_table_content_template(request, organization_id, enhanced_datasets_with_details)
+                    
+                    # Use template helper for OOB badge update (pure HTMX)
                     badges_html = self.render_dataset_badges_template(request, organization_id)
                     oob_updates = {'dataset-badges': badges_html}
-                    response_html = self.build_oob_response("", oob_updates)
+                    response_html = self.build_oob_response(table_content, oob_updates)
                     
                     return HttpResponse(response_html)
             

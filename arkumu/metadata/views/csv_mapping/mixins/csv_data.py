@@ -133,10 +133,13 @@ class CSVDataMixin:
         selected_datasets_key = f"selected_datasets_{organization_id}"
         selected_datasets = request.session.get(selected_datasets_key, [])
         
-        # Get selected datasets with details
-        selected_datasets_with_details = [
-            dataset for dataset in csv_datasets if dataset['name'] in selected_datasets
-        ]
+        # Get selected datasets with details, preserving selection order (newest first)
+        selected_datasets_with_details = []
+        for selected_name in selected_datasets:  # Iterate in selection order
+            for dataset in csv_datasets:
+                if dataset['name'] == selected_name:
+                    selected_datasets_with_details.append(dataset)
+                    break
         
         return selected_datasets, selected_datasets_with_details
     
