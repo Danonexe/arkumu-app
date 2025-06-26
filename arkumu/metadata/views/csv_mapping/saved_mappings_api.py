@@ -119,11 +119,10 @@ class SaveMappingView(GeneralLoginRequiredMixin, CSVMappingCoordinatorMixin, Vie
                         validation_result['errors'].append(f"FK relationship '{fk_id}' missing required field: {field}")
                         validation_result['is_valid'] = False
                 
-                # Check that FK references valid datasets
+                # Check that FK references valid datasets (allow missing references as warnings)
                 target_dataset = fk_config.get('target_dataset')
                 if target_dataset and target_dataset not in selected_datasets:
-                    validation_result['errors'].append(f"FK relationship '{fk_id}' references unselected dataset '{target_dataset}'")
-                    validation_result['is_valid'] = False
+                    validation_result['warnings'].append(f"FK relationship '{fk_id}' references unselected dataset '{target_dataset}' - relationship will be preserved for future use")
             
             # 4.5. Validate relationship contexts (new feature)
             relationship_contexts = mapping_config.get('relationship_contexts', {})
