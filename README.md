@@ -67,18 +67,16 @@ Column annotations help you describe what each column in your data represents an
 **Real-world example:** See the "Practical Example: Many-to-Many Relationships" section below for a clear demonstration of how to use Relationship Context in junction tables.
 
 #### 🌐 Ontology
-**What it does:** Connects your data to external standards or vocabularies.
+**What it does:** Maps your column to standardized property names or vocabularies to ensure consistent data modeling.
 
-**When to use:** When your data should follow established standards from outside organizations.
+**When to use:** When you want to use established property names or connect your data to standard vocabularies like Dublin Core, FOAF, or other ontologies.
 
-**Example:** Using standard location codes or industry classification systems.
+**Example:** Mapping a "Name" column to the standard property "foaf:name" or a "Date Created" column to "dc:created".
 
-**Arkumu Ontology (Internal):** 
-- The Arkumu ontology is crucial for creating a uniform data model across the system
-- Users can add property names that will be used in their models
-- The system parses values from existing RSH and FUK tables already in the model
-- For guidance on proper property naming and ontology usage, contact René Bialik
-- Using consistent property names ensures better integration and searchability across datasets
+**Benefits:** 
+- Ensures consistent property naming across different datasets
+- Makes your data more interoperable with other systems
+- Improves data integration and searchability
 
 ### Practical Example: Many-to-Many Relationships
 
