@@ -130,6 +130,13 @@ class ToggleExternalOntologyFormView(GeneralLoginRequiredMixin, OrganizationMixi
                     'example': 'director',
                     'description': 'Filmportal vocnet Vokabular'
                 },
+                'aat': {
+                    'name': 'AAT (Art & Architecture Thesaurus)',
+                    'uri_template': 'http://vocab.getty.edu/aat/{identifier}',
+                    'identifier_pattern': r'^\d+$',
+                    'example': '300021147',
+                    'description': 'Getty Art & Architecture Thesaurus (AAT) Vokabular'
+                },
                 
                 # === VOCABULARIES / ONTOLOGIES ===
                 'dublin_core': {
