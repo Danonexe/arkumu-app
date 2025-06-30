@@ -22,7 +22,7 @@ $ docker compose -f docker-compose.local.yml run --rm django python manage.py cr
 ```
 
 **You can access the main page at:**
-http://localhost:8080
+http://localhost:8000
 
 ## CSV Column Annotation Guide
 
