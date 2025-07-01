@@ -15,6 +15,15 @@ from arkumu.importer.services.importer.smart_bulk_updater import (
     UpdateStrategy, BulkUpdateStats, ResourceUpdate, MAX_INDEXED_VALUE_SIZE
 )
 
+@dataclass
+class FKRelationship:
+    """Foreign key relationship configuration"""
+    source_column: str
+    source_dataset: str
+    target_column: str
+    target_dataset: str
+    relationship_type: str
+
 # Note: We use vectorized Unicode normalization with Polars df.str.normalize("NFC") 
 # instead of the old per-cell normalize_string_nfc() function for better performance
 
@@ -36,7 +45,8 @@ class SmartBulkUpdaterPolars:
                  base_uri: str = "http://arkumu.org/data",
                  link_row_cells: bool = False,
                  link_topology: str = "row",
-                 multi_value_threshold: float = 0.2
+                 multi_value_threshold: float = 0.2,
+                 fk_relationships: Optional[List[FKRelationship]] = None
                  ):
         """
         Initialize the Polars-optimized smart bulk updater.
@@ -49,6 +59,7 @@ class SmartBulkUpdaterPolars:
             link_row_cells: Whether to link cells to rows
             link_topology: Topology for linking cells to rows
             multi_value_threshold: Threshold for detecting multi-value columns (0.2 = 20%)
+            fk_relationships: List of foreign key relationships to process
         """
         self.default_strategy = default_strategy
         self.timestamp_column = timestamp_column
@@ -58,6 +69,7 @@ class SmartBulkUpdaterPolars:
         self.link_row_cells = link_row_cells
         self.link_topology = link_topology
         self.multi_value_threshold = multi_value_threshold
+        self.fk_relationships = fk_relationships or []
         
         # Initialize standard RDF properties
         try:
@@ -117,65 +129,141 @@ class SmartBulkUpdaterPolars:
         
         return df.with_columns(all_columns)
 
-    def analyze_column_for_multi_values_polars(self, df: pl.DataFrame, column_name: str) -> dict:
+    def analyze_column_for_multi_values_polars(self, df: pl.DataFrame, column_name: str, 
+                                             force_multi_value: bool = False, 
+                                             separator: str = ",") -> dict:
         """
-        Simplified analysis: Disable multi-value splitting for now.
-        Import everything as single values - split later if needed.
+        Analyze a column for multi-value content using Polars vectorized operations.
+        
+        Args:
+            df: Polars DataFrame
+            column_name: Column to analyze
+            force_multi_value: Force multi-value processing regardless of detection
+            separator: Separator to check for (default: comma)
         """
         if column_name not in df.columns:
             return {"is_multi_value": False, "separator": None, "stats": {"percentage": 0.0}}
         
-        # Always return single-value for safety and simplicity
+        # If forced, return multi-value immediately
+        if force_multi_value:
+            return {
+                "is_multi_value": True,
+                "separator": separator,
+                "stats": {
+                    "percentage": 100.0,
+                    "confidence_score": 1.0,
+                    "forced": True,
+                    "total_rows": df.height
+                }
+            }
+        
+        # Get column data and filter out nulls
+        column_data = df.select(pl.col(column_name).cast(pl.Utf8)).drop_nulls()
+        
+        if column_data.height == 0:
+            return {"is_multi_value": False, "separator": None, "stats": {"percentage": 0.0}}
+        
+        # Use Polars to count rows containing the separator
+        rows_with_separator = column_data.filter(
+            pl.col(column_name).str.contains(f"\\{separator}", literal=False)
+        ).height
+        
+        # Calculate statistics
+        total_rows = column_data.height
+        percentage = (rows_with_separator / total_rows) * 100 if total_rows > 0 else 0
+        
+        # Calculate average separators per row for confidence
+        separator_counts = column_data.select(
+            pl.col(column_name).str.count_matches(f"\\{separator}", literal=False).alias("count")
+        )
+        avg_separators = separator_counts.select(pl.col("count").mean()).item()
+        
+        # Determine if this is multi-value based on threshold
+        is_multi_value = percentage >= (self.multi_value_threshold * 100)
+        confidence_score = min(percentage / 100, 1.0) if is_multi_value else 0.0
+        
         return {
-            "is_multi_value": False,
-            "separator": None,
+            "is_multi_value": is_multi_value,
+            "separator": separator if is_multi_value else None,
             "stats": {
-                "percentage": 0.0,
-                "confidence_score": 0.0,
-                "avg_commas_per_row": 0.0,
-                "total_rows": df.height,
-                "rows_with_commas": 0
+                "percentage": percentage,
+                "confidence_score": confidence_score,
+                "avg_separators_per_row": avg_separators,
+                "total_rows": total_rows,
+                "rows_with_separators": rows_with_separator
             }
         }
 
-    def analyze_dataset_multi_values_polars(self, df: pl.DataFrame) -> Dict[str, Dict[str, Any]]:
+    def analyze_dataset_multi_values_polars(self, df: pl.DataFrame, 
+                                           column_configs: Optional[Dict[str, Dict[str, Any]]] = None) -> Dict[str, Dict[str, Any]]:
         """
-        Simplified analysis: No multi-value detection - all columns treated as single-value.
+        Analyze dataset for multi-value columns using Polars vectorized operations.
+        
+        Args:
+            df: Polars DataFrame to analyze
+            column_configs: Optional column configurations from mapping system
+                          Format: {column_name: {"is_multi_value": bool, "separator": str}}
         """
         if df.height == 0:
             return {}
         
         multi_value_analysis = {}
-        for column_name in df.columns:
-            multi_value_analysis[column_name] = {
-                "is_multi_value": False,
-                "separator": None,
-                "stats": {
-                    "percentage": 0.0,
-                    "confidence_score": 0.0,
-                    "avg_commas_per_row": 0.0,
-                    "total_rows": df.height,
-                    "rows_with_commas": 0
-                }
-            }
         
-        logger.info(f"Multi-value detection disabled - all {len(df.columns)} columns treated as single-value")
+        for column_name in df.columns:
+            # Check if we have mapping configuration for this column
+            if column_configs and column_name in column_configs:
+                config = column_configs[column_name]
+                force_multi_value = config.get("is_multi_value", False)
+                separator = config.get("multi_value_separator", ",")
+                
+                analysis = self.analyze_column_for_multi_values_polars(
+                    df, column_name, force_multi_value=force_multi_value, separator=separator
+                )
+            else:
+                # Auto-detect multi-value patterns
+                analysis = self.analyze_column_for_multi_values_polars(df, column_name)
+            
+            multi_value_analysis[column_name] = analysis
+        
+        # Log analysis results
+        multi_value_columns = [col for col, analysis in multi_value_analysis.items() if analysis["is_multi_value"]]
+        if multi_value_columns:
+            logger.info(f"Multi-value analysis: {len(multi_value_columns)} columns detected as multi-value: {multi_value_columns}")
+        else:
+            logger.info(f"Multi-value analysis: all {len(df.columns)} columns treated as single-value")
+        
         return multi_value_analysis
 
     def split_cell_values_polars(self, value: str, separator: str = ",") -> List[str]:
         """
-        Simplified: No splitting - return single value as list.
+        Split cell values using the specified separator with proper cleaning.
+        
+        Args:
+            value: String value to split
+            separator: Separator to use for splitting
+            
+        Returns:
+            List of cleaned values
         """
-        return [value.strip()] if value and value.strip() else []
+        if not value or not value.strip():
+            return []
+        
+        if not separator:
+            return [value.strip()]
+        
+        # Split and clean values
+        values = [v.strip() for v in value.split(separator) if v.strip()]
+        return values
 
-    def prepare_update_data_vectorized(self, df: pl.DataFrame, dataset_name: str) -> Tuple[List[ResourceUpdate], BulkUpdateStats]:
+    def prepare_update_data_vectorized(self, df: pl.DataFrame, dataset_name: str, 
+                                       column_configs: Optional[Dict[str, Dict[str, Any]]] = None) -> Tuple[List[ResourceUpdate], BulkUpdateStats]:
         """
-        OPTIMIZED: Fully vectorized approach without multi-value complexity.
-        Much faster since no splitting logic needed.
+        OPTIMIZED: Fully vectorized approach with multi-value support when configured.
         
         Args:
             df: Polars DataFrame with CSV data
             dataset_name: Name of the dataset
+            column_configs: Optional column configurations from mapping system
             
         Returns:
             Tuple of (list of ResourceUpdate objects, BulkUpdateStats)
@@ -187,16 +275,15 @@ class SmartBulkUpdaterPolars:
         logger.debug(f"Step 1: Applying vectorized Unicode normalization")
         df_normalized = self._normalize_unicode_vectorized(df)
         
-        # STEP 2: Skip multi-value analysis (disabled)
-        logger.debug(f"Step 2: Multi-value analysis skipped (disabled)")
+        # STEP 2: Multi-value analysis with mapping configs
+        logger.debug(f"Step 2: Analyzing multi-value columns")
+        multi_value_analysis = self.analyze_dataset_multi_values_polars(df_normalized, column_configs)
         
         # STEP 3: Add row identifiers (start from 0 consistently)
         logger.debug(f"Step 3: Adding row identifiers")
         df_with_ids = df_normalized.with_row_index(name='row_id', offset=0)
         
-
-        
-        # STEP 4: Efficient conversion to updates (vectorized)
+        # STEP 4: Efficient conversion to updates (vectorized with multi-value support)
         logger.debug(f"Step 4: Converting to ResourceUpdate objects")
         updates = []
         stats = BulkUpdateStats()
@@ -215,47 +302,62 @@ class SmartBulkUpdaterPolars:
                 if column_name == 'row_id' or column_name is None:
                     continue
                 
-
-                    
                 if value is not None and str(value).strip():
                     current_value_str = str(value).strip()
                     
-                    # Vectorized truncation logic
-                    try:
-                        original_byte_size = len(current_value_str.encode('utf-8'))
-                        if original_byte_size > MAX_INDEXED_VALUE_SIZE:
-                            temp_val = current_value_str
-                            while len(temp_val.encode('utf-8')) > MAX_INDEXED_VALUE_SIZE:
-                                temp_val = temp_val[:-1]
-                            current_value_str = temp_val + "..."
-                            stats.truncated_values += 1
-                            logger.warning(
-                                f"SBU Polars: Value truncated for dataset '{dataset_name}', column '{column_name}', row_id '{safe_row_id}'. "
-                                f"Original byte size: {original_byte_size}, new byte size: {len(current_value_str.encode('utf-8'))}"
-                            )
-                    except UnicodeEncodeError:
-                        logger.warning(f"SBU Polars: Could not encode value to check size for dataset '{dataset_name}', column '{column_name}', row_id '{safe_row_id}'.")
+                    # Check if this column is multi-value
+                    column_analysis = multi_value_analysis.get(column_name, {"is_multi_value": False})
+                    is_multi_value = column_analysis.get("is_multi_value", False)
+                    separator = column_analysis.get("separator", ",")
                     
-                    # Create resource update with 1-based row ID in URI
-                    safe_column_name = slugify_uri_part(column_name)
-                    display_row_id = int(row_id_val) + 1 if str(row_id_val).isdigit() else row_id_val
-                    safe_display_row_id = slugify_uri_part(str(display_row_id))
-                    cell_uri = mint_uri(self.base_uri, self.institution, "datasets", dataset_name, safe_column_name, safe_display_row_id)
+                    # Split values if multi-value
+                    if is_multi_value:
+                        values = self.split_cell_values_polars(current_value_str, separator)
+                    else:
+                        values = [current_value_str]
                     
-
-                    
-                    update = ResourceUpdate(
-                        uri=cell_uri,
-                        new_values=[current_value_str],
-                        new_name=column_name,
-                        new_datatype="http://www.w3.org/2001/XMLSchema#string",
-                        action=UpdateStrategy.SKIP_EXISTING  # Will be determined later
-                    )
-                    # Note: Don't count total_values_created here - count during actual execution
-                    
-                    updates.append(update)
+                    # Process each value (single or multiple)
+                    for value_item in values:
+                        if not value_item or not value_item.strip():
+                            continue
+                            
+                        value_str = value_item.strip()
+                        
+                        # Vectorized truncation logic
+                        try:
+                            original_byte_size = len(value_str.encode('utf-8'))
+                            if original_byte_size > MAX_INDEXED_VALUE_SIZE:
+                                temp_val = value_str
+                                while len(temp_val.encode('utf-8')) > MAX_INDEXED_VALUE_SIZE:
+                                    temp_val = temp_val[:-1]
+                                value_str = temp_val + "..."
+                                stats.truncated_values += 1
+                                logger.warning(
+                                    f"SBU Polars: Value truncated for dataset '{dataset_name}', column '{column_name}', row_id '{safe_row_id}'. "
+                                    f"Original byte size: {original_byte_size}, new byte size: {len(value_str.encode('utf-8'))}"
+                                )
+                        except UnicodeEncodeError:
+                            logger.warning(f"SBU Polars: Could not encode value to check size for dataset '{dataset_name}', column '{column_name}', row_id '{safe_row_id}'.")
+                        
+                        # Create resource update with 1-based row ID in URI
+                        safe_column_name = slugify_uri_part(column_name)
+                        display_row_id = int(row_id_val) + 1 if str(row_id_val).isdigit() else row_id_val
+                        safe_display_row_id = slugify_uri_part(str(display_row_id))
+                        cell_uri = mint_uri(self.base_uri, self.institution, "datasets", dataset_name, safe_column_name, safe_display_row_id)
+                        
+                        update = ResourceUpdate(
+                            uri=cell_uri,
+                            new_values=[value_str],
+                            new_name=column_name,
+                            new_datatype="http://www.w3.org/2001/XMLSchema#string",
+                            action=UpdateStrategy.SKIP_EXISTING,  # Will be determined later
+                            is_multi_value=is_multi_value
+                        )
+                        
+                        updates.append(update)
         
-        logger.info(f"SBU Polars: Generated {len(updates)} updates for dataset '{dataset_name}' without multi-value splitting")
+        multi_value_count = sum(1 for analysis in multi_value_analysis.values() if analysis.get("is_multi_value", False))
+        logger.info(f"SBU Polars: Generated {len(updates)} updates for dataset '{dataset_name}' with {multi_value_count} multi-value columns")
         return updates, stats
 
     def get_existing_resources_bulk(self, uris: List[str]) -> Dict[str, Resource]:
@@ -268,19 +370,21 @@ class SmartBulkUpdaterPolars:
 
     def determine_update_actions_polars(self, 
                                       df: pl.DataFrame, 
-                                      dataset_name: str) -> Tuple[List[ResourceUpdate], BulkUpdateStats]:
+                                      dataset_name: str,
+                                      column_configs: Optional[Dict[str, Dict[str, Any]]] = None) -> Tuple[List[ResourceUpdate], BulkUpdateStats]:
         """
         Determine update actions using Polars DataFrame operations.
         
         Args:
             df: Polars DataFrame with CSV data
             dataset_name: Name of the dataset
+            column_configs: Optional column configurations from mapping system
             
         Returns:
             Tuple of (list of ResourceUpdate objects, BulkUpdateStats)
         """
         # Prepare the basic update data
-        updates, action_stats = self.prepare_update_data_vectorized(df, dataset_name)
+        updates, action_stats = self.prepare_update_data_vectorized(df, dataset_name, column_configs)
         
         if not updates:
             return updates, action_stats
@@ -718,7 +822,8 @@ class SmartBulkUpdaterPolars:
     def import_csv_with_smart_updates(self,
                                     csv_data: Union[List[Dict[str, Any]], pl.DataFrame],
                                     dataset_name: str,
-                                    strategy: Optional[UpdateStrategy] = None) -> BulkUpdateStats:
+                                    strategy: Optional[UpdateStrategy] = None,
+                                    column_configs: Optional[Dict[str, Dict[str, Any]]] = None) -> BulkUpdateStats:
         """
         Import CSV data with intelligent update handling using Polars optimization.
         
@@ -726,6 +831,7 @@ class SmartBulkUpdaterPolars:
             csv_data: List of row dictionaries from CSV or Polars DataFrame
             dataset_name: Name of the dataset
             strategy: Override the default update strategy
+            column_configs: Optional column configurations from mapping system
             
         Returns:
             BulkUpdateStats with operation results
@@ -746,7 +852,7 @@ class SmartBulkUpdaterPolars:
                 return overall_stats
             
             # Use Polars-optimized processing
-            updates, action_stats = self.determine_update_actions_polars(df, dataset_name)
+            updates, action_stats = self.determine_update_actions_polars(df, dataset_name, column_configs)
             overall_stats.merge(action_stats)
             logger.info(f"Determined {len(updates)} update actions. Truncated values: {action_stats.truncated_values}")
             
@@ -964,4 +1070,146 @@ class SmartBulkUpdaterPolars:
         except Resource.DoesNotExist:
             pass
             
-        return fallback_updated_at 
+        return fallback_updated_at
+    
+    def process_fk_relationships(self, datasets: Dict[str, Union[List[Dict[str, Any]], pl.DataFrame]]) -> BulkUpdateStats:
+        """
+        Process foreign key relationships between datasets.
+        
+        Args:
+            datasets: Dictionary mapping dataset names to their data
+            
+        Returns:
+            BulkUpdateStats with FK processing results
+        """
+        if not self.fk_relationships:
+            return BulkUpdateStats()
+        
+        logger.info(f"Processing {len(self.fk_relationships)} FK relationships")
+        fk_stats = BulkUpdateStats()
+        
+        for fk_rel in self.fk_relationships:
+            try:
+                self._process_single_fk_relationship(fk_rel, datasets, fk_stats)
+            except Exception as e:
+                logger.error(f"Error processing FK relationship {fk_rel}: {e}", exc_info=True)
+                fk_stats.errors += 1
+        
+        logger.info(f"FK processing completed: {fk_stats.triples_created} relationship triples created")
+        return fk_stats
+    
+    def _process_single_fk_relationship(self, fk_rel: FKRelationship, 
+                                      datasets: Dict[str, Union[List[Dict[str, Any]], pl.DataFrame]], 
+                                      stats: BulkUpdateStats):
+        """Process a single FK relationship."""
+        
+        # Get source and target datasets
+        if fk_rel.source_dataset not in datasets or fk_rel.target_dataset not in datasets:
+            logger.warning(f"Missing dataset for FK relationship: {fk_rel}")
+            return
+        
+        source_df = self._ensure_dataframe(datasets[fk_rel.source_dataset])
+        target_df = self._ensure_dataframe(datasets[fk_rel.target_dataset])
+        
+        if fk_rel.source_column not in source_df.columns:
+            logger.warning(f"Source column '{fk_rel.source_column}' not found in dataset '{fk_rel.source_dataset}'")
+            return
+            
+        if fk_rel.target_column not in target_df.columns:
+            logger.warning(f"Target column '{fk_rel.target_column}' not found in dataset '{fk_rel.target_dataset}'")
+            return
+        
+        # Create property resource for relationship
+        relationship_prop, _ = Resource.objects.get_or_create(
+            uri=mint_uri(self.base_uri, self.institution, "properties", fk_rel.relationship_type),
+            defaults={
+                "resource_type": ResourceType.PROPERTY,
+                "name": fk_rel.relationship_type,
+                "source": self.institution,
+                "is_placeholder": False
+            }
+        )
+        
+        # Build target value lookup (target_column_value -> target_entity_uri)
+        target_lookup = {}
+        target_df_with_ids = target_df.with_row_index(name='row_id', offset=0)
+        
+        for target_row in target_df_with_ids.iter_rows(named=True):
+            target_value = target_row.get(fk_rel.target_column)
+            if target_value and str(target_value).strip():
+                target_row_id = target_row.get('row_id', 0)
+                display_row_id = int(target_row_id) + 1 if str(target_row_id).isdigit() else target_row_id
+                safe_display_row_id = slugify_uri_part(str(display_row_id))
+                safe_target_column = slugify_uri_part(fk_rel.target_column)
+                
+                # Target entity URI (using anchor column pattern)
+                target_entity_uri = mint_uri(self.base_uri, self.institution, "entities", 
+                                           fk_rel.target_dataset, str(target_value).strip())
+                target_lookup[str(target_value).strip()] = target_entity_uri
+        
+        # Process source dataset and create relationships
+        source_df_with_ids = source_df.with_row_index(name='row_id', offset=0)
+        relationship_triples = []
+        
+        for source_row in source_df_with_ids.iter_rows(named=True):
+            fk_value = source_row.get(fk_rel.source_column)
+            if fk_value and str(fk_value).strip():
+                fk_value_str = str(fk_value).strip()
+                
+                if fk_value_str in target_lookup:
+                    # Create source entity URI
+                    source_row_id = source_row.get('row_id', 0)
+                    source_anchor_value = self._get_anchor_value_for_row(source_row, fk_rel.source_dataset)
+                    source_entity_uri = mint_uri(self.base_uri, self.institution, "entities",
+                                               fk_rel.source_dataset, source_anchor_value)
+                    
+                    target_entity_uri = target_lookup[fk_value_str]
+                    
+                    # Get or create source and target entity resources
+                    source_entity, _ = Resource.objects.get_or_create(
+                        uri=source_entity_uri,
+                        defaults={
+                            "resource_type": ResourceType.IRI,
+                            "name": source_anchor_value,
+                            "source": self.institution,
+                            "is_placeholder": False
+                        }
+                    )
+                    
+                    target_entity, _ = Resource.objects.get_or_create(
+                        uri=target_entity_uri,
+                        defaults={
+                            "resource_type": ResourceType.IRI,
+                            "name": fk_value_str,
+                            "source": self.institution,
+                            "is_placeholder": True  # Target might be stub
+                        }
+                    )
+                    
+                    # Create relationship triple
+                    relationship_triples.append(
+                        Triple(
+                            subject=source_entity,
+                            predicate=relationship_prop,
+                            object=target_entity
+                        )
+                    )
+        
+        # Bulk create relationship triples
+        if relationship_triples:
+            Triple.objects.bulk_create(relationship_triples, ignore_conflicts=True)
+            stats.triples_created += len(relationship_triples)
+            stats.relationships_created += len(relationship_triples)
+            logger.info(f"Created {len(relationship_triples)} relationship triples for {fk_rel.relationship_type}")
+    
+    def _get_anchor_value_for_row(self, row_data: Dict[str, Any], dataset_name: str) -> str:
+        """Get anchor value for a row - simplified to use first available value or row ID."""
+        # Try common anchor column names first
+        for anchor_col in ['id', 'ID', 'name', 'Name']:
+            if anchor_col in row_data and row_data[anchor_col]:
+                return str(row_data[anchor_col]).strip()
+        
+        # Fall back to row_id
+        row_id = row_data.get('row_id', 'unknown')
+        display_row_id = int(row_id) + 1 if str(row_id).isdigit() else row_id
+        return str(display_row_id)
