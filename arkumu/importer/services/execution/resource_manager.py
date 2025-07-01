@@ -354,4 +354,147 @@ class ResourceManager:
     def get_existing_resources_bulk(self, uris: List[str]) -> Dict[str, Resource]:
         """Efficiently fetch existing resources for a list of URIs."""
         existing = Resource.objects.filter(uri__in=uris).select_related()
-        return {resource.uri: resource for resource in existing} 
+        return {resource.uri: resource for resource in existing}
+    
+    def generate_entity_uri(self, dataset_name: str, entity_id: str) -> str:
+        """Generate URI for an entity."""
+        safe_dataset_name = slugify_uri_part(dataset_name)
+        safe_entity_id = slugify_uri_part(str(entity_id))
+        return mint_uri(self.base_uri, self.institution, "entities", safe_dataset_name, safe_entity_id)
+    
+    def generate_junction_uri(self, dataset_name: str, primary_value: str, secondary_value: str) -> str:
+        """Generate URI for a junction entity."""
+        safe_dataset_name = slugify_uri_part(dataset_name)
+        safe_primary = slugify_uri_part(str(primary_value))
+        safe_secondary = slugify_uri_part(str(secondary_value))
+        return mint_uri(self.base_uri, self.institution, "junctions", safe_dataset_name, 
+                       f"{safe_primary}_{safe_secondary}")
+    
+    def create_entity_resource(self, entity_uri: str, dataset_name: str, is_stub: bool = False) -> Resource:
+        """Create or get an entity resource."""
+        try:
+            with transaction.atomic():
+                entity_resource, created = Resource.objects.get_or_create(
+                    uri=entity_uri,
+                    defaults={
+                        "resource_type": ResourceType.IRI,
+                        "name": entity_uri.split('/')[-1],
+                        "source": self.institution,
+                        "is_placeholder": is_stub
+                    }
+                )
+                
+                if created and self.statistics:
+                    self.statistics.current_metrics.resources_created += 1
+                    if is_stub:
+                        self.statistics.current_metrics.stub_entities_created += 1
+                
+                return entity_resource
+                
+        except Exception as e:
+            logger.error(f"Failed to create entity resource {entity_uri}: {e}")
+            raise
+    
+    def create_external_resource(self, external_uri: str, ontology_type: str) -> Resource:
+        """Create or get an external ontology resource."""
+        try:
+            with transaction.atomic():
+                external_resource, created = Resource.objects.get_or_create(
+                    uri=external_uri,
+                    defaults={
+                        "resource_type": ResourceType.IRI,
+                        "name": external_uri.split('/')[-1],
+                        "source": ontology_type,
+                        "is_placeholder": False
+                    }
+                )
+                
+                if created and self.statistics:
+                    self.statistics.current_metrics.resources_created += 1
+                
+                return external_resource
+                
+        except Exception as e:
+            logger.error(f"Failed to create external resource {external_uri}: {e}")
+            raise
+    
+    def create_property_triple(self, subject_resource: Resource, property_uri: str, 
+                             object_value: str, datatype: str) -> Triple:
+        """Create a property triple (subject -> property -> literal value)."""
+        try:
+            with transaction.atomic():
+                # Create or get property resource
+                property_resource, _ = Resource.objects.get_or_create(
+                    uri=property_uri,
+                    defaults={
+                        "resource_type": ResourceType.PROPERTY,
+                        "name": property_uri.split('/')[-1],
+                        "source": self.institution,
+                        "is_placeholder": False
+                    }
+                )
+                
+                # Create value resource if needed
+                value_uri = mint_uri(self.base_uri, self.institution, "values", 
+                                   slugify_uri_part(object_value[:50]))  # Truncate for URI
+                
+                value_resource, _ = Resource.objects.get_or_create(
+                    value=object_value,
+                    datatype=datatype,
+                    source=self.institution,
+                    defaults={
+                        "resource_type": ResourceType.LITERAL,
+                        "name": object_value[:100],  # Truncate for name
+                        "uri": value_uri,
+                        "is_placeholder": False
+                    }
+                )
+                
+                # Create the triple
+                triple, created = Triple.objects.get_or_create(
+                    subject=subject_resource,
+                    predicate=property_resource,
+                    object=value_resource
+                )
+                
+                if created and self.statistics:
+                    self.statistics.current_metrics.triples_created += 1
+                
+                return triple
+                
+        except Exception as e:
+            logger.error(f"Failed to create property triple: {e}")
+            raise
+    
+    def create_relationship_triple(self, subject_resource: Resource, property_uri: str, 
+                                 object_resource: Resource) -> Triple:
+        """Create a relationship triple (subject -> property -> object resource)."""
+        try:
+            with transaction.atomic():
+                # Create or get property resource
+                property_resource, _ = Resource.objects.get_or_create(
+                    uri=property_uri,
+                    defaults={
+                        "resource_type": ResourceType.PROPERTY,
+                        "name": property_uri.split('/')[-1],
+                        "source": self.institution,
+                        "is_placeholder": False
+                    }
+                )
+                
+                # Create the triple
+                triple, created = Triple.objects.get_or_create(
+                    subject=subject_resource,
+                    predicate=property_resource,
+                    object=object_resource
+                )
+                
+                if created and self.statistics:
+                    self.statistics.current_metrics.triples_created += 1
+                    self.statistics.current_metrics.relationships_created += 1
+                
+                return triple
+                
+        except Exception as e:
+            logger.error(f"Failed to create relationship triple: {e}")
+            raise 

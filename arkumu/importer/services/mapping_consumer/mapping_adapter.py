@@ -1,0 +1,285 @@
+"""
+Mapping Adapter
+
+Loads and adapts mapping configurations from arkumu.metadata for execution.
+"""
+
+import logging
+from typing import Dict, Any, Optional, List
+from dataclasses import dataclass
+from datetime import datetime
+
+from django.core.exceptions import ObjectDoesNotExist
+from arkumu.metadata.models.mappings import Mapping
+from .config_translator import ConfigTranslator, ExecutionConfig
+from .validation import ValidationService, ValidationResult
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class MappingInfo:
+    """Basic information about a mapping"""
+    id: int
+    name: str
+    organization: str
+    created_at: datetime
+    updated_at: datetime
+    version: str
+    datasets: List[str]
+    total_columns: int
+    fk_relationships: int
+    external_ontologies: int
+
+
+class MappingAdapter:
+    """
+    Adapts GUI mapping configurations for execution engine consumption.
+    
+    This class serves as the bridge between the CSV mapping GUI system
+    (arkumu.metadata) and the execution engine (arkumu.importer).
+    """
+    
+    def __init__(self):
+        self.config_translator = ConfigTranslator()
+        self.validation_service = ValidationService()
+        
+    def load_mapping_config(self, mapping_id: int) -> Dict[str, Any]:
+        """
+        Load mapping configuration from database.
+        
+        Args:
+            mapping_id: ID of the mapping to load
+            
+        Returns:
+            Raw mapping configuration dictionary
+            
+        Raises:
+            ObjectDoesNotExist: If mapping doesn't exist
+            ValueError: If mapping configuration is invalid
+        """
+        try:
+            mapping = Mapping.objects.get(id=mapping_id)
+            logger.info(f"Loaded mapping '{mapping.name}' (ID: {mapping_id})")
+            
+            # Parse the mapping configuration
+            config = mapping.configuration
+            if not isinstance(config, dict):
+                raise ValueError(f"Mapping {mapping_id} has invalid configuration format")
+                
+            # Add metadata
+            config['_metadata'] = {
+                'mapping_id': mapping.id,
+                'mapping_name': mapping.name,
+                'organization': mapping.organization,
+                'created_at': mapping.created_at,
+                'updated_at': mapping.updated_at,
+                'created_by': mapping.created_by.username if mapping.created_by else None
+            }
+            
+            return config
+            
+        except ObjectDoesNotExist:
+            logger.error(f"Mapping with ID {mapping_id} not found")
+            raise
+        except Exception as e:
+            logger.error(f"Failed to load mapping {mapping_id}: {e}")
+            raise ValueError(f"Failed to load mapping configuration: {e}")
+    
+    def get_mapping_info(self, mapping_id: int) -> MappingInfo:
+        """
+        Get basic information about a mapping without loading full config.
+        
+        Args:
+            mapping_id: ID of the mapping
+            
+        Returns:
+            MappingInfo object with basic metadata
+        """
+        try:
+            mapping = Mapping.objects.get(id=mapping_id)
+            config = mapping.configuration
+            
+            # Extract basic statistics
+            workspace_columns = config.get('workspace_columns', {})
+            selected_datasets = config.get('selected_datasets', [])
+            fk_relationships = config.get('fk_relationships', {})
+            external_ontologies = config.get('external_ontologies', {})
+            
+            total_columns = sum(len(columns) for columns in workspace_columns.values())
+            
+            return MappingInfo(
+                id=mapping.id,
+                name=mapping.name,
+                organization=mapping.organization,
+                created_at=mapping.created_at,
+                updated_at=mapping.updated_at,
+                version=config.get('version', '1.0'),
+                datasets=selected_datasets,
+                total_columns=total_columns,
+                fk_relationships=len(fk_relationships),
+                external_ontologies=len(external_ontologies)
+            )
+            
+        except ObjectDoesNotExist:
+            logger.error(f"Mapping with ID {mapping_id} not found")
+            raise
+    
+    def list_mappings_for_organization(self, organization: str) -> List[MappingInfo]:
+        """
+        List all mappings for an organization.
+        
+        Args:
+            organization: Organization identifier
+            
+        Returns:
+            List of MappingInfo objects
+        """
+        try:
+            mappings = Mapping.objects.filter(organization=organization).order_by('-updated_at')
+            
+            mapping_infos = []
+            for mapping in mappings:
+                try:
+                    info = self.get_mapping_info(mapping.id)
+                    mapping_infos.append(info)
+                except Exception as e:
+                    logger.warning(f"Failed to get info for mapping {mapping.id}: {e}")
+                    continue
+                    
+            logger.info(f"Found {len(mapping_infos)} mappings for organization '{organization}'")
+            return mapping_infos
+            
+        except Exception as e:
+            logger.error(f"Failed to list mappings for organization '{organization}': {e}")
+            return []
+    
+    def validate_mapping(self, mapping_id: int) -> ValidationResult:
+        """
+        Validate a mapping configuration for execution readiness.
+        
+        Args:
+            mapping_id: ID of the mapping to validate
+            
+        Returns:
+            ValidationResult with validation status and details
+        """
+        try:
+            config = self.load_mapping_config(mapping_id)
+            return self.validation_service.validate_mapping_config(config)
+            
+        except Exception as e:
+            logger.error(f"Failed to validate mapping {mapping_id}: {e}")
+            return ValidationResult(
+                is_valid=False,
+                errors=[f"Failed to load mapping: {e}"],
+                warnings=[],
+                summary="Mapping could not be loaded for validation"
+            )
+    
+    def translate_to_execution_config(self, mapping_id: int) -> ExecutionConfig:
+        """
+        Load and translate mapping to execution configuration.
+        
+        Args:
+            mapping_id: ID of the mapping to translate
+            
+        Returns:
+            ExecutionConfig object ready for execution engine
+            
+        Raises:
+            ValueError: If mapping is invalid or cannot be translated
+        """
+        # Load the mapping configuration
+        config = self.load_mapping_config(mapping_id)
+        
+        # Validate before translation
+        validation_result = self.validation_service.validate_mapping_config(config)
+        if not validation_result.is_valid:
+            error_msg = f"Mapping {mapping_id} validation failed: {'; '.join(validation_result.errors)}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        
+        # Translate to execution format
+        execution_config = self.config_translator.translate_mapping_config(config)
+        
+        logger.info(f"Successfully translated mapping {mapping_id} to execution config")
+        logger.debug(f"Execution config: {len(execution_config.datasets)} datasets, "
+                    f"{len(execution_config.column_configurations)} columns, "
+                    f"{len(execution_config.fk_relationships)} FK relationships")
+        
+        return execution_config
+    
+    def get_mapping_summary(self, mapping_id: int) -> Dict[str, Any]:
+        """
+        Get a comprehensive summary of a mapping for display purposes.
+        
+        Args:
+            mapping_id: ID of the mapping
+            
+        Returns:
+            Dictionary with mapping summary information
+        """
+        try:
+            info = self.get_mapping_info(mapping_id)
+            validation_result = self.validate_mapping(mapping_id)
+            
+            return {
+                'mapping_info': info,
+                'validation': {
+                    'is_valid': validation_result.is_valid,
+                    'error_count': len(validation_result.errors),
+                    'warning_count': len(validation_result.warnings),
+                    'summary': validation_result.summary
+                },
+                'execution_ready': validation_result.is_valid,
+                'complexity_score': self._calculate_complexity_score(info)
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to get mapping summary for {mapping_id}: {e}")
+            return {
+                'error': str(e),
+                'execution_ready': False
+            }
+    
+    def _calculate_complexity_score(self, info: MappingInfo) -> str:
+        """
+        Calculate a simple complexity score for the mapping.
+        
+        Args:
+            info: MappingInfo object
+            
+        Returns:
+            Complexity score as string ("low", "medium", "high")
+        """
+        score = 0
+        
+        # Dataset count
+        if len(info.datasets) > 3:
+            score += 2
+        elif len(info.datasets) > 1:
+            score += 1
+            
+        # Column count
+        if info.total_columns > 20:
+            score += 2
+        elif info.total_columns > 10:
+            score += 1
+            
+        # FK relationships
+        if info.fk_relationships > 5:
+            score += 2
+        elif info.fk_relationships > 0:
+            score += 1
+            
+        # External ontologies
+        if info.external_ontologies > 0:
+            score += 1
+            
+        if score >= 5:
+            return "high"
+        elif score >= 3:
+            return "medium"
+        else:
+            return "low"

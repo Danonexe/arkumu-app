@@ -53,6 +53,10 @@ class ExecutionMetrics:
     multi_value_cells_split: int = 0
     multi_value_items_created: int = 0
     
+    # Entity processing
+    stub_entities_created: int = 0
+    relationships_created: int = 0
+    
     def duration_seconds(self) -> float:
         """Calculate execution duration in seconds."""
         if self.start_time and self.end_time:
@@ -95,6 +99,10 @@ class ExecutionMetrics:
         # Multi-value
         self.multi_value_cells_split += other.multi_value_cells_split
         self.multi_value_items_created += other.multi_value_items_created
+        
+        # Entity processing
+        self.stub_entities_created += other.stub_entities_created
+        self.relationships_created += other.relationships_created
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
@@ -113,7 +121,9 @@ class ExecutionMetrics:
             'warnings': self.warnings,
             'fk_relationships_created': self.fk_relationships_created,
             'external_ontology_matches': self.external_ontology_matches,
-            'multi_value_items_created': self.multi_value_items_created
+            'multi_value_items_created': self.multi_value_items_created,
+            'stub_entities_created': self.stub_entities_created,
+            'relationships_created': self.relationships_created
         }
 
 
