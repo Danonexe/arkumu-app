@@ -4,7 +4,13 @@ from typing import Dict, List, Any, Optional
 
 import csv
 from arkumu.importer.services.importer.file_handler import FileHandler
-from arkumu.importer.services.importer.smart_bulk_updater_polars import SmartBulkUpdaterPolars as SmartBulkUpdater, UpdateStrategy, FKRelationship
+from arkumu.importer.services.importer.bulk_data_analyzer import BulkDataAnalyzer
+from arkumu.importer.services.importer.bulk_uri_service import BulkURIService
+from arkumu.importer.services.importer.bulk_update_engine import BulkUpdateEngine, BulkUpdateStats
+from arkumu.importer.services.importer.bulk_database_executor import BulkDatabaseExecutor
+from arkumu.importer.services.importer.bulk_relationship_processor import BulkRelationshipProcessor
+from arkumu.importer.services.importer.bulk_update_engine import UpdateStrategy
+from arkumu.importer.services.importer.bulk_relationship_processor import FKRelationship
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +22,12 @@ class ImportWorkflowService:
     
     def __init__(self):
         self.file_handler = FileHandler()
-        self.smart_updater = SmartBulkUpdater()
+        # Initialize modular services
+        self.data_analyzer = BulkDataAnalyzer()
+        self.uri_service = None  # Will be initialized per import with specific institution/base_uri
+        self.update_engine = BulkUpdateEngine()
+        self.database_executor = None  # Will be initialized per import with specific uri_service
+        self.relationship_processor = None  # Will be initialized per import with specific uri_service
     
     @staticmethod
     def import_csv_with_table_services(
@@ -495,23 +506,13 @@ class ImportWorkflowService:
             logger.info(f"   Auto-detected dataset name: {dataset_name}")
         
         try:
-            # Initialize smart updater
-            if use_polars:
-                logger.info(f"🚀 Using Polars-optimized SmartBulkUpdaterPolars")
-                smart_updater = SmartBulkUpdaterPolars(
-                    default_strategy=update_strategy,
-                    timestamp_column=timestamp_column,
-                    institution=institution,
-                    base_uri=base_uri
-                )
-            else:
-                logger.info(f"🚀 Using original SmartBulkUpdater")
-                smart_updater = SmartBulkUpdater(
-                    default_strategy=update_strategy,
-                    timestamp_column=timestamp_column,
-                    institution=institution,
-                    base_uri=base_uri
-                )
+            # Initialize modular services
+            logger.info(f"🚀 Using modular bulk updater services")
+            uri_service = BulkURIService(base_uri, institution)
+            data_analyzer = BulkDataAnalyzer()
+            update_engine = BulkUpdateEngine()
+            database_executor = BulkDatabaseExecutor(uri_service)
+            relationship_processor = BulkRelationshipProcessor(uri_service)
             
             # Read CSV data
             import csv
@@ -529,10 +530,14 @@ class ImportWorkflowService:
                 "strategy_used": update_strategy.value
             }
             
+            # Convert CSV data to Polars DataFrame for processing
+            import polars as pl
+            df = pl.DataFrame(csv_data)
+            
             # Perform analysis if requested
             if analyze_first:
                 logger.info(f"🔍 Analyzing dataset changes...")
-                analysis = smart_updater.analyze_dataset_changes(dataset_name, csv_data)
+                analysis = data_analyzer.analyze_dataset_changes(df, dataset_name)
                 result["analysis"] = analysis
                 
                 logger.info(f"📋 Analysis results:")
@@ -554,9 +559,12 @@ class ImportWorkflowService:
             
             # Execute the import
             logger.info(f"🔧 Executing smart bulk import...")
-            stats = smart_updater.import_csv_with_smart_updates(
-                csv_data, dataset_name, update_strategy
-            )
+            
+            # Determine update actions using the update engine
+            updates = update_engine.determine_update_actions(df, dataset_name)
+            
+            # Execute the bulk update using the database executor
+            stats = database_executor.execute_bulk_update(updates, dataset_name)
             
             # Convert stats to dict for consistent return format
             result["stats"] = {
@@ -610,14 +618,11 @@ class ImportWorkflowService:
         logger.info(f"   🔗 Link row cells: {link_row_cells}")
         logger.info(f"   🔗 Link to first column: {link_to_first_column}")
         
-        # Use SmartBulkUpdaterPolars instead of import_csv_as_cells
-        updater = SmartBulkUpdater(
-            default_strategy=UpdateStrategy.UPDATE_VALUES,
-            institution=institution,
-            base_uri=base_uri,
-            link_row_cells=link_row_cells,
-            link_topology="first_column" if link_to_first_column else "row"
-        )
+        # Use modular services instead of monolithic updater
+        uri_service = BulkURIService(base_uri, institution)
+        data_analyzer = BulkDataAnalyzer()
+        update_engine = BulkUpdateEngine()
+        database_executor = BulkDatabaseExecutor(uri_service)
         
         # Read CSV data
         csv_data = []
@@ -626,8 +631,19 @@ class ImportWorkflowService:
             reader = csv.DictReader(f, delimiter=delimiter, quoting=quoting)
             csv_data = list(reader)
         
-        # Process with SmartBulkUpdaterPolars
-        bulk_stats = updater.import_csv_with_smart_updates(csv_data, dataset_name)
+        # Convert to Polars DataFrame and process with modular services
+        import polars as pl
+        df = pl.DataFrame(csv_data)
+        
+        # Configure link topology
+        link_topology = "first_column" if link_to_first_column else "row"
+        
+        # Determine update actions and execute
+        updates, determine_stats = update_engine.determine_update_actions(df, dataset_name)
+        bulk_stats = database_executor.execute_bulk_update(updates, dataset_name)
+        
+        # Merge stats from different phases
+        bulk_stats.merge(determine_stats)
         
         # Convert BulkUpdateStats to dict format expected by import_workflow
         stats = {
@@ -723,13 +739,12 @@ class ImportWorkflowService:
         for i, fk_rel in enumerate(fk_relationships, 1):
             logger.info(f"   {i}. Column '{fk_rel.source_column}' → {fk_rel.target_dataset}.{fk_rel.target_column}")
         
-        # Use SmartBulkUpdaterPolars for relationship processing
-        updater = SmartBulkUpdater(
-            default_strategy=UpdateStrategy.UPDATE_VALUES,
-            institution=institution,
-            base_uri=base_uri,
-            fk_relationships=fk_relationships
-        )
+        # Use modular services for relationship processing
+        uri_service = BulkURIService(base_uri, institution)
+        data_analyzer = BulkDataAnalyzer()
+        update_engine = BulkUpdateEngine()
+        database_executor = BulkDatabaseExecutor(uri_service)
+        relationship_processor = BulkRelationshipProcessor(uri_service)
         
         # Read CSV data
         csv_data = []
@@ -738,12 +753,17 @@ class ImportWorkflowService:
             reader = csv.DictReader(f, delimiter=delimiter, quoting=quoting)
             csv_data = list(reader)
         
+        # Convert to Polars DataFrame
+        import polars as pl
+        df = pl.DataFrame(csv_data)
+        
         # Process the relationship CSV with regular import first
-        bulk_stats = updater.import_csv_with_smart_updates(csv_data, dataset_name)
+        updates = update_engine.determine_update_actions(df, dataset_name)
+        bulk_stats = database_executor.execute_bulk_update(updates, dataset_name)
         
         # Process FK relationships
-        datasets = {dataset_name: csv_data}
-        fk_stats = updater.process_fk_relationships(datasets)
+        datasets = {dataset_name: df}
+        fk_stats = relationship_processor.process_fk_relationships(datasets, fk_relationships)
         
         # Convert to expected dict format
         stats = {

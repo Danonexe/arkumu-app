@@ -5,7 +5,11 @@ from dataclasses import dataclass
 from enum import Enum
 from datetime import datetime
 
-from arkumu.importer.services.importer.smart_bulk_updater_polars import SmartBulkUpdaterPolars as SmartBulkUpdater, UpdateStrategy, BulkUpdateStats
+from arkumu.importer.services.importer.bulk_data_analyzer import BulkDataAnalyzer
+from arkumu.importer.services.importer.bulk_uri_service import BulkURIService
+from arkumu.importer.services.importer.bulk_database_executor import BulkDatabaseExecutor
+from arkumu.importer.services.importer.bulk_relationship_processor import BulkRelationshipProcessor
+from arkumu.importer.services.importer.bulk_update_engine import UpdateStrategy, BulkUpdateStats, BulkUpdateEngine
 from arkumu.importer.services.importer.uri_utils import mint_uri, slugify_uri_part
 
 logger = logging.getLogger(__name__)
@@ -49,7 +53,12 @@ class GUIMappingProcessor:
                  default_strategy: UpdateStrategy = UpdateStrategy.SKIP_EXISTING):
         self.base_uri = base_uri
         self.default_strategy = default_strategy
-        self.bulk_updater = None  # Will be initialized per import
+        # Initialize modular services (will be configured per import)
+        self.data_analyzer = None
+        self.uri_service = None
+        self.update_engine = None
+        self.database_executor = None
+        self.relationship_processor = None
         
     def analyze_gui_mapping_config(self, mapping_config: Dict[str, Any]) -> MappingExecutionPlan:
         """
@@ -129,16 +138,22 @@ class GUIMappingProcessor:
         """
         logger.info(f"Starting GUI mapping processing for {dataset_name} with {len(csv_data)} rows")
         
-        # Initialize bulk updater for this import
+        # Initialize modular services for this import
         import_strategy = mapping_config.get('import_strategy', {})
-        self.bulk_updater = SmartBulkUpdater(
-            default_strategy=self._convert_import_strategy(import_strategy),
-            institution=organization_id,
-            base_uri=self.base_uri,
-            link_row_cells=import_strategy.get('link_topology') != 'none',
-            link_topology=import_strategy.get('link_topology', 'row'),
+        update_strategy = self._convert_import_strategy(import_strategy)
+        
+        self.data_analyzer = BulkDataAnalyzer(
             multi_value_threshold=import_strategy.get('multi_value_threshold', 0.2)
         )
+        self.uri_service = BulkURIService(self.base_uri, organization_id)
+        self.update_engine = BulkUpdateEngine()
+        self.database_executor = BulkDatabaseExecutor(self.uri_service)
+        self.relationship_processor = BulkRelationshipProcessor(self.uri_service)
+        
+        # Store import configuration for use in processing phases
+        self.link_row_cells = import_strategy.get('link_topology') != 'none'
+        self.link_topology = import_strategy.get('link_topology', 'row')
+        self.update_strategy = update_strategy
         
         # Analyze and create execution plan
         execution_plan = self.analyze_gui_mapping_config(mapping_config)
@@ -229,9 +244,16 @@ class GUIMappingProcessor:
             if filtered_row:  # Only include rows with anchor data
                 filtered_data.append(filtered_row)
         
-        # Use SmartBulkUpdater to create anchor entities
-        stats = self.bulk_updater.import_csv_with_smart_updates(
-            filtered_data, f"{dataset_name}_anchors", UpdateStrategy.SKIP_EXISTING
+        # Convert to Polars DataFrame and use modular services
+        import polars as pl
+        df = pl.DataFrame(filtered_data)
+        
+        # Use modular services to create anchor entities
+        updates = self.update_engine.determine_update_actions(df, f"{dataset_name}_anchors")
+        stats = self.database_executor.execute_bulk_update(
+            updates, f"{dataset_name}_anchors",
+            link_row_cells=self.link_row_cells,
+            link_topology=self.link_topology
         )
         
         return {
@@ -258,9 +280,16 @@ class GUIMappingProcessor:
             if filtered_row:
                 filtered_data.append(filtered_row)
         
-        # Use SmartBulkUpdater with multi-value detection
-        stats = self.bulk_updater.import_csv_with_smart_updates(
-            filtered_data, f"{dataset_name}_literals", self.default_strategy
+        # Convert to Polars DataFrame and use modular services with multi-value detection
+        import polars as pl
+        df = pl.DataFrame(filtered_data)
+        
+        # Use modular services with multi-value detection
+        updates = self.update_engine.determine_update_actions(df, f"{dataset_name}_literals")
+        stats = self.database_executor.execute_bulk_update(
+            updates, f"{dataset_name}_literals",
+            link_row_cells=self.link_row_cells,
+            link_topology=self.link_topology
         )
         
         return {
