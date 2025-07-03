@@ -3,7 +3,7 @@ import polars as pl
 from unittest.mock import Mock, patch, MagicMock
 from arkumu.metadata.models import Resource, Triple
 from arkumu.metadata.models.resource import ResourceType
-from arkumu.importer.services.importer.smart_bulk_updater import UpdateStrategy
+from arkumu.importer.services.importer.smart_bulk_updater_polars import UpdateStrategy
 from arkumu.importer.services.execution.execution_engine import MappingExecutionEngine
 from arkumu.importer.services.execution.statistics import ExecutionMetrics
 

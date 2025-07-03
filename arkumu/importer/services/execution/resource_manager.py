@@ -11,7 +11,7 @@ from arkumu.metadata.models import Resource
 from arkumu.metadata.models.resource import ResourceType
 from arkumu.metadata.models.triples import Triple
 from arkumu.importer.services.importer.uri_utils import mint_uri, slugify_uri_part
-from arkumu.importer.services.importer.smart_bulk_updater import MAX_INDEXED_VALUE_SIZE
+from arkumu.importer.services.importer.smart_bulk_updater_polars import MAX_INDEXED_VALUE_SIZE
 from .statistics import ExecutionStatistics
 
 logger = logging.getLogger(__name__)

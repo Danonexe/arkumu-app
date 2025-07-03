@@ -20,7 +20,7 @@ import tempfile
 import os
 
 from arkumu.storage.services.bucket_service import BucketService
-from arkumu.importer.services.importer.smart_bulk_updater import SmartBulkUpdater
+from arkumu.importer.services.importer.smart_bulk_updater_polars import SmartBulkUpdaterPolars
 from arkumu.metadata.services.relationship_discovery import RelationshipDiscoveryService
 
 logger = logging.getLogger(__name__)
@@ -90,7 +90,7 @@ class S3DirectDataAnalyzer:
         
         # Initialize services for S3 access and analysis
         self.bucket_service = BucketService()
-        self.bulk_updater = SmartBulkUpdater()
+        self.bulk_updater = SmartBulkUpdaterPolars()
         self.relationship_service = RelationshipDiscoveryService()
     
     def discover_s3_data_sources(self, organization_id: str) -> List[S3DataSourceInfo]:

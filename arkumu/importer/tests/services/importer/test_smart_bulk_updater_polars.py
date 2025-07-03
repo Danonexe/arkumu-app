@@ -4,7 +4,7 @@ from typing import List, Dict, Any
 from arkumu.metadata.models import Resource, Triple
 from arkumu.metadata.models.resource import ResourceType
 from arkumu.importer.services.importer.smart_bulk_updater_polars import SmartBulkUpdaterPolars
-from arkumu.importer.services.importer.smart_bulk_updater import SmartBulkUpdater, UpdateStrategy, BulkUpdateStats
+from arkumu.importer.services.importer.smart_bulk_updater_polars import UpdateStrategy, BulkUpdateStats
 from arkumu.importer.services.importer.uri_utils import mint_uri, slugify_uri_part
 
 # Standard vocabulary URIs

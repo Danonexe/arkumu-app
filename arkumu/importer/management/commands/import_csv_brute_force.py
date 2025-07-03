@@ -1,7 +1,8 @@
 import os
 import json
+import csv
 from django.core.management.base import BaseCommand, CommandError
-from arkumu.importer.services.importer.bulk_import import import_csv_as_cells, import_relationship_csv
+from arkumu.importer.services.importer.smart_bulk_updater_polars import SmartBulkUpdaterPolars, UpdateStrategy, FKRelationship
 
 
 class Command(BaseCommand):
@@ -64,24 +65,79 @@ class Command(BaseCommand):
             
             # Import based on table type
             if is_relationship:
-                stats = import_relationship_csv(
-                    file_path,
-                    dataset_name,
-                    fk_columns,
+                # Create FK relationships for SmartBulkUpdaterPolars
+                fk_relationships = []
+                for fk_col in fk_columns:
+                    fk_relationships.append(FKRelationship(
+                        source_column=fk_col["column"],
+                        source_dataset=dataset_name,
+                        target_column=fk_col["target_column"],
+                        target_dataset=fk_col["target_table"],
+                        relationship_type="relation"
+                    ))
+                
+                # Use SmartBulkUpdaterPolars for relationship processing
+                updater = SmartBulkUpdaterPolars(
+                    default_strategy=UpdateStrategy.UPDATE_VALUES,
                     institution=institution,
                     base_uri=base_uri,
-                    delimiter=delimiter,
-                    has_quoted_fields=has_quoted_fields
+                    fk_relationships=fk_relationships
                 )
+                
+                # Read CSV data
+                csv_data = []
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    quoting = csv.QUOTE_ALL if has_quoted_fields else csv.QUOTE_MINIMAL
+                    reader = csv.DictReader(f, delimiter=delimiter, quoting=quoting)
+                    csv_data = list(reader)
+                
+                # Process with SmartBulkUpdaterPolars
+                bulk_stats = updater.import_csv_with_smart_updates(csv_data, dataset_name)
+                
+                # Convert BulkUpdateStats to dict format expected by this command
+                stats = {
+                    "rows_processed": bulk_stats.rows_processed,
+                    "cells_processed": bulk_stats.cells_processed,
+                    "resources_created": bulk_stats.resources_created,
+                    "triples_created": bulk_stats.triples_created,
+                    "relationships_created": bulk_stats.relationships_created,
+                    "errors": bulk_stats.errors
+                }
+                
+                # Process FK relationships separately
+                datasets = {dataset_name: csv_data}
+                fk_stats = updater.process_fk_relationships(datasets)
+                stats["relationships_created"] += fk_stats.relationships_created
+                
             else:
-                stats = import_csv_as_cells(
-                    file_path,
-                    dataset_name,
+                # Use SmartBulkUpdaterPolars for regular CSV import
+                updater = SmartBulkUpdaterPolars(
+                    default_strategy=UpdateStrategy.UPDATE_VALUES,
                     institution=institution,
                     base_uri=base_uri,
-                    delimiter=delimiter,
-                    has_quoted_fields=has_quoted_fields
+                    link_row_cells=True,
+                    link_topology="row"
                 )
+                
+                # Read CSV data
+                csv_data = []
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    quoting = csv.QUOTE_ALL if has_quoted_fields else csv.QUOTE_MINIMAL
+                    reader = csv.DictReader(f, delimiter=delimiter, quoting=quoting)
+                    csv_data = list(reader)
+                
+                # Process with SmartBulkUpdaterPolars
+                bulk_stats = updater.import_csv_with_smart_updates(csv_data, dataset_name)
+                
+                # Convert BulkUpdateStats to dict format expected by this command
+                stats = {
+                    "rows_processed": bulk_stats.rows_processed,
+                    "cells_processed": bulk_stats.cells_processed,
+                    "resources_created": bulk_stats.resources_created,
+                    "triples_created": bulk_stats.triples_created,
+                    "row_links_created": bulk_stats.row_links_created,
+                    "errors": bulk_stats.errors
+                }
             
             # Update total stats
             total_stats["files_processed"] += 1

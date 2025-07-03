@@ -47,17 +47,35 @@ def setup_django():
 @pytest.mark.django_db(transaction=True)
 def test_with_row_resources_and_linking(test_csv):
     """Test with row resources and linking enabled"""
-    from arkumu.importer.services.importer.bulk_import import import_csv_as_cells
+    from arkumu.importer.services.importer.smart_bulk_updater_polars import SmartBulkUpdaterPolars, UpdateStrategy
+    import csv
+    
+    # Read CSV data
+    csv_data = []
+    with open(test_csv, 'r', encoding='utf-8') as f:
+        reader = csv.DictReader(f, delimiter=';')
+        csv_data = list(reader)
     
     # Test with row resources and linking enabled
-    stats = import_csv_as_cells(
-        csv_file_path=test_csv,
-        dataset_name="test_dataset_with_rows",
+    updater = SmartBulkUpdaterPolars(
+        default_strategy=UpdateStrategy.UPDATE_VALUES,
         institution="TEST",
-        create_row_resources=True,
-        link_cells_to_rows=True,
-        batch_size=10
+        link_row_cells=True,
+        link_topology="row"
     )
+    
+    bulk_stats = updater.import_csv_with_smart_updates(csv_data, "test_dataset_with_rows")
+    
+    # Convert to expected dict format
+    stats = {
+        "rows_processed": bulk_stats.rows_processed,
+        "cells_processed": bulk_stats.cells_processed,
+        "resources_created": bulk_stats.resources_created,
+        "triples_created": bulk_stats.triples_created,
+        "row_links_created": bulk_stats.row_links_created,
+        "errors": bulk_stats.errors,
+        "truncated_values": bulk_stats.truncated_values
+    }
     
     # Print stats to debug
     print(f"Import stats: {stats}")
@@ -73,17 +91,35 @@ def test_with_row_resources_and_linking(test_csv):
 @pytest.mark.django_db(transaction=True)
 def test_without_row_resources(test_csv):
     """Test without row resources (cells only)"""
-    from arkumu.importer.services.importer.bulk_import import import_csv_as_cells
+    from arkumu.importer.services.importer.smart_bulk_updater_polars import SmartBulkUpdaterPolars, UpdateStrategy
+    import csv
+    
+    # Read CSV data
+    csv_data = []
+    with open(test_csv, 'r', encoding='utf-8') as f:
+        reader = csv.DictReader(f, delimiter=';')
+        csv_data = list(reader)
     
     # Test without row resources
-    stats = import_csv_as_cells(
-        csv_file_path=test_csv,
-        dataset_name="test_dataset_cells_only",
+    updater = SmartBulkUpdaterPolars(
+        default_strategy=UpdateStrategy.UPDATE_VALUES,
         institution="TEST",
-        create_row_resources=False,
-        link_cells_to_rows=False,
-        batch_size=10
+        link_row_cells=False,
+        link_topology="row"
     )
+    
+    bulk_stats = updater.import_csv_with_smart_updates(csv_data, "test_dataset_cells_only")
+    
+    # Convert to expected dict format
+    stats = {
+        "rows_processed": bulk_stats.rows_processed,
+        "cells_processed": bulk_stats.cells_processed,
+        "resources_created": bulk_stats.resources_created,
+        "triples_created": bulk_stats.triples_created,
+        "row_links_created": bulk_stats.row_links_created,
+        "errors": bulk_stats.errors,
+        "truncated_values": bulk_stats.truncated_values
+    }
     
     # Print stats to debug
     print(f"Import stats (cells only): {stats}")

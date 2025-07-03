@@ -4,7 +4,7 @@ import logging
 import pytest
 
 from arkumu.importer.services.importer.import_workflow import ImportWorkflowService
-from arkumu.importer.services.importer.smart_bulk_updater import UpdateStrategy
+from arkumu.importer.services.importer.smart_bulk_updater_polars import UpdateStrategy
 from arkumu.metadata.models.resource import Resource
 from arkumu.metadata.models.triples import Triple
 

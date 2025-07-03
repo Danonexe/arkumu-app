@@ -118,7 +118,7 @@ from typing import Dict, List, Any
 from arkumu.metadata.models.mappings import Mapping
 from arkumu.metadata.services.data_analysis.s3_direct_data_analyzer import S3DirectDataAnalyzer
 from arkumu.importer.services.importer.smart_bulk_updater_polars import SmartBulkUpdaterPolars
-from arkumu.importer.services.importer.smart_bulk_updater import UpdateStrategy
+from arkumu.importer.services.importer.smart_bulk_updater_polars import UpdateStrategy
 from arkumu.metadata.views.csv_mapping.mixins.coordinator import CSVMappingCoordinatorMixin
 from arkumu.metadata.views.csv_mapping.mixins.base import OrganizationMixin
 
@@ -346,7 +346,7 @@ class ExecuteGUIMappingView(GeneralLoginRequiredMixin, OrganizationMixin, CSVMap
                 except Exception as e:
                     logger.error(f"Error processing dataset {dataset}: {str(e)}")
                     if combined_stats is None:
-                        from arkumu.importer.services.importer.smart_bulk_updater import BulkUpdateStats
+                        from arkumu.importer.services.importer.smart_bulk_updater_polars import BulkUpdateStats
                         combined_stats = BulkUpdateStats()
                     combined_stats.errors += 1
         

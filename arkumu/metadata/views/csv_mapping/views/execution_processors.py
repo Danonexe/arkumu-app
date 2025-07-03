@@ -17,7 +17,7 @@ from typing import Dict, List, Any, Optional
 
 from arkumu.metadata.models import Resource, Triple
 from arkumu.metadata.models.resource import ResourceType
-from arkumu.importer.services.importer.smart_bulk_updater import BulkUpdateStats, UpdateStrategy
+from arkumu.importer.services.importer.smart_bulk_updater_polars import BulkUpdateStats, UpdateStrategy
 from arkumu.importer.services.importer.smart_bulk_updater_polars import SmartBulkUpdaterPolars
 from arkumu.importer.services.importer.uri_utils import mint_uri, slugify_uri_part
 from arkumu.importer.services.importer.entity_centric_processor import EntityCentricMappingProcessor
@@ -432,7 +432,7 @@ class ContextProcessor:
         # TODO: Implement proper junction table processing
         # For now, use standard processing but this could be enhanced
         # to create proper junction entities and linking triples
-        from arkumu.importer.services.importer.smart_bulk_updater import UpdateStrategy
+        from arkumu.importer.services.importer.smart_bulk_updater_polars import UpdateStrategy
         
         strategy_map = {
             'SKIP_EXISTING': UpdateStrategy.SKIP_EXISTING,

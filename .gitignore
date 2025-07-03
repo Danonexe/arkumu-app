@@ -293,3 +293,7 @@ theme/static/css/output.css
 
 # Markdown notes
 md_notes/
+
+#.md instructions
+CLAUDE.md
+cursor.md

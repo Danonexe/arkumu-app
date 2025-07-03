@@ -1,8 +1,9 @@
 import logging
 import polars as pl
 from typing import Dict, List, Any, Optional, Set, Tuple, Union
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from enum import Enum
 import dateutil.parser
 from django.db import transaction
 import re
@@ -11,9 +12,67 @@ from arkumu.metadata.models import Resource
 from arkumu.metadata.models.resource import ResourceType
 from arkumu.metadata.models.triples import Triple
 from arkumu.importer.services.importer.uri_utils import mint_uri, slugify_uri_part
-from arkumu.importer.services.importer.smart_bulk_updater import (
-    UpdateStrategy, BulkUpdateStats, ResourceUpdate, MAX_INDEXED_VALUE_SIZE
-)
+
+# Maximum size for values to avoid btree index errors (PostgreSQL limit is ~2704 bytes)
+# Using a significantly lower limit to account for index overhead (other columns + metadata).
+MAX_INDEXED_VALUE_SIZE = 1000
+
+class UpdateStrategy(Enum):
+    """Strategies for handling existing data during bulk imports."""
+    SKIP_EXISTING = "skip_existing"  # Skip if resource already exists
+    UPDATE_VALUES = "update_values"  # Update existing literal values
+    MERGE_TRIPLES = "merge_triples"  # Add new triples, keep existing ones
+    REPLACE_ALL = "replace_all"      # Replace all data for the entity
+    TIMESTAMP_BASED = "timestamp_based"  # Use timestamps to determine updates
+
+
+@dataclass
+class BulkUpdateStats:
+    """Statistics for bulk update operations."""
+    rows_processed: int = 0
+    cells_processed: int = 0
+    resources_created: int = 0
+    resources_updated: int = 0
+    resources_skipped: int = 0
+    triples_created: int = 0
+    triples_updated: int = 0
+    triples_skipped: int = 0
+    row_links_created: int = 0
+    errors: int = 0
+    truncated_values: int = 0
+    multi_value_cells_detected: int = 0
+    total_values_created: int = 0
+    relationships_created: int = 0
+    
+    def merge(self, other: 'BulkUpdateStats'):
+        """Merge another stats object into this one."""
+        self.rows_processed += other.rows_processed
+        self.cells_processed += other.cells_processed
+        self.resources_created += other.resources_created
+        self.resources_updated += other.resources_updated
+        self.resources_skipped += other.resources_skipped
+        self.triples_created += other.triples_created
+        self.triples_updated += other.triples_updated
+        self.triples_skipped += other.triples_skipped
+        self.row_links_created += other.row_links_created
+        self.errors += other.errors
+        self.truncated_values += other.truncated_values
+        self.multi_value_cells_detected += other.multi_value_cells_detected
+        self.total_values_created += other.total_values_created
+        self.relationships_created += other.relationships_created
+
+
+@dataclass
+class ResourceUpdate:
+    """Represents a potential resource update."""
+    uri: str
+    new_values: List[str] = field(default_factory=list)  # Changed from new_value to support multiple values
+    new_name: Optional[str] = None
+    new_datatype: Optional[str] = None
+    new_language: Optional[str] = None
+    action: UpdateStrategy = UpdateStrategy.SKIP_EXISTING
+    existing_resource: Optional[Resource] = None
+    is_multi_value: bool = False
 
 @dataclass
 class FKRelationship:

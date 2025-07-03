@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from enum import Enum
 from datetime import datetime
 
-from arkumu.importer.services.importer.smart_bulk_updater import SmartBulkUpdater, UpdateStrategy, BulkUpdateStats
+from arkumu.importer.services.importer.smart_bulk_updater_polars import SmartBulkUpdaterPolars as SmartBulkUpdater, UpdateStrategy, BulkUpdateStats
 from arkumu.importer.services.importer.uri_utils import mint_uri, slugify_uri_part
 
 logger = logging.getLogger(__name__)

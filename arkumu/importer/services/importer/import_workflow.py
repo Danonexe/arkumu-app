@@ -2,10 +2,9 @@ import os
 import logging
 from typing import Dict, List, Any, Optional
 
-from arkumu.importer.services.importer.bulk_import import import_csv_as_cells
+import csv
 from arkumu.importer.services.importer.file_handler import FileHandler
-from arkumu.importer.services.importer.smart_bulk_updater import SmartBulkUpdater, UpdateStrategy
-from arkumu.importer.services.importer.smart_bulk_updater_polars import SmartBulkUpdaterPolars
+from arkumu.importer.services.importer.smart_bulk_updater_polars import SmartBulkUpdaterPolars as SmartBulkUpdater, UpdateStrategy, FKRelationship
 
 logger = logging.getLogger(__name__)
 
@@ -611,16 +610,35 @@ class ImportWorkflowService:
         logger.info(f"   🔗 Link row cells: {link_row_cells}")
         logger.info(f"   🔗 Link to first column: {link_to_first_column}")
         
-        stats = import_csv_as_cells(
-            file_path,
-            dataset_name,
+        # Use SmartBulkUpdaterPolars instead of import_csv_as_cells
+        updater = SmartBulkUpdater(
+            default_strategy=UpdateStrategy.UPDATE_VALUES,
             institution=institution,
             base_uri=base_uri,
-            delimiter=delimiter,
-            has_quoted_fields=has_quoted_fields,
-            link_cells_to_rows=link_row_cells,
+            link_row_cells=link_row_cells,
             link_topology="first_column" if link_to_first_column else "row"
         )
+        
+        # Read CSV data
+        csv_data = []
+        with open(file_path, 'r', encoding='utf-8') as f:
+            quoting = csv.QUOTE_ALL if has_quoted_fields else csv.QUOTE_MINIMAL
+            reader = csv.DictReader(f, delimiter=delimiter, quoting=quoting)
+            csv_data = list(reader)
+        
+        # Process with SmartBulkUpdaterPolars
+        bulk_stats = updater.import_csv_with_smart_updates(csv_data, dataset_name)
+        
+        # Convert BulkUpdateStats to dict format expected by import_workflow
+        stats = {
+            "rows_processed": bulk_stats.rows_processed,
+            "cells_processed": bulk_stats.cells_processed,
+            "resources_created": bulk_stats.resources_created,
+            "triples_created": bulk_stats.triples_created,
+            "row_links_created": bulk_stats.row_links_created,
+            "errors": bulk_stats.errors,
+            "truncated_values": bulk_stats.truncated_values
+        }
         
         logger.info(f"✅ Step 1 completed: import_csv_as_cells finished")
         logger.info(f"   📊 Rows processed: {stats.get('rows_processed', 0)}")
@@ -681,10 +699,8 @@ class ImportWorkflowService:
         has_quoted_fields: bool = False
     ) -> Dict[str, Any]:
         """
-        Import a relationship CSV file using the import_relationship_csv function.
+        Import a relationship CSV file using SmartBulkUpdaterPolars FK processing.
         """
-        from arkumu.importer.services.importer.bulk_import import import_relationship_csv
-        
         logger.info(f"🔗 Starting relationship CSV import for {dataset_name}")
         logger.info(f"   📁 File path: {csv_path}")
         logger.info(f"   🏛️ Institution: {institution}")
@@ -692,28 +708,54 @@ class ImportWorkflowService:
         logger.info(f"   📊 Delimiter: '{delimiter}'")
         logger.info(f"   📝 Has quoted fields: {has_quoted_fields}")
         
-        # Convert relationship config to the format expected by import_relationship_csv
-        fk_columns = []
+        # Convert relationship config to FKRelationship objects
+        fk_relationships = []
         for rel_config in relationship_config:
-            fk_columns.append({
-                "column": rel_config["column"],
-                "target_table": rel_config["target_table"],
-                "target_column": "id"  # Assume 'id' column for target
-            })
+            fk_relationships.append(FKRelationship(
+                source_column=rel_config["column"],
+                source_dataset=dataset_name,
+                target_column="id",  # Assume 'id' column for target
+                target_dataset=rel_config["target_table"],
+                relationship_type="relation"
+            ))
         
-        logger.info(f"🔗 Configured FK columns: {len(fk_columns)} columns")
-        for i, fk_col in enumerate(fk_columns, 1):
-            logger.info(f"   {i}. Column '{fk_col['column']}' → {fk_col['target_table']}.{fk_col['target_column']}")
+        logger.info(f"🔗 Configured FK relationships: {len(fk_relationships)} relationships")
+        for i, fk_rel in enumerate(fk_relationships, 1):
+            logger.info(f"   {i}. Column '{fk_rel.source_column}' → {fk_rel.target_dataset}.{fk_rel.target_column}")
         
-        stats = import_relationship_csv(
-            csv_file_path=csv_path,
-            dataset_name=dataset_name,
-            fk_columns=fk_columns,
+        # Use SmartBulkUpdaterPolars for relationship processing
+        updater = SmartBulkUpdater(
+            default_strategy=UpdateStrategy.UPDATE_VALUES,
             institution=institution,
             base_uri=base_uri,
-            delimiter=delimiter,
-            has_quoted_fields=has_quoted_fields
+            fk_relationships=fk_relationships
         )
+        
+        # Read CSV data
+        csv_data = []
+        with open(csv_path, 'r', encoding='utf-8') as f:
+            quoting = csv.QUOTE_ALL if has_quoted_fields else csv.QUOTE_MINIMAL
+            reader = csv.DictReader(f, delimiter=delimiter, quoting=quoting)
+            csv_data = list(reader)
+        
+        # Process the relationship CSV with regular import first
+        bulk_stats = updater.import_csv_with_smart_updates(csv_data, dataset_name)
+        
+        # Process FK relationships
+        datasets = {dataset_name: csv_data}
+        fk_stats = updater.process_fk_relationships(datasets)
+        
+        # Convert to expected dict format
+        stats = {
+            "rows_processed": bulk_stats.rows_processed,
+            "cells_processed": bulk_stats.cells_processed,
+            "resources_created": bulk_stats.resources_created + fk_stats.resources_created,
+            "triples_created": bulk_stats.triples_created + fk_stats.triples_created,
+            "relationships_created": fk_stats.relationships_created,
+            "errors": bulk_stats.errors + fk_stats.errors,
+            "truncated_values": bulk_stats.truncated_values + fk_stats.truncated_values,
+            "row_links_created": bulk_stats.row_links_created
+        }
         
         logger.info(f"✅ Relationship CSV import completed for {dataset_name}")
         logger.info(f"   📊 Rows processed: {stats.get('rows_processed', 0)}")
@@ -723,7 +765,7 @@ class ImportWorkflowService:
         logger.info(f"   📊 Errors: {stats.get('errors', 0)}")
         logger.info(f"   📊 Truncated values: {stats.get('truncated_values', 0)}")
         
-        # Ensure all expected stats are present
+        # Ensure all expected stats are present for backward compatibility
         if "placeholders_created" not in stats:
             stats["placeholders_created"] = 0
         if "placeholders_resolved" not in stats:
@@ -732,7 +774,5 @@ class ImportWorkflowService:
             stats["files_uploaded"] = 0
         if "upload_errors" not in stats:
             stats["upload_errors"] = 0
-        if "row_links_created" not in stats:
-            stats["row_links_created"] = 0
         
         return stats

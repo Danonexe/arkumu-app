@@ -12,12 +12,11 @@ from dataclasses import dataclass
 from datetime import datetime
 import polars as pl
 
-from ..mapping_consumer import ExecutionConfig, ColumnConfig, FKRelationship as MappingFKRelationship, ProcessingStrategy
+from arkumu.importer.services.mapping_consumer import ExecutionConfig, ColumnConfig, FKRelationship as MappingFKRelationship, ProcessingStrategy
 from .data_processor import DataProcessor
 from .resource_manager import ResourceManager
 from .statistics import ExecutionStatistics, ExecutionMetrics
-from ..importer.smart_bulk_updater_polars import SmartBulkUpdaterPolars, FKRelationship as BulkFKRelationship
-from ..importer.smart_bulk_updater import UpdateStrategy
+from arkumu.importer.services.importer.smart_bulk_updater_polars import SmartBulkUpdaterPolars, FKRelationship as BulkFKRelationship, UpdateStrategy
 
 logger = logging.getLogger(__name__)
 

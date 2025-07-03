@@ -4,7 +4,7 @@ from datetime import datetime, timezone, timedelta
 from unittest.mock import Mock
 from arkumu.metadata.models import Resource, Triple
 from arkumu.metadata.models.resource import ResourceType
-from arkumu.importer.services.importer.smart_bulk_updater import UpdateStrategy
+from arkumu.importer.services.importer.smart_bulk_updater_polars import UpdateStrategy
 from arkumu.importer.services.execution.update_analyzer import UpdateAnalyzer
 from arkumu.importer.services.execution.resource_manager import ResourceManager
 
