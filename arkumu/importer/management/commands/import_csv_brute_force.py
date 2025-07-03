@@ -2,7 +2,8 @@ import os
 import json
 import csv
 from django.core.management.base import BaseCommand, CommandError
-from arkumu.importer.services.importer.smart_bulk_updater_polars import SmartBulkUpdaterPolars, UpdateStrategy, FKRelationship
+from arkumu.importer.services.importer.bulk_update_engine import UpdateStrategy
+from arkumu.importer.services.importer.bulk_relationship_processor import FKRelationship
 
 
 class Command(BaseCommand):

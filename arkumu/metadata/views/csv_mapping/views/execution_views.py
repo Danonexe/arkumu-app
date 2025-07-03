@@ -117,8 +117,8 @@ from typing import Dict, List, Any
 
 from arkumu.metadata.models.mappings import Mapping
 from arkumu.metadata.services.data_analysis.s3_direct_data_analyzer import S3DirectDataAnalyzer
-from arkumu.importer.services.importer.smart_bulk_updater_polars import SmartBulkUpdaterPolars
-from arkumu.importer.services.importer.smart_bulk_updater_polars import UpdateStrategy
+from arkumu.importer.services.importer.bulk_update_engine import UpdateStrategy
+from arkumu.importer.services.importer.mapping_processor import GUIMappingProcessor
 from arkumu.metadata.views.csv_mapping.mixins.coordinator import CSVMappingCoordinatorMixin
 from arkumu.metadata.views.csv_mapping.mixins.base import OrganizationMixin
 

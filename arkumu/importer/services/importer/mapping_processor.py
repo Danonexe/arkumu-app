@@ -249,12 +249,11 @@ class GUIMappingProcessor:
         df = pl.DataFrame(filtered_data)
         
         # Use modular services to create anchor entities
-        updates = self.update_engine.determine_update_actions(df, f"{dataset_name}_anchors")
-        stats = self.database_executor.execute_bulk_update(
-            updates, f"{dataset_name}_anchors",
-            link_row_cells=self.link_row_cells,
-            link_topology=self.link_topology
-        )
+        updates, determine_stats = self.update_engine.determine_update_actions(df, f"{dataset_name}_anchors")
+        stats = self.database_executor.execute_bulk_update(updates, f"{dataset_name}_anchors")
+        
+        # Merge stats from different phases
+        stats.merge(determine_stats)
         
         return {
             'phase': 'entities',
@@ -285,12 +284,11 @@ class GUIMappingProcessor:
         df = pl.DataFrame(filtered_data)
         
         # Use modular services with multi-value detection
-        updates = self.update_engine.determine_update_actions(df, f"{dataset_name}_literals")
-        stats = self.database_executor.execute_bulk_update(
-            updates, f"{dataset_name}_literals",
-            link_row_cells=self.link_row_cells,
-            link_topology=self.link_topology
-        )
+        updates, determine_stats = self.update_engine.determine_update_actions(df, f"{dataset_name}_literals")
+        stats = self.database_executor.execute_bulk_update(updates, f"{dataset_name}_literals")
+        
+        # Merge stats from different phases
+        stats.merge(determine_stats)
         
         return {
             'phase': 'literals',

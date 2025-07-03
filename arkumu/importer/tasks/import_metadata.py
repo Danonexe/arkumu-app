@@ -23,7 +23,7 @@ except ImportError:
 
 # Arkumu specific imports
 from arkumu.importer.services.importer.import_workflow import ImportWorkflowService
-from arkumu.importer.services.importer.smart_bulk_updater_polars import UpdateStrategy, BulkUpdateStats
+from arkumu.importer.services.importer.bulk_update_engine import UpdateStrategy, BulkUpdateStats
 from arkumu.storage.services.bucket_service import BucketService # Added to download S3 file
 
 # Django cache

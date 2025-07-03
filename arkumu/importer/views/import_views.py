@@ -7,7 +7,7 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache
 
 from arkumu.storage.services.bucket_service import BucketService
-from arkumu.importer.services.importer.smart_bulk_updater_polars import UpdateStrategy
+from arkumu.importer.services.importer.bulk_update_engine import UpdateStrategy
 from arkumu.importer.tasks.import_metadata import run_csv_import_workflow, run_csv_directory_import_workflow
 from arkumu.importer.models import IngestSession
 from arkumu.users.mixins import general_login_required

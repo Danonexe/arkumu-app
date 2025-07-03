@@ -16,7 +16,8 @@ from arkumu.importer.services.mapping_consumer import ExecutionConfig, ColumnCon
 from .data_processor import DataProcessor
 from .resource_manager import ResourceManager
 from .statistics import ExecutionStatistics, ExecutionMetrics
-from arkumu.importer.services.importer.smart_bulk_updater_polars import SmartBulkUpdaterPolars, FKRelationship as BulkFKRelationship, UpdateStrategy
+from arkumu.importer.services.importer.bulk_update_engine import UpdateStrategy
+from arkumu.importer.services.importer.bulk_relationship_processor import FKRelationship as BulkFKRelationship
 
 logger = logging.getLogger(__name__)
 

@@ -70,7 +70,7 @@ class ImportWorkflowService:
             session_dict = {}
         
         try:
-            # Import the service factory
+            # Try to import the service factory (legacy table services)
             from arkumu.metadata.services.metadata_models_mapping import ServiceFactory
             
             # Get the enhanced services
@@ -79,7 +79,7 @@ class ImportWorkflowService:
             mapping_config_service = service_factory.get_mapping_configuration_service(session_dict)
             processing_pipeline = service_factory.get_processing_pipeline_service(session_dict)
             
-            logger.info(f"🔍 Step 1: Analyzing CSV structure...")
+            logger.info(f"🔍 Step 1: Analyzing CSV structure with table services...")
             
             # Analyze the CSV file structure
             analysis = table_analysis_service.analyze_csv(csv_path)
@@ -160,10 +160,10 @@ class ImportWorkflowService:
             return result
             
         except ImportError as e:
-            logger.error(f"Service architecture not available: {e}")
-            logger.info(f"🔄 Falling back to traditional cell-based import...")
+            logger.info(f"Table services not available, using modular architecture: {e}")
+            logger.info(f"🔄 Falling back to modular bulk import services...")
             
-            # Fallback to the traditional approach
+            # Fallback to the modular architecture approach
             return ImportWorkflowService.import_csv(
                 csv_path=csv_path,
                 dataset_name=dataset_name,
@@ -537,7 +537,7 @@ class ImportWorkflowService:
             # Perform analysis if requested
             if analyze_first:
                 logger.info(f"🔍 Analyzing dataset changes...")
-                analysis = data_analyzer.analyze_dataset_changes(df, dataset_name)
+                analysis = data_analyzer.analyze_dataset_changes(dataset_name, df, base_uri, institution)
                 result["analysis"] = analysis
                 
                 logger.info(f"📋 Analysis results:")
@@ -561,10 +561,13 @@ class ImportWorkflowService:
             logger.info(f"🔧 Executing smart bulk import...")
             
             # Determine update actions using the update engine
-            updates = update_engine.determine_update_actions(df, dataset_name)
+            updates, determine_stats = update_engine.determine_update_actions(df, dataset_name)
             
             # Execute the bulk update using the database executor
             stats = database_executor.execute_bulk_update(updates, dataset_name)
+            
+            # Merge stats from different phases
+            stats.merge(determine_stats)
             
             # Convert stats to dict for consistent return format
             result["stats"] = {
@@ -758,8 +761,11 @@ class ImportWorkflowService:
         df = pl.DataFrame(csv_data)
         
         # Process the relationship CSV with regular import first
-        updates = update_engine.determine_update_actions(df, dataset_name)
+        updates, determine_stats = update_engine.determine_update_actions(df, dataset_name)
         bulk_stats = database_executor.execute_bulk_update(updates, dataset_name)
+        
+        # Merge stats from different phases
+        bulk_stats.merge(determine_stats)
         
         # Process FK relationships
         datasets = {dataset_name: df}
