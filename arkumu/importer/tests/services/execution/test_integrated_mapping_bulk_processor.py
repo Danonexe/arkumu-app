@@ -197,7 +197,7 @@ class TestIntegratedMappingBulkProcessor:
              patch.object(integrated_processor.bulk_updater, 'execute_bulk_update') as mock_execute:
             
             # Configure mocks with proper BulkUpdateStats attributes
-            from arkumu.importer.services.importer.smart_bulk_updater import BulkUpdateStats
+            from arkumu.importer.services.importer.smart_bulk_updater_polars import BulkUpdateStats
             mock_stats = BulkUpdateStats()
             mock_determine.return_value = ([], mock_stats)
             
@@ -235,7 +235,7 @@ class TestIntegratedMappingBulkProcessor:
              patch.object(integrated_processor.bulk_updater, 'process_fk_relationships') as mock_fk:
             
             # Configure mocks with proper BulkUpdateStats attributes
-            from arkumu.importer.services.importer.smart_bulk_updater import BulkUpdateStats
+            from arkumu.importer.services.importer.smart_bulk_updater_polars import BulkUpdateStats
             mock_stats = BulkUpdateStats()
             mock_determine.return_value = ([], mock_stats)
             
@@ -269,7 +269,7 @@ class TestIntegratedMappingBulkProcessor:
     def test_bulk_stats_merging(self, integrated_processor):
         """Test merging of BulkUpdateStats into ExecutionMetrics."""
         # Create mock bulk stats with proper BulkUpdateStats object
-        from arkumu.importer.services.importer.smart_bulk_updater import BulkUpdateStats
+        from arkumu.importer.services.importer.smart_bulk_updater_polars import BulkUpdateStats
         mock_bulk_stats = BulkUpdateStats()
         mock_bulk_stats.resources_created = 10
         mock_bulk_stats.triples_created = 20
@@ -325,7 +325,7 @@ class TestIntegratedMappingBulkProcessor:
         # Mock bulk updater to verify it's being used
         with patch.object(integrated_processor.bulk_updater, 'determine_update_actions_polars') as mock_determine, \
              patch.object(integrated_processor.bulk_updater, 'execute_bulk_update') as mock_execute:
-            from arkumu.importer.services.importer.smart_bulk_updater import BulkUpdateStats
+            from arkumu.importer.services.importer.smart_bulk_updater_polars import BulkUpdateStats
             mock_stats = BulkUpdateStats()
             mock_determine.return_value = ([], mock_stats)
             mock_execute.return_value = BulkUpdateStats()
@@ -416,7 +416,7 @@ class TestFullIntegrationWorkflow:
         # Mock the database operations since this is an integration test
         with patch.object(updater, 'determine_update_actions_polars') as mock_determine:
             # Simulate the processing
-            from arkumu.importer.services.importer.smart_bulk_updater import BulkUpdateStats
+            from arkumu.importer.services.importer.smart_bulk_updater_polars import BulkUpdateStats
             mock_stats = BulkUpdateStats()
             mock_stats.resources_created = 10
             mock_stats.triples_created = 15

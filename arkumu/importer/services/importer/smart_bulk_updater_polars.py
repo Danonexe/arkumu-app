@@ -151,6 +151,29 @@ class SmartBulkUpdaterPolars:
             self.rdf_value_prop = None
             self.dcterms_relation_prop = None
 
+    def _ensure_rdf_properties(self):
+        """Ensure RDF properties exist, creating them if necessary."""
+        try:
+            if self.has_part_prop is None:
+                self.has_part_prop, _ = Resource.objects.get_or_create(
+                    uri="http://purl.org/dc/terms/hasPart",
+                    defaults={"resource_type": ResourceType.PROPERTY, "name": "hasPart", "source": self.institution, "is_placeholder": False}
+                )
+            
+            if self.rdf_value_prop is None:
+                self.rdf_value_prop, _ = Resource.objects.get_or_create(
+                    uri="http://www.w3.org/1999/02/22-rdf-syntax-ns#value",
+                    defaults={"resource_type": ResourceType.PROPERTY, "name": "value", "source": self.institution, "is_placeholder": False}
+                )
+            
+            if self.dcterms_relation_prop is None:
+                self.dcterms_relation_prop, _ = Resource.objects.get_or_create(
+                    uri="http://purl.org/dc/terms/relation",
+                    defaults={"resource_type": ResourceType.PROPERTY, "name": "relation", "source": self.institution, "is_placeholder": False}
+                )
+        except Exception as e:
+            logger.error(f"Failed to ensure RDF properties: {e}", exc_info=True)
+
     def _ensure_dataframe(self, data: Union[List[Dict[str, Any]], pl.DataFrame]) -> pl.DataFrame:
         """Convert data to Polars DataFrame if it's not already."""
         if isinstance(data, pl.DataFrame):
@@ -376,7 +399,7 @@ class SmartBulkUpdaterPolars:
                         values = [current_value_str]
                     
                     # Process each value (single or multiple)
-                    for value_item in values:
+                    for value_index, value_item in enumerate(values):
                         if not value_item or not value_item.strip():
                             continue
                             
@@ -398,11 +421,16 @@ class SmartBulkUpdaterPolars:
                         except UnicodeEncodeError:
                             logger.warning(f"SBU Polars: Could not encode value to check size for dataset '{dataset_name}', column '{column_name}', row_id '{safe_row_id}'.")
                         
-                        # Create resource update with 1-based row ID in URI
+                        # Create resource update with unique URI for multi-value items
                         safe_column_name = slugify_uri_part(column_name)
                         display_row_id = int(row_id_val) + 1 if str(row_id_val).isdigit() else row_id_val
                         safe_display_row_id = slugify_uri_part(str(display_row_id))
-                        cell_uri = mint_uri(self.base_uri, self.institution, "datasets", dataset_name, safe_column_name, safe_display_row_id)
+                        
+                        # For multi-value columns, include value index to make URI unique
+                        if is_multi_value and len(values) > 1:
+                            cell_uri = mint_uri(self.base_uri, self.institution, "datasets", dataset_name, safe_column_name, safe_display_row_id, f"v{value_index}")
+                        else:
+                            cell_uri = mint_uri(self.base_uri, self.institution, "datasets", dataset_name, safe_column_name, safe_display_row_id)
                         
                         update = ResourceUpdate(
                             uri=cell_uri,
@@ -683,10 +711,14 @@ class SmartBulkUpdaterPolars:
                 
             column_resources[column_name] = column_resource
             
-            # Dataset → hasPart → Column
-            structural_triples.append(
-                Triple(subject=dataset_resource, predicate=self.has_part_prop, object=column_resource)
-            )
+            # Dataset → hasPart → Column (ensure property exists)
+            if self.has_part_prop is None:
+                self._ensure_rdf_properties()
+            
+            if self.has_part_prop:
+                structural_triples.append(
+                    Triple(subject=dataset_resource, predicate=self.has_part_prop, object=column_resource)
+                )
         
         # STEP 2: Topology-specific row resource creation (ONLY if needed)
         create_row_resources = (self.link_topology == "row" and self.link_row_cells)
@@ -708,8 +740,12 @@ class SmartBulkUpdaterPolars:
                 if row_created:
                     stats.resources_created += 1
                 
-                # Dataset → hasPart → Row
-                structural_triples.append(Triple(subject=dataset_resource, predicate=self.has_part_prop, object=row_resource))
+                # Dataset → hasPart → Row (ensure property exists)
+                if self.has_part_prop is None:
+                    self._ensure_rdf_properties()
+                
+                if self.has_part_prop:
+                    structural_triples.append(Triple(subject=dataset_resource, predicate=self.has_part_prop, object=row_resource))
         
         elif self.link_topology == "first_column":
             # FIRST_COLUMN TOPOLOGY: Column hierarchy + star pattern
@@ -734,9 +770,14 @@ class SmartBulkUpdaterPolars:
                 column_name = self._extract_column_name_from_uri(cell_uri)
                 if column_name and column_name in column_resources:
                     column_resource = column_resources[column_name]
-                    structural_triples.append(
-                        Triple(subject=column_resource, predicate=self.has_part_prop, object=cell_resource)
-                    )
+                    
+                    if self.has_part_prop is None:
+                        self._ensure_rdf_properties()
+                    
+                    if self.has_part_prop:
+                        structural_triples.append(
+                            Triple(subject=column_resource, predicate=self.has_part_prop, object=cell_resource)
+                        )
                 
                 # TOPOLOGY-SPECIFIC: Additional cell relationships (ONLY if row resources exist)
                 if create_row_resources:
@@ -748,9 +789,14 @@ class SmartBulkUpdaterPolars:
                         row_uri = mint_uri(self.base_uri, self.institution, "datasets", dataset_name, "rows", safe_row_id)
                         try:
                             row_resource = Resource.objects.get(uri=row_uri)
-                            structural_triples.append(
-                                Triple(subject=row_resource, predicate=self.has_part_prop, object=cell_resource)
-                            )
+                            
+                            if self.has_part_prop is None:
+                                self._ensure_rdf_properties()
+                            
+                            if self.has_part_prop:
+                                structural_triples.append(
+                                    Triple(subject=row_resource, predicate=self.has_part_prop, object=cell_resource)
+                                )
                         except Resource.DoesNotExist:
                             logger.warning(f"Row resource not found: {row_uri}")
                 
@@ -767,8 +813,15 @@ class SmartBulkUpdaterPolars:
                         if val_created:
                             stats.resources_created += 1
                         
-                        # Create rdf:value triple
-                        value_triples.append(Triple(subject=cell_resource, predicate=self.rdf_value_prop, object=value_resource))
+                        # Create rdf:value triple (ensure property exists)
+                        if self.rdf_value_prop is None:
+                            self._ensure_rdf_properties()
+                        
+                        if self.rdf_value_prop:
+                            value_triples.append(Triple(subject=cell_resource, predicate=self.rdf_value_prop, object=value_resource))
+                        else:
+                            logger.error(f"Cannot create value triple: rdf:value property not available")
+                            stats.errors += 1
                         stats.total_values_created += 1
                         
             except Resource.DoesNotExist:

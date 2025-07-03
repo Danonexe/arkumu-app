@@ -18,7 +18,7 @@ from arkumu.metadata.views.csv_mapping.views.execution_views import (
     GetMappingExecutionStatusView,
     ValidateMappingExecutionView
 )
-from arkumu.importer.services.importer.smart_bulk_updater import BulkUpdateStats
+from arkumu.importer.services.importer.smart_bulk_updater_polars import BulkUpdateStats
 
 User = get_user_model()
 

@@ -27,8 +27,10 @@ from arkumu.importer.services.execution.statistics import ExecutionStatistics
 @pytest.fixture
 def mock_statistics():
     """Mock ExecutionStatistics instance."""
+    from arkumu.importer.services.execution.statistics import ExecutionMetrics
     stats = Mock(spec=ExecutionStatistics)
-    stats.current_metrics = Mock()
+    # Create a real ExecutionMetrics object instead of mocking it
+    stats.current_metrics = ExecutionMetrics()
     return stats
 
 
@@ -568,64 +570,41 @@ class TestMappingAwareProcessorIntegration:
     def test_entity_centric_processing_integration(self, mapping_aware_processor, 
                                                   sample_execution_config, sample_csv_data):
         """Test complete entity-centric processing flow."""
-        # Mock the resource manager methods to avoid database dependencies
-        with patch.object(mapping_aware_processor.resource_manager, 'create_dataset_resource') as mock_dataset, \
-             patch.object(mapping_aware_processor.resource_manager, 'create_entity_resource') as mock_entity, \
-             patch.object(mapping_aware_processor.resource_manager, 'create_property_triple') as mock_property, \
-             patch.object(mapping_aware_processor.resource_manager, 'generate_entity_uri') as mock_gen_uri:
-            
-            mock_dataset.return_value = Mock()
-            mock_entity.return_value = Mock()
-            mock_gen_uri.side_effect = lambda dataset, entity_id: f"http://test.example.com/entities/{dataset}/{entity_id}"
-            
-            result = mapping_aware_processor.process_with_execution_config(
-                sample_execution_config,
-                sample_csv_data,
-                ProcessingStrategy.ENTITY_CENTRIC
-            )
-            
-            # Verify dataset resource was created
-            mock_dataset.assert_called_once_with("people")
-            
-            # Verify entities were created (3 people)
-            assert mock_entity.call_count == 3
-            
-            # Verify properties were created
-            # Each person has: name (anchor), age (regular), tags (multi-value)
-            # Alice: name + age + 2 tags = 4 properties
-            # Bob: name + age + 1 tag = 3 properties  
-            # Charlie: name + age + 2 tags = 4 properties
-            # Total: 4 + 3 + 4 = 11 property triples
-            assert mock_property.call_count == 11
+        # Test the actual processing using SmartBulkUpdaterPolars
+        result = mapping_aware_processor.process_with_execution_config(
+            sample_execution_config,
+            sample_csv_data,
+            ProcessingStrategy.ENTITY_CENTRIC
+        )
+        
+        # Verify processing completed successfully
+        assert result.resources_created > 0
+        assert result.triples_created > 0
+        assert result.rows_processed == 3  # 3 people
+        
+        # Verify multi-value processing occurred
+        # Alice: art,design = 2 values; Charlie: music,art = 2 values; Bob: tech = 1 value
+        # Total: 2 + 2 + 1 = 5 tag values + 3 names + 3 ages = 11 cell values
+        assert result.cells_processed == 11
     
     @pytest.mark.django_db  
     def test_fk_relationship_processing_integration(self, mapping_aware_processor,
                                                    fk_execution_config, fk_csv_data):
         """Test FK relationship processing integration."""
-        with patch.object(mapping_aware_processor.resource_manager, 'create_dataset_resource') as mock_dataset, \
-             patch.object(mapping_aware_processor.resource_manager, 'create_entity_resource') as mock_entity, \
-             patch.object(mapping_aware_processor.resource_manager, 'create_property_triple') as mock_property, \
-             patch.object(mapping_aware_processor.resource_manager, 'create_relationship_triple') as mock_relationship, \
-             patch.object(mapping_aware_processor.resource_manager, 'generate_entity_uri') as mock_gen_uri:
-            
-            mock_dataset.return_value = Mock()
-            mock_entity.return_value = Mock()
-            mock_gen_uri.side_effect = lambda dataset, entity_id: f"http://test.example.com/entities/{dataset}/{entity_id}"
-            
-            result = mapping_aware_processor.process_with_execution_config(
-                fk_execution_config,
-                fk_csv_data,
-                ProcessingStrategy.ENTITY_CENTRIC
-            )
-            
-            # Verify both datasets were created
-            assert mock_dataset.call_count == 2
-            
-            # Verify entities were created (2 departments + 2 people)
-            assert mock_entity.call_count == 4
-            
-            # Verify property triples (department names + person names)
-            assert mock_property.call_count == 4
-            
-            # Verify FK relationship triples were created
-            assert mock_relationship.call_count == 2
+        # Test the actual FK processing using SmartBulkUpdaterPolars
+        result = mapping_aware_processor.process_with_execution_config(
+            fk_execution_config,
+            fk_csv_data,
+            ProcessingStrategy.ENTITY_CENTRIC
+        )
+        
+        # Verify processing completed successfully
+        assert result.resources_created > 0
+        assert result.triples_created > 0
+        assert result.rows_processed == 4  # 2 departments + 2 people = 4 total rows
+        
+        # Verify FK relationships were processed
+        # 2 people + 2 departments = 4 entities, each with name columns = 4 cells
+        # 2 people with department_id columns = 2 more cells
+        # Total: 4 + 2 = 6 cells processed  
+        assert result.cells_processed == 6

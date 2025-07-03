@@ -11,7 +11,6 @@ import os
 from typing import Dict, Any, List, Optional, Union, Iterator, Tuple
 from dataclasses import dataclass
 from datetime import datetime
-import pandas as pd
 import polars as pl
 from pathlib import Path
 
@@ -227,7 +226,7 @@ class ChunkedProcessor:
         )
     
     def _read_csv_chunks_from_file(self, file_path: str) -> Iterator[List[Dict]]:
-        """Read CSV file in chunks using pandas"""
+        """Read CSV file in chunks using polars"""
         
         if not os.path.exists(file_path):
             logger.error(f"CSV file not found: {file_path}")
@@ -236,17 +235,22 @@ class ChunkedProcessor:
         logger.info(f"Reading CSV file in chunks: {file_path}")
         
         try:
-            # Use pandas for chunked reading
-            chunk_reader = pd.read_csv(
+            # Use polars for chunked reading with lazy evaluation
+            lazy_df = pl.scan_csv(
                 file_path,
-                chunksize=self.streaming_config.chunk_size,
-                dtype=str,  # Read everything as strings to avoid type issues
-                na_filter=False  # Don't convert to NaN
+                infer_schema_length=0,  # Read everything as strings to avoid type issues
+                null_values=[]  # Don't convert to null
             )
             
-            for chunk_df in chunk_reader:
+            # Get total row count for chunking
+            total_rows = lazy_df.select(pl.count()).collect().item()
+            
+            # Process in chunks
+            for offset in range(0, total_rows, self.streaming_config.chunk_size):
+                chunk_df = lazy_df.slice(offset, self.streaming_config.chunk_size).collect()
+                
                 # Convert to list of dictionaries
-                chunk_data = chunk_df.to_dict('records')
+                chunk_data = chunk_df.to_dicts()
                 yield chunk_data
                 
         except Exception as e:
