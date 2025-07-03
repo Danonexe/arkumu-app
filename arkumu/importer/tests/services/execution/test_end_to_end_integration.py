@@ -4,7 +4,7 @@ End-to-end integration tests for the complete mapping-aware bulk processing syst
 
 import pytest
 import polars as pl
-from arkumu.importer.services.importer.smart_bulk_updater_polars import SmartBulkUpdaterPolars, FKRelationship
+from arkumu.importer.services.importer.bulk_relationship_processor import FKRelationship
 from arkumu.importer.services.execution.mapping_aware_processor import MappingAwareProcessor
 from arkumu.importer.services.mapping_consumer import (
     ExecutionConfig, ColumnConfig, DatasetConfig, ColumnType, ProcessingStrategy,

@@ -9,7 +9,7 @@ from django.conf import settings
 
 from arkumu.storage.models import S3FileObject, UploadSession
 from arkumu.metadata.models import Resource
-from arkumu.metadata.services.metatdata_s3_mapping import (
+from arkumu.metadata.services.metatdata_s3_mapping.map_resources_to_files import (
     FileResourceMatcherService,
     MatchingConfig,
     FileMatchingError,

@@ -14,7 +14,7 @@ from datetime import datetime
 import polars as pl
 from pathlib import Path
 
-from ..mapping_consumer import ExecutionConfig, ProcessingStrategy
+from arkumu.importer.services.mapping_consumer import ExecutionConfig, ProcessingStrategy
 from .mapping_aware_processor import MappingAwareProcessor, ProcessingContext
 from .statistics import ExecutionStatistics, ExecutionMetrics
 
