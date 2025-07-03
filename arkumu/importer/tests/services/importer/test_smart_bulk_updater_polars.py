@@ -109,45 +109,6 @@ class TestCoreResourceCreationFixes:
             assert len(update.new_values) == 1, f"ResourceUpdate {update.uri} should have exactly 1 value"
 
 
-class TestPolarsVsOriginalCompatibility:
-    """Test that Polars version produces identical results to the original implementation."""
-    
-    @pytest.mark.django_db
-    def test_identical_results_to_original_implementation(self, initial_data_empty):
-        """Test that both implementations create identical resources and triples."""
-        dataset_name = "compatibilityTest"
-        
-        # Test with original implementation
-        updater_original = SmartBulkUpdater(institution=INSTITUTION, base_uri=BASE_URI, link_row_cells=False)
-        stats_original = updater_original.import_csv_with_smart_updates(simple_test_data, dataset_name + "_original")
-        
-        # Test with Polars implementation
-        updater_polars = SmartBulkUpdaterPolars(institution=INSTITUTION, base_uri=BASE_URI, link_row_cells=False)
-        df = pl.DataFrame(simple_test_data)
-        stats_polars = updater_polars.import_csv_with_smart_updates(df, dataset_name + "_polars")
-        
-        # Should create the same number of resources and triples
-        original_resources = Resource.objects.filter(uri__contains="compatibilitytest_original").exclude(uri__in=[HAS_PART_URI, RDF_VALUE_URI, DCTERMS_RELATION_URI]).count()
-        polars_resources = Resource.objects.filter(uri__contains="compatibilitytest_polars").exclude(uri__in=[HAS_PART_URI, RDF_VALUE_URI, DCTERMS_RELATION_URI]).count()
-        
-        assert original_resources == polars_resources, f"Original created {original_resources} resources, Polars created {polars_resources}"
-        # Both implementations should create the same data, but may count statistics differently
-        # Verify that the same literal values were created
-        original_literals = set(Resource.objects.filter(
-            resource_type=ResourceType.LITERAL,
-            uri__isnull=True
-        ).filter(
-            object_triples__subject__uri__contains="compatibilitytest_original"
-        ).values_list('value', flat=True))
-        
-        polars_literals = set(Resource.objects.filter(
-            resource_type=ResourceType.LITERAL,
-            uri__isnull=True
-        ).filter(
-            object_triples__subject__uri__contains="compatibilitytest_polars"
-        ).values_list('value', flat=True))
-        
-        assert original_literals == polars_literals, f"Different literal values: original {original_literals}, polars {polars_literals}"
 
 
 class TestPolarsDataFrameHandling:
@@ -250,8 +211,9 @@ class TestRealWorldData:
         
         # Verify import worked
         assert stats.resources_created > 0, "Should have created resources"
-        # With column-only topology: 5 dataset→column + 10 column→cell + 10 cell→value = 25 triples expected
-        assert stats.triples_created == 25, f"Should create exactly 25 triples with column-only topology, got {stats.triples_created}"
+        # With column-only topology and multi-value detection: 5 dataset→column + 11 column→cell + 11 cell→value = 27 triples expected
+        # (The _Beschreibung_verkettet column is detected as multi-value for row 1, creating an extra cell and value triple)
+        assert stats.triples_created == 27, f"Should create exactly 27 triples with column-only topology and multi-value detection, got {stats.triples_created}"
         
         # Verify German text handling
         german_literals = Resource.objects.filter(

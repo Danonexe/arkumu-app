@@ -618,13 +618,13 @@ class SmartBulkUpdaterPolars:
         if not active_updates:
             return
         
-        # Track rows processed (count unique row IDs in this batch)
+        # Don't track rows here - already counted in determine_update_actions_polars
+        # Just collect row_ids for later use in topology
         row_ids_in_batch = set()
         for update in active_updates:
             row_id = self._extract_row_id_from_uri(update.uri)
             if row_id:
                 row_ids_in_batch.add(row_id)
-        stats.rows_processed += len(row_ids_in_batch)
         
         # Track cells processed (active updates count)
         stats.cells_processed += len(active_updates)
@@ -797,6 +797,7 @@ class SmartBulkUpdaterPolars:
                                 structural_triples.append(
                                     Triple(subject=row_resource, predicate=self.has_part_prop, object=cell_resource)
                                 )
+                                stats.row_links_created += 1  # Track row links
                         except Resource.DoesNotExist:
                             logger.warning(f"Row resource not found: {row_uri}")
                 
