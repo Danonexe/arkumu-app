@@ -10,6 +10,8 @@ from .data_processor import DataProcessor
 from .resource_manager import ResourceManager
 from .update_analyzer import UpdateAnalyzer
 from .statistics import ExecutionStatistics, ExecutionMetrics
+from .mapping_aware_processor import MappingAwareProcessor
+from .chunked_processor import ChunkedProcessor, StreamingConfig, process_large_dataset_chunked
 
 __all__ = [
     'MappingExecutionEngine',
@@ -17,5 +19,9 @@ __all__ = [
     'ResourceManager',
     'UpdateAnalyzer',
     'ExecutionStatistics',
-    'ExecutionMetrics'
+    'ExecutionMetrics',
+    'MappingAwareProcessor',
+    'ChunkedProcessor',
+    'StreamingConfig',
+    'process_large_dataset_chunked'
 ] 

@@ -350,14 +350,97 @@ class ImportOrchestrator:
                                         csv_sources: Dict[str, Any],
                                         result: ImportResult,
                                         **kwargs):
-        """Execute using streaming entity-centric processing"""
+        """Execute using streaming entity-centric processing with chunked data handling"""
         
-        logger.info("Executing streaming entity-centric processing")
+        logger.info("Executing streaming entity-centric processing with chunked data handling")
         
-        # For now, delegate to entity-centric (will be enhanced in Phase 3)
-        # In the future, this will implement chunked processing
-        result.add_warning("Streaming entity-centric not fully implemented, using standard entity-centric")
-        self._execute_entity_centric(execution_config, csv_sources, result, **kwargs)
+        try:
+            from ..execution.chunked_processor import ChunkedProcessor, StreamingConfig
+            
+            # Configure streaming parameters
+            chunk_size = kwargs.get('chunk_size', 10000)
+            max_memory_mb = kwargs.get('max_memory_mb', 200)
+            
+            streaming_config = StreamingConfig(
+                chunk_size=chunk_size,
+                max_memory_mb=max_memory_mb,
+                enable_gc=True,
+                persist_chunks=True
+            )
+            
+            # Initialize chunked processor
+            chunked_processor = ChunkedProcessor(
+                institution=self.institution,
+                base_uri=self.base_uri,
+                streaming_config=streaming_config
+            )
+            
+            # Check if we have file paths or in-memory data
+            has_large_datasets = self._check_for_large_datasets(csv_sources)
+            
+            if has_large_datasets:
+                # Use chunked processing for large datasets
+                logger.info(f"Processing {len(csv_sources)} datasets with chunking (chunk_size={chunk_size}, max_memory={max_memory_mb}MB)")
+                
+                # Update progress tracking
+                if self.progress_tracker:
+                    self.progress_tracker.update_progress(
+                        phase="streaming_processing",
+                        message=f"Starting chunked processing with {chunk_size} rows per chunk"
+                    )
+                
+                # Process with chunked processor
+                metrics = chunked_processor.process_large_csv_sources(
+                    execution_config, 
+                    csv_sources,
+                    ProcessingStrategy.STREAMING_ENTITY_CENTRIC
+                )
+                
+                # Get processing summary
+                summary = chunked_processor.get_processing_summary()
+                
+                # Update result with chunked processing metrics
+                result.total_resources_created += metrics.resources_created
+                result.total_triples_created += metrics.triples_created
+                result.total_rows_processed += metrics.rows_processed
+                result.total_cells_processed += metrics.cells_processed
+                result.datasets_processed = len(execution_config.datasets)
+                
+                # Add chunked processing details to result
+                result.phase_results.append({
+                    'phase_name': 'streaming_entity_centric',
+                    'chunks_processed': summary['chunks_processed'],
+                    'average_memory_usage_mb': summary['average_memory_usage_mb'],
+                    'processing_rate_rows_per_second': summary['rows_per_second'],
+                    'chunk_details': summary['chunk_details'][:5]  # First 5 chunks for summary
+                })
+                
+                # Estimate peak memory usage
+                if summary['chunk_details']:
+                    result.peak_memory_usage_mb = max(chunk['memory_mb'] for chunk in summary['chunk_details'])
+                
+                logger.info(f"Streaming processing completed: {summary['chunks_processed']} chunks, "
+                          f"{summary['total_rows_processed']} rows, "
+                          f"{summary['average_memory_usage_mb']:.1f}MB avg memory")
+                
+            else:
+                # Fall back to regular entity-centric for smaller datasets
+                logger.info("Datasets are small enough for in-memory processing, using standard entity-centric")
+                result.add_warning("Datasets small enough for in-memory processing, using standard entity-centric")
+                self._execute_entity_centric(execution_config, csv_sources, result, **kwargs)
+                
+        except ImportError as e:
+            logger.error(f"Chunked processor not available: {e}")
+            result.add_error(f"Streaming processing failed: chunked processor not available")
+            # Fall back to standard entity-centric
+            self._execute_entity_centric(execution_config, csv_sources, result, **kwargs)
+            
+        except Exception as e:
+            logger.error(f"Streaming entity-centric processing failed: {e}", exc_info=True)
+            result.add_error(f"Streaming processing failed: {str(e)}")
+            # Fall back to standard entity-centric
+            logger.info("Falling back to standard entity-centric processing")
+            self._execute_entity_centric(execution_config, csv_sources, result, **kwargs)
     
     def _execute_multi_phase(self,
                            execution_config: ExecutionConfig,
@@ -568,3 +651,43 @@ class ImportOrchestrator:
             recommendations.append(f"Recommended processing strategy: {recommended_strategy}")
         
         return recommendations
+    
+    def _check_for_large_datasets(self, csv_sources: Dict[str, Any]) -> bool:
+        """
+        Check if any datasets are large enough to benefit from chunked processing.
+        
+        Args:
+            csv_sources: CSV data sources (file paths or in-memory data)
+            
+        Returns:
+            True if chunked processing is recommended
+        """
+        for dataset_name, csv_source in csv_sources.items():
+            if isinstance(csv_source, str):
+                # File path - check file size
+                try:
+                    import os
+                    file_size_mb = os.path.getsize(csv_source) / (1024 * 1024)
+                    logger.info(f"Dataset '{dataset_name}' file size: {file_size_mb:.1f}MB")
+                    
+                    # Consider chunking for files > 50MB
+                    if file_size_mb > 50:
+                        logger.info(f"Dataset '{dataset_name}' is large ({file_size_mb:.1f}MB), using chunked processing")
+                        return True
+                        
+                except Exception as e:
+                    logger.warning(f"Could not determine file size for {csv_source}: {e}")
+                    # Assume it's large if we can't determine size
+                    return True
+                    
+            elif isinstance(csv_source, list):
+                # In-memory data - check row count
+                row_count = len(csv_source)
+                logger.info(f"Dataset '{dataset_name}' has {row_count} rows in memory")
+                
+                # Consider chunking for > 20,000 rows
+                if row_count > 20000:
+                    logger.info(f"Dataset '{dataset_name}' has many rows ({row_count}), using chunked processing")
+                    return True
+        
+        return False
