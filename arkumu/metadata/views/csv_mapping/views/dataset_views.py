@@ -48,17 +48,10 @@ class CSVDatasetCardView(GeneralLoginRequiredMixin, OrganizationMixin,
             # Use S3DirectDataAnalyzer to get the full dataset preview
             analyzer = S3DirectDataAnalyzer()
             
-            # Get the source summary which contains dataset previews
-            source_summary = analyzer.get_s3_source_summary(organization_id, source_name)
+            # OPTIMIZATION: Get single dataset summary to avoid full S3 scan
+            dataset_preview = analyzer.get_single_dataset_summary(organization_id, dataset_name, source_name)
             
-            # Find the specific dataset in the source
-            dataset_preview = None
-            for dataset_info in source_summary.get('datasets', []):
-                if dataset_info.get('name') == dataset_name:
-                    dataset_preview = dataset_info
-                    break
-            
-            if not dataset_preview or 'error' in dataset_preview:
+            if dataset_preview.get('error'):
                 return HttpResponse(f'<div class="text-danger">Failed to load dataset "{dataset_name}" from source "{source_name}"</div>')
             
             # Transform the data to match the template expectations

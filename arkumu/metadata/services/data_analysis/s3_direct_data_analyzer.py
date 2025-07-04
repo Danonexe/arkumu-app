@@ -746,6 +746,101 @@ class S3DirectDataAnalyzer:
             'datasets': datasets_summary,
             'total_datasets': len(dataset_names)
         }
+    
+    def get_single_dataset_summary(self, organization_id: str, dataset_name: str, source_name: str) -> Dict[str, Any]:
+        """
+        Get summary for a single dataset WITHOUT scanning all files in S3.
+        
+        This is an optimized method that directly accesses the specific file
+        without discovering all sources first.
+        
+        Args:
+            organization_id: Organization ID for S3 bucket access
+            dataset_name: Name of the dataset
+            source_name: Name of the source file
+            
+        Returns:
+            Dataset summary with columns and preview
+        """
+        try:
+            # Determine the S3 path directly without full scan
+            bucket_name = self.bucket_service.get_organization_bucket(organization_id)
+            
+            # Try common file extensions
+            possible_extensions = ['.csv', '.xlsx', '.xls', '.json', '.parquet']
+            source_info = None
+            
+            for ext in possible_extensions:
+                object_key = f"metadata/{source_name}{ext}"
+                try:
+                    # Check if file exists by trying to get its metadata
+                    self.bucket_service.base_s3_service.s3_client.head_object(
+                        Bucket=bucket_name,
+                        Key=object_key
+                    )
+                    # File exists, create source info
+                    source_info = S3DataSourceInfo(
+                        bucket_name=bucket_name,
+                        object_key=object_key,
+                        name=source_name,
+                        format=ext[1:]  # Remove dot
+                    )
+                    break
+                except:
+                    continue
+            
+            if not source_info:
+                # Fallback: check without extension (source_name might already include it)
+                object_key = f"metadata/{source_name}"
+                try:
+                    self.bucket_service.base_s3_service.s3_client.head_object(
+                        Bucket=bucket_name,
+                        Key=object_key
+                    )
+                    # Determine format from filename
+                    name, ext = os.path.splitext(source_name)
+                    if ext.lower() in ['.csv', '.xlsx', '.xls', '.json', '.parquet']:
+                        source_info = S3DataSourceInfo(
+                            bucket_name=bucket_name,
+                            object_key=object_key,
+                            name=name,
+                            format=ext[1:].lower()
+                        )
+                except:
+                    pass
+            
+            if not source_info:
+                raise ValueError(f"Source file '{source_name}' not found in S3")
+            
+            # Get preview for the specific dataset
+            preview = self.get_s3_table_preview(source_info, dataset_name, limit=5)
+            
+            return {
+                'name': dataset_name,
+                'source': source_name,
+                'row_count': preview.total_rows,
+                'column_count': len(preview.column_headers),
+                'columns': preview.column_headers,
+                'sample_data': preview.data_rows,
+                'multi_value_columns': list(preview.multi_value_columns.keys()),
+                'preview': {
+                    'colHeaders': preview.column_headers,
+                    'dataRows': preview.data_rows
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting single dataset summary for {dataset_name}: {e}")
+            return {
+                'name': dataset_name,
+                'source': source_name,
+                'error': str(e),
+                'columns': [],
+                'preview': {
+                    'colHeaders': [],
+                    'dataRows': []
+                }
+            }
 
     def get_s3_import_preview(self, 
                             organization_id: str,

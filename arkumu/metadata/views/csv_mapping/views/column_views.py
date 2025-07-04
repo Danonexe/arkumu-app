@@ -194,17 +194,12 @@ class SelectAllDatasetColumnsView(GeneralLoginRequiredMixin, OrganizationMixin,
                 # Could optionally show a user-friendly message about the auto-correction
             
             # Get dataset preview to get all column names
+            # OPTIMIZATION: Use single dataset summary to avoid full S3 scan
             analyzer = S3DirectDataAnalyzer()
-            source_summary = analyzer.get_s3_source_summary(organization_id, source_name)
+            dataset_preview = analyzer.get_single_dataset_summary(organization_id, dataset_name, source_name)
             
-            dataset_preview = None
-            for dataset_info in source_summary.get('datasets', []):
-                if dataset_info.get('name') == dataset_name:
-                    dataset_preview = dataset_info
-                    break
-            
-            if not dataset_preview:
-                return HttpResponse(f'<div class="alert alert-error">Dataset "{dataset_name}" not found</div>')
+            if dataset_preview.get('error'):
+                return HttpResponse(f'<div class="alert alert-error">Dataset "{dataset_name}" error: {dataset_preview["error"]}</div>')
             
             # PERFORMANCE OPTIMIZATION: Use batch operation instead of individual column adds
             column_names = dataset_preview.get('columns', [])
@@ -499,17 +494,12 @@ class SelectAllColumnsView(GeneralLoginRequiredMixin, OrganizationMixin,
                 return HttpResponse('<div class="alert alert-error">Dataset and source parameters required</div>')
             
             # Get all columns from dataset
+            # OPTIMIZATION: Use single dataset summary to avoid full S3 scan
             analyzer = S3DirectDataAnalyzer()
-            source_summary = analyzer.get_s3_source_summary(organization_id, source_name)
+            dataset_preview = analyzer.get_single_dataset_summary(organization_id, dataset_name, source_name)
             
-            dataset_preview = None
-            for dataset_info in source_summary.get('datasets', []):
-                if dataset_info.get('name') == dataset_name:
-                    dataset_preview = dataset_info
-                    break
-            
-            if not dataset_preview:
-                return HttpResponse('<div class="alert alert-error">Dataset not found</div>')
+            if dataset_preview.get('error'):
+                return HttpResponse(f'<div class="alert alert-error">Dataset error: {dataset_preview["error"]}</div>')
             
             # Use separate session key for column selection (not workspace)
             selection_key = f"column_selection_{organization_id}"

@@ -138,13 +138,8 @@ class CSVMappingTemplateHelperMixin:
         if dataset_preview is None:
             from arkumu.metadata.services.data_analysis.s3_direct_data_analyzer import S3DirectDataAnalyzer
             analyzer = S3DirectDataAnalyzer()
-            source_summary = analyzer.get_s3_source_summary(organization_id, source_name)
-            
-            # Find the specific dataset
-            for dataset_info in source_summary.get('datasets', []):
-                if dataset_info.get('name') == dataset_name:
-                    dataset_preview = dataset_info
-                    break
+            # OPTIMIZATION: Use single dataset summary to avoid full S3 scan
+            dataset_preview = analyzer.get_single_dataset_summary(organization_id, dataset_name, source_name)
         
         # Build dataset context
         dataset_context = {

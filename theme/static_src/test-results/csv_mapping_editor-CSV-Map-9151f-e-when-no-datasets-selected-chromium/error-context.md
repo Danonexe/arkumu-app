@@ -1,0 +1,686 @@
+# Page snapshot
+
+```yaml
+- heading "DisallowedHost at /metadata/csv-mapping/" [level=1]
+- text: "Invalid HTTP_HOST header: 'django:8000'. You may need to add 'django' to ALLOWED_HOSTS."
+- table:
+  - rowgroup:
+    - 'row "Request Method: GET"':
+      - cell "Request Method:"
+      - cell "GET"
+    - 'row "Request URL: http://django:8000/metadata/csv-mapping/"':
+      - cell "Request URL:"
+      - cell "http://django:8000/metadata/csv-mapping/"
+    - 'row "Django Version: 5.0.11"':
+      - cell "Django Version:"
+      - cell "5.0.11"
+    - 'row "Exception Type: DisallowedHost"':
+      - cell "Exception Type:"
+      - cell "DisallowedHost"
+    - 'row "Exception Value: Invalid HTTP_HOST header: ''django:8000''. You may need to add ''django'' to ALLOWED_HOSTS."':
+      - cell "Exception Value:"
+      - 'cell "Invalid HTTP_HOST header: ''django:8000''. You may need to add ''django'' to ALLOWED_HOSTS."'
+    - 'row "Exception Location: /usr/local/lib/python3.12/site-packages/django/http/request.py, line 151, in get_host"':
+      - cell "Exception Location:"
+      - cell "/usr/local/lib/python3.12/site-packages/django/http/request.py, line 151, in get_host"
+    - 'row "Python Executable: /usr/local/bin/python"':
+      - cell "Python Executable:"
+      - cell "/usr/local/bin/python"
+    - 'row "Python Version: 3.12.8"':
+      - cell "Python Version:"
+      - cell "3.12.8"
+    - 'row "Python Path: [''/app'', ''/usr/local/bin'', ''/usr/local/lib/python312.zip'', ''/usr/local/lib/python3.12'', ''/usr/local/lib/python3.12/lib-dynload'', ''/usr/local/lib/python3.12/site-packages'', ''/app/arkumu'']"':
+      - cell "Python Path:"
+      - cell "['/app', '/usr/local/bin', '/usr/local/lib/python312.zip', '/usr/local/lib/python3.12', '/usr/local/lib/python3.12/lib-dynload', '/usr/local/lib/python3.12/site-packages', '/app/arkumu']"
+    - 'row "Server time: Tue, 01 Jul 2025 08:19:02 +0000"':
+      - cell "Server time:"
+      - cell "Tue, 01 Jul 2025 08:19:02 +0000"
+- heading "Traceback Switch to copy-and-paste view" [level=2]:
+  - text: Traceback
+  - link "Switch to copy-and-paste view":
+    - /url: "#"
+- list:
+  - listitem:
+    - code: /usr/local/lib/python3.12/site-packages/django/core/handlers/exception.py
+    - text: ", line 42, in inner"
+    - list:
+      - listitem: response = await get_response(request) ^^^^^^^^^^^^^^^^^^^^^^^^^^^ …
+    - group: Local vars
+  - listitem:
+    - code: /usr/local/lib/python3.12/site-packages/django/utils/deprecation.py
+    - text: ", line 146, in __acall__"
+    - list:
+      - listitem: response = await sync_to_async( …
+    - group: Local vars
+  - listitem:
+    - code: /usr/local/lib/python3.12/concurrent/futures/thread.py
+    - text: ", line 59, in run"
+    - list:
+      - listitem: result = self.fn(*self.args, **self.kwargs) ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ …
+    - group: Local vars
+  - listitem:
+    - code: /usr/local/lib/python3.12/site-packages/django/middleware/common.py
+    - text: ", line 48, in process_request"
+    - list:
+      - listitem: host = request.get_host() ^^^^^^^^^^^^^^^^^^ …
+    - group: Local vars
+  - listitem:
+    - code: /usr/local/lib/python3.12/site-packages/django/http/request.py
+    - text: ", line 151, in get_host"
+    - list:
+      - listitem: raise DisallowedHost(msg) ^^^^^^^^^^^^^^^^^^^^^^^^^ …
+    - group: Local vars
+- heading "Request information" [level=2]
+- heading "USER" [level=3]
+- paragraph: "[unable to retrieve the current user]"
+- heading "GET" [level=3]
+- paragraph: No GET data
+- heading "POST" [level=3]
+- paragraph: No POST data
+- heading "FILES" [level=3]
+- paragraph: No FILES data
+- heading "COOKIES" [level=3]
+- paragraph: No cookie data
+- heading "META" [level=3]
+- table:
+  - rowgroup:
+    - row "Variable Value":
+      - cell "Variable"
+      - cell "Value"
+  - rowgroup:
+    - row "HTTP_ACCEPT 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7'":
+      - cell "HTTP_ACCEPT"
+      - cell "'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7'"
+    - row "HTTP_ACCEPT_ENCODING 'gzip, deflate'":
+      - cell "HTTP_ACCEPT_ENCODING"
+      - cell "'gzip, deflate'"
+    - row "HTTP_ACCEPT_LANGUAGE 'en-US'":
+      - cell "HTTP_ACCEPT_LANGUAGE"
+      - cell "'en-US'"
+    - row "HTTP_CONNECTION 'keep-alive'":
+      - cell "HTTP_CONNECTION"
+      - cell "'keep-alive'"
+    - row "HTTP_HOST 'django:8000'":
+      - cell "HTTP_HOST"
+      - cell "'django:8000'"
+    - row "HTTP_UPGRADE_INSECURE_REQUESTS '1'":
+      - cell "HTTP_UPGRADE_INSECURE_REQUESTS"
+      - cell "'1'"
+    - row "HTTP_USER_AGENT ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like ' 'Gecko) Chrome/138.0.7204.23 Safari/537.36')":
+      - cell "HTTP_USER_AGENT"
+      - cell "('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like ' 'Gecko) Chrome/138.0.7204.23 Safari/537.36')"
+    - row "PATH_INFO '/metadata/csv-mapping/'":
+      - cell "PATH_INFO"
+      - cell "'/metadata/csv-mapping/'"
+    - row "QUERY_STRING ''":
+      - cell "QUERY_STRING"
+      - cell "''"
+    - row "REMOTE_ADDR '10.10.8.6'":
+      - cell "REMOTE_ADDR"
+      - cell "'10.10.8.6'"
+    - row "REMOTE_HOST '10.10.8.6'":
+      - cell "REMOTE_HOST"
+      - cell "'10.10.8.6'"
+    - row "REMOTE_PORT 59654":
+      - cell "REMOTE_PORT"
+      - cell "59654"
+    - row "REQUEST_METHOD 'GET'":
+      - cell "REQUEST_METHOD"
+      - cell "'GET'"
+    - row "SCRIPT_NAME ''":
+      - cell "SCRIPT_NAME"
+      - cell "''"
+    - row "SERVER_NAME '10.10.8.5'":
+      - cell "SERVER_NAME"
+      - cell "'10.10.8.5'"
+    - row "SERVER_PORT '8000'":
+      - cell "SERVER_PORT"
+      - cell "'8000'"
+    - row "wsgi.multiprocess True":
+      - cell "wsgi.multiprocess"
+      - cell "True"
+    - row "wsgi.multithread True":
+      - cell "wsgi.multithread"
+      - cell "True"
+- heading "Settings" [level=3]
+- heading "Using settings module config.settings.local" [level=4]:
+  - text: Using settings module
+  - code: config.settings.local
+- table:
+  - rowgroup:
+    - row "Setting Value":
+      - cell "Setting"
+      - cell "Value"
+  - rowgroup:
+    - 'row "ABSOLUTE_URL_OVERRIDES {}"':
+      - cell "ABSOLUTE_URL_OVERRIDES"
+      - 'cell "{}"'
+    - row "ACCOUNT_ADAPTER 'arkumu.users.adapters.AccountAdapter'":
+      - cell "ACCOUNT_ADAPTER"
+      - cell "'arkumu.users.adapters.AccountAdapter'"
+    - row "ACCOUNT_ALLOW_REGISTRATION False":
+      - cell "ACCOUNT_ALLOW_REGISTRATION"
+      - cell "False"
+    - row "ACCOUNT_AUTHENTICATION_METHOD 'username'":
+      - cell "ACCOUNT_AUTHENTICATION_METHOD"
+      - cell "'username'"
+    - row "ACCOUNT_EMAIL_REQUIRED True":
+      - cell "ACCOUNT_EMAIL_REQUIRED"
+      - cell "True"
+    - row "ACCOUNT_EMAIL_VERIFICATION 'none'":
+      - cell "ACCOUNT_EMAIL_VERIFICATION"
+      - cell "'none'"
+    - 'row "ACCOUNT_FORMS {''signup'': ''arkumu.users.forms.UserSignupForm''}"':
+      - cell "ACCOUNT_FORMS"
+      - 'cell "{''signup'': ''arkumu.users.forms.UserSignupForm''}"'
+    - row "ADMINS [('arkumu', 'arkumu@arkumu.uni-koeln.de')]":
+      - cell "ADMINS"
+      - cell "[('arkumu', 'arkumu@arkumu.uni-koeln.de')]"
+    - row "ADMIN_URL 'admin/'":
+      - cell "ADMIN_URL"
+      - cell "'admin/'"
+    - row "ALLOWED_HOSTS ['localhost', '0.0.0.0', '127.0.0.1', 'dev.arkumu.uni-koeln.de']":
+      - cell "ALLOWED_HOSTS"
+      - cell "['localhost', '0.0.0.0', '127.0.0.1', 'dev.arkumu.uni-koeln.de']"
+    - row "APPEND_SLASH True":
+      - cell "APPEND_SLASH"
+      - cell "True"
+    - row "APPS_DIR PosixPath('/app/arkumu')":
+      - cell "APPS_DIR"
+      - cell "PosixPath('/app/arkumu')"
+    - row "AUTHENTICATION_BACKENDS ['django.contrib.auth.backends.ModelBackend', 'allauth.account.auth_backends.AuthenticationBackend']":
+      - cell "AUTHENTICATION_BACKENDS"
+      - cell "['django.contrib.auth.backends.ModelBackend', 'allauth.account.auth_backends.AuthenticationBackend']"
+    - row "AUTH_PASSWORD_VALIDATORS '********************'":
+      - cell "AUTH_PASSWORD_VALIDATORS"
+      - cell "'********************'"
+    - row "AUTH_USER_MODEL 'users.User'":
+      - cell "AUTH_USER_MODEL"
+      - cell "'users.User'"
+    - row "BASE_DIR PosixPath('/app')":
+      - cell "BASE_DIR"
+      - cell "PosixPath('/app')"
+    - 'row "CACHES {''default'': {''BACKEND'': ''django_redis.cache.RedisCache'', ''LOCATION'': ''redis://redis:6379/1'', ''OPTIONS'': {''CLIENT_CLASS'': ''django_redis.client.DefaultClient'', ''IGNORE_EXCEPTIONS'': True}}}"':
+      - cell "CACHES"
+      - 'cell "{''default'': {''BACKEND'': ''django_redis.cache.RedisCache'', ''LOCATION'': ''redis://redis:6379/1'', ''OPTIONS'': {''CLIENT_CLASS'': ''django_redis.client.DefaultClient'', ''IGNORE_EXCEPTIONS'': True}}}"'
+    - row "CACHE_MIDDLEWARE_ALIAS 'default'":
+      - cell "CACHE_MIDDLEWARE_ALIAS"
+      - cell "'default'"
+    - row "CACHE_MIDDLEWARE_KEY_PREFIX '********************'":
+      - cell "CACHE_MIDDLEWARE_KEY_PREFIX"
+      - cell "'********************'"
+    - row "CACHE_MIDDLEWARE_SECONDS 600":
+      - cell "CACHE_MIDDLEWARE_SECONDS"
+      - cell "600"
+    - row "CORS_URLS_REGEX '^/api/.*$'":
+      - cell "CORS_URLS_REGEX"
+      - cell "'^/api/.*$'"
+    - row "CRISPY_ALLOWED_TEMPLATE_PACKS 'bootstrap5'":
+      - cell "CRISPY_ALLOWED_TEMPLATE_PACKS"
+      - cell "'bootstrap5'"
+    - row "CRISPY_TEMPLATE_PACK 'bootstrap5'":
+      - cell "CRISPY_TEMPLATE_PACK"
+      - cell "'bootstrap5'"
+    - row "CSRF_COOKIE_AGE 31449600":
+      - cell "CSRF_COOKIE_AGE"
+      - cell "31449600"
+    - row "CSRF_COOKIE_DOMAIN None":
+      - cell "CSRF_COOKIE_DOMAIN"
+      - cell "None"
+    - row "CSRF_COOKIE_HTTPONLY True":
+      - cell "CSRF_COOKIE_HTTPONLY"
+      - cell "True"
+    - row "CSRF_COOKIE_NAME 'csrftoken'":
+      - cell "CSRF_COOKIE_NAME"
+      - cell "'csrftoken'"
+    - row "CSRF_COOKIE_PATH '/'":
+      - cell "CSRF_COOKIE_PATH"
+      - cell "'/'"
+    - row "CSRF_COOKIE_SAMESITE 'Lax'":
+      - cell "CSRF_COOKIE_SAMESITE"
+      - cell "'Lax'"
+    - row "CSRF_COOKIE_SECURE False":
+      - cell "CSRF_COOKIE_SECURE"
+      - cell "False"
+    - row "CSRF_FAILURE_VIEW 'django.views.csrf.csrf_failure'":
+      - cell "CSRF_FAILURE_VIEW"
+      - cell "'django.views.csrf.csrf_failure'"
+    - row "CSRF_HEADER_NAME 'HTTP_X_CSRFTOKEN'":
+      - cell "CSRF_HEADER_NAME"
+      - cell "'HTTP_X_CSRFTOKEN'"
+    - row "CSRF_TRUSTED_ORIGINS ['https://dev.arkumu.uni-koeln.de']":
+      - cell "CSRF_TRUSTED_ORIGINS"
+      - cell "['https://dev.arkumu.uni-koeln.de']"
+    - row "CSRF_USE_SESSIONS False":
+      - cell "CSRF_USE_SESSIONS"
+      - cell "False"
+    - 'row "DATABASES {''default'': {''ATOMIC_REQUESTS'': True, ''AUTOCOMMIT'': True, ''CONN_HEALTH_CHECKS'': False, ''CONN_MAX_AGE'': 0, ''ENGINE'': ''django.db.backends.postgresql'', ''HOST'': ''postgres'', ''NAME'': ''arkumu'', ''OPTIONS'': {''options'': ''-c search_path=digikunst,public''}, ''PASSWORD'': ''********************'', ''PORT'': 5432, ''TEST'': {''CHARSET'': None, ''COLLATION'': None, ''MIGRATE'': True, ''MIRROR'': None, ''NAME'': None}, ''TIME_ZONE'': None, ''USER'': ''debug''}}"':
+      - cell "DATABASES"
+      - 'cell "{''default'': {''ATOMIC_REQUESTS'': True, ''AUTOCOMMIT'': True, ''CONN_HEALTH_CHECKS'': False, ''CONN_MAX_AGE'': 0, ''ENGINE'': ''django.db.backends.postgresql'', ''HOST'': ''postgres'', ''NAME'': ''arkumu'', ''OPTIONS'': {''options'': ''-c search_path=digikunst,public''}, ''PASSWORD'': ''********************'', ''PORT'': 5432, ''TEST'': {''CHARSET'': None, ''COLLATION'': None, ''MIGRATE'': True, ''MIRROR'': None, ''NAME'': None}, ''TIME_ZONE'': None, ''USER'': ''debug''}}"'
+    - row "DATABASE_ROUTERS []":
+      - cell "DATABASE_ROUTERS"
+      - cell "[]"
+    - row "DATA_UPLOAD_MAX_MEMORY_SIZE 524288000":
+      - cell "DATA_UPLOAD_MAX_MEMORY_SIZE"
+      - cell "524288000"
+    - row "DATA_UPLOAD_MAX_NUMBER_FIELDS 1000":
+      - cell "DATA_UPLOAD_MAX_NUMBER_FIELDS"
+      - cell "1000"
+    - row "DATA_UPLOAD_MAX_NUMBER_FILES 1000":
+      - cell "DATA_UPLOAD_MAX_NUMBER_FILES"
+      - cell "1000"
+    - row "DATETIME_FORMAT 'N j, Y, P'":
+      - cell "DATETIME_FORMAT"
+      - cell "'N j, Y, P'"
+    - row "DATETIME_INPUT_FORMATS ['%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M:%S.%f', '%Y-%m-%d %H:%M', '%m/%d/%Y %H:%M:%S', '%m/%d/%Y %H:%M:%S.%f', '%m/%d/%Y %H:%M', '%m/%d/%y %H:%M:%S', '%m/%d/%y %H:%M:%S.%f', '%m/%d/%y %H:%M']":
+      - cell "DATETIME_INPUT_FORMATS"
+      - cell "['%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M:%S.%f', '%Y-%m-%d %H:%M', '%m/%d/%Y %H:%M:%S', '%m/%d/%Y %H:%M:%S.%f', '%m/%d/%Y %H:%M', '%m/%d/%y %H:%M:%S', '%m/%d/%y %H:%M:%S.%f', '%m/%d/%y %H:%M']"
+    - row "DATE_FORMAT 'N j, Y'":
+      - cell "DATE_FORMAT"
+      - cell "'N j, Y'"
+    - row "DATE_INPUT_FORMATS ['%Y-%m-%d', '%m/%d/%Y', '%m/%d/%y', '%b %d %Y', '%b %d, %Y', '%d %b %Y', '%d %b, %Y', '%B %d %Y', '%B %d, %Y', '%d %B %Y', '%d %B, %Y']":
+      - cell "DATE_INPUT_FORMATS"
+      - cell "['%Y-%m-%d', '%m/%d/%Y', '%m/%d/%y', '%b %d %Y', '%b %d, %Y', '%d %b %Y', '%d %b, %Y', '%B %d %Y', '%B %d, %Y', '%d %B %Y', '%d %B, %Y']"
+    - row "DEBUG True":
+      - cell "DEBUG"
+      - cell "True"
+    - row "DEBUG_PROPAGATE_EXCEPTIONS False":
+      - cell "DEBUG_PROPAGATE_EXCEPTIONS"
+      - cell "False"
+    - 'row "DEBUG_TOOLBAR_CONFIG {''DISABLE_PANELS'': [''debug_toolbar.panels.redirects.RedirectsPanel'', ''debug_toolbar.panels.profiling.ProfilingPanel''], ''SHOW_TEMPLATE_CONTEXT'': True}"':
+      - cell "DEBUG_TOOLBAR_CONFIG"
+      - 'cell "{''DISABLE_PANELS'': [''debug_toolbar.panels.redirects.RedirectsPanel'', ''debug_toolbar.panels.profiling.ProfilingPanel''], ''SHOW_TEMPLATE_CONTEXT'': True}"'
+    - row "DECIMAL_SEPARATOR '.'":
+      - cell "DECIMAL_SEPARATOR"
+      - cell "'.'"
+    - row "DEFAULT_AUTO_FIELD 'django.db.models.BigAutoField'":
+      - cell "DEFAULT_AUTO_FIELD"
+      - cell "'django.db.models.BigAutoField'"
+    - row "DEFAULT_CHARSET 'utf-8'":
+      - cell "DEFAULT_CHARSET"
+      - cell "'utf-8'"
+    - row "DEFAULT_EXCEPTION_REPORTER 'django.views.debug.ExceptionReporter'":
+      - cell "DEFAULT_EXCEPTION_REPORTER"
+      - cell "'django.views.debug.ExceptionReporter'"
+    - row "DEFAULT_EXCEPTION_REPORTER_FILTER 'django.views.debug.SafeExceptionReporterFilter'":
+      - cell "DEFAULT_EXCEPTION_REPORTER_FILTER"
+      - cell "'django.views.debug.SafeExceptionReporterFilter'"
+    - row "DEFAULT_FILE_STORAGE 'django.core.files.storage.FileSystemStorage'":
+      - cell "DEFAULT_FILE_STORAGE"
+      - cell "'django.core.files.storage.FileSystemStorage'"
+    - row "DEFAULT_FROM_EMAIL 'webmaster@localhost'":
+      - cell "DEFAULT_FROM_EMAIL"
+      - cell "'webmaster@localhost'"
+    - row "DEFAULT_INDEX_TABLESPACE ''":
+      - cell "DEFAULT_INDEX_TABLESPACE"
+      - cell "''"
+    - row "DEFAULT_TABLESPACE ''":
+      - cell "DEFAULT_TABLESPACE"
+      - cell "''"
+    - row "DISALLOWED_USER_AGENTS []":
+      - cell "DISALLOWED_USER_AGENTS"
+      - cell "[]"
+    - row "DJANGO_ADMIN_FORCE_ALLAUTH False":
+      - cell "DJANGO_ADMIN_FORCE_ALLAUTH"
+      - cell "False"
+    - row "DJANGO_APPS ['django.contrib.auth', 'django.contrib.contenttypes', 'django.contrib.sessions', 'django.contrib.sites', 'django.contrib.messages', 'django.contrib.staticfiles', 'django.contrib.admin', 'django.forms']":
+      - cell "DJANGO_APPS"
+      - cell "['django.contrib.auth', 'django.contrib.contenttypes', 'django.contrib.sessions', 'django.contrib.sites', 'django.contrib.messages', 'django.contrib.staticfiles', 'django.contrib.admin', 'django.forms']"
+    - row "EMAIL_BACKEND 'django.core.mail.backends.console.EmailBackend'":
+      - cell "EMAIL_BACKEND"
+      - cell "'django.core.mail.backends.console.EmailBackend'"
+    - row "EMAIL_HOST 'localhost'":
+      - cell "EMAIL_HOST"
+      - cell "'localhost'"
+    - row "EMAIL_HOST_PASSWORD '********************'":
+      - cell "EMAIL_HOST_PASSWORD"
+      - cell "'********************'"
+    - row "EMAIL_HOST_USER ''":
+      - cell "EMAIL_HOST_USER"
+      - cell "''"
+    - row "EMAIL_PORT 25":
+      - cell "EMAIL_PORT"
+      - cell "25"
+    - row "EMAIL_SSL_CERTFILE None":
+      - cell "EMAIL_SSL_CERTFILE"
+      - cell "None"
+    - row "EMAIL_SSL_KEYFILE '********************'":
+      - cell "EMAIL_SSL_KEYFILE"
+      - cell "'********************'"
+    - row "EMAIL_SUBJECT_PREFIX '[Django] '":
+      - cell "EMAIL_SUBJECT_PREFIX"
+      - cell "'[Django] '"
+    - row "EMAIL_TIMEOUT 5":
+      - cell "EMAIL_TIMEOUT"
+      - cell "5"
+    - row "EMAIL_USE_LOCALTIME False":
+      - cell "EMAIL_USE_LOCALTIME"
+      - cell "False"
+    - row "EMAIL_USE_SSL False":
+      - cell "EMAIL_USE_SSL"
+      - cell "False"
+    - row "EMAIL_USE_TLS False":
+      - cell "EMAIL_USE_TLS"
+      - cell "False"
+    - row "FILE_UPLOAD_DIRECTORY_PERMISSIONS None":
+      - cell "FILE_UPLOAD_DIRECTORY_PERMISSIONS"
+      - cell "None"
+    - row "FILE_UPLOAD_HANDLERS ['django.core.files.uploadhandler.MemoryFileUploadHandler', 'django.core.files.uploadhandler.TemporaryFileUploadHandler']":
+      - cell "FILE_UPLOAD_HANDLERS"
+      - cell "['django.core.files.uploadhandler.MemoryFileUploadHandler', 'django.core.files.uploadhandler.TemporaryFileUploadHandler']"
+    - row "FILE_UPLOAD_MAX_MEMORY_SIZE 26214400":
+      - cell "FILE_UPLOAD_MAX_MEMORY_SIZE"
+      - cell "26214400"
+    - row "FILE_UPLOAD_PERMISSIONS 420":
+      - cell "FILE_UPLOAD_PERMISSIONS"
+      - cell "420"
+    - row "FILE_UPLOAD_TEMP_DIR None":
+      - cell "FILE_UPLOAD_TEMP_DIR"
+      - cell "None"
+    - row "FIRST_DAY_OF_WEEK 0":
+      - cell "FIRST_DAY_OF_WEEK"
+      - cell "0"
+    - row "FIXTURE_DIRS ('/app/arkumu/fixtures',)":
+      - cell "FIXTURE_DIRS"
+      - cell "('/app/arkumu/fixtures',)"
+    - row "FORCE_SCRIPT_NAME None":
+      - cell "FORCE_SCRIPT_NAME"
+      - cell "None"
+    - row "FORMAT_MODULE_PATH None":
+      - cell "FORMAT_MODULE_PATH"
+      - cell "None"
+    - row "FORMS_URLFIELD_ASSUME_HTTPS False":
+      - cell "FORMS_URLFIELD_ASSUME_HTTPS"
+      - cell "False"
+    - row "FORM_RENDERER 'django.forms.renderers.TemplatesSetting'":
+      - cell "FORM_RENDERER"
+      - cell "'django.forms.renderers.TemplatesSetting'"
+    - 'row "HUEY {''blocking'': True, ''connection'': {''url'': ''redis://redis:6379/0''}, ''consumer'': {''backoff'': 1.15, ''check_worker_health'': True, ''health_check_interval'': 1, ''initial_delay'': 0.1, ''max_delay'': 10.0, ''periodic'': True, ''scheduler_interval'': 1, ''worker_type'': ''thread'', ''workers'': 2}, ''huey_class'': ''huey.RedisHuey'', ''immediate'': False, ''name'': ''arkumu'', ''results'': True, ''store_none'': False, ''utc'': True}"':
+      - cell "HUEY"
+      - 'cell "{''blocking'': True, ''connection'': {''url'': ''redis://redis:6379/0''}, ''consumer'': {''backoff'': 1.15, ''check_worker_health'': True, ''health_check_interval'': 1, ''initial_delay'': 0.1, ''max_delay'': 10.0, ''periodic'': True, ''scheduler_interval'': 1, ''worker_type'': ''thread'', ''workers'': 2}, ''huey_class'': ''huey.RedisHuey'', ''immediate'': False, ''name'': ''arkumu'', ''results'': True, ''store_none'': False, ''utc'': True}"'
+    - row "IGNORABLE_404_URLS []":
+      - cell "IGNORABLE_404_URLS"
+      - cell "[]"
+    - row "INSTALLED_APPS ['django.contrib.auth', 'django.contrib.contenttypes', 'django.contrib.sessions', 'django.contrib.sites', 'django.contrib.messages', 'django.contrib.staticfiles', 'django.contrib.admin', 'django.forms', 'crispy_forms', 'crispy_bootstrap5', 'allauth', 'allauth.account', 'allauth.mfa', 'allauth.socialaccount', 'rest_framework', 'rest_framework.authtoken', 'corsheaders', 'drf_spectacular', 'modeltranslation', 'huey.contrib.djhuey', 'arkumu.users', 'arkumu.metadata', 'arkumu.importer', 'arkumu.rest', 'arkumu.storage', 'django_extensions']":
+      - cell "INSTALLED_APPS"
+      - cell "['django.contrib.auth', 'django.contrib.contenttypes', 'django.contrib.sessions', 'django.contrib.sites', 'django.contrib.messages', 'django.contrib.staticfiles', 'django.contrib.admin', 'django.forms', 'crispy_forms', 'crispy_bootstrap5', 'allauth', 'allauth.account', 'allauth.mfa', 'allauth.socialaccount', 'rest_framework', 'rest_framework.authtoken', 'corsheaders', 'drf_spectacular', 'modeltranslation', 'huey.contrib.djhuey', 'arkumu.users', 'arkumu.metadata', 'arkumu.importer', 'arkumu.rest', 'arkumu.storage', 'django_extensions']"
+    - row "INTERNAL_IPS ['127.0.0.1', '10.0.2.2', '10.10.8.1']":
+      - cell "INTERNAL_IPS"
+      - cell "['127.0.0.1', '10.0.2.2', '10.10.8.1']"
+    - row "LANGUAGES [('de', 'German'), ('en', 'English'), ('fr', 'French')]":
+      - cell "LANGUAGES"
+      - cell "[('de', 'German'), ('en', 'English'), ('fr', 'French')]"
+    - row "LANGUAGES_BIDI ['he', 'ar', 'ar-dz', 'ckb', 'fa', 'ug', 'ur']":
+      - cell "LANGUAGES_BIDI"
+      - cell "['he', 'ar', 'ar-dz', 'ckb', 'fa', 'ug', 'ur']"
+    - row "LANGUAGE_CODE 'en'":
+      - cell "LANGUAGE_CODE"
+      - cell "'en'"
+    - row "LANGUAGE_COOKIE_AGE None":
+      - cell "LANGUAGE_COOKIE_AGE"
+      - cell "None"
+    - row "LANGUAGE_COOKIE_DOMAIN None":
+      - cell "LANGUAGE_COOKIE_DOMAIN"
+      - cell "None"
+    - row "LANGUAGE_COOKIE_HTTPONLY False":
+      - cell "LANGUAGE_COOKIE_HTTPONLY"
+      - cell "False"
+    - row "LANGUAGE_COOKIE_NAME 'django_language'":
+      - cell "LANGUAGE_COOKIE_NAME"
+      - cell "'django_language'"
+    - row "LANGUAGE_COOKIE_PATH '/'":
+      - cell "LANGUAGE_COOKIE_PATH"
+      - cell "'/'"
+    - row "LANGUAGE_COOKIE_SAMESITE None":
+      - cell "LANGUAGE_COOKIE_SAMESITE"
+      - cell "None"
+    - row "LANGUAGE_COOKIE_SECURE False":
+      - cell "LANGUAGE_COOKIE_SECURE"
+      - cell "False"
+    - row "LOCALE_PATHS ['/app/locale']":
+      - cell "LOCALE_PATHS"
+      - cell "['/app/locale']"
+    - row "LOCAL_APPS ['arkumu.users', 'arkumu.metadata', 'arkumu.importer', 'arkumu.rest', 'arkumu.storage']":
+      - cell "LOCAL_APPS"
+      - cell "['arkumu.users', 'arkumu.metadata', 'arkumu.importer', 'arkumu.rest', 'arkumu.storage']"
+    - 'row "LOGGING {''disable_existing_loggers'': False, ''formatters'': {''verbose'': {''format'': ''%(levelname)s %(asctime)s %(module)s '' ''%(process)d %(thread)d %(message)s''}}, ''handlers'': {''console'': {''class'': ''logging.StreamHandler'', ''formatter'': ''verbose'', ''level'': ''DEBUG''}}, ''root'': {''handlers'': [''console''], ''level'': ''INFO''}, ''version'': 1}"':
+      - cell "LOGGING"
+      - 'cell "{''disable_existing_loggers'': False, ''formatters'': {''verbose'': {''format'': ''%(levelname)s %(asctime)s %(module)s '' ''%(process)d %(thread)d %(message)s''}}, ''handlers'': {''console'': {''class'': ''logging.StreamHandler'', ''formatter'': ''verbose'', ''level'': ''DEBUG''}}, ''root'': {''handlers'': [''console''], ''level'': ''INFO''}, ''version'': 1}"'
+    - row "LOGGING_CONFIG 'logging.config.dictConfig'":
+      - cell "LOGGING_CONFIG"
+      - cell "'logging.config.dictConfig'"
+    - row "LOGIN_REDIRECT_URL '/'":
+      - cell "LOGIN_REDIRECT_URL"
+      - cell "'/'"
+    - row "LOGIN_URL 'account_login'":
+      - cell "LOGIN_URL"
+      - cell "'account_login'"
+    - row "LOGOUT_REDIRECT_URL None":
+      - cell "LOGOUT_REDIRECT_URL"
+      - cell "None"
+    - row "MANAGERS [('arkumu', 'arkumu@arkumu.uni-koeln.de')]":
+      - cell "MANAGERS"
+      - cell "[('arkumu', 'arkumu@arkumu.uni-koeln.de')]"
+    - row "MEDIA_ROOT '/app/arkumu/media'":
+      - cell "MEDIA_ROOT"
+      - cell "'/app/arkumu/media'"
+    - row "MEDIA_URL '/media/'":
+      - cell "MEDIA_URL"
+      - cell "'/media/'"
+    - row "MESSAGE_STORAGE 'django.contrib.messages.storage.fallback.FallbackStorage'":
+      - cell "MESSAGE_STORAGE"
+      - cell "'django.contrib.messages.storage.fallback.FallbackStorage'"
+    - row "MIDDLEWARE ['django.middleware.security.SecurityMiddleware', 'corsheaders.middleware.CorsMiddleware', 'django.contrib.sessions.middleware.SessionMiddleware', 'django.middleware.locale.LocaleMiddleware', 'django.middleware.common.CommonMiddleware', 'django.middleware.csrf.CsrfViewMiddleware', 'django.contrib.auth.middleware.AuthenticationMiddleware', 'django.contrib.messages.middleware.MessageMiddleware', 'django.middleware.clickjacking.XFrameOptionsMiddleware', 'allauth.account.middleware.AccountMiddleware']":
+      - cell "MIDDLEWARE"
+      - cell "['django.middleware.security.SecurityMiddleware', 'corsheaders.middleware.CorsMiddleware', 'django.contrib.sessions.middleware.SessionMiddleware', 'django.middleware.locale.LocaleMiddleware', 'django.middleware.common.CommonMiddleware', 'django.middleware.csrf.CsrfViewMiddleware', 'django.contrib.auth.middleware.AuthenticationMiddleware', 'django.contrib.messages.middleware.MessageMiddleware', 'django.middleware.clickjacking.XFrameOptionsMiddleware', 'allauth.account.middleware.AccountMiddleware']"
+    - 'row "MIGRATION_MODULES {''sites'': ''arkumu.contrib.sites.migrations''}"':
+      - cell "MIGRATION_MODULES"
+      - 'cell "{''sites'': ''arkumu.contrib.sites.migrations''}"'
+    - row "MONTH_DAY_FORMAT 'F j'":
+      - cell "MONTH_DAY_FORMAT"
+      - cell "'F j'"
+    - row "NUMBER_GROUPING 0":
+      - cell "NUMBER_GROUPING"
+      - cell "0"
+    - row "PASSWORD_HASHERS '********************'":
+      - cell "PASSWORD_HASHERS"
+      - cell "'********************'"
+    - row "PASSWORD_RESET_TIMEOUT '********************'":
+      - cell "PASSWORD_RESET_TIMEOUT"
+      - cell "'********************'"
+    - row "PREPEND_WWW False":
+      - cell "PREPEND_WWW"
+      - cell "False"
+    - row "READ_DOT_ENV_FILE False":
+      - cell "READ_DOT_ENV_FILE"
+      - cell "False"
+    - row "REDIS_SSL False":
+      - cell "REDIS_SSL"
+      - cell "False"
+    - row "REDIS_URL 'redis://redis:6379/0'":
+      - cell "REDIS_URL"
+      - cell "'redis://redis:6379/0'"
+    - 'row "REST_FRAMEWORK {''DEFAULT_AUTHENTICATION_CLASSES'': (''rest_framework.authentication.SessionAuthentication'', ''rest_framework.authentication.TokenAuthentication''), ''DEFAULT_PERMISSION_CLASSES'': (''rest_framework.permissions.AllowAny'',), ''DEFAULT_SCHEMA_CLASS'': ''drf_spectacular.openapi.AutoSchema''}"':
+      - cell "REST_FRAMEWORK"
+      - 'cell "{''DEFAULT_AUTHENTICATION_CLASSES'': (''rest_framework.authentication.SessionAuthentication'', ''rest_framework.authentication.TokenAuthentication''), ''DEFAULT_PERMISSION_CLASSES'': (''rest_framework.permissions.AllowAny'',), ''DEFAULT_SCHEMA_CLASS'': ''drf_spectacular.openapi.AutoSchema''}"'
+    - row "ROOT_URLCONF 'config.urls'":
+      - cell "ROOT_URLCONF"
+      - cell "'config.urls'"
+    - row "SECRET_KEY '********************'":
+      - cell "SECRET_KEY"
+      - cell "'********************'"
+    - row "SECRET_KEY_FALLBACKS '********************'":
+      - cell "SECRET_KEY_FALLBACKS"
+      - cell "'********************'"
+    - row "SECURE_CONTENT_TYPE_NOSNIFF True":
+      - cell "SECURE_CONTENT_TYPE_NOSNIFF"
+      - cell "True"
+    - row "SECURE_CROSS_ORIGIN_OPENER_POLICY 'same-origin'":
+      - cell "SECURE_CROSS_ORIGIN_OPENER_POLICY"
+      - cell "'same-origin'"
+    - row "SECURE_HSTS_INCLUDE_SUBDOMAINS False":
+      - cell "SECURE_HSTS_INCLUDE_SUBDOMAINS"
+      - cell "False"
+    - row "SECURE_HSTS_PRELOAD False":
+      - cell "SECURE_HSTS_PRELOAD"
+      - cell "False"
+    - row "SECURE_HSTS_SECONDS 0":
+      - cell "SECURE_HSTS_SECONDS"
+      - cell "0"
+    - row "SECURE_PROXY_SSL_HEADER None":
+      - cell "SECURE_PROXY_SSL_HEADER"
+      - cell "None"
+    - row "SECURE_REDIRECT_EXEMPT []":
+      - cell "SECURE_REDIRECT_EXEMPT"
+      - cell "[]"
+    - row "SECURE_REFERRER_POLICY 'same-origin'":
+      - cell "SECURE_REFERRER_POLICY"
+      - cell "'same-origin'"
+    - row "SECURE_SSL_HOST None":
+      - cell "SECURE_SSL_HOST"
+      - cell "None"
+    - row "SECURE_SSL_REDIRECT False":
+      - cell "SECURE_SSL_REDIRECT"
+      - cell "False"
+    - row "SERVER_EMAIL 'root@localhost'":
+      - cell "SERVER_EMAIL"
+      - cell "'root@localhost'"
+    - row "SESSION_CACHE_ALIAS 'default'":
+      - cell "SESSION_CACHE_ALIAS"
+      - cell "'default'"
+    - row "SESSION_COOKIE_AGE 1209600":
+      - cell "SESSION_COOKIE_AGE"
+      - cell "1209600"
+    - row "SESSION_COOKIE_DOMAIN None":
+      - cell "SESSION_COOKIE_DOMAIN"
+      - cell "None"
+    - row "SESSION_COOKIE_HTTPONLY True":
+      - cell "SESSION_COOKIE_HTTPONLY"
+      - cell "True"
+    - row "SESSION_COOKIE_NAME 'sessionid'":
+      - cell "SESSION_COOKIE_NAME"
+      - cell "'sessionid'"
+    - row "SESSION_COOKIE_PATH '/'":
+      - cell "SESSION_COOKIE_PATH"
+      - cell "'/'"
+    - row "SESSION_COOKIE_SAMESITE 'Lax'":
+      - cell "SESSION_COOKIE_SAMESITE"
+      - cell "'Lax'"
+    - row "SESSION_COOKIE_SECURE False":
+      - cell "SESSION_COOKIE_SECURE"
+      - cell "False"
+    - row "SESSION_ENGINE 'django.contrib.sessions.backends.db'":
+      - cell "SESSION_ENGINE"
+      - cell "'django.contrib.sessions.backends.db'"
+    - row "SESSION_EXPIRE_AT_BROWSER_CLOSE False":
+      - cell "SESSION_EXPIRE_AT_BROWSER_CLOSE"
+      - cell "False"
+    - row "SESSION_FILE_PATH None":
+      - cell "SESSION_FILE_PATH"
+      - cell "None"
+    - row "SESSION_SAVE_EVERY_REQUEST False":
+      - cell "SESSION_SAVE_EVERY_REQUEST"
+      - cell "False"
+    - row "SESSION_SERIALIZER 'django.contrib.sessions.serializers.JSONSerializer'":
+      - cell "SESSION_SERIALIZER"
+      - cell "'django.contrib.sessions.serializers.JSONSerializer'"
+    - row "SETTINGS_MODULE 'config.settings.local'":
+      - cell "SETTINGS_MODULE"
+      - cell "'config.settings.local'"
+    - row "SHORT_DATETIME_FORMAT 'm/d/Y P'":
+      - cell "SHORT_DATETIME_FORMAT"
+      - cell "'m/d/Y P'"
+    - row "SHORT_DATE_FORMAT 'm/d/Y'":
+      - cell "SHORT_DATE_FORMAT"
+      - cell "'m/d/Y'"
+    - row "SIGNING_BACKEND 'django.core.signing.TimestampSigner'":
+      - cell "SIGNING_BACKEND"
+      - cell "'django.core.signing.TimestampSigner'"
+    - row "SILENCED_SYSTEM_CHECKS []":
+      - cell "SILENCED_SYSTEM_CHECKS"
+      - cell "[]"
+    - row "SITE_ID 1":
+      - cell "SITE_ID"
+      - cell "1"
+    - row "SOCIALACCOUNT_ADAPTER 'arkumu.users.adapters.SocialAccountAdapter'":
+      - cell "SOCIALACCOUNT_ADAPTER"
+      - cell "'arkumu.users.adapters.SocialAccountAdapter'"
+    - 'row "SOCIALACCOUNT_FORMS {''signup'': ''arkumu.users.forms.UserSocialSignupForm''}"':
+      - cell "SOCIALACCOUNT_FORMS"
+      - 'cell "{''signup'': ''arkumu.users.forms.UserSocialSignupForm''}"'
+    - 'row "SPECTACULAR_SETTINGS {''DESCRIPTION'': ''Documentation of API endpoints of arkumu'', ''SCHEMA_PATH_PREFIX'': ''/api/'', ''SERVE_PERMISSIONS'': [''rest_framework.permissions.IsAdminUser''], ''TITLE'': ''arkumu API'', ''VERSION'': ''1.0.0''}"':
+      - cell "SPECTACULAR_SETTINGS"
+      - 'cell "{''DESCRIPTION'': ''Documentation of API endpoints of arkumu'', ''SCHEMA_PATH_PREFIX'': ''/api/'', ''SERVE_PERMISSIONS'': [''rest_framework.permissions.IsAdminUser''], ''TITLE'': ''arkumu API'', ''VERSION'': ''1.0.0''}"'
+    - row "STATICFILES_DIRS ['/app/arkumu/static', '/app/theme/static']":
+      - cell "STATICFILES_DIRS"
+      - cell "['/app/arkumu/static', '/app/theme/static']"
+    - row "STATICFILES_FINDERS ['django.contrib.staticfiles.finders.FileSystemFinder', 'django.contrib.staticfiles.finders.AppDirectoriesFinder']":
+      - cell "STATICFILES_FINDERS"
+      - cell "['django.contrib.staticfiles.finders.FileSystemFinder', 'django.contrib.staticfiles.finders.AppDirectoriesFinder']"
+    - row "STATICFILES_STORAGE 'django.contrib.staticfiles.storage.StaticFilesStorage'":
+      - cell "STATICFILES_STORAGE"
+      - cell "'django.contrib.staticfiles.storage.StaticFilesStorage'"
+    - row "STATIC_ROOT '/app/staticfiles'":
+      - cell "STATIC_ROOT"
+      - cell "'/app/staticfiles'"
+    - row "STATIC_URL '/static/'":
+      - cell "STATIC_URL"
+      - cell "'/static/'"
+    - 'row "STORAGES {''default'': {''BACKEND'': ''django.core.files.storage.FileSystemStorage''}, ''staticfiles'': {''BACKEND'': ''django.contrib.staticfiles.storage.StaticFilesStorage''}}"':
+      - cell "STORAGES"
+      - 'cell "{''default'': {''BACKEND'': ''django.core.files.storage.FileSystemStorage''}, ''staticfiles'': {''BACKEND'': ''django.contrib.staticfiles.storage.StaticFilesStorage''}}"'
+    - 'row "TEMPLATES [{''APP_DIRS'': True, ''BACKEND'': ''django.template.backends.django.DjangoTemplates'', ''DIRS'': [''/app/arkumu/templates''], ''OPTIONS'': {''context_processors'': [''django.template.context_processors.debug'', ''django.template.context_processors.request'', ''django.contrib.auth.context_processors.auth'', ''django.template.context_processors.i18n'', ''django.template.context_processors.media'', ''django.template.context_processors.static'', ''django.template.context_processors.tz'', ''django.contrib.messages.context_processors.messages'', ''arkumu.users.context_processors.allauth_settings'']}}]"':
+      - cell "TEMPLATES"
+      - 'cell "[{''APP_DIRS'': True, ''BACKEND'': ''django.template.backends.django.DjangoTemplates'', ''DIRS'': [''/app/arkumu/templates''], ''OPTIONS'': {''context_processors'': [''django.template.context_processors.debug'', ''django.template.context_processors.request'', ''django.contrib.auth.context_processors.auth'', ''django.template.context_processors.i18n'', ''django.template.context_processors.media'', ''django.template.context_processors.static'', ''django.template.context_processors.tz'', ''django.contrib.messages.context_processors.messages'', ''arkumu.users.context_processors.allauth_settings'']}}]"'
+    - row "TEST_NON_SERIALIZED_APPS []":
+      - cell "TEST_NON_SERIALIZED_APPS"
+      - cell "[]"
+    - row "TEST_RUNNER 'django.test.runner.DiscoverRunner'":
+      - cell "TEST_RUNNER"
+      - cell "'django.test.runner.DiscoverRunner'"
+    - row "THIRD_PARTY_APPS ['crispy_forms', 'crispy_bootstrap5', 'allauth', 'allauth.account', 'allauth.mfa', 'allauth.socialaccount', 'rest_framework', 'rest_framework.authtoken', 'corsheaders', 'drf_spectacular', 'modeltranslation', 'huey.contrib.djhuey']":
+      - cell "THIRD_PARTY_APPS"
+      - cell "['crispy_forms', 'crispy_bootstrap5', 'allauth', 'allauth.account', 'allauth.mfa', 'allauth.socialaccount', 'rest_framework', 'rest_framework.authtoken', 'corsheaders', 'drf_spectacular', 'modeltranslation', 'huey.contrib.djhuey']"
+    - row "THOUSAND_SEPARATOR ','":
+      - cell "THOUSAND_SEPARATOR"
+      - cell "','"
+    - row "TIME_FORMAT 'P'":
+      - cell "TIME_FORMAT"
+      - cell "'P'"
+    - row "TIME_INPUT_FORMATS ['%H:%M:%S', '%H:%M:%S.%f', '%H:%M']":
+      - cell "TIME_INPUT_FORMATS"
+      - cell "['%H:%M:%S', '%H:%M:%S.%f', '%H:%M']"
+    - row "TIME_ZONE 'UTC'":
+      - cell "TIME_ZONE"
+      - cell "'UTC'"
+    - row "USE_I18N True":
+      - cell "USE_I18N"
+      - cell "True"
+    - row "USE_THOUSAND_SEPARATOR False":
+      - cell "USE_THOUSAND_SEPARATOR"
+      - cell "False"
+    - row "USE_TZ True":
+      - cell "USE_TZ"
+      - cell "True"
+    - row "USE_X_FORWARDED_HOST False":
+      - cell "USE_X_FORWARDED_HOST"
+      - cell "False"
+    - row "USE_X_FORWARDED_PORT False":
+      - cell "USE_X_FORWARDED_PORT"
+      - cell "False"
+    - row "WSGI_APPLICATION 'config.wsgi.application'":
+      - cell "WSGI_APPLICATION"
+      - cell "'config.wsgi.application'"
+    - row "X_FRAME_OPTIONS 'DENY'":
+      - cell "X_FRAME_OPTIONS"
+      - cell "'DENY'"
+    - row "YEAR_MONTH_FORMAT 'F Y'":
+      - cell "YEAR_MONTH_FORMAT"
+      - cell "'F Y'"
+- paragraph:
+  - text: You’re seeing this error because you have
+  - code: DEBUG = True
+  - text: in your Django settings file. Change that to
+  - code: "False"
+  - text: ", and Django will display a standard page generated by the handler for this status code."
+```
