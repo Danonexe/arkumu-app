@@ -391,35 +391,25 @@ class LazyDatasetPreviewView(GeneralLoginRequiredMixin, OrganizationMixin,
     def _get_lightweight_csv_preview(self, organization_id: str, source_name: str, dataset_name: str):
         """
         Get a lightweight CSV preview using Polars but skipping expensive multi-value analysis.
-        Uses the same robust file handling as S3DirectDataAnalyzer but without the analysis overhead.
+        OPTIMIZATION: Use get_single_dataset_summary to avoid full S3 scan.
         """
         try:
-            # Use S3DirectDataAnalyzer for proper file discovery and Polars parsing
+            # Use optimized single dataset summary method
             analyzer = S3DirectDataAnalyzer()
-            sources = analyzer.discover_s3_data_sources(organization_id)
+            dataset_summary = analyzer.get_single_dataset_summary(organization_id, dataset_name, source_name)
             
-            # Find the correct source info
-            source_info = None
-            for source in sources:
-                if source.name == source_name:
-                    source_info = source
-                    break
+            if dataset_summary.get('error'):
+                return {'error': dataset_summary.get('error')}
             
-            if not source_info:
-                return {'error': f'Source {source_name} not found'}
-            
-            # Use the analyzer's robust Polars-based preview method but skip expensive analysis
-            preview = analyzer.get_s3_table_preview(source_info, dataset_name, limit=5, skip_analysis=True)
-            
-            # Return the same format as the original but without multi-value analysis results
+            # Return the same format as expected by the template
             return {
                 'name': dataset_name,
-                'columns': preview.column_headers,
-                'column_count': len(preview.column_headers),
-                'sample_data': preview.data_rows,
-                'row_count': preview.total_rows,
-                'showing_rows': len(preview.data_rows),
-                'has_more': preview.has_more
+                'columns': dataset_summary.get('columns', []),
+                'column_count': dataset_summary.get('column_count', 0),
+                'sample_data': dataset_summary.get('sample_data', []),
+                'row_count': dataset_summary.get('row_count', 0),
+                'showing_rows': len(dataset_summary.get('sample_data', [])),
+                'has_more': dataset_summary.get('row_count', 0) > len(dataset_summary.get('sample_data', []))
             }
             
         except Exception as e:

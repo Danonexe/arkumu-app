@@ -22,12 +22,23 @@ class CSVDataMixin:
         """
         Discover and return all CSV datasets for a given organization.
         
+        OPTIMIZATION: Cache the dataset list to avoid repeated S3 scans.
+        
         Args:
             organization_id (str): Organization ID to discover datasets for
             
         Returns:
             list: List of CSV dataset dictionaries with name, source, format
         """
+        # Check cache first
+        from django.core.cache import cache
+        cache_key = f"csv_datasets:{organization_id}"
+        cached_datasets = cache.get(cache_key)
+        
+        if cached_datasets is not None:
+            logger.info(f"CSV_DATA_MIXIN: Using cached dataset list for organization '{organization_id}' ({len(cached_datasets)} datasets)")
+            return cached_datasets
+        
         logger.info(f"CSV_DATA_MIXIN: Discovering CSV datasets for organization '{organization_id}'")
         
         try:
@@ -46,6 +57,10 @@ class CSVDataMixin:
                         })
             
             logger.info(f"CSV_DATA_MIXIN: Found {len(csv_datasets)} CSV datasets")
+            
+            # Cache for 5 minutes
+            cache.set(cache_key, csv_datasets, 300)
+            
             return csv_datasets
             
         except Exception as e:
