@@ -22,6 +22,7 @@ import os
 from arkumu.storage.services.bucket_service import BucketService
 # SmartBulkUpdaterPolars removed - using modular services instead
 from arkumu.metadata.services.relationship_discovery import RelationshipDiscoveryService
+from arkumu.importer.services.importer.bulk_data_analyzer import BulkDataAnalyzer
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +92,7 @@ class S3DirectDataAnalyzer:
         # Initialize services for S3 access and analysis
         self.bucket_service = BucketService()
         self.relationship_service = RelationshipDiscoveryService()
+        self.bulk_analyzer = BulkDataAnalyzer()
         
         # Initialize bulk updater only when needed (lazy initialization)
         self._bulk_updater = None
@@ -491,7 +493,7 @@ class S3DirectDataAnalyzer:
                 # Take a smaller subset for analysis if needed
                 analysis_sample_df = sample_df.head(self.sample_size_for_analysis)
                 sample_data = analysis_sample_df.to_dicts()
-                multi_value_analysis = self.bulk_updater.analyze_dataset_multi_values(sample_data)
+                multi_value_analysis = self.bulk_analyzer.analyze_dataset_multi_values(analysis_sample_df)
             else:
                 # Skip expensive analysis for lazy loading
                 sample_data = []
@@ -779,7 +781,15 @@ class S3DirectDataAnalyzer:
             csv_data.append(row_dict)
         
         # Analyze what would change
-        changes_analysis = self.bulk_updater.analyze_dataset_changes(dataset_name, csv_data)
+        # Convert list of dicts to DataFrame for the new analyzer
+        import polars as pl
+        df = pl.DataFrame(csv_data)
+        changes_analysis = self.bulk_analyzer.analyze_dataset_changes(
+            dataset_name=dataset_name,
+            df=df,
+            base_uri="https://example.org/",  # TODO: Get from config
+            institution=organization_id
+        )
         
         return {
             'dataset_name': dataset_name,
