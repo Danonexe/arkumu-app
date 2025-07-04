@@ -1,5 +1,5 @@
 from django.urls import path
-from arkumu.metadata.views import dashboard_views, resource_views, triple_views, graph_views, bulk_editor_views, data_discovery_views, data_explorer_views, split_views, direct_data_views
+from arkumu.metadata.views import dashboard_views, resource_views, triple_views, graph_views, bulk_editor_views, data_discovery_views, data_explorer_views, split_views, direct_data_views, model_graph_views
 from arkumu.metadata.views.csv_mapping import saved_mappings_api
 from arkumu.metadata.views.csv_mapping.views import mapping_validation_views, mapping_save_views, mapping_load_views, mapping_delete_views
 from arkumu.metadata.views.csv_mapping.views import core_editor_views, dataset_views, column_views, utility_views, relationship_views, ontology_views
@@ -150,6 +150,7 @@ urlpatterns = [
     
     # Main CSV Mapping Editor
     path('csv-mapping-editor/', core_editor_views.csv_mapping_editor_view, name='csv_mapping_editor'),
+    path('mapping-graph-data/', core_editor_views.mapping_graph_data_view, name='mapping_graph_data'),
     
     # Step 2: Dataset card views (implemented with coordinator)
     path('csv-dataset-card/', dataset_views.CSVDatasetCardView.as_view(), name='csv_dataset_card'),
@@ -228,5 +229,12 @@ urlpatterns = [
     path('csv-mapping/execute/', ExecuteGUIMappingView.as_view(), name='execute_gui_mapping'),
     path('csv-mapping/execution-status/', GetMappingExecutionStatusView.as_view(), name='mapping_execution_status'),
     path('csv-mapping/validate-execution/', ValidateMappingExecutionView.as_view(), name='validate_mapping_execution'),
+    
+    # Model Graph Visualization URLs
+    path('model-graph/', model_graph_views.model_graph_main, name='model_graph'),
+    path('model-graph/mapping-details/', model_graph_views.model_graph_mapping_details, name='model_graph_mapping_details'),
+    path('model-graph/field/<str:field_type>/', model_graph_views.model_graph_field_details, name='model_graph_field_details'),
+    path('model-graph/workflow/<str:workflow_type>/', model_graph_views.model_graph_workflow_details, name='model_graph_workflow_details'),
+    path('model-graph/relation/<str:relation_type>/', model_graph_views.model_graph_relation_details, name='model_graph_relation_details'),
     
     ]

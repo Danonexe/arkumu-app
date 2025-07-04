@@ -14,9 +14,9 @@ from django.http import QueryDict
 from django.contrib.sessions.middleware import SessionMiddleware
 from django.middleware.csrf import CsrfViewMiddleware
 
-from arkumu.metadata.views.csv_mapping.csv_mapping_views import (
+from arkumu.metadata.views.csv_mapping.views.core_editor_views import (
     CSVMappingEditorView,
-    GetMappingJSONContentView
+    MappingGraphDataView
 )
 
 User = get_user_model()
@@ -284,9 +284,9 @@ class TestCSVMappingEditorView:
                     assert 'Error loading CSV mapping editor' in context['error']
 
 
-@pytest.mark.django_db  
-class TestGetMappingJSONContentView:
-    """Tests for GetMappingJSONContentView - JSON content display"""
+@pytest.mark.django_db
+class TestMappingGraphDataView:
+    """Tests for MappingGraphDataView - Graph visualization for CSV mapping relationships"""
     
     @pytest.fixture
     def mock_organization_context(self, organization_id):
@@ -294,247 +294,320 @@ class TestGetMappingJSONContentView:
         return {
             'organization_id': organization_id,
             'organization_exists': True,
-            'organizations': [{'id': organization_id, 'name': 'Test Organization'}]
+            'organizations': [
+                {'id': organization_id, 'name': 'Test Organization'},
+                {'id': 'other-org', 'name': 'Other Organization'}
+            ]
         }
     
     @pytest.fixture
-    def mock_mapping_config(self, organization_id):
-        """Mock mapping configuration"""
+    def mock_workspace_columns(self, organization_id):
+        """Mock workspace columns with relationships"""
         return {
-            'version': '1.0',
-            'organization_id': organization_id,
-            'selected_datasets': ['dataset1.csv', 'dataset2.csv'],
-            'workspace_columns': {
-                f'{organization_id}::dataset1.csv::id': {
-                    'name': 'id',
-                    'dataset': 'dataset1.csv',
-                    'source': organization_id
-                },
-                f'{organization_id}::dataset1.csv::name': {
-                    'name': 'name', 
-                    'dataset': 'dataset1.csv',
-                    'source': organization_id
+            f'{organization_id}::dataset1.csv::id': {
+                'dataset': 'dataset1.csv',
+                'name': 'id',
+                'is_anchor': True,
+                'is_fk': False,
+                'is_multi_value': False,
+                'is_relationship_context': False,
+                'is_external_ontology': False
+            },
+            f'{organization_id}::dataset1.csv::user_id': {
+                'dataset': 'dataset1.csv',
+                'name': 'user_id',
+                'is_anchor': False,
+                'is_fk': True,
+                'is_multi_value': False,
+                'is_relationship_context': False,
+                'is_external_ontology': False,
+                'fk_config': {
+                    'target_dataset': 'users.csv',
+                    'target_column': 'id',
+                    'direction': 'outbound'
                 }
             },
-            'fk_relationships': {},
-            'entity_mappings': {},
-            'metadata': {
-                'total_datasets': 2,
-                'total_columns': 2,
-                'total_fk_relationships': 0
+            f'{organization_id}::dataset2.csv::id': {
+                'dataset': 'dataset2.csv',
+                'name': 'id',
+                'is_anchor': True,
+                'is_fk': False,
+                'is_multi_value': False,
+                'is_relationship_context': False,
+                'is_external_ontology': False
             }
         }
     
-    def test_get_json_content_success(self, request_factory, organization_id, mock_organization_context, mock_mapping_config):
-        """Test successful JSON content generation"""
-        request = request_factory.get(f'/?organization={organization_id}')
-        request = add_session_to_request(request)
-        
-        view = GetMappingJSONContentView()
-        
-        mock_workspace_summary = {
-            'total_datasets': 2,
-            'total_columns': 2,
-            'selected_datasets': ['dataset1.csv', 'dataset2.csv']
+    @pytest.fixture
+    def mock_mapping_model(self, organization_id, mock_workspace_columns):
+        """Mock mapping model instance"""
+        mapping = Mock()
+        mapping.id = 'test-mapping-123'
+        mapping.name = 'Test Mapping'
+        mapping.description = 'Test mapping description'
+        mapping.mapping_config = {
+            'workspace_columns': mock_workspace_columns,
+            'import_strategy': {'strategy': 'append'}
         }
-        
-        with patch.object(view, 'get_organization_id_from_request', return_value=organization_id):
-            with patch.object(view, 'get_organization_context', return_value=mock_organization_context):
-                with patch.object(view, 'serialize_current_mapping_state', return_value=mock_mapping_config):
-                    with patch.object(view, 'get_workspace_summary', return_value=mock_workspace_summary):
-                        with patch('arkumu.metadata.views.csv_mapping.csv_mapping_views.timezone') as mock_timezone:
-                            mock_timezone.now.return_value.isoformat.return_value = '2024-01-01T12:00:00'
-                            mock_timezone.now.return_value.strftime.return_value = '2024-01-01 12:00:00'
-                            
-                            response = view.get(request)
-                            
-                            # Verify response content contains expected elements
-                            content = response.content.decode()
-                            
-                            assert 'Current Mapping Configuration' in content
-                            assert '📋 Copy JSON' in content
-                            assert '💾 Download JSON' in content
-                            assert '"organization_id"' in content
-                            assert f'"{organization_id}"' in content
-                            assert 'export_timestamp' in content
-                            assert 'workspace_summary' in content
-                            
-                            # Verify JSON structure is included
-                            assert 'workspace_columns' in content
-                            assert 'selected_datasets' in content
-    
-    def test_get_json_content_invalid_organization(self, request_factory, organization_id):
-        """Test JSON content with invalid organization"""
+        return mapping
+
+    def test_get_htmx_request_success(self, request_factory, organization_id, mock_organization_context, mock_workspace_columns):
+        """Test successful HTMX request returns modal with graph data"""
         request = request_factory.get(f'/?organization={organization_id}')
         request = add_session_to_request(request)
+        # Add HTMX headers
+        request.META['HTTP_HX_REQUEST'] = 'true'
         
-        view = GetMappingJSONContentView()
+        view = MappingGraphDataView()
+        
+        with patch.object(view, 'get_organization_context', return_value=mock_organization_context):
+            with patch.object(view, 'get_workspace_columns', return_value=mock_workspace_columns):
+                with patch('arkumu.metadata.views.csv_mapping.views.core_editor_views.render') as mock_render:
+                    mock_render.return_value = Mock()
+                    
+                    response = view.get(request)
+                    
+                    # Verify render was called with correct template for HTMX
+                    mock_render.assert_called_once()
+                    args, kwargs = mock_render.call_args
+                    
+                    assert args[1] == 'csv_mapping/partials/mapping_graph_modal_open.html'
+                    context = args[2]
+                    
+                    # Verify context contains graph data
+                    assert 'graph_data' in context
+                    assert 'nodes' in context['graph_data']
+                    assert 'edges' in context['graph_data']
+                    assert context['error'] is None
+                    
+                    # Verify graph data structure
+                    graph_data = context['graph_data']
+                    assert len(graph_data['nodes']) > 0  # Should have dataset and column nodes
+                    assert len(graph_data['edges']) > 0  # Should have edges
+
+    def test_get_htmx_request_with_mapping_id(self, request_factory, organization_id, mock_organization_context, mock_mapping_model):
+        """Test HTMX request with specific mapping ID loads mapping from database"""
+        request = request_factory.get(f'/?organization={organization_id}&mapping_id=test-mapping-123')
+        request = add_session_to_request(request)
+        request.META['HTTP_HX_REQUEST'] = 'true'
+        
+        view = MappingGraphDataView()
+        
+        with patch.object(view, 'get_organization_context', return_value=mock_organization_context):
+            with patch('arkumu.metadata.models.mappings.Mapping.objects.get', return_value=mock_mapping_model):
+                with patch('arkumu.metadata.views.csv_mapping.views.core_editor_views.render') as mock_render:
+                    mock_render.return_value = Mock()
+                    
+                    response = view.get(request)
+                    
+                    # Verify template and context
+                    args, kwargs = mock_render.call_args
+                    assert args[1] == 'csv_mapping/partials/mapping_graph_modal_open.html'
+                    context = args[2]
+                    
+                    # Verify mapping info is in context
+                    assert context['mapping_name'] == 'Test Mapping'
+                    assert context['mapping_description'] == 'Test mapping description'
+                    assert 'graph_data' in context
+
+    def test_get_json_request_success(self, request_factory, organization_id, mock_organization_context, mock_workspace_columns):
+        """Test non-HTMX request returns JSON data"""
+        request = request_factory.get(f'/?organization={organization_id}')
+        request = add_session_to_request(request)
+        # No HTMX headers - should return JSON
+        
+        view = MappingGraphDataView()
+        
+        with patch.object(view, 'get_organization_context', return_value=mock_organization_context):
+            with patch.object(view, 'get_workspace_columns', return_value=mock_workspace_columns):
+                response = view.get(request)
+                
+                # Should return JsonResponse
+                assert hasattr(response, 'content')
+                
+                # Parse JSON content
+                content = json.loads(response.content.decode())
+                assert 'nodes' in content
+                assert 'edges' in content
+                assert len(content['nodes']) > 0
+                assert len(content['edges']) > 0
+
+    def test_get_invalid_organization_htmx(self, request_factory):
+        """Test HTMX request with invalid organization returns error modal"""
+        request = request_factory.get('/?organization=invalid-org')
+        request = add_session_to_request(request)
+        request.META['HTTP_HX_REQUEST'] = 'true'
+        
+        view = MappingGraphDataView()
         
         invalid_org_context = {
-            'organization_id': organization_id,
+            'organization_id': 'invalid-org',
             'organization_exists': False,
             'organizations': []
         }
         
-        with patch.object(view, 'get_organization_id_from_request', return_value=organization_id):
-            with patch.object(view, 'get_organization_context', return_value=invalid_org_context):
+        with patch.object(view, 'get_organization_context', return_value=invalid_org_context):
+            with patch('arkumu.metadata.views.csv_mapping.views.core_editor_views.render') as mock_render:
+                mock_render.return_value = Mock()
+                
                 response = view.get(request)
                 
-                content = response.content.decode()
+                # Verify error template
+                args, kwargs = mock_render.call_args
+                assert args[1] == 'csv_mapping/partials/mapping_graph_content.html'
+                context = args[2]
                 
-                # Verify error JSON structure
-                assert 'Invalid organization' in content
-                assert f'Organization \\"{organization_id}\\" not found' in content
-                assert '<pre class="bg-gray-100' in content  # Error format
-    
-    def test_get_json_content_with_complex_data(self, request_factory, organization_id, mock_organization_context):
-        """Test JSON content with complex mapping data including FK relationships"""
+                assert context['error'] == 'Invalid organization'
+                assert context['graph_data']['nodes'] == []
+                assert context['graph_data']['edges'] == []
+
+    def test_get_mapping_not_found_htmx(self, request_factory, organization_id, mock_organization_context):
+        """Test HTMX request with non-existent mapping ID returns error"""
+        request = request_factory.get(f'/?organization={organization_id}&mapping_id=non-existent')
+        request = add_session_to_request(request)
+        request.META['HTTP_HX_REQUEST'] = 'true'
+        
+        view = MappingGraphDataView()
+        
+        from arkumu.metadata.models.mappings import Mapping
+        
+        with patch.object(view, 'get_organization_context', return_value=mock_organization_context):
+            with patch.object(Mapping.objects, 'get', side_effect=Mapping.DoesNotExist):
+                with patch('arkumu.metadata.views.csv_mapping.views.core_editor_views.render') as mock_render:
+                    mock_render.return_value = Mock()
+                    
+                    response = view.get(request)
+                    
+                    # Verify error handling
+                    args, kwargs = mock_render.call_args
+                    context = args[2]
+                    
+                    assert 'Mapping non-existent not found' in context['error']
+
+    def test_graph_data_generation(self, request_factory, organization_id, mock_organization_context, mock_workspace_columns):
+        """Test internal graph data generation with various relationship types"""
         request = request_factory.get(f'/?organization={organization_id}')
         request = add_session_to_request(request)
         
-        complex_mapping_config = {
-            'version': '1.0',
-            'organization_id': organization_id,
-            'selected_datasets': ['users.csv', 'orders.csv', 'products.csv'],
-            'workspace_columns': {
-                f'{organization_id}::users.csv::id': {'name': 'id', 'dataset': 'users.csv'},
-                f'{organization_id}::users.csv::name': {'name': 'name', 'dataset': 'users.csv'},
-                f'{organization_id}::orders.csv::user_id': {'name': 'user_id', 'dataset': 'orders.csv'},
-                f'{organization_id}::orders.csv::product_id': {'name': 'product_id', 'dataset': 'orders.csv'},
-                f'{organization_id}::products.csv::id': {'name': 'id', 'dataset': 'products.csv'},
-            },
-            'fk_relationships': {
-                f'{organization_id}::orders.csv::user_id': {
-                    'target_dataset': 'users.csv',
-                    'target_column': 'id',
-                    'relationship_type': 'many_to_one'
-                },
-                f'{organization_id}::orders.csv::product_id': {
-                    'target_dataset': 'products.csv',
-                    'target_column': 'id',
-                    'relationship_type': 'many_to_one'
-                }
-            },
-            'entity_mappings': {},
-            'metadata': {
-                'total_datasets': 3,
-                'total_columns': 5,
-                'total_fk_relationships': 2
-            }
-        }
+        view = MappingGraphDataView()
         
-        view = GetMappingJSONContentView()
+        # Test the internal _generate_cytoscape_data method
+        graph_data = view._generate_cytoscape_data(mock_workspace_columns, organization_id)
         
-        mock_workspace_summary = {
-            'total_datasets': 3,
-            'total_columns': 5,
-            'selected_datasets': ['users.csv', 'orders.csv', 'products.csv']
-        }
+        # Verify data structure
+        assert 'nodes' in graph_data
+        assert 'edges' in graph_data
         
-        with patch.object(view, 'get_organization_id_from_request', return_value=organization_id):
-            with patch.object(view, 'get_organization_context', return_value=mock_organization_context):
-                with patch.object(view, 'serialize_current_mapping_state', return_value=complex_mapping_config):
-                    with patch.object(view, 'get_workspace_summary', return_value=mock_workspace_summary):
-                        with patch('arkumu.metadata.views.csv_mapping.csv_mapping_views.timezone') as mock_timezone:
-                            # Create a proper mock that returns strings, not MagicMocks
-                            mock_now = Mock()
-                            mock_now.isoformat.return_value = '2024-01-01T12:00:00'
-                            mock_now.strftime.return_value = '2024-01-01 12:00:00'
-                            mock_timezone.now.return_value = mock_now
-                            
-                            response = view.get(request)
-                            
-                            content = response.content.decode()
-                            
-                            # Verify complex data is included
-                            assert 'fk_relationships' in content
-                            assert 'many_to_one' in content
-                            assert 'Datasets: 3' in content
-                            assert 'Columns: 5' in content  
-                            assert 'FK Relations: 2' in content
-                            
-                            # Verify organization_id format in column IDs
-                            assert f'{organization_id}::users.csv::id' in content
-                            assert f'{organization_id}::orders.csv::user_id' in content
-    
-    def test_exception_handling(self, request_factory, organization_id):
-        """Test exception handling in JSON content generation"""
+        nodes = graph_data['nodes']
+        edges = graph_data['edges']
+        
+        # Should have dataset nodes and column nodes
+        dataset_nodes = [n for n in nodes if n.get('type') == 'dataset']
+        column_nodes = [n for n in nodes if n.get('type') == 'column']
+        
+        assert len(dataset_nodes) >= 2  # dataset1.csv, dataset2.csv
+        assert len(column_nodes) >= 3   # id, user_id, id
+        
+        # Should have contains edges and FK edges
+        contains_edges = [e for e in edges if e.get('type') == 'contains']
+        fk_edges = [e for e in edges if e.get('type') == 'foreign_key']
+        
+        assert len(contains_edges) >= 3  # Dataset to column edges
+        assert len(fk_edges) >= 1        # FK relationship edge
+        
+        # Verify FK edge structure
+        fk_edge = fk_edges[0]
+        assert 'source' in fk_edge
+        assert 'target' in fk_edge
+        assert 'direction' in fk_edge
+
+    def test_exception_handling_htmx(self, request_factory, organization_id):
+        """Test that exceptions are properly handled and return error templates for HTMX"""
         request = request_factory.get(f'/?organization={organization_id}')
         request = add_session_to_request(request)
+        request.META['HTTP_HX_REQUEST'] = 'true'
         
-        view = GetMappingJSONContentView()
+        view = MappingGraphDataView()
         
-        with patch.object(view, 'get_organization_id_from_request', side_effect=Exception("Test error")):
-            with patch('arkumu.metadata.views.csv_mapping.csv_mapping_views.logger') as mock_logger:
+        # Force an exception
+        with patch.object(view, 'get_organization_context', side_effect=Exception("Test error")):
+            with patch('arkumu.metadata.views.csv_mapping.views.core_editor_views.render') as mock_render:
+                mock_render.return_value = Mock()
+                
                 response = view.get(request)
                 
-                # Verify error logging
-                mock_logger.error.assert_called()
+                # Verify error handling
+                args, kwargs = mock_render.call_args
+                assert args[1] == 'csv_mapping/partials/mapping_graph_content.html'
+                context = args[2]
                 
-                # Verify error HTML response
-                content = response.content.decode()
-                assert 'Error Loading JSON' in content
-                assert 'Test error' in content
-                assert 'bg-red-50' in content  # Error styling
-    
-    def test_json_formatting_and_structure(self, request_factory, organization_id, mock_organization_context, mock_mapping_config):
-        """Test that JSON is properly formatted and structured"""
-        request = request_factory.get(f'/?organization={organization_id}')
+                assert context['error'] == 'Test error'
+
+    def test_modal_target_issue_analysis(self, request_factory, organization_id, mock_organization_context, mock_workspace_columns):
+        """Test to verify the HTMX target/swap issue with modal loading"""
+        # Use a valid UUID for mapping_id to avoid validation errors
+        import uuid
+        valid_mapping_id = str(uuid.uuid4())
+        
+        request = request_factory.get(f'/?organization={organization_id}&mapping_id={valid_mapping_id}')
         request = add_session_to_request(request)
+        request.META['HTTP_HX_REQUEST'] = 'true'
         
-        view = GetMappingJSONContentView()
+        view = MappingGraphDataView()
         
-        with patch.object(view, 'get_organization_id_from_request', return_value=organization_id):
-            with patch.object(view, 'get_organization_context', return_value=mock_organization_context):
-                with patch.object(view, 'serialize_current_mapping_state', return_value=mock_mapping_config):
-                    with patch.object(view, 'get_workspace_summary', return_value={}):
-                        with patch('arkumu.metadata.views.csv_mapping.csv_mapping_views.timezone') as mock_timezone:
-                            mock_timezone.now.return_value.isoformat.return_value = '2024-01-01T12:00:00'
-                            mock_timezone.now.return_value.strftime.return_value = '2024-01-01 12:00:00'
-                            
-                            response = view.get(request)
-                            content = response.content.decode()
-                            
-                            # Verify JSON structure and formatting
-                            assert 'json-content' in content  # ID for copy functionality
-                            assert 'copyJsonToClipboard' in content  # Copy function
-                            assert '/metadata/csv-mapping/export-json/' in content  # Download link
-                            assert 'Generated:' in content  # Timestamp
-                            
-                            # Extract and verify JSON structure
-                            import re
-                            json_match = re.search(r'<code>({.*})</code>', content, re.DOTALL)
-                            assert json_match is not None
-                            
-                            # Parse the JSON to verify it's valid
-                            json_content = json_match.group(1)
-                            parsed_json = json.loads(json_content)
-                            
-                            # Verify expected structure
-                            assert 'export_timestamp' in parsed_json
-                            assert 'exported_by' in parsed_json
-                            assert 'workspace_summary' in parsed_json
-                            assert parsed_json['organization_id'] == organization_id
+        # Mock the mapping to avoid database lookup
+        mock_mapping = Mock()
+        mock_mapping.name = 'Test Mapping'
+        mock_mapping.description = 'Test Description'
+        mock_mapping.mapping_config = {
+            'workspace_columns': mock_workspace_columns
+        }
+        
+        with patch.object(view, 'get_organization_context', return_value=mock_organization_context):
+            with patch.object(view, 'get_workspace_columns', return_value=mock_workspace_columns):
+                with patch('arkumu.metadata.models.mappings.Mapping.objects.get', return_value=mock_mapping):
+                    with patch('arkumu.metadata.views.csv_mapping.views.core_editor_views.render') as mock_render:
+                        mock_response = Mock()
+                        mock_response.content = b'<dialog id="mapping-graph-modal" class="modal" open>...</dialog>'
+                        mock_render.return_value = mock_response
+                        
+                        response = view.get(request)
+                        
+                        # Verify the view returns the open modal template
+                        args, kwargs = mock_render.call_args
+                        template_name = args[1]
+                        
+                        # ISSUE IDENTIFIED: The view should return mapping_graph_modal_open.html for HTMX requests
+                        # but current implementation may return content template during errors
+                        assert template_name == 'csv_mapping/partials/mapping_graph_modal_open.html'
+                        
+                        # The response content should contain a complete modal element
+                        assert b'<dialog id="mapping-graph-modal"' in response.content
+                        assert b'open' in response.content
 
-
-@pytest.mark.django_db
-class TestViewIntegration:
-    """Integration tests for UI views"""
-    
-    def test_view_direct_instantiation(self, request_factory, organization_id):
-        """Test that views can be instantiated and called directly"""
-        # Test CSVMappingEditorView instantiation
-        editor_view = CSVMappingEditorView()
-        assert editor_view is not None
-        assert hasattr(editor_view, 'get')
+    def test_error_handling_returns_content_template_not_modal(self, request_factory, organization_id, mock_organization_context):
+        """Test that demonstrates the issue: errors return content template instead of modal template"""
+        # Use invalid mapping ID to trigger error
+        request = request_factory.get(f'/?organization={organization_id}&mapping_id=invalid-uuid')
+        request = add_session_to_request(request)
+        request.META['HTTP_HX_REQUEST'] = 'true'
         
-        # Test GetMappingJSONContentView instantiation
-        json_view = GetMappingJSONContentView()
-        assert json_view is not None
-        assert hasattr(json_view, 'get')
+        view = MappingGraphDataView()
         
-        # Test that both views have the expected mixin methods
-        assert hasattr(editor_view, 'get_organization_context')
-        assert hasattr(editor_view, 'get_csv_datasets_for_organization')
-        assert hasattr(json_view, 'serialize_current_mapping_state')
-        assert hasattr(json_view, 'get_workspace_summary') 
+        with patch.object(view, 'get_organization_context', return_value=mock_organization_context):
+            with patch('arkumu.metadata.views.csv_mapping.views.core_editor_views.render') as mock_render:
+                mock_render.return_value = Mock()
+                
+                response = view.get(request)
+                
+                # This is the BUG: When there's an error, the view returns content template
+                # instead of modal template, which breaks HTMX modal opening
+                args, kwargs = mock_render.call_args
+                template_name = args[1]
+                
+                # This demonstrates the bug - errors return content template
+                assert template_name == 'csv_mapping/partials/mapping_graph_content.html'
+                
+                # This means HTMX gets content instead of a proper modal structure
+                context = args[2]
+                assert 'error' in context 
