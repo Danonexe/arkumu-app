@@ -52,6 +52,9 @@
     </div> <!-- End main-content -->
 </div>
 
+<!-- Mapping Graph Visualization Modal -->
+{% include 'csv_mapping/partials/mapping_graph_modal.html' %}
+
 <!-- Hidden template for empty state -->
 <template id="empty-csv-state-template">
     <div class="hero h-40" id="empty-csv-state">
@@ -82,6 +85,8 @@
 
 {% block javascript %}
 {{ block.super }}
+<!-- Cytoscape.js for graph visualization -->
+<script src="https://unpkg.com/cytoscape@3.26.0/dist/cytoscape.min.js"></script>
 {% endblock %}
 
 {% block inline_javascript %}
@@ -187,6 +192,16 @@ document.addEventListener('DOMContentLoaded', function() {
     // Only log actual errors, not all HTMX activity
     // Removed verbose trigger, beforeRequest, and afterRequest logging
     
+    // Listen for successful mapping loads to potentially show graph
+    document.addEventListener('htmx:afterSwap', function(evt) {
+        // Check if this was a mapping load operation that updated the navbar
+        if (evt.target.id === 'mapping-status' && evt.detail.xhr.status === 200) {
+            // A mapping was successfully loaded - navbar should now have the "Graph" button
+            // The button will be available for user to click manually
+            console.log('Mapping loaded successfully - Graph button now available');
+        }
+    });
+    
     // JSON view will refresh automatically when it becomes visible via tab switching
 });
 
@@ -215,6 +230,13 @@ function showSuccessToast(message) {
         setTimeout(() => {
             toast.style.display = 'none';
         }, 3000);
+    }
+}
+
+function refreshGraph() {
+    const graphPanel = document.getElementById('mapping-graph-panel');
+    if (graphPanel) {
+        htmx.trigger(graphPanel, 'load');
     }
 }
 </script>

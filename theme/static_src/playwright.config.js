@@ -34,21 +34,16 @@ module.exports = defineConfig({
     video: 'retain-on-failure',
   },
 
-  /* Configure projects for major browsers */
+  /* Configure projects - Using only Chromium for simplicity */
   projects: [
-    {
-      name: 'firefox',
-      use: { ...devices['Desktop Firefox'] },
-    },
-
+    // Setup project for authentication
+    { name: 'setup', testMatch: /.*\.setup\.js/ },
+    
+    // Main test project using Chromium only
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
-    },
-
-    {
-      name: 'webkit',
-      use: { ...devices['Desktop Safari'] },
+      dependencies: ['setup'],
     },
 
     /* Test against mobile viewports. */

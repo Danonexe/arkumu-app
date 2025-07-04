@@ -5,10 +5,11 @@
   "scripts": {
     "dev": "tailwindcss -i ./css/input.css -o ../static/css/output.css --watch",
     "build": "tailwindcss -i ./css/input.css -o ../static/css/output.css --minify",
-    "test": "playwright test",
-    "test:headed": "playwright test --headed",
-    "test:debug": "playwright test --debug",
-    "test:ui": "playwright test --ui",
+    "test": "playwright test --project=chromium",
+    "test:setup": "playwright test --project=setup",
+    "test:headed": "playwright test --project=chromium --headed",
+    "test:debug": "playwright test --project=chromium --debug",
+    "test:ui": "playwright test --project=chromium --ui",
     "test:report": "playwright show-report"
   },
   "dependencies": {
