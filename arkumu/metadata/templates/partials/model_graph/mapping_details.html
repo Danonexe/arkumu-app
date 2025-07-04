@@ -1,0 +1,24 @@
+<div class="space-y-2">
+    <h4 class="font-bold text-blue-600">Mapping Model Core</h4>
+    <p class="text-sm">The central entity for storing CSV data transformation configurations.</p>
+    
+    <div class="mt-3">
+        <h5 class="font-semibold text-gray-700">Key Characteristics:</h5>
+        <ul class="text-sm text-gray-600 list-disc list-inside space-y-1">
+            <li>Inherits from UUIDModel (provides id, created_at, updated_at)</li>
+            <li>Stores flexible JSON configurations for GUI interpretation</li>
+            <li>Tracks validation status and execution history</li>
+            <li>Optimized with database indexes for performance</li>
+        </ul>
+    </div>
+    
+    <div class="mt-3">
+        <h5 class="font-semibold text-gray-700">Model Methods:</h5>
+        <ul class="text-sm text-gray-600 list-disc list-inside space-y-1">
+            <li><code>get_dataset_count()</code> - Count of source datasets</li>
+            <li><code>get_column_count()</code> - Count of workspace columns</li>
+            <li><code>get_relationship_count()</code> - Count of FK relationships</li>
+            <li><code>is_ready_for_execution()</code> - Validation check</li>
+        </ul>
+    </div>
+</div>

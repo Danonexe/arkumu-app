@@ -1,0 +1,77 @@
+{% if field_type == 'basic' %}
+<div class="space-y-2">
+    <h4 class="font-bold text-purple-600">Basic Information Fields</h4>
+    <div class="bg-white rounded p-3 border">
+        <h5 class="font-semibold">name</h5>
+        <p class="text-sm text-gray-600">CharField(max_length=255) - Human-readable mapping name</p>
+    </div>
+    <div class="bg-white rounded p-3 border">
+        <h5 class="font-semibold">description</h5>
+        <p class="text-sm text-gray-600">TextField(blank=True) - Optional description of mapping purpose</p>
+    </div>
+</div>
+
+{% elif field_type == 'organization' %}
+<div class="space-y-2">
+    <h4 class="font-bold text-purple-600">Organization Context</h4>
+    <div class="bg-white rounded p-3 border">
+        <h5 class="font-semibold">organization_id</h5>
+        <p class="text-sm text-gray-600">CharField(max_length=255, db_index=True)</p>
+        <p class="text-sm text-gray-600 mt-1">Links mapping to specific organization for multi-tenancy</p>
+    </div>
+</div>
+
+{% elif field_type == 'sources' %}
+<div class="space-y-2">
+    <h4 class="font-bold text-purple-600">Source Datasets</h4>
+    <div class="bg-white rounded p-3 border">
+        <h5 class="font-semibold">source_datasets</h5>
+        <p class="text-sm text-gray-600">JSONField(default=list)</p>
+        <p class="text-sm text-gray-600 mt-1">List of CSV dataset names this mapping applies to</p>
+        <div class="mt-2 bg-gray-100 p-2 rounded text-xs">
+            <strong>Example:</strong> ["projects.csv", "people.csv"]
+        </div>
+    </div>
+</div>
+
+{% elif field_type == 'config' %}
+<div class="space-y-2">
+    <h4 class="font-bold text-purple-600">Mapping Configuration</h4>
+    <div class="bg-white rounded p-3 border">
+        <h5 class="font-semibold">mapping_config</h5>
+        <p class="text-sm text-gray-600">JSONField(default=dict)</p>
+        <p class="text-sm text-gray-600 mt-1">Flexible structure interpreted by the GUI</p>
+        <div class="mt-2 space-y-1">
+            <div class="text-xs bg-gray-100 p-2 rounded">
+                <strong>Contains:</strong>
+                <ul class="list-disc list-inside mt-1">
+                    <li>workspace_columns - Selected columns with configurations</li>
+                    <li>fk_relationships - Foreign key relationships</li>
+                    <li>selected_datasets - Active datasets</li>
+                    <li>column_selection - UI selection state</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% elif field_type == 'indexes' %}
+<div class="space-y-2">
+    <h4 class="font-bold text-purple-600">Database Indexes</h4>
+    <div class="bg-white rounded p-3 border space-y-2">
+        <div>
+            <h5 class="font-semibold">Index 1: organization_id + validation_status</h5>
+            <p class="text-sm text-gray-600">Optimizes queries for organization-specific mappings by status</p>
+        </div>
+        <div>
+            <h5 class="font-semibold">Index 2: created_by + validation_status</h5>
+            <p class="text-sm text-gray-600">Optimizes queries for user-specific mappings by status</p>
+        </div>
+        <div>
+            <h5 class="font-semibold">Ordering: -created_at</h5>
+            <p class="text-sm text-gray-600">Default ordering shows newest mappings first</p>
+        </div>
+    </div>
+</div>
+
+{% endif %}

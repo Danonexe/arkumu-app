@@ -1,0 +1,49 @@
+{% if workflow_type == 'validation' %}
+<div class="space-y-2">
+    <h4 class="font-bold text-green-600">Validation Workflow</h4>
+    <div class="bg-white rounded p-3 border">
+        <h5 class="font-semibold">validation_status</h5>
+        <p class="text-sm text-gray-600">CharField(max_length=20, default='draft')</p>
+        <div class="mt-2 space-y-1">
+            <div class="flex items-center space-x-2">
+                <span class="px-2 py-1 bg-gray-200 text-gray-800 text-xs rounded">draft</span>
+                <span class="text-sm">Initial state, under development</span>
+            </div>
+            <div class="flex items-center space-x-2">
+                <span class="px-2 py-1 bg-blue-200 text-blue-800 text-xs rounded">validated</span>
+                <span class="text-sm">Configuration checked and approved</span>
+            </div>
+            <div class="flex items-center space-x-2">
+                <span class="px-2 py-1 bg-green-200 text-green-800 text-xs rounded">active</span>
+                <span class="text-sm">Ready for production execution</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% elif workflow_type == 'execution' %}
+<div class="space-y-2">
+    <h4 class="font-bold text-green-600">Execution Tracking</h4>
+    <div class="bg-white rounded p-3 border space-y-2">
+        <div>
+            <h5 class="font-semibold">last_executed</h5>
+            <p class="text-sm text-gray-600">DateTimeField(null=True, blank=True)</p>
+            <p class="text-sm text-gray-600">Timestamp of most recent execution</p>
+        </div>
+        <div>
+            <h5 class="font-semibold">execution_stats</h5>
+            <p class="text-sm text-gray-600">JSONField(default=dict)</p>
+            <div class="mt-2 bg-gray-100 p-2 rounded text-xs">
+                <strong>Typical structure:</strong>
+                <pre class="mt-1">{
+  "resources_created": 150,
+  "triples_created": 800,
+  "rows_processed": 150,
+  "executed_at": "2024-01-15T10:30:00Z"
+}</pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endif %}

@@ -295,6 +295,13 @@ theme/static/css/output.css
 theme/static_src/test-results/
 theme/static_src/playwright-report/
 
+# Debug files and test scripts
+theme/static_src/*.png
+theme/static_src/test_*.js
+theme/static_src/debug-*.js
+theme/static_src/playwright/
+theme/static_src/tests/
+
 # Markdown notes
 md_notes/
 

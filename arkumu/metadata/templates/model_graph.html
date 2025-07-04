@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+
+{% block title %}Mapping Model Graph{% endblock %}
+
+{% block content %}
+<div class="container mx-auto p-6">
+    <div class="mb-6">
+        <h1 class="text-3xl font-bold text-gray-800">Mapping Model Structure</h1>
+        <p class="text-gray-600 mt-2">Interactive visualization of the Mapping model architecture</p>
+    </div>
+
+    <!-- Model Graph Container -->
+    <div id="mapping-model-graph" class="bg-white rounded-lg shadow-lg p-6">
+        <div class="graph-container" style="position: relative; height: 500px; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 20px;">
+            
+            <!-- Core Model Node (Center) -->
+            <div class="model-node central-node col-start-2 row-start-2" 
+                 hx-get="{% url 'metadata:model_graph_mapping_details' %}" 
+                 hx-target="#node-details"
+                 hx-trigger="click"
+                 style="background: #e3f2fd; border: 2px solid #1976d2; padding: 12px; border-radius: 8px; text-align: center; cursor: pointer; transition: all 0.2s;">
+                <strong class="text-lg">Mapping Model</strong>
+                <div class="text-sm text-gray-600 mt-1">Core Entity</div>
+            </div>
+            
+            <!-- Basic Info Fields (Top Left) -->
+            <div class="field-node col-start-1 row-start-1" data-field="basic-info"
+                 hx-get="{% url 'metadata:model_graph_field_details' field_type='basic' %}"
+                 hx-target="#field-details"
+                 hx-trigger="click"
+                 style="background: #f3e5f5; border: 2px solid #7b1fa2; padding: 12px; border-radius: 8px; text-align: center; cursor: pointer; transition: all 0.2s;">
+                <strong>Basic Info</strong>
+                <div class="text-sm text-gray-600">(name, description)</div>
+            </div>
+            
+            <!-- Organization Context (Top Center) -->
+            <div class="field-node col-start-2 row-start-1" data-field="organization"
+                 hx-get="{% url 'metadata:model_graph_field_details' field_type='organization' %}"
+                 hx-target="#field-details"
+                 hx-trigger="click"
+                 style="background: #f3e5f5; border: 2px solid #7b1fa2; padding: 12px; border-radius: 8px; text-align: center; cursor: pointer; transition: all 0.2s;">
+                <strong>Organization</strong>
+                <div class="text-sm text-gray-600">(organization_id)</div>
+            </div>
+            
+            <!-- Source Datasets (Top Right) -->
+            <div class="field-node col-start-3 row-start-1" data-field="source-data"
+                 hx-get="{% url 'metadata:model_graph_field_details' field_type='sources' %}"
+                 hx-target="#field-details"
+                 hx-trigger="click"
+                 style="background: #f3e5f5; border: 2px solid #7b1fa2; padding: 12px; border-radius: 8px; text-align: center; cursor: pointer; transition: all 0.2s;">
+                <strong>Source Datasets</strong>
+                <div class="text-sm text-gray-600">(JSON list)</div>
+            </div>
+            
+            <!-- Mapping Configuration (Left Center) -->
+            <div class="field-node col-start-1 row-start-2" data-field="mapping-config"
+                 hx-get="{% url 'metadata:model_graph_field_details' field_type='config' %}"
+                 hx-target="#field-details"
+                 hx-trigger="click"
+                 style="background: #f3e5f5; border: 2px solid #7b1fa2; padding: 12px; border-radius: 8px; text-align: center; cursor: pointer; transition: all 0.2s;">
+                <strong>Mapping Config</strong>
+                <div class="text-sm text-gray-600">(JSON structure)</div>
+            </div>
+            
+            <!-- User Relationship (Right Center) -->
+            <div class="relation-node col-start-3 row-start-2"
+                 hx-get="{% url 'metadata:model_graph_relation_details' relation_type='user' %}"
+                 hx-target="#relation-details"
+                 hx-trigger="click"
+                 style="background: #fff3e0; border: 2px solid #f57c00; padding: 12px; border-radius: 8px; text-align: center; cursor: pointer; transition: all 0.2s;">
+                <strong>Created By</strong>
+                <div class="text-sm text-gray-600">→ User Model</div>
+            </div>
+            
+            <!-- Validation Workflow (Bottom Left) -->
+            <div class="workflow-node col-start-1 row-start-3" data-status="validation"
+                 hx-get="{% url 'metadata:model_graph_workflow_details' workflow_type='validation' %}"
+                 hx-target="#workflow-details"
+                 hx-trigger="click"
+                 style="background: #e8f5e8; border: 2px solid #388e3c; padding: 12px; border-radius: 8px; text-align: center; cursor: pointer; transition: all 0.2s;">
+                <strong>Validation Status</strong>
+                <div class="text-sm text-gray-600">(draft/validated/active)</div>
+            </div>
+            
+            <!-- Execution Tracking (Bottom Center) -->
+            <div class="workflow-node col-start-2 row-start-3" data-status="execution"
+                 hx-get="{% url 'metadata:model_graph_workflow_details' workflow_type='execution' %}"
+                 hx-target="#workflow-details"
+                 hx-trigger="click"
+                 style="background: #e8f5e8; border: 2px solid #388e3c; padding: 12px; border-radius: 8px; text-align: center; cursor: pointer; transition: all 0.2s;">
+                <strong>Execution Tracking</strong>
+                <div class="text-sm text-gray-600">(last_executed, stats)</div>
+            </div>
+            
+            <!-- Database Indexes (Bottom Right) -->
+            <div class="field-node col-start-3 row-start-3" data-field="indexes"
+                 hx-get="{% url 'metadata:model_graph_field_details' field_type='indexes' %}"
+                 hx-target="#field-details"
+                 hx-trigger="click"
+                 style="background: #f3e5f5; border: 2px solid #7b1fa2; padding: 12px; border-radius: 8px; text-align: center; cursor: pointer; transition: all 0.2s;">
+                <strong>Database Indexes</strong>
+                <div class="text-sm text-gray-600">(performance optimization)</div>
+            </div>
+        </div>
+        
+        <!-- Interactive Details Panels -->
+        <div class="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <!-- Main Node Details -->
+            <div class="bg-gray-50 rounded-lg p-4">
+                <h3 class="font-semibold text-gray-800 mb-2">Node Details</h3>
+                <div id="node-details" class="text-gray-600">
+                    Click any node to see detailed information about that part of the model.
+                </div>
+            </div>
+            
+            <!-- Field/Workflow/Relation Details -->
+            <div class="bg-gray-50 rounded-lg p-4">
+                <h3 class="font-semibold text-gray-800 mb-2">Component Details</h3>
+                <div id="field-details" class="text-gray-600 mb-2"></div>
+                <div id="workflow-details" class="text-gray-600 mb-2"></div>
+                <div id="relation-details" class="text-gray-600"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.model-node:hover, .field-node:hover, .workflow-node:hover, .relation-node:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.model-node:active, .field-node:active, .workflow-node:active, .relation-node:active {
+    transform: scale(0.98);
+}
+
+/* Connection lines would go here if needed */
+</style>
+{% endblock %}

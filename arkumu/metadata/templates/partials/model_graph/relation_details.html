@@ -1,0 +1,19 @@
+{% if relation_type == 'user' %}
+<div class="space-y-2">
+    <h4 class="font-bold text-orange-600">User Relationship</h4>
+    <div class="bg-white rounded p-3 border">
+        <h5 class="font-semibold">created_by</h5>
+        <p class="text-sm text-gray-600">ForeignKey(settings.AUTH_USER_MODEL, models.SET_NULL)</p>
+        <div class="mt-2 space-y-1">
+            <p class="text-sm"><strong>Relationship:</strong> Many-to-One (User → Mappings)</p>
+            <p class="text-sm"><strong>On Delete:</strong> SET_NULL (preserves mapping if user deleted)</p>
+            <p class="text-sm"><strong>Related Name:</strong> created_mappings</p>
+            <p class="text-sm"><strong>Nullable:</strong> Yes (null=True, blank=True)</p>
+        </div>
+        <div class="mt-3 bg-blue-50 p-2 rounded text-xs">
+            <strong>Usage:</strong> Track which user created each mapping for auditing and permissions
+        </div>
+    </div>
+</div>
+
+{% endif %}
