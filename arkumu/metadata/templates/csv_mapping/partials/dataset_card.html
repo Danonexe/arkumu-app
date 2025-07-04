@@ -91,7 +91,7 @@
     <!-- Card Body using DaisyUI collapse pattern -->
     <div class="card-body pt-2 px-4 pb-4 bg-base-100 transition-all duration-300" id="card-body-{{ dataset.name|slugify }}">
         
-        {% if dataset.preview and dataset.preview.data %}
+        {% if dataset.preview %}
             <!-- Hidden forms for column data - Coordinator-based (no JSON needed) -->
             {% for header in dataset.preview.colHeaders %}
             <form id="column-data-form-{{ dataset.name|slugify }}-{{ forloop.counter0 }}" style="display: none;">
@@ -133,6 +133,19 @@
                         </thead>
                         <tbody id="table-body-{{ dataset.name|slugify }}">
                             {% include 'csv_mapping/partials/table_rows.html' with data=dataset.preview.data dataset=dataset.name source=dataset.source %}
+                            {% if not dataset.preview.data %}
+                            <tr>
+                                <td colspan="{{ dataset.preview.colHeaders|length }}" class="text-center py-8 text-base-content opacity-60 italic">
+                                    <div class="flex flex-col items-center gap-2">
+                                        <svg class="w-8 h-8 opacity-40" fill="currentColor" viewBox="0 0 20 20">
+                                            <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                        </svg>
+                                        <span>Dataset has {{ dataset.preview.colHeaders|length }} column{{ dataset.preview.colHeaders|length|pluralize }} but no data rows</span>
+                                        <span class="text-xs opacity-50">You can still use the column headers for mapping</span>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endif %}
                         </tbody>
                     </table>
                 </div>
@@ -165,12 +178,10 @@
         {% else %}
             <!-- Enhanced Empty State with Lazy Loading via HTMX -->
             <div class="hero min-h-32 bg-base-200 rounded-lg"
-                 {% if dataset.lazy_load_preview %}
                  hx-get="{% url 'metadata:csv_dataset_preview' %}?organization_id={{ organization_id }}&source={{ dataset.source|urlencode }}&dataset={{ dataset.name|urlencode }}"
-                 hx-trigger="intersect once"
+                 hx-trigger="revealed"
                  hx-target="#dataset-{{ dataset.name|slugify }}"
-                 hx-swap="outerHTML"
-                 {% endif %}>
+                 hx-swap="outerHTML">
                 <div class="hero-content text-center">
                     <div class="max-w-md">
                         <div class="text-4xl mb-2">📊</div>

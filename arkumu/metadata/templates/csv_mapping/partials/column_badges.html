@@ -4,7 +4,7 @@ Shows column selection state for browsing/preview purposes only
 Actual workspace operations happen via separate "Add to Workspace" buttons
 {% endcomment %}
 
-{% if dataset.preview.colHeaders %}
+{% if dataset.preview and dataset.preview.colHeaders %}
     <!-- Hidden forms for column badges - using coordinator format -->
     {% for column in dataset.preview.colHeaders %}
     <form id="column-badge-form-{{ dataset.name|slugify }}-{{ forloop.counter0 }}" style="display: none;">
