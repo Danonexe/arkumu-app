@@ -163,14 +163,23 @@
             </div>
             
         {% else %}
-            <!-- Enhanced Empty State with DaisyUI hero component -->
-            <div class="hero min-h-32 bg-base-200 rounded-lg">
+            <!-- Enhanced Empty State with Lazy Loading via HTMX -->
+            <div class="hero min-h-32 bg-base-200 rounded-lg"
+                 {% if dataset.lazy_load_preview %}
+                 hx-get="{% url 'metadata:csv_dataset_preview' %}?organization_id={{ organization_id }}&source={{ dataset.source|urlencode }}&dataset={{ dataset.name|urlencode }}"
+                 hx-trigger="intersect once"
+                 hx-target="#dataset-{{ dataset.name|slugify }}"
+                 hx-swap="outerHTML"
+                 {% endif %}>
                 <div class="hero-content text-center">
                     <div class="max-w-md">
                         <div class="text-4xl mb-2">📊</div>
-                        <h3 class="text-lg font-bold">No Preview Available</h3>
-                        <p class="text-sm text-base-content opacity-70 mt-2">This card will load the data preview automatically.</p>
-                        <div class="badge badge-warning mt-2">Loading</div>
+                        <h3 class="text-lg font-bold">Loading Preview...</h3>
+                        <p class="text-sm text-base-content opacity-70 mt-2">Dataset preview will load when visible.</p>
+                        <div class="badge badge-warning mt-2">
+                            <span class="loading loading-spinner loading-xs"></span>
+                            Loading
+                        </div>
                     </div>
                 </div>
             </div>

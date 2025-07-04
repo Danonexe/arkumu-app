@@ -90,8 +90,18 @@ class S3DirectDataAnalyzer:
         
         # Initialize services for S3 access and analysis
         self.bucket_service = BucketService()
-        # self.bulk_updater = SmartBulkUpdaterPolars()  # Removed - using modular services
         self.relationship_service = RelationshipDiscoveryService()
+        
+        # Initialize bulk updater only when needed (lazy initialization)
+        self._bulk_updater = None
+    
+    @property
+    def bulk_updater(self):
+        """Lazy initialization of bulk updater only when needed."""
+        if self._bulk_updater is None:
+            from arkumu.importer.services.importer.smart_bulk_updater import SmartBulkUpdater
+            self._bulk_updater = SmartBulkUpdater()
+        return self._bulk_updater
     
     def discover_s3_data_sources(self, organization_id: str) -> List[S3DataSourceInfo]:
         """
@@ -435,7 +445,8 @@ class S3DirectDataAnalyzer:
                            source_info: S3DataSourceInfo,
                            dataset_name: Optional[str] = None,
                            offset: int = 0,
-                           limit: Optional[int] = None) -> S3TablePreview:
+                           limit: Optional[int] = None,
+                           skip_analysis: bool = False) -> S3TablePreview:
         """
         Get a preview of table data from S3 without loading the entire dataset.
         
@@ -444,6 +455,7 @@ class S3DirectDataAnalyzer:
             dataset_name: For multi-dataset sources (Excel sheets)
             offset: Number of rows to skip
             limit: Maximum number of rows to return
+            skip_analysis: If True, skip expensive multi-value analysis (for lazy loading)
             
         Returns:
             S3TablePreview with requested data slice
@@ -474,11 +486,16 @@ class S3DirectDataAnalyzer:
             # Ensure we're returning lists, not tuples (which Polars might return)
             data_rows = [list(row) for row in preview_df.fill_null("").rows()]
             
-            # Analyze multi-value columns using the sample we already have
-            # Take a smaller subset for analysis if needed
-            analysis_sample_df = sample_df.head(self.sample_size_for_analysis)
-            sample_data = analysis_sample_df.to_dicts()
-            multi_value_analysis = self.bulk_updater.analyze_dataset_multi_values(sample_data)
+            # Conditionally analyze multi-value columns (skip for lazy loading)
+            if not skip_analysis:
+                # Take a smaller subset for analysis if needed
+                analysis_sample_df = sample_df.head(self.sample_size_for_analysis)
+                sample_data = analysis_sample_df.to_dicts()
+                multi_value_analysis = self.bulk_updater.analyze_dataset_multi_values(sample_data)
+            else:
+                # Skip expensive analysis for lazy loading
+                sample_data = []
+                multi_value_analysis = {}
             
             return S3TablePreview(
                 column_headers=column_headers,

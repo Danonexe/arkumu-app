@@ -142,53 +142,28 @@ class ToggleDatasetSelectionView(GeneralLoginRequiredMixin, OrganizationMixin,
             for i, ds in enumerate(selected_datasets_with_details):
                 logger.info(f"🔍 DEBUG:   {i+1}. {ds.get('name')} from {ds.get('source')}")
             
-            # ENHANCEMENT: Load full preview data for each selected dataset
+            # OPTIMIZATION: Return lightweight datasets without expensive S3 preview loading
+            # Preview data will be loaded lazily via separate HTMX calls when needed
             enhanced_datasets_with_details = []
-            analyzer = S3DirectDataAnalyzer()
             
             # Get column selection state (not workspace) for dataset column selection info
             selection_key = f"column_selection_{organization_id}"
             column_selections = request.session.get(selection_key, {})
             
             for dataset in selected_datasets_with_details:
-                try:
-                    # Get the full dataset preview using the same logic as CSVDatasetCardView
-                    source_summary = analyzer.get_s3_source_summary(organization_id, dataset['source'])
-                    
-                    # Find the specific dataset in the source
-                    dataset_preview = None
-                    for dataset_info in source_summary.get('datasets', []):
-                        if dataset_info.get('name') == dataset['name']:
-                            dataset_preview = dataset_info
-                            break
-                    
-                    if dataset_preview and 'error' not in dataset_preview:
-                        # Get selected columns from column selection session (not workspace)
-                        dataset_key = f"{dataset['name']}::{dataset['source']}"
-                        dataset_selected_columns = column_selections.get(dataset_key, [])
-                        
-                        # Transform to match template expectations
-                        enhanced_dataset = {
-                            **dataset,  # Keep original data
-                            'cell_count': dataset_preview.get('row_count', 0) * dataset_preview.get('column_count', 0),
-                            'dataset_selected_columns': dataset_selected_columns,  # From selection session
-                            'preview': {
-                                'colHeaders': dataset_preview.get('columns', []),
-                                'data': dataset_preview.get('sample_data', []),
-                                'total_rows': dataset_preview.get('row_count', 0),
-                                'showing_rows': len(dataset_preview.get('sample_data', [])),
-                                'has_more': dataset_preview.get('row_count', 0) > len(dataset_preview.get('sample_data', [])),
-                            }
-                        }
-                        enhanced_datasets_with_details.append(enhanced_dataset)
-                    else:
-                        # Fallback: dataset without preview (will trigger lazy loading)
-                        enhanced_datasets_with_details.append(dataset)
-                        
-                except Exception as e:
-                    logger.warning(f"TOGGLE_DATASET: Could not load preview for {dataset['name']}: {e}")
-                    # Fallback: dataset without preview
-                    enhanced_datasets_with_details.append(dataset)
+                # Get selected columns from column selection session (not workspace)
+                dataset_key = f"{dataset['name']}::{dataset['source']}"
+                dataset_selected_columns = column_selections.get(dataset_key, [])
+                
+                # Create lightweight dataset object without expensive preview data
+                enhanced_dataset = {
+                    **dataset,  # Keep original data
+                    'dataset_selected_columns': dataset_selected_columns,  # From selection session
+                    'lazy_load_preview': True,  # Flag to indicate preview should be loaded lazily
+                }
+                enhanced_datasets_with_details.append(enhanced_dataset)
+                
+            logger.info(f"✅ TOGGLE_DATASET: Fast response - {len(enhanced_datasets_with_details)} datasets prepared for lazy loading")
             
             # Build context for both table content and dataset badges
             context = {
@@ -337,4 +312,123 @@ class GetDatasetBadgesView(GeneralLoginRequiredMixin, OrganizationMixin,
             
         except Exception as e:
             logger.error(f"GET_BADGES: Error getting dataset badges: {e}", exc_info=True)
-            return HttpResponse(f'<div class="text-danger">Error: {str(e)}</div>') 
+            return HttpResponse(f'<div class="text-danger">Error: {str(e)}</div>')
+
+
+class LazyDatasetPreviewView(GeneralLoginRequiredMixin, OrganizationMixin,
+    CSVMappingCoordinatorMixin, 
+    CSVMappingTemplateHelperMixin, View):
+    """
+    Lazy loading view for dataset preview data.
+    
+    This endpoint is called via HTMX when a dataset card needs to load
+    its preview data on-demand to avoid expensive S3 operations upfront.
+    """
+    
+    def get(self, request):
+        """Handle GET requests for lazy loading dataset preview."""
+        try:
+            # Get organization_id from GET parameters (passed by HTMX call)
+            organization_id = request.GET.get('organization_id')
+            source_name = request.GET.get('source')
+            dataset_name = request.GET.get('dataset')
+            
+            if not organization_id or not source_name or not dataset_name:
+                return HttpResponse('<div class="alert alert-error">Missing required parameters</div>')
+            
+            logger.info(f"🔄 LAZY_PREVIEW: Loading preview for {dataset_name} from {source_name}")
+            
+            # Create Redis cache key for this specific dataset (same pattern as core_editor_views)
+            cache_key = f"dataset_preview:{organization_id}:{source_name}:{dataset_name}"
+            
+            # Try to get from Redis cache first
+            from django.core.cache import cache
+            cached_preview = cache.get(cache_key)
+            if cached_preview:
+                logger.info(f"✅ LAZY_PREVIEW: Using cached preview for {dataset_name}")
+                dataset_preview = cached_preview
+            else:
+                # Cache miss - load lightweight preview without expensive analysis
+                logger.info(f"🔄 LAZY_PREVIEW: Loading lightweight preview for {dataset_name} from S3 (cache miss)")
+                dataset_preview = self._get_lightweight_csv_preview(organization_id, source_name, dataset_name)
+                
+                # Cache the result for 15 minutes (900 seconds)
+                if dataset_preview and 'error' not in dataset_preview:
+                    cache.set(cache_key, dataset_preview, 900)
+                    logger.info(f"💾 LAZY_PREVIEW: Cached lightweight preview for {dataset_name} (15 min TTL)")
+            
+            if not dataset_preview or 'error' in dataset_preview:
+                return HttpResponse('<div class="alert alert-error">Dataset preview could not be loaded</div>')
+            
+            # Get column selection state for this dataset
+            selection_key = f"column_selection_{organization_id}"
+            column_selections = request.session.get(selection_key, {})
+            dataset_key = f"{dataset_name}::{source_name}"
+            dataset_selected_columns = column_selections.get(dataset_key, [])
+            
+            # Create enhanced dataset object with preview data
+            enhanced_dataset = {
+                'name': dataset_name,
+                'source': source_name,
+                'format': 'csv',  # Could be determined from source info
+                'cell_count': dataset_preview.get('row_count', 0) * dataset_preview.get('column_count', 0),
+                'dataset_selected_columns': dataset_selected_columns,
+                'preview': {
+                    'colHeaders': dataset_preview.get('columns', []),
+                    'data': dataset_preview.get('sample_data', []),
+                    'total_rows': dataset_preview.get('row_count', 0),
+                    'showing_rows': len(dataset_preview.get('sample_data', [])),
+                    'has_more': dataset_preview.get('row_count', 0) > len(dataset_preview.get('sample_data', [])),
+                }
+            }
+            
+            # Render the dataset card with full preview data
+            context = {
+                'dataset': enhanced_dataset,
+                'organization_id': organization_id,
+            }
+            
+            logger.info(f"✅ LAZY_PREVIEW: Successfully loaded preview for {dataset_name}")
+            return render(request, 'csv_mapping/partials/dataset_card.html', context)
+            
+        except Exception as e:
+            logger.error(f"LAZY_PREVIEW: Error loading dataset preview: {e}", exc_info=True)
+            return HttpResponse(f'<div class="alert alert-error">Error loading preview: {str(e)}</div>')
+    
+    def _get_lightweight_csv_preview(self, organization_id: str, source_name: str, dataset_name: str):
+        """
+        Get a lightweight CSV preview using Polars but skipping expensive multi-value analysis.
+        Uses the same robust file handling as S3DirectDataAnalyzer but without the analysis overhead.
+        """
+        try:
+            # Use S3DirectDataAnalyzer for proper file discovery and Polars parsing
+            analyzer = S3DirectDataAnalyzer()
+            sources = analyzer.discover_s3_data_sources(organization_id)
+            
+            # Find the correct source info
+            source_info = None
+            for source in sources:
+                if source.name == source_name:
+                    source_info = source
+                    break
+            
+            if not source_info:
+                return {'error': f'Source {source_name} not found'}
+            
+            # Use the analyzer's robust Polars-based preview method but skip expensive analysis
+            preview = analyzer.get_s3_table_preview(source_info, dataset_name, limit=5, skip_analysis=True)
+            
+            # Return the same format as the original but without multi-value analysis results
+            return {
+                'name': dataset_name,
+                'columns': preview.column_headers,
+                'column_count': len(preview.column_headers),
+                'sample_data': preview.data_rows,
+                'row_count': preview.total_rows,
+                'showing_rows': len(preview.data_rows),
+                'has_more': preview.has_more
+            }
+            
+        except Exception as e:
+            logger.error(f"LIGHTWEIGHT_PREVIEW: Error: {e}")
+            return {'error': f'Failed to load preview: {str(e)}'} 
