@@ -1,0 +1,282 @@
+<!-- Modal Header -->
+<div class="flex items-center justify-between p-6 border-b border-base-300">
+    <div class="flex items-center gap-3">
+        <div class="badge badge-secondary">OVERVIEW</div>
+        <h3 class="font-bold text-lg">{{ mapping_name|default:"Mapping Overview" }}</h3>
+        {% if mapping_description %}
+        <div class="text-sm text-base-content/70">
+            <span class="text-xs block">{{ mapping_description }}</span>
+        </div>
+        {% endif %}
+    </div>
+    <div class="flex items-center gap-2">
+        <button class="btn btn-sm btn-circle btn-ghost" onclick="document.getElementById('mapping-overview-modal').close()">✕</button>
+    </div>
+</div>
+
+<!-- Overview Content -->
+<div class="p-6 overflow-y-auto" style="height: calc(83vh - 120px);">
+    {% if error %}
+    <!-- Error state -->
+    <div class="flex items-center justify-center h-full">
+        <div class="text-center p-8">
+            <svg class="w-16 h-16 mx-auto mb-4 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+            </svg>
+            <h4 class="text-lg font-semibold mb-2 text-red-600">Failed to Load Overview</h4>
+            <p class="text-base-content/60 max-w-md mb-4">{{ error }}</p>
+            <button class="btn btn-sm btn-ghost" onclick="document.getElementById('mapping-overview-modal').close()">Close</button>
+        </div>
+    </div>
+    {% elif not overview_data or not overview_data.datasets %}
+    <!-- Empty state -->
+    <div class="flex items-center justify-center h-full">
+        <div class="text-center">
+            <svg class="w-16 h-16 mx-auto mb-4 text-base-content/30" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/>
+                <path fill-rule="evenodd" d="M4 5a2 2 0 012-2v1a1 1 0 002 0V3a2 2 0 012 0v1a1 1 0 002 0V3a2 2 0 012 2v6.586l-.293.293a1 1 0 00-.293.707V17a1 1 0 01-1 1H6a1 1 0 01-1-1v-3.414a1 1 0 00-.293-.707L4.293 11.586A1 1 0 004 11.414V5zm5 6a1 1 0 100-2 1 1 0 000 2z"/>
+            </svg>
+            <h4 class="text-lg font-semibold mb-2">No Mapping Data</h4>
+            <p class="text-base-content/60 max-w-md">This mapping doesn't contain any configured columns to display.</p>
+            <p class="text-sm text-base-content/40 mt-2">Add datasets and configure columns to see the overview.</p>
+        </div>
+    </div>
+    {% else %}
+    <!-- Summary Statistics -->
+    <div class="mb-8">
+        <h4 class="text-lg font-semibold mb-4 flex items-center gap-2">
+            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/>
+            </svg>
+            Mapping Summary
+        </h4>
+        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+            <div class="stat bg-base-100 border border-base-300 rounded-lg p-4">
+                <div class="stat-title text-xs">Datasets</div>
+                <div class="stat-value text-2xl text-primary">{{ overview_data.summary.total_datasets }}</div>
+            </div>
+            <div class="stat bg-base-100 border border-base-300 rounded-lg p-4">
+                <div class="stat-title text-xs">Columns</div>
+                <div class="stat-value text-2xl text-secondary">{{ overview_data.summary.total_columns }}</div>
+            </div>
+            <div class="stat bg-base-100 border border-base-300 rounded-lg p-4">
+                <div class="stat-title text-xs">Anchors</div>
+                <div class="stat-value text-2xl text-warning">{{ overview_data.summary.total_anchors }}</div>
+            </div>
+            <div class="stat bg-base-100 border border-base-300 rounded-lg p-4">
+                <div class="stat-title text-xs">Foreign Keys</div>
+                <div class="stat-value text-2xl text-error">{{ overview_data.summary.total_foreign_keys }}</div>
+            </div>
+            <div class="stat bg-base-100 border border-base-300 rounded-lg p-4">
+                <div class="stat-title text-xs">Ontologies</div>
+                <div class="stat-value text-2xl text-info">{{ overview_data.summary.total_external_ontologies }}</div>
+            </div>
+            <div class="stat bg-base-100 border border-base-300 rounded-lg p-4">
+                <div class="stat-title text-xs">Multi-Value</div>
+                <div class="stat-value text-2xl text-accent">{{ overview_data.summary.total_multi_value }}</div>
+            </div>
+            <div class="stat bg-base-100 border border-base-300 rounded-lg p-4">
+                <div class="stat-title text-xs">Junctions</div>
+                <div class="stat-value text-2xl text-neutral">{{ overview_data.summary.total_relationship_contexts }}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dataset Details -->
+    <div class="space-y-4">
+        {% for dataset_name, dataset_info in overview_data.datasets.items %}
+        <div class="collapse collapse-arrow border border-base-300 bg-base-50">
+            <input type="checkbox" class="peer" /> 
+            <div class="collapse-title flex items-center gap-3 p-4">
+                <div class="badge badge-primary badge-lg">
+                    <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/>
+                    </svg>
+                    {{ dataset_name }}.csv
+                </div>
+                <span class="text-sm text-base-content/60">{{ dataset_info.columns|length }} columns</span>
+                
+                <!-- Quick stats badges -->
+                <div class="flex gap-2 ml-auto">
+                    {% if dataset_info.anchor_columns %}
+                    <div class="badge badge-warning badge-xs">{{ dataset_info.anchor_columns|length }} anchor{{ dataset_info.anchor_columns|length|pluralize }}</div>
+                    {% endif %}
+                    {% if dataset_info.foreign_keys %}
+                    <div class="badge badge-error badge-xs">{{ dataset_info.foreign_keys|length }} FK{{ dataset_info.foreign_keys|length|pluralize }}</div>
+                    {% endif %}
+                    {% if dataset_info.external_ontologies %}
+                    <div class="badge badge-info badge-xs">{{ dataset_info.external_ontologies|length }} ontolog{{ dataset_info.external_ontologies|length|pluralize:"y,ies" }}</div>
+                    {% endif %}
+                    {% if dataset_info.multi_value_columns %}
+                    <div class="badge badge-accent badge-xs">{{ dataset_info.multi_value_columns|length }} multi-value</div>
+                    {% endif %}
+                    {% if dataset_info.relationship_contexts %}
+                    <div class="badge badge-neutral badge-xs">{{ dataset_info.relationship_contexts|length }} junction{{ dataset_info.relationship_contexts|length|pluralize }}</div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="collapse-content p-4 pt-0">
+
+            <!-- All Columns -->
+            <div class="mb-4">
+                <h6 class="font-medium text-sm mb-2 flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v4a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/>
+                    </svg>
+                    All Columns
+                </h6>
+                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                    {% for column in dataset_info.columns %}
+                    <div class="flex items-center gap-2 p-2 bg-base-100 rounded border text-xs">
+                        <span class="font-medium">{{ column.name }}</span>
+                        <div class="flex gap-1">
+                            {% if column.is_anchor %}
+                            <div class="badge badge-warning badge-xs" title="Anchor Column">⚓</div>
+                            {% endif %}
+                            {% if column.is_fk %}
+                            <div class="badge badge-error badge-xs" title="Foreign Key">🔗</div>
+                            {% endif %}
+                            {% if column.is_multi_value %}
+                            <div class="badge badge-accent badge-xs" title="Multi-Value">🔀</div>
+                            {% endif %}
+                            {% if column.is_external_ontology %}
+                            <div class="badge badge-info badge-xs" title="External Ontology">🌐</div>
+                            {% endif %}
+                            {% if column.is_relationship_context %}
+                            <div class="badge badge-neutral badge-xs" title="Junction Table">🔄</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Special Column Categories -->
+            {% if dataset_info.anchor_columns %}
+            <div class="mb-4">
+                <h6 class="font-medium text-sm mb-2 flex items-center gap-2 text-warning">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                    </svg>
+                    Anchor Columns ({{ dataset_info.anchor_columns|length }})
+                </h6>
+                <div class="space-y-2">
+                    {% for anchor in dataset_info.anchor_columns %}
+                    <div class="bg-warning/10 border border-warning/30 rounded p-3">
+                        <div class="font-medium text-sm">{{ anchor.name }}</div>
+                        <div class="text-xs text-base-content/60 mt-1">Primary identifier for this dataset</div>
+                        {% if anchor.predicate_uri %}
+                        <div class="text-xs text-base-content/50 mt-1 font-mono">{{ anchor.predicate_uri }}</div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if dataset_info.foreign_keys %}
+            <div class="mb-4">
+                <h6 class="font-medium text-sm mb-2 flex items-center gap-2 text-error">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5zm-5 5a2 2 0 012.828 0 1 1 0 101.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5a1 1 0 10-1.414-1.414l-1.5 1.5a2 2 0 11-2.828-2.828l3-3z" clip-rule="evenodd"/>
+                    </svg>
+                    Foreign Key Relationships ({{ dataset_info.foreign_keys|length }})
+                </h6>
+                <div class="space-y-2">
+                    {% for fk in dataset_info.foreign_keys %}
+                    <div class="bg-error/10 border border-error/30 rounded p-3">
+                        <div class="font-medium text-sm">{{ fk.name }}</div>
+                        {% if fk.fk_config %}
+                        <div class="text-xs text-base-content/60 mt-1">
+                            Links to: <strong>{{ fk.fk_config.target_dataset }}.{{ fk.fk_config.target_column }}</strong>
+                            {% if fk.fk_config.direction %}
+                            <span class="badge badge-xs ml-2">{{ fk.fk_config.direction|title }}</span>
+                            {% endif %}
+                        </div>
+                        {% if fk.fk_config.predicate_uri %}
+                        <div class="text-xs text-base-content/50 mt-1 font-mono">{{ fk.fk_config.predicate_uri }}</div>
+                        {% endif %}
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if dataset_info.external_ontologies %}
+            <div class="mb-4">
+                <h6 class="font-medium text-sm mb-2 flex items-center gap-2 text-info">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M4.083 9h1.946c.089-1.546.383-2.97.837-4.118A6.004 6.004 0 004.083 9zM10 2a8 8 0 100 16 8 8 0 000-16zm0 2c-.076 0-.232.032-.465.262-.238.234-.497.623-.737 1.182-.389.907-.673 2.142-.766 3.556h3.936c-.093-1.414-.377-2.649-.766-3.556-.24-.559-.5-.948-.737-1.182C10.232 4.032 10.076 4 10 4zm3.971 5c-.089-1.546-.383-2.97-.837-4.118A6.004 6.004 0 0115.917 9h-1.946zm-2.003 2H8.032c.093 1.414.377 2.649.766 3.556.24.559.5.948.737 1.182.233.23.389.262.465.262.076 0 .232-.032.465-.262.238-.234.498-.623.737-1.182.389-.907.673-2.142.766-3.556zm1.166 4.118c.454-1.148.748-2.572.837-4.118h1.946a6.004 6.004 0 01-2.783 4.118zm-6.268 0C6.412 13.97 6.118 12.546 6.029 11H4.083a6.004 6.004 0 002.783 4.118z" clip-rule="evenodd"/>
+                    </svg>
+                    External Ontology Connections ({{ dataset_info.external_ontologies|length }})
+                </h6>
+                <div class="space-y-2">
+                    {% for ext_ont in dataset_info.external_ontologies %}
+                    <div class="bg-info/10 border border-info/30 rounded p-3">
+                        <div class="font-medium text-sm">{{ ext_ont.name }}</div>
+                        {% if ext_ont.external_ontology %}
+                        <div class="text-xs text-base-content/60 mt-1">
+                            Type: <strong>{{ ext_ont.external_ontology.ontology_type|upper }}</strong>
+                            {% if ext_ont.external_ontology.uri_template %}
+                            <div class="text-xs text-base-content/50 mt-1 font-mono">{{ ext_ont.external_ontology.uri_template }}</div>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if dataset_info.multi_value_columns %}
+            <div class="mb-4">
+                <h6 class="font-medium text-sm mb-2 flex items-center gap-2 text-accent">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/>
+                        <path fill-rule="evenodd" d="M4 5a2 2 0 012-2v1a1 1 0 002 0V3a2 2 0 012 0v1a1 1 0 002 0V3a2 2 0 012 2v6.586l-.293.293a1 1 0 00-.293.707V17a1 1 0 01-1 1H6a1 1 0 01-1-1v-3.414a1 1 0 00-.293-.707L4.293 11.586A1 1 0 004 11.414V5zm8 5a1 1 0 10-2 0v1a1 1 0 002 0v-1zm0-3a1 1 0 10-2 0v1a1 1 0 002 0V7z" clip-rule="evenodd"/>
+                    </svg>
+                    Multi-Value Columns ({{ dataset_info.multi_value_columns|length }})
+                </h6>
+                <div class="space-y-2">
+                    {% for mv in dataset_info.multi_value_columns %}
+                    <div class="bg-accent/10 border border-accent/30 rounded p-3">
+                        <div class="font-medium text-sm">{{ mv.name }}</div>
+                        <div class="text-xs text-base-content/60 mt-1">Contains multiple values separated by delimiters</div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if dataset_info.relationship_contexts %}
+            <div class="mb-4">
+                <h6 class="font-medium text-sm mb-2 flex items-center gap-2 text-neutral">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M5 2a1 1 0 011 1v1h1a1 1 0 010 2H6v1a1 1 0 01-2 0V6H3a1 1 0 010-2h1V3a1 1 0 011-1zm0 10a1 1 0 011 1v1h1a1 1 0 110 2H6v1a1 1 0 11-2 0v-1H3a1 1 0 110-2h1v-1a1 1 0 011-1zM12 2a1 1 0 01.967.744L14.146 7.2 17.5 9.134a1 1 0 010 1.732L14.146 12.8l-1.179 4.456a1 1 0 01-1.934 0L9.854 12.8 6.5 10.866a1 1 0 010-1.732L9.854 7.2l1.179-4.456A1 1 0 0112 2z" clip-rule="evenodd"/>
+                    </svg>
+                    Junction Tables ({{ dataset_info.relationship_contexts|length }})
+                </h6>
+                <div class="space-y-2">
+                    {% for junction in dataset_info.relationship_contexts %}
+                    <div class="bg-neutral/10 border border-neutral/30 rounded p-3">
+                        <div class="font-medium text-sm">{{ junction.name }}</div>
+                        {% if junction.relationship_context %}
+                        <div class="text-xs text-base-content/60 mt-1">
+                            Links: <strong>{{ junction.relationship_context.primary_fk_dataset }}</strong> ↔ <strong>{{ junction.relationship_context.secondary_fk_dataset }}</strong>
+                            {% if junction.relationship_context.context_predicate %}
+                            <div class="text-xs text-base-content/50 mt-1">Predicate: {{ junction.relationship_context.context_predicate }}</div>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+            </div> <!-- End collapse-content -->
+        </div> <!-- End collapse -->
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>

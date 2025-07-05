@@ -97,6 +97,7 @@ partials/table_rows.html
 partials/navbar_mapping_controls.html
 ├── Current Mapping Save/Update Controls (when mapping exists)
 ├── View Graph Button (displays relationship graph modal)
+├── View Overview Button (displays mapping text summary modal)
 ├── Save As New Mapping Controls
 ├── Load Existing Mapping Dropdown
 └── Responsive 2x2 Grid Layout for Mobile/Desktop
@@ -119,6 +120,7 @@ partials/navbar_mapping_controls.html
 | `#load-mapping-select` | navbar_mapping_controls.html | Load mapping dropdown |
 | `#mapping-status` | navbar_mapping_controls.html | Load operation status |
 | `#mapping-graph-modal` | navbar_mapping_controls.html | Graph visualization modal target |
+| `#mapping-overview-modal` | navbar_mapping_controls.html | Overview text summary modal target |
 
 ## 🔄 Data Flow
 
@@ -148,6 +150,13 @@ partials/navbar_mapping_controls.html
 2. **Graph Data Loading**: HTMX fetches graph data from `metadata:mapping_graph_data` endpoint
 3. **Modal Display**: Graph data populates `#mapping-graph-modal` target
 4. **Post-Save Integration**: Graph modal automatically displays after successful save operations
+
+### Overview Text Summary
+1. **View Overview**: User clicks "Overview" button in `navbar_mapping_controls.html`
+2. **Overview Data Loading**: HTMX fetches mapping summary from `metadata:mapping_overview_data` endpoint
+3. **Modal Display**: Text summary populates `#mapping-overview-modal` target
+4. **Collapsible Structure**: Each dataset section is collapsible (collapsed by default) with quick stats badges
+5. **Detailed Information**: Shows datasets, columns, anchors, foreign keys, external ontologies, multi-value columns, and junction tables
 
 ### Workspace Organization
 - **Datasets**: Datasets with most recent workspace activity appear at TOP

@@ -1,0 +1,11 @@
+<!-- Mapping Overview Modal - OPEN STATE -->
+<dialog id="mapping-overview-modal" class="modal" open>
+    <div class="modal-box w-11/12 max-w-7xl h-5/6 max-h-none p-0">
+        <div id="mapping-overview-modal-content">
+            {% include 'csv_mapping/partials/mapping_overview_content.html' %}
+        </div>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+        <button type="submit">close</button>
+    </form>
+</dialog>

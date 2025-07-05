@@ -55,6 +55,9 @@
 <!-- Mapping Graph Visualization Modal -->
 {% include 'csv_mapping/partials/mapping_graph_modal.html' %}
 
+<!-- Mapping Overview Modal -->
+{% include 'csv_mapping/partials/mapping_overview_modal.html' %}
+
 <!-- Hidden template for empty state -->
 <template id="empty-csv-state-template">
     <div class="hero h-40" id="empty-csv-state">
@@ -204,6 +207,14 @@ document.addEventListener('DOMContentLoaded', function() {
         // Check if this was a graph modal content swap - if so, open the modal
         if (evt.target.id === 'mapping-graph-modal' && evt.detail.xhr.status === 200) {
             const modal = document.getElementById('mapping-graph-modal');
+            if (modal && !modal.open) {
+                modal.showModal();
+            }
+        }
+        
+        // Check if this was an overview modal content swap - if so, open the modal
+        if (evt.target.id === 'mapping-overview-modal' && evt.detail.xhr.status === 200) {
+            const modal = document.getElementById('mapping-overview-modal');
             if (modal && !modal.open) {
                 modal.showModal();
             }

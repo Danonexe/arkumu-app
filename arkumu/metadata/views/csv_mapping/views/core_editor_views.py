@@ -424,4 +424,190 @@ class MappingGraphDataView(GeneralLoginRequiredMixin, OrganizationMixin, CSVMapp
 def mapping_graph_data_view(request):
     """Function-based wrapper for MappingGraphDataView."""
     view = MappingGraphDataView()
+    return view.get(request)
+
+
+class MappingOverviewDataView(GeneralLoginRequiredMixin, OrganizationMixin, CSVMappingCoordinatorMixin, View):
+    """
+    Provides text-based overview of CSV mapping configuration.
+    
+    Returns a detailed text summary showing:
+    - Datasets with their columns
+    - Anchor columns
+    - Foreign key relationships
+    - External ontology connections
+    - Multi-value columns
+    - Relationship contexts (junction tables)
+    """
+    
+    def get(self, request):
+        """Generate text overview for current mapping configuration."""
+        try:
+            # Get organization context
+            org_context = self.get_organization_context(request)
+            organization_id = org_context['organization_id']
+            
+            if not org_context['organization_exists']:
+                if request.headers.get('HX-Request'):
+                    context = {
+                        'overview_data': None,
+                        'mapping_name': None,
+                        'mapping_description': None,
+                        'error': 'Invalid organization'
+                    }
+                    return render(request, 'csv_mapping/partials/mapping_overview_content.html', context)
+                else:
+                    return JsonResponse({'error': 'Invalid organization'}, status=400)
+            
+            # Check if specific mapping ID is requested
+            mapping_id = request.GET.get('mapping_id')
+            
+            if mapping_id:
+                # Load mapping from database
+                from arkumu.metadata.models.mappings import Mapping
+                try:
+                    mapping = Mapping.objects.get(id=mapping_id)
+                    selected_columns = mapping.mapping_config.get('workspace_columns', {})
+                    logger.info(f"MAPPING_OVERVIEW: Loaded mapping {mapping_id} with {len(selected_columns)} columns")
+                except Mapping.DoesNotExist:
+                    if request.headers.get('HX-Request'):
+                        context = {
+                            'overview_data': None,
+                            'mapping_name': None,
+                            'mapping_description': None,
+                            'error': f'Mapping {mapping_id} not found'
+                        }
+                        return render(request, 'csv_mapping/partials/mapping_overview_content.html', context)
+                    else:
+                        return JsonResponse({'error': 'Mapping not found'}, status=404)
+            else:
+                # Get workspace columns from current session
+                selected_columns = self.get_workspace_columns(request, organization_id)
+                logger.info(f"MAPPING_OVERVIEW: Using current workspace with {len(selected_columns)} columns")
+            
+            # Generate overview data
+            overview_data = self._generate_overview_data(selected_columns, organization_id)
+            
+            # Return as HTMX template or JSON based on request
+            if request.headers.get('HX-Request'):
+                context = {
+                    'overview_data': overview_data,
+                    'mapping_name': None,
+                    'mapping_description': None,
+                    'error': None
+                }
+                
+                # Add mapping info if available
+                if mapping_id:
+                    try:
+                        mapping = Mapping.objects.get(id=mapping_id)
+                        context['mapping_name'] = mapping.name
+                        context['mapping_description'] = mapping.description
+                    except Mapping.DoesNotExist:
+                        pass
+                
+                return render(request, 'csv_mapping/partials/mapping_overview_modal_open.html', context)
+            else:
+                return JsonResponse(overview_data)
+                
+        except Exception as e:
+            logger.error(f"MAPPING_OVERVIEW: Error generating overview data: {e}", exc_info=True)
+            
+            # Return appropriate error response based on request type
+            if request.headers.get('HX-Request'):
+                context = {
+                    'overview_data': None,
+                    'mapping_name': None,
+                    'mapping_description': None,
+                    'error': str(e)
+                }
+                return render(request, 'csv_mapping/partials/mapping_overview_content.html', context)
+            else:
+                return JsonResponse({'error': str(e)}, status=500)
+    
+    def _generate_overview_data(self, selected_columns, organization_id):
+        """Convert workspace columns into structured overview data."""
+        logger.info(f"MAPPING_OVERVIEW: _generate_overview_data called with {len(selected_columns)} columns")
+        
+        # Group columns by dataset
+        datasets = {}
+        for col_id, col_data in selected_columns.items():
+            dataset_name = col_data.get('dataset', '')
+            
+            if dataset_name not in datasets:
+                datasets[dataset_name] = {
+                    'name': dataset_name,
+                    'columns': [],
+                    'anchor_columns': [],
+                    'foreign_keys': [],
+                    'external_ontologies': [],
+                    'multi_value_columns': [],
+                    'relationship_contexts': []
+                }
+            
+            column_info = {
+                'name': col_data.get('name', ''),
+                'id': col_id,
+                'arkumu_type': col_data.get('arkumu_type', 'literal'),
+                'is_anchor': col_data.get('is_anchor', False),
+                'is_fk': col_data.get('is_fk', False),
+                'is_multi_value': col_data.get('is_multi_value', False),
+                'is_external_ontology': col_data.get('is_external_ontology', False),
+                'is_relationship_context': col_data.get('is_relationship_context', False),
+                'predicate_uri': col_data.get('predicate_uri', ''),
+                'fk_config': col_data.get('fk_config', {}),
+                'external_ontology': col_data.get('external_ontology', {}),
+                'relationship_context': col_data.get('relationship_context', {})
+            }
+            
+            datasets[dataset_name]['columns'].append(column_info)
+            
+            # Categorize special columns
+            if column_info['is_anchor']:
+                datasets[dataset_name]['anchor_columns'].append(column_info)
+            
+            if column_info['is_fk']:
+                datasets[dataset_name]['foreign_keys'].append(column_info)
+            
+            if column_info['is_external_ontology']:
+                datasets[dataset_name]['external_ontologies'].append(column_info)
+            
+            if column_info['is_multi_value']:
+                datasets[dataset_name]['multi_value_columns'].append(column_info)
+            
+            if column_info['is_relationship_context']:
+                datasets[dataset_name]['relationship_contexts'].append(column_info)
+        
+        # Sort datasets by name
+        sorted_datasets = dict(sorted(datasets.items()))
+        
+        # Generate summary statistics
+        total_datasets = len(sorted_datasets)
+        total_columns = sum(len(ds['columns']) for ds in sorted_datasets.values())
+        total_anchors = sum(len(ds['anchor_columns']) for ds in sorted_datasets.values())
+        total_fks = sum(len(ds['foreign_keys']) for ds in sorted_datasets.values())
+        total_external_ontologies = sum(len(ds['external_ontologies']) for ds in sorted_datasets.values())
+        total_multi_value = sum(len(ds['multi_value_columns']) for ds in sorted_datasets.values())
+        total_relationship_contexts = sum(len(ds['relationship_contexts']) for ds in sorted_datasets.values())
+        
+        logger.info(f"MAPPING_OVERVIEW: Generated overview for {total_datasets} datasets, {total_columns} columns")
+        
+        return {
+            'datasets': sorted_datasets,
+            'summary': {
+                'total_datasets': total_datasets,
+                'total_columns': total_columns,
+                'total_anchors': total_anchors,
+                'total_foreign_keys': total_fks,
+                'total_external_ontologies': total_external_ontologies,
+                'total_multi_value': total_multi_value,
+                'total_relationship_contexts': total_relationship_contexts
+            }
+        }
+
+
+@general_login_required
+def mapping_overview_data_view(request):
+    """Function-based wrapper for MappingOverviewDataView."""
+    view = MappingOverviewDataView()
     return view.get(request) 

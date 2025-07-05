@@ -151,6 +151,7 @@ urlpatterns = [
     # Main CSV Mapping Editor
     path('csv-mapping-editor/', core_editor_views.csv_mapping_editor_view, name='csv_mapping_editor'),
     path('mapping-graph-data/', core_editor_views.mapping_graph_data_view, name='mapping_graph_data'),
+    path('mapping-overview-data/', core_editor_views.mapping_overview_data_view, name='mapping_overview_data'),
     
     # Step 2: Dataset card views (implemented with coordinator)
     path('csv-dataset-card/', dataset_views.CSVDatasetCardView.as_view(), name='csv_dataset_card'),
