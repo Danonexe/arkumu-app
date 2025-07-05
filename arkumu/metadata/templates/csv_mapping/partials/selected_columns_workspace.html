@@ -14,8 +14,7 @@
                 <h3 class="font-semibold text-sm text-base-content">Column Workspace</h3>
                 <p class="text-xs text-base-content/60">
                     {% if datasets_with_columns %}
-                        {{ datasets_with_columns|length }} dataset{{ datasets_with_columns|length|pluralize }} • 
-                        {% for dataset_group in datasets_with_columns %}{{ dataset_group.selected_count }}{% if not forloop.last %} + {% endif %}{% endfor %} column{{ datasets_with_columns|length|pluralize }} total
+                        {{ datasets_with_columns|length }} dataset{{ datasets_with_columns|length|pluralize }} in workspace
                     {% else %}
                         Ready for column selection
                     {% endif %}
