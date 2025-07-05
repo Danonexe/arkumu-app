@@ -86,7 +86,7 @@
 {% block javascript %}
 {{ block.super }}
 <!-- Cytoscape.js for graph visualization -->
-<script src="https://unpkg.com/cytoscape@3.26.0/dist/cytoscape.min.js"></script>
+<script src="https://unpkg.com/cytoscape@3.32.0/dist/cytoscape.min.js"></script>
 {% endblock %}
 
 {% block inline_javascript %}
@@ -200,6 +200,14 @@ document.addEventListener('DOMContentLoaded', function() {
             // The button will be available for user to click manually
             console.log('Mapping loaded successfully - Graph button now available');
         }
+        
+        // Check if this was a graph modal content swap - if so, open the modal
+        if (evt.target.id === 'mapping-graph-modal' && evt.detail.xhr.status === 200) {
+            const modal = document.getElementById('mapping-graph-modal');
+            if (modal && !modal.open) {
+                modal.showModal();
+            }
+        }
     });
     
     // JSON view will refresh automatically when it becomes visible via tab switching
@@ -237,6 +245,27 @@ function refreshGraph() {
     const graphPanel = document.getElementById('mapping-graph-panel');
     if (graphPanel) {
         htmx.trigger(graphPanel, 'load');
+    }
+}
+
+function showMappingGraphModal(mappingId, mappingName, mappingDescription) {
+    // First load the graph data, then open the modal
+    const modal = document.getElementById('mapping-graph-modal');
+    if (modal && mappingId) {
+        // Only open modal if not already open
+        if (!modal.open) {
+            modal.showModal();
+        }
+        
+        // Trigger HTMX to load the graph content
+        htmx.ajax('GET', "{% url 'metadata:mapping_graph_data' %}", {
+            values: {
+                'organization': '{{ organization_id }}',
+                'mapping_id': mappingId
+            },
+            target: '#mapping-graph-modal',
+            swap: 'outerHTML'
+        });
     }
 }
 </script>

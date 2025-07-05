@@ -96,6 +96,7 @@ partials/table_rows.html
 
 partials/navbar_mapping_controls.html
 ├── Current Mapping Save/Update Controls (when mapping exists)
+├── View Graph Button (displays relationship graph modal)
 ├── Save As New Mapping Controls
 ├── Load Existing Mapping Dropdown
 └── Responsive 2x2 Grid Layout for Mobile/Desktop
@@ -117,6 +118,7 @@ partials/navbar_mapping_controls.html
 | `#save-feedback` | navbar_mapping_controls.html | Save operation feedback |
 | `#load-mapping-select` | navbar_mapping_controls.html | Load mapping dropdown |
 | `#mapping-status` | navbar_mapping_controls.html | Load operation status |
+| `#mapping-graph-modal` | navbar_mapping_controls.html | Graph visualization modal target |
 
 ## 🔄 Data Flow
 
@@ -140,6 +142,12 @@ partials/navbar_mapping_controls.html
    - User selects mapping and clicks "Load" (with confirmation)
    - Updates `#mapping-status` with load results
 4. **Dynamic Updates**: Save As triggers reload of mapping dropdown
+
+### Graph Visualization
+1. **View Graph**: User clicks "Graph" button in `navbar_mapping_controls.html`
+2. **Graph Data Loading**: HTMX fetches graph data from `metadata:mapping_graph_data` endpoint
+3. **Modal Display**: Graph data populates `#mapping-graph-modal` target
+4. **Post-Save Integration**: Graph modal automatically displays after successful save operations
 
 ### Workspace Organization
 - **Datasets**: Datasets with most recent workspace activity appear at TOP
