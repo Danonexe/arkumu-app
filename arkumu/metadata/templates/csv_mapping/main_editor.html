@@ -38,7 +38,8 @@
         <div class="navbar-end" id="navbar-end">
             <div class="flex items-center gap-3">
                 <div class="divider divider-horizontal mx-0"></div>
-                <!-- Mapping controls will be injected here via HTMX OOB -->
+                <!-- Mapping controls rendered on initial load and updated via HTMX OOB -->
+                {% include 'csv_mapping/partials/navbar_mapping_controls.html' with organization_id=organization_id current_mapping_id=current_mapping_id current_mapping_name=current_mapping_name current_mapping_updated=current_mapping_updated current_mapping_status=current_mapping_status csrf_token=csrf_token %}
             </div>
         </div>
     </div>
