@@ -78,6 +78,44 @@ class IngestDataView(GeneralLoginRequiredMixin, OrganizationMixin, IngestCoordin
             return render(request, 'importer/partials/main_ingest_content.html', context)
         
         return render(request, self.template_name, context)
+    
+    def post(self, request):
+        """Handle POST requests for HTMX actions"""
+        # Get organization context
+        org_context = self.get_organization_context(request)
+        organization_id = org_context.get('organization_id')
+        
+        # Handle load_mapping action
+        if request.POST.get('action') == 'load_mapping':
+            mapping_id = request.POST.get('mapping_id')
+            if mapping_id and organization_id:
+                # Get mapping details
+                try:
+                    from arkumu.metadata.models import CSVMapping
+                    selected_mapping = CSVMapping.objects.get(
+                        id=mapping_id,
+                        organization=organization_id
+                    )
+                    context = {
+                        'selected_mapping': selected_mapping,
+                        'organization_id': organization_id
+                    }
+                except CSVMapping.DoesNotExist:
+                    context = {
+                        'selected_mapping': None,
+                        'organization_id': organization_id
+                    }
+            else:
+                context = {
+                    'selected_mapping': None,
+                    'organization_id': organization_id
+                }
+            
+            return render(request, 'importer/partials/mapping_details.html', context)
+        
+        # For other POST requests, return a simple HttpResponse to avoid full page reload
+        from django.http import HttpResponse
+        return HttpResponse("Invalid action", status=400)
 
 
 @general_login_required

@@ -72,21 +72,25 @@
                             <option value="">Loading mappings...</option>
                         </select>
                     </div>
+                    
+                    <!-- Load button to trigger mapping details update -->
+                    <div class="mt-3">
+                        <button class="btn btn-warning btn-sm" 
+                                hx-post="{% url 'importer:ingest_data' %}"
+                                hx-vals='{"organization": "{{ organization_id }}", "action": "load_mapping", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
+                                hx-include="#mapping-select"
+                                hx-target="#mapping-details"
+                                hx-swap="innerHTML">
+                            Load Mapping Details
+                        </button>
+                    </div>
                 </div>
                 
                 <!-- Mapping Details will go here -->
                 <div id="mapping-details" class="mt-4">
-                    {% if selected_mapping %}
-                        <!-- Show mapping summary -->
-                        <div class="alert alert-info">
-                            <h3 class="font-semibold">{{ selected_mapping.name }}</h3>
-                            <p class="text-sm">{{ selected_mapping.description|default:"No description" }}</p>
-                        </div>
-                    {% else %}
-                        <div class="text-center py-8 text-base-content/50">
-                            <p>Select a mapping to see details</p>
-                        </div>
-                    {% endif %}
+                    <div class="text-center py-8 text-base-content/50">
+                        <p>Select a mapping to see details</p>
+                    </div>
                 </div>
             </div>
         </div>
