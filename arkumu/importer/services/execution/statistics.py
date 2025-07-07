@@ -188,6 +188,10 @@ class ExecutionStatistics:
             self.dataset_metrics[dataset_name].warnings += 1
         logger.warning(f"Execution warning: {message}")
     
+    def merge_metrics(self, metrics: ExecutionMetrics) -> None:
+        """Merge external metrics into current statistics."""
+        self.current_metrics.merge(metrics)
+    
     def get_summary(self) -> Dict[str, Any]:
         """Get a summary of all statistics."""
         summary = {

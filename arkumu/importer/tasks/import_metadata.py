@@ -47,7 +47,11 @@ def run_csv_import_workflow(
     link_to_first_column: bool = False,
     update_strategy: UpdateStrategy = UpdateStrategy.SKIP_EXISTING,
     task_id_for_cache: Optional[str] = None,
-    upload_session_id: Optional[UUID] = None # Added ingest_session_id (keeping param name for compatibility)
+    upload_session_id: Optional[UUID] = None, # Added ingest_session_id (keeping param name for compatibility)
+    # New mapping parameters
+    mapping_id: Optional[str] = None,
+    use_mapping: bool = False,
+    use_table_services: bool = False
 ) -> Dict[str, Any]:
     """
     Huey task to import a CSV file using the ImportWorkflowService.
@@ -146,19 +150,55 @@ def run_csv_import_workflow(
 
         update_cache("processing", f"Processing downloaded file {os.path.basename(temp_local_path)} for {dataset_name}...", 20)
         
-        stats: BulkUpdateStats = ImportWorkflowService.import_csv(
-            csv_path=temp_local_path, # Use the new local temp path
-            dataset_name=dataset_name,
-            institution=institution,  # Keep original case (lowercase)
-            base_uri=base_uri,
-            delimiter=delimiter,
-            has_quoted_fields=has_quoted_fields,
-            link_row_cells=link_row_cells,
-            link_to_first_column=link_to_first_column,
-            use_smart_updater=True,
-            use_polars=True,  # Use Polars-optimized version for better performance
-            update_strategy=update_strategy
-        )
+        # Handle mapping configuration if provided
+        mapping_config = None
+        if use_mapping and mapping_id:
+            try:
+                from arkumu.metadata.models import Mapping
+                from arkumu.metadata.services.mapping_consumer.mapping_adapter import MappingAdapter
+                
+                update_cache("processing", f"Loading mapping configuration...", 25)
+                
+                # Load the mapping
+                mapping = Mapping.objects.get(id=mapping_id)
+                adapter = MappingAdapter()
+                mapping_config = adapter.translate_to_execution_config(mapping_id)
+                
+                logger.info(f"Task {actual_task_id or 'UnknownID'}: Using mapping '{mapping.name}' (ID: {mapping_id})")
+                
+            except Exception as e:
+                logger.warning(f"Task {actual_task_id or 'UnknownID'}: Failed to load mapping {mapping_id}: {e}")
+                update_cache("processing", f"Warning: Failed to load mapping, using entity-based import", 30)
+        
+        # Choose import method based on configuration
+        if use_table_services or (use_mapping and mapping_config):
+            logger.info(f"Task {actual_task_id or 'UnknownID'}: Using table-based services with mapping")
+            stats: BulkUpdateStats = ImportWorkflowService.import_csv_with_table_services(
+                csv_path=temp_local_path,
+                dataset_name=dataset_name,
+                institution=institution,
+                base_uri=base_uri,
+                delimiter=delimiter,
+                has_quoted_fields=has_quoted_fields,
+                auto_mapping=True,
+                session_dict={'mapping_config': mapping_config} if mapping_config else None
+            )
+        else:
+            logger.info(f"Task {actual_task_id or 'UnknownID'}: Using standard import workflow")
+            stats: BulkUpdateStats = ImportWorkflowService.import_csv(
+                csv_path=temp_local_path,
+                dataset_name=dataset_name,
+                institution=institution,
+                base_uri=base_uri,
+                delimiter=delimiter,
+                has_quoted_fields=has_quoted_fields,
+                link_row_cells=link_row_cells,
+                link_to_first_column=link_to_first_column,
+                use_smart_updater=True,
+                use_polars=True,
+                update_strategy=update_strategy,
+                use_table_services=use_table_services
+            )
         
         update_cache("processing", f"Finalizing import for {dataset_name}...", 80)
 

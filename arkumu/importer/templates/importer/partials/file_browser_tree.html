@@ -1,0 +1,95 @@
+{% if total_files == 0 %}
+    <div class="alert alert-warning">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 15.5c-.77.833.192 2.5 1.732 2.5z"/>
+        </svg>
+        <span>No CSV files found in {{ organization.name }}</span>
+    </div>
+{% else %}
+    <div class="text-sm text-base-content/70 mb-2">
+        Found {{ total_files }} CSV file{{ total_files|pluralize }}
+    </div>
+    
+    <!-- File Tree -->
+    <div class="file-tree">
+        {% include "importer/partials/file_tree_node.html" with node=file_tree node_name="metadata" level=0 %}
+    </div>
+{% endif %}
+
+<style>
+.file-tree {
+    font-size: 0.875rem;
+}
+
+.file-tree-node {
+    margin-left: 0.5rem;
+}
+
+.file-tree-item {
+    display: flex;
+    align-items: center;
+    padding: 0.25rem 0;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.file-tree-item:hover {
+    background-color: hsl(var(--b2));
+    border-radius: 0.25rem;
+}
+
+.file-tree-item.selected {
+    background-color: hsl(var(--p) / 0.1);
+}
+
+.file-checkbox {
+    margin-right: 0.5rem;
+}
+
+.folder-toggle {
+    margin-right: 0.25rem;
+    transition: transform 0.2s;
+}
+
+.folder-toggle.open {
+    transform: rotate(90deg);
+}
+
+.folder-contents {
+    margin-left: 1.5rem;
+    display: none;
+}
+
+.folder-contents.open {
+    display: block;
+}
+</style>
+
+<script>
+// Toggle folder visibility
+function toggleFolder(folderId) {
+    const toggle = document.querySelector(`[data-folder="${folderId}"] .folder-toggle`);
+    const contents = document.getElementById(folderId);
+    
+    if (toggle && contents) {
+        toggle.classList.toggle('open');
+        contents.classList.toggle('open');
+    }
+}
+
+// Handle file selection
+document.querySelectorAll('.file-checkbox').forEach(checkbox => {
+    checkbox.addEventListener('change', function() {
+        const fileItem = this.closest('.file-tree-item');
+        const fileKey = this.value;
+        
+        if (this.checked) {
+            fileItem.classList.add('selected');
+            toggleFileSelection(fileKey);
+        } else {
+            fileItem.classList.remove('selected');
+            toggleFileSelection(fileKey);
+        }
+    });
+});
+</script>

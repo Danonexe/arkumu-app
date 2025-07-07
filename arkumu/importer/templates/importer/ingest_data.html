@@ -1,0 +1,462 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+    <!-- Header -->
+    <div class="mb-6">
+        <h1 class="text-3xl font-bold">Data Ingestion Center</h1>
+        <p class="text-base-content/70 mt-2">Import your CSV data with intelligent mapping and real-time progress tracking</p>
+    </div>
+
+    <!-- Three-Pane Layout -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 h-[calc(100vh-200px)]">
+        
+        <!-- Left Pane: File Selection -->
+        <div class="card bg-base-100 shadow-xl overflow-hidden">
+            <div class="card-body p-4">
+                <h2 class="card-title text-lg mb-4">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+                    </svg>
+                    Select Files
+                </h2>
+                
+                <!-- Organization Selection -->
+                <div class="form-control mb-4">
+                    <label class="label">
+                        <span class="label-text">Organization</span>
+                    </label>
+                    <select id="organization-select" 
+                            name="organization" 
+                            class="select select-bordered select-sm w-full"
+                            hx-get="{% url 'importer:get_organization_files' %}"
+                            hx-target="#file-browser"
+                            hx-trigger="change"
+                            hx-include="this">
+                        <option value="">Select organization...</option>
+                        {% for org in organizations %}
+                            <option value="{{ org.id }}">{{ org.name }}</option>
+                        {% empty %}
+                            <option value="rsh">Robert Schumann Hochschule Düsseldorf</option>
+                            <option value="khm">Kunsthochschule für Medien Köln</option>
+                            <option value="fuk">Folkwang Universität der Künste</option>
+                            <option value="hmt">Hochschule für Musik und Tanz Köln</option>
+                            <option value="det">Hochschule für Musik Detmold</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <!-- File Browser -->
+                <div id="file-browser" class="overflow-y-auto flex-1">
+                    <div class="text-center py-8 text-base-content/50">
+                        <svg class="w-12 h-12 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
+                        </svg>
+                        <p>Select an organization to browse files</p>
+                    </div>
+                </div>
+                
+                <!-- Selected Files Summary -->
+                <div class="mt-4 pt-4 border-t border-base-300">
+                    <div class="text-sm">
+                        <span class="font-semibold">Selected:</span>
+                        <span id="selected-count" class="badge badge-primary badge-sm ml-2">0 files</span>
+                    </div>
+                    <div id="selected-files-list" class="mt-2 max-h-32 overflow-y-auto">
+                        <!-- Selected files will be listed here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Center Pane: Mapping Selection -->
+        <div class="card bg-base-100 shadow-xl overflow-hidden">
+            <div class="card-body p-4">
+                <h2 class="card-title text-lg mb-4">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                    </svg>
+                    Configure Mapping
+                </h2>
+                
+                <!-- Mapping Controls (from navbar_mapping_controls.html) -->
+                <div id="mapping-controls" class="space-y-4">
+                    <!-- Load Mapping Row -->
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text">Select Mapping</span>
+                            <span class="label-text-alt text-warning">Required</span>
+                        </label>
+                        <select id="mapping-select" 
+                                name="mapping_id"
+                                class="select select-bordered select-sm w-full"
+                                hx-get="{% url 'metadata:csv_list_mappings' %}"
+                                hx-trigger="load, organization-changed from:body"
+                                hx-target="this"
+                                hx-swap="innerHTML"
+                                hx-vals='js:{organization: document.getElementById("organization-select").value}'>
+                            <option value="">Loading mappings...</option>
+                        </select>
+                        <label class="label">
+                            <span class="label-text-alt">Choose a mapping or use entity-based import</span>
+                        </label>
+                    </div>
+                    
+                    <!-- Mapping Actions -->
+                    <div class="flex gap-2">
+                        <button id="mapping-overview-btn"
+                                class="btn btn-primary btn-sm flex-1"
+                                disabled
+                                hx-get="{% url 'metadata:mapping_overview_data' %}"
+                                hx-vals='js:{
+                                    organization: document.getElementById("organization-select").value,
+                                    mapping_id: document.getElementById("mapping-select").value
+                                }'
+                                hx-target="#mapping-overview-modal"
+                                hx-swap="outerHTML">
+                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            Overview
+                        </button>
+                        
+                        <button id="mapping-graph-btn"
+                                class="btn btn-outline btn-sm flex-1"
+                                disabled
+                                hx-get="{% url 'metadata:mapping_graph_data' %}"
+                                hx-vals='js:{
+                                    organization: document.getElementById("organization-select").value,
+                                    mapping_id: document.getElementById("mapping-select").value
+                                }'
+                                hx-target="#mapping-graph-modal"
+                                hx-swap="outerHTML">
+                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/>
+                            </svg>
+                            Graph
+                        </button>
+                    </div>
+                    
+                    <!-- Import Strategy -->
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text">Import Strategy</span>
+                        </label>
+                        <div class="space-y-2">
+                            <label class="cursor-pointer flex items-start gap-2">
+                                <input type="radio" name="import_strategy" value="mapping" 
+                                       class="radio radio-primary radio-sm mt-1" 
+                                       id="strategy-mapping" disabled>
+                                <div>
+                                    <span class="font-medium">Use Selected Mapping</span>
+                                    <p class="text-xs text-base-content/70">Apply the configured mapping with relationships and transformations</p>
+                                </div>
+                            </label>
+                            <label class="cursor-pointer flex items-start gap-2">
+                                <input type="radio" name="import_strategy" value="entity" 
+                                       class="radio radio-primary radio-sm mt-1" 
+                                       id="strategy-entity" checked>
+                                <div>
+                                    <span class="font-medium">Entity-Based Import</span>
+                                    <p class="text-xs text-base-content/70">Default fast import without mapping (fallback)</p>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <!-- Import Options -->
+                    <div class="space-y-2">
+                        <div class="form-control">
+                            <label class="cursor-pointer flex items-center gap-2">
+                                <input type="checkbox" class="checkbox checkbox-sm" 
+                                       id="use-table-services" checked>
+                                <span class="label-text">Use modern table services</span>
+                            </label>
+                        </div>
+                        <div class="form-control">
+                            <label class="cursor-pointer flex items-center gap-2">
+                                <input type="checkbox" class="checkbox checkbox-sm" 
+                                       id="link-row-cells" checked>
+                                <span class="label-text">Link cells in same row</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Start Import Button -->
+                <div class="mt-auto pt-4 border-t border-base-300">
+                    <button id="start-import-btn"
+                            class="btn btn-success w-full"
+                            disabled>
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                        </svg>
+                        Start Import
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Right Pane: Live Progress Dashboard -->
+        <div class="card bg-base-100 shadow-xl overflow-hidden">
+            <div class="card-body p-4">
+                <h2 class="card-title text-lg mb-4">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                    </svg>
+                    Progress Dashboard
+                </h2>
+                
+                <!-- Import Status -->
+                <div id="import-status" class="space-y-4">
+                    <!-- Initial State -->
+                    <div class="text-center py-8 text-base-content/50">
+                        <svg class="w-12 h-12 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                        <p>Select files and configure import to begin</p>
+                    </div>
+                </div>
+                
+                <!-- Statistics Grid (hidden initially) -->
+                <div id="import-stats" class="hidden">
+                    <div class="grid grid-cols-2 gap-2 mb-4">
+                        <div class="stat bg-base-200 rounded-lg p-3">
+                            <div class="stat-title text-xs">Files</div>
+                            <div class="stat-value text-lg" id="stat-files">0</div>
+                        </div>
+                        <div class="stat bg-base-200 rounded-lg p-3">
+                            <div class="stat-title text-xs">Rows</div>
+                            <div class="stat-value text-lg" id="stat-rows">0</div>
+                        </div>
+                        <div class="stat bg-base-200 rounded-lg p-3">
+                            <div class="stat-title text-xs">Resources</div>
+                            <div class="stat-value text-lg text-success" id="stat-resources">0</div>
+                        </div>
+                        <div class="stat bg-base-200 rounded-lg p-3">
+                            <div class="stat-title text-xs">Errors</div>
+                            <div class="stat-value text-lg text-error" id="stat-errors">0</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Progress Bar -->
+                    <div class="mb-4">
+                        <div class="flex justify-between text-xs mb-1">
+                            <span>Overall Progress</span>
+                            <span id="progress-percent">0%</span>
+                        </div>
+                        <progress class="progress progress-primary w-full" 
+                                  id="overall-progress" 
+                                  value="0" 
+                                  max="100"></progress>
+                    </div>
+                    
+                    <!-- Current Operation -->
+                    <div class="alert alert-info mb-4">
+                        <svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                        </svg>
+                        <span id="current-operation">Initializing...</span>
+                    </div>
+                </div>
+                
+                <!-- Activity Log -->
+                <div class="flex-1 overflow-hidden">
+                    <h3 class="font-semibold text-sm mb-2">Activity Log</h3>
+                    <div id="activity-log" class="overflow-y-auto h-full bg-base-200 rounded-lg p-2 text-xs font-mono">
+                        <!-- Log entries will appear here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modals for mapping overview and graph -->
+<div id="mapping-overview-modal"></div>
+<div id="mapping-graph-modal"></div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// File selection management
+let selectedFiles = new Set();
+let currentOrganization = null;
+
+// Organization change handler
+document.getElementById('organization-select').addEventListener('change', function() {
+    currentOrganization = this.value;
+    selectedFiles.clear();
+    updateSelectedFilesDisplay();
+    updateStartButton();
+    
+    // Trigger mapping reload
+    htmx.trigger(document.body, 'organization-changed');
+});
+
+// Mapping selection handler
+document.getElementById('mapping-select').addEventListener('change', function() {
+    const hasMapping = this.value !== '';
+    document.getElementById('mapping-overview-btn').disabled = !hasMapping;
+    document.getElementById('mapping-graph-btn').disabled = !hasMapping;
+    document.getElementById('strategy-mapping').disabled = !hasMapping;
+    
+    if (hasMapping) {
+        document.getElementById('strategy-mapping').checked = true;
+    } else {
+        document.getElementById('strategy-entity').checked = true;
+    }
+    
+    updateStartButton();
+});
+
+// File selection functions
+function toggleFileSelection(fileKey) {
+    if (selectedFiles.has(fileKey)) {
+        selectedFiles.delete(fileKey);
+    } else {
+        selectedFiles.add(fileKey);
+    }
+    updateSelectedFilesDisplay();
+    updateStartButton();
+}
+
+function updateSelectedFilesDisplay() {
+    const count = selectedFiles.size;
+    document.getElementById('selected-count').textContent = `${count} file${count !== 1 ? 's' : ''}`;
+    
+    const listEl = document.getElementById('selected-files-list');
+    if (count === 0) {
+        listEl.innerHTML = '<div class="text-base-content/50">No files selected</div>';
+    } else {
+        listEl.innerHTML = Array.from(selectedFiles).map(file => 
+            `<div class="truncate">• ${file.split('/').pop()}</div>`
+        ).join('');
+    }
+}
+
+function updateStartButton() {
+    const hasFiles = selectedFiles.size > 0;
+    const hasOrg = currentOrganization !== null && currentOrganization !== '';
+    document.getElementById('start-import-btn').disabled = !(hasFiles && hasOrg);
+}
+
+// Start import handler
+document.getElementById('start-import-btn').addEventListener('click', async function() {
+    const mappingId = document.getElementById('mapping-select').value;
+    const useMapping = document.getElementById('strategy-mapping').checked && mappingId;
+    const useTableServices = document.getElementById('use-table-services').checked;
+    const linkRowCells = document.getElementById('link-row-cells').checked;
+    
+    // Show progress dashboard
+    document.getElementById('import-status').innerHTML = '';
+    document.getElementById('import-stats').classList.remove('hidden');
+    
+    // Start import for each selected file
+    for (const fileKey of selectedFiles) {
+        await startFileImport(fileKey, {
+            organization: currentOrganization,
+            mapping_id: useMapping ? mappingId : null,
+            use_table_services: useTableServices,
+            link_row_cells: linkRowCells
+        });
+    }
+});
+
+// Import functions
+async function startFileImport(fileKey, options) {
+    const formData = new FormData();
+    formData.append('s3_object_key', fileKey);
+    formData.append('organization_id', options.organization);
+    
+    if (options.mapping_id) {
+        formData.append('mapping_id', options.mapping_id);
+        formData.append('use_mapping', 'true');
+    }
+    
+    formData.append('use_table_services', options.use_table_services);
+    formData.append('link_row_cells', options.link_row_cells);
+    
+    try {
+        const response = await fetch('{% url "importer:ingest_file" %}', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: formData
+        });
+        
+        if (response.ok) {
+            const html = await response.text();
+            const statusDiv = document.createElement('div');
+            statusDiv.innerHTML = html;
+            document.getElementById('import-status').appendChild(statusDiv);
+            
+            // Log activity
+            addActivityLog(`Started import: ${fileKey.split('/').pop()}`);
+        } else {
+            addActivityLog(`Failed to start import: ${fileKey.split('/').pop()}`, 'error');
+        }
+    } catch (error) {
+        addActivityLog(`Error: ${error.message}`, 'error');
+    }
+}
+
+// Activity logging
+function addActivityLog(message, level = 'info') {
+    const log = document.getElementById('activity-log');
+    const timestamp = new Date().toLocaleTimeString();
+    const entry = document.createElement('div');
+    entry.className = level === 'error' ? 'text-error' : '';
+    entry.textContent = `[${timestamp}] ${message}`;
+    log.appendChild(entry);
+    log.scrollTop = log.scrollHeight;
+}
+
+// Update statistics from polling results
+function updateImportStats(stats) {
+    if (stats.files_processed !== undefined) {
+        document.getElementById('stat-files').textContent = stats.files_processed;
+    }
+    if (stats.rows_processed !== undefined) {
+        document.getElementById('stat-rows').textContent = stats.rows_processed;
+    }
+    if (stats.resources_created !== undefined) {
+        document.getElementById('stat-resources').textContent = stats.resources_created;
+    }
+    if (stats.errors !== undefined) {
+        document.getElementById('stat-errors').textContent = stats.errors;
+    }
+    
+    // Update progress
+    if (stats.progress !== undefined) {
+        document.getElementById('overall-progress').value = stats.progress;
+        document.getElementById('progress-percent').textContent = `${stats.progress}%`;
+    }
+    
+    // Update current operation
+    if (stats.current_operation) {
+        document.getElementById('current-operation').textContent = stats.current_operation;
+    }
+}
+
+// Listen for HTMX events to update stats
+document.body.addEventListener('htmx:afterSwap', function(event) {
+    // Check if this is a status update
+    if (event.detail.target.closest('#import-status')) {
+        // Extract stats from the response if available
+        const statsEl = event.detail.target.querySelector('[data-import-stats]');
+        if (statsEl) {
+            try {
+                const stats = JSON.parse(statsEl.dataset.importStats);
+                updateImportStats(stats);
+            } catch (e) {
+                console.error('Failed to parse import stats:', e);
+            }
+        }
+    }
+});
+</script>
+{% endblock %}

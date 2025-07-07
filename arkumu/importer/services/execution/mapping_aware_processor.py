@@ -68,13 +68,12 @@ class MappingAwareProcessor:
             statistics=statistics
         )
         
-        # Initialize the optimized bulk updater for actual data processing
-        self.bulk_updater = SmartBulkUpdaterPolars(
-            default_strategy=UpdateStrategy.UPDATE_VALUES,
-            institution=institution,
+        # Initialize the execution engine for actual data processing
+        from .execution_engine import MappingExecutionEngine
+        self.execution_engine = MappingExecutionEngine(
+            organization_id=institution,
             base_uri=base_uri,
-            link_row_cells=True,
-            link_topology="row"
+            default_strategy=UpdateStrategy.UPDATE_VALUES
         )
         
         # Processing state
@@ -120,23 +119,9 @@ class MappingAwareProcessor:
     def _process_entity_centric(self, context: ProcessingContext) -> ExecutionMetrics:
         """Process using entity-centric approach with optimized bulk updater"""
         
-        logger.info("Processing with entity-centric strategy using SmartBulkUpdaterPolars")
+        logger.info("Processing with entity-centric strategy using MappingExecutionEngine")
         
-        # Convert mapping FK relationships to bulk updater format
-        bulk_fk_relationships = []
-        for fk_rel in context.execution_config.fk_relationships:
-            bulk_fk_relationships.append(BulkFKRelationship(
-                source_column=fk_rel.source_column,
-                source_dataset=fk_rel.source_dataset,
-                target_column=fk_rel.target_column,
-                target_dataset=fk_rel.target_dataset,
-                relationship_type=fk_rel.relationship_type
-            ))
-        
-        # Update bulk updater with FK relationships
-        self.bulk_updater.fk_relationships = bulk_fk_relationships
-        
-        # Process each dataset with the optimized bulk updater
+        # Process each dataset with the execution engine
         for dataset_config in context.execution_config.datasets:
             if dataset_config.dataset_name not in context.all_csv_sources:
                 logger.warning(f"No CSV data for dataset: {dataset_config.dataset_name}")
@@ -144,32 +129,32 @@ class MappingAwareProcessor:
             
             csv_data = context.all_csv_sources[dataset_config.dataset_name]
             
-            # Convert column configs to bulk updater format
-            column_configs = self._convert_column_configs_to_bulk_format(dataset_config.columns)
+            # Convert column configs to mapping format
+            mapping_config = self._create_mapping_config_from_dataset(dataset_config)
             
-            # Use the optimized bulk updater for data processing
-            logger.info(f"Processing dataset '{dataset_config.dataset_name}' with mapping-aware bulk updater")
+            # Use the execution engine for data processing
+            logger.info(f"Processing dataset '{dataset_config.dataset_name}' with mapping-aware execution engine")
             
-            # Update the bulk updater's determine_update_actions_polars to accept column_configs
-            df = self.bulk_updater._ensure_dataframe(csv_data)
-            updates, action_stats = self.bulk_updater.determine_update_actions_polars(
-                df, dataset_config.dataset_name, column_configs
-            )
-            
-            # Execute the updates
-            execution_stats = self.bulk_updater.execute_bulk_update(
-                updates, dataset_config.dataset_name, action_stats
-            )
-            
-            # Merge statistics
-            self._merge_bulk_stats_to_execution_metrics(execution_stats)
+            try:
+                # Execute the import with mapping configuration
+                metrics = self.execution_engine.execute_simple_import(
+                    csv_data=csv_data,
+                    dataset_name=dataset_config.dataset_name,
+                    mapping_config=mapping_config
+                )
+                
+                # Update our statistics with the returned metrics
+                self.statistics.merge_metrics(metrics)
+                
+            except Exception as e:
+                logger.error(f"Error processing dataset {dataset_config.dataset_name}: {e}")
+                self.statistics.add_error(str(e), dataset_config.dataset_name)
             
             context.processed_datasets.add(dataset_config.dataset_name)
         
-        # Process FK relationships using the bulk updater
-        if bulk_fk_relationships:
-            fk_stats = self.bulk_updater.process_fk_relationships(context.all_csv_sources)
-            self._merge_bulk_stats_to_execution_metrics(fk_stats)
+        # Handle FK relationships through mapping configuration
+        if context.execution_config.fk_relationships:
+            logger.info(f"FK relationships ({len(context.execution_config.fk_relationships)}) are handled by execution engine")
         
         return self.statistics.current_metrics
     
@@ -714,6 +699,39 @@ class MappingAwareProcessor:
                 return fk_rel.target_dataset
         
         return f"unknown_target_for_{fk_column}"
+    
+    def _create_mapping_config_from_dataset(self, dataset_config) -> Dict[str, Any]:
+        """Create mapping configuration from dataset config."""
+        mapping_config = {
+            "dataset_name": dataset_config.dataset_name,
+            "columns": {},
+            "fk_relationships": []
+        }
+        
+        # Convert columns
+        for column in dataset_config.columns:
+            mapping_config["columns"][column.column_name] = {
+                "is_multi_value": column.is_multi_value,
+                "multi_value_separator": column.multi_value_separator or ",",
+                "column_type": column.column_type.value if hasattr(column.column_type, 'value') else str(column.column_type),
+                "is_anchor": column.is_anchor,
+                "arkumu_type": column.arkumu_type,
+                "datatype": column.datatype,
+                "fk_config": column.fk_config
+            }
+        
+        # Include FK relationships
+        if hasattr(dataset_config, 'fk_relationships'):
+            for fk_rel in dataset_config.fk_relationships:
+                mapping_config["fk_relationships"].append({
+                    "source_column": fk_rel.source_column,
+                    "source_dataset": fk_rel.source_dataset,
+                    "target_column": fk_rel.target_column,
+                    "target_dataset": fk_rel.target_dataset,
+                    "relationship_type": fk_rel.relationship_type
+                })
+        
+        return mapping_config
     
     def _convert_column_configs_to_bulk_format(self, columns: List[ColumnConfig]) -> Dict[str, Dict[str, Any]]:
         """Convert mapping column configs to bulk updater format."""

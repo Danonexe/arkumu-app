@@ -533,15 +533,51 @@ class ListMappingsView(GeneralLoginRequiredMixin, CSVMappingCoordinatorMixin, Vi
         logger.info("LIST_MAPPINGS: Starting list operation")
         
         try:
-            organization_id = request.GET.get('organization')
+            organization_param = request.GET.get('organization')
             
-            if not organization_id:
+            if not organization_param:
                 return JsonResponse({'error': 'Organization ID is required'}, status=400)
             
-            # Get mappings for organization
-            mappings = Mapping.objects.filter(
-                organization_id=organization_id
-            ).order_by('-created_at')
+            # Handle organization codes vs IDs
+            try:
+                # First try as numeric ID
+                organization_id = int(organization_param)
+                # Get mappings for organization (for numeric IDs)
+                mappings = Mapping.objects.filter(
+                    organization_id=organization_id
+                ).order_by('-created_at')
+            except ValueError:
+                # Handle organization codes like 'fuk', 'rsh', etc.
+                # Look up organization by code
+                from arkumu.users.models import Organization
+                try:
+                    organization = Organization.objects.get(code=organization_param)
+                    organization_id = organization.id
+                    logger.info(f"LIST_MAPPINGS: Found organization '{organization.name}' (code: {organization_param}, id: {organization_id})")
+                    
+                    # Get mappings for this organization
+                    mappings = Mapping.objects.filter(
+                        organization_id=organization_id
+                    ).order_by('-created_at')
+                    
+                except Organization.DoesNotExist:
+                    logger.warning(f"LIST_MAPPINGS: Organization with code '{organization_param}' not found in database")
+                    # Return empty mappings for unknown organization codes
+                    if request.headers.get('HX-Request'):
+                        # Return HTML options for select dropdown with empty state
+                        options_html = '<option value="">No mappings available for this organization</option>'
+                        return HttpResponse(options_html)
+                    else:
+                        # Return JSON for API calls
+                        return JsonResponse({
+                            'success': True,
+                            'mappings': [],
+                            'total_count': 0,
+                            'message': f'No mappings found for organization {organization_param}'
+                        })
+                except Exception as e:
+                    logger.error(f"LIST_MAPPINGS: Error looking up organization '{organization_param}': {str(e)}")
+                    return JsonResponse({'error': f'Error looking up organization: {organization_param}'}, status=400)
             
             # Serialize mapping list
             mapping_list = []

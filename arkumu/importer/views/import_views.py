@@ -22,21 +22,40 @@ def ingest_file(request):
     Ingest a CSV file using the ImportWorkflowService
     """
     if request.method == "POST":
-        file_path = request.POST.get('file_path')
-        organization_slug = request.POST.get('organization') # This is the org slug/short_name
+        # Support both old parameter names and new ones
+        s3_object_key = request.POST.get('s3_object_key') or request.POST.get('file_path')
+        organization_id = request.POST.get('organization_id') or request.POST.get('organization')
+        
+        # New parameters for mapping support
+        mapping_id = request.POST.get('mapping_id')
+        use_mapping = request.POST.get('use_mapping', 'false').lower() == 'true'
+        use_table_services = request.POST.get('use_table_services', 'false').lower() == 'true'
+        link_row_cells = request.POST.get('link_row_cells', 'true').lower() == 'true'
 
-        if not file_path or not organization_slug:
-            return JsonResponse({'error': 'Missing file_path or organization'}, status=400)
+        if not s3_object_key or not organization_id:
+            return JsonResponse({'error': 'Missing s3_object_key or organization_id'}, status=400)
 
         # Determine dataset name from file_path (e.g., remove extension)
-        dataset_name = os.path.splitext(os.path.basename(file_path))[0]
+        dataset_name = os.path.splitext(os.path.basename(s3_object_key))[0]
+        
+        # Get organization
+        from arkumu.core.models import Organization
+        try:
+            organization = Organization.objects.get(id=organization_id)
+            organization_slug = organization.slug
+        except Organization.DoesNotExist:
+            try:
+                # Fallback: treat organization_id as slug
+                organization = Organization.objects.get(slug=organization_id)
+                organization_slug = organization_id
+            except Organization.DoesNotExist:
+                return JsonResponse({'error': 'Organization not found'}, status=404)
         
         # Instantiate bucket service
         bucket_service = BucketService()
         
         # Get bucket name for organization
-        s3_bucket_name = bucket_service.get_organization_bucket(organization_slug) # Renamed for clarity
-        s3_object_key = file_path # Renamed for clarity
+        s3_bucket_name = bucket_service.get_organization_bucket(organization_slug)
         
         # Check if it's a CSV file
         if not s3_object_key.lower().endswith('.csv'):
@@ -76,20 +95,24 @@ def ingest_file(request):
             task_id=polling_task_id,
         )
         
-        # Enqueue the Huey task, now passing s3_bucket_name and s3_object_key, and ingest_session_id
+        # Enqueue the Huey task with mapping support
         task_instance = run_csv_import_workflow(
             s3_bucket_name=s3_bucket_name,
             s3_object_key=s3_object_key,
             dataset_name=dataset_name,
-            institution=organization_slug, # Keep original case (lowercase)
+            institution=organization_slug,
             base_uri="http://arkumu.org/data",
             delimiter=';',
             has_quoted_fields=True,
-            link_row_cells=True,
-            link_to_first_column=False, # Default, or make configurable
-            update_strategy=UpdateStrategy.UPDATE_VALUES, # Default: Update existing data when re-importing
-            task_id_for_cache=polling_task_id, # Pass the generated ID for caching
-            upload_session_id=ingest_session.id # Pass the ID of the new IngestSession (keeping param name for compatibility)
+            link_row_cells=link_row_cells,
+            link_to_first_column=False,
+            update_strategy=UpdateStrategy.UPDATE_VALUES,
+            task_id_for_cache=polling_task_id,
+            upload_session_id=ingest_session.id,
+            # New mapping parameters
+            mapping_id=mapping_id if use_mapping else None,
+            use_mapping=use_mapping,
+            use_table_services=use_table_services
         )
         
         # Update the ingest session with the Huey task ID

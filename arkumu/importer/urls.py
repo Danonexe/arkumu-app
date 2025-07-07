@@ -1,10 +1,14 @@
 from django.urls import path
-from .views import import_views
+from .views import import_views, ingest_views
 
 app_name = "importer"
 
 urlpatterns = [
-    # CSV ingest endpoint
+    # New ingest data interface
+    path("ingest/", ingest_views.ingest_data, name="ingest_data"),
+    path("ingest/get-files/", ingest_views.get_organization_files_for_ingest, name="get_organization_files"),
+    
+    # CSV ingest endpoint (existing)
     path("ingest-file/", import_views.ingest_file, name="ingest_file"),
     
     # Directory import endpoint
