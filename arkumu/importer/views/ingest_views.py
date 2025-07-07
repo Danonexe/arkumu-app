@@ -81,6 +81,10 @@ class IngestDataView(GeneralLoginRequiredMixin, OrganizationMixin, IngestCoordin
     
     def post(self, request):
         """Handle POST requests for HTMX actions"""
+        logger.info(f"POST request received. Headers: {dict(request.headers)}")
+        logger.info(f"POST data: {dict(request.POST)}")
+        logger.info(f"Is HTMX request: {request.headers.get('HX-Request')}")
+        
         # Get organization context
         org_context = self.get_organization_context(request)
         organization_id = org_context.get('organization_id')
@@ -88,33 +92,45 @@ class IngestDataView(GeneralLoginRequiredMixin, OrganizationMixin, IngestCoordin
         # Handle load_mapping action
         if request.POST.get('action') == 'load_mapping':
             mapping_id = request.POST.get('mapping_id')
+            logger.info(f"Loading mapping details: mapping_id={mapping_id}, organization_id={organization_id}")
+            
             if mapping_id and organization_id:
                 # Get mapping details
                 try:
-                    from arkumu.metadata.models import CSVMapping
-                    selected_mapping = CSVMapping.objects.get(
+                    from arkumu.metadata.models import Mapping
+                    selected_mapping = Mapping.objects.get(
                         id=mapping_id,
-                        organization=organization_id
+                        organization_id=organization_id
                     )
                     context = {
                         'selected_mapping': selected_mapping,
                         'organization_id': organization_id
                     }
-                except CSVMapping.DoesNotExist:
+                    logger.info(f"Successfully loaded mapping: {selected_mapping.name}")
+                except Mapping.DoesNotExist:
+                    logger.warning(f"Mapping {mapping_id} not found for organization {organization_id}")
                     context = {
                         'selected_mapping': None,
                         'organization_id': organization_id
                     }
             else:
+                logger.warning(f"Missing mapping_id or organization_id: mapping_id={mapping_id}, organization_id={organization_id}")
                 context = {
                     'selected_mapping': None,
                     'organization_id': organization_id
                 }
             
+            logger.info(f"Returning mapping_details.html template with context: {list(context.keys())}")
             return render(request, 'importer/partials/mapping_details.html', context)
         
-        # For other POST requests, return a simple HttpResponse to avoid full page reload
-        from django.http import HttpResponse
+        # Check if it's an HTMX request but no action or unknown action
+        if request.headers.get('HX-Request'):
+            logger.warning(f"HTMX request but no valid action. Action: {request.POST.get('action')}")
+            # Return empty response for unknown HTMX actions
+            return HttpResponse("")
+        
+        # For non-HTMX POST requests, this might be causing the full page reload
+        logger.warning("Non-HTMX POST request received - this might cause full page reload!")
         return HttpResponse("Invalid action", status=400)
 
 
@@ -124,6 +140,8 @@ def ingest_data(request):
     Function-based wrapper for IngestDataView (for URL compatibility)
     """
     view = IngestDataView()
+    if request.method == 'POST':
+        return view.post(request)
     return view.get(request)
 
 
