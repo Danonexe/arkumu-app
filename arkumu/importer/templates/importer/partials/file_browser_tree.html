@@ -6,81 +6,60 @@
         <span>No CSV files found in {{ organization.name }}</span>
     </div>
 {% else %}
-    <div class="flex justify-between items-center mb-2">
-        <div class="text-sm text-base-content/70">
-            Found {{ total_files }} CSV file{{ total_files|pluralize }}
+    <!-- File Selection Summary -->
+    <div class="bg-base-200 rounded-lg p-3 mb-3">
+        <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center gap-2">
+                <span class="text-sm font-medium">Files</span>
+                <div class="badge badge-neutral badge-sm">{{ total_files }} total</div>
+            </div>
+            <div class="flex gap-1">
+                <button class="btn btn-xs btn-primary"
+                        hx-post="{% url 'importer:select_all_files' %}"
+                        hx-include="#organization-selector"
+                        hx-target="#file-browser"
+                        hx-swap="innerHTML">
+                    Select All
+                </button>
+                <button class="btn btn-xs btn-ghost"
+                        hx-post="{% url 'importer:deselect_all_files' %}"
+                        hx-include="#organization-selector"
+                        hx-target="#file-browser"
+                        hx-swap="innerHTML">
+                    Clear
+                </button>
+            </div>
         </div>
-        <div class="flex gap-1">
-            <button class="btn btn-xs btn-primary"
-                    hx-post="{% url 'importer:select_all_files' %}"
-                    hx-vals='js:{organization: document.getElementById("organization-select").value}'
-                    hx-target="#file-browser"
-                    hx-swap="innerHTML">
-                Select All
-            </button>
-            <button class="btn btn-xs btn-ghost"
-                    hx-post="{% url 'importer:deselect_all_files' %}"
-                    hx-vals='js:{organization: document.getElementById("organization-select").value}'
-                    hx-target="#file-browser"
-                    hx-swap="innerHTML">
-                Clear
-            </button>
+        <div class="flex items-center gap-2">
+            <span class="text-sm text-base-content/70">Selected:</span>
+            <div id="selected-count" class="badge badge-primary badge-sm">{{ selected_count }} file{{ selected_count|pluralize }}</div>
         </div>
     </div>
     
-    <!-- File Tree -->
-    <div class="file-tree">
-        {% include "importer/partials/file_tree_node.html" with node=file_tree node_name="metadata" level=0 selected_files=selected_files %}
+    <!-- Scrollable File Tree -->
+    <div class="space-y-1 overflow-y-auto" style="max-height: calc(100vh - 400px);">
+        {% include "importer/partials/file_tree_node.html" with node=file_tree selected_files=selected_files level=0 %}
     </div>
 
-    <!-- Update parent template counters -->
-    <script>
-        // Update selected count and file list in parent
-        const countEl = document.getElementById('selected-count');
-        if (countEl) {
-            countEl.textContent = '{{ selected_count }} file{{ selected_count|pluralize }}';
-        }
-        
-        const filesList = document.getElementById('selected-files-list');
-        if (filesList) {
-            {% if selected_files %}
-                filesList.innerHTML = `{% for file_key in selected_files %}<div class="truncate">• {{ file_key }}</div>{% endfor %}`;
-            {% else %}
-                filesList.innerHTML = '<div class="text-base-content/50">No files selected</div>';
-            {% endif %}
-        }
-        
-        // Trigger button state update
-        if (typeof updateStartButton === 'function') {
-            updateStartButton();
-        }
-    </script>
 {% endif %}
 
 <style>
-.file-tree {
-    font-size: 0.875rem;
-}
-
-.file-tree-node {
-    margin-left: 0.5rem;
-}
-
 .file-tree-item {
     display: flex;
     align-items: center;
-    padding: 0.25rem 0;
-    cursor: pointer;
+    padding: 0.375rem;
+    border-radius: 0.375rem;
     transition: background-color 0.2s;
+    border: 1px solid transparent;
 }
 
 .file-tree-item:hover {
     background-color: hsl(var(--b2));
-    border-radius: 0.25rem;
 }
 
 .file-tree-item.selected {
     background-color: hsl(var(--p) / 0.1);
+    border-color: hsl(var(--p) / 0.3);
 }
 
 .file-checkbox {
@@ -88,21 +67,17 @@
 }
 
 .folder-toggle {
+    cursor: pointer;
     margin-right: 0.25rem;
     transition: transform 0.2s;
 }
 
-.folder-toggle.open {
-    transform: rotate(90deg);
+.folder-toggle:hover {
+    transform: scale(1.1);
 }
 
 .folder-contents {
-    margin-left: 1.5rem;
-    display: none;
-}
-
-.folder-contents.open {
-    display: block;
+    transition: all 0.2s ease-in-out;
 }
 </style>
 

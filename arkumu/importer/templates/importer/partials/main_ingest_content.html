@@ -14,33 +14,11 @@
                     Select Files
                 </h2>
                 
-                <!-- Organization info (no dropdown here - it's in navbar) -->
-                <div class="mb-4 p-2 bg-base-200 rounded">
-                    <div class="text-sm text-base-content/70">Selected Organization:</div>
-                    <div class="font-medium">{{ organization_name|default:"Unknown" }}</div>
-                </div>
-                
                 <!-- File Browser -->
-                <div id="file-browser" class="overflow-y-auto flex-1">
+                <div id="file-browser" class="flex-1 min-h-0">
                     {% include 'importer/partials/file_browser_tree.html' %}
                 </div>
                 
-                <!-- Selected Files Summary -->
-                <div class="mt-4 pt-4 border-t border-base-300">
-                    <div class="text-sm">
-                        <span class="font-semibold">Selected:</span>
-                        <span id="selected-count" class="badge badge-primary badge-sm ml-2">{{ selected_files|length|default:0 }} files</span>
-                    </div>
-                    <div id="selected-files-list" class="mt-2 max-h-32 overflow-y-auto">
-                        {% if selected_files %}
-                            {% for file in selected_files %}
-                                <div class="text-xs text-base-content/70 py-1">{{ file }}</div>
-                            {% endfor %}
-                        {% else %}
-                            <div class="text-base-content/50">No files selected</div>
-                        {% endif %}
-                    </div>
-                </div>
             </div>
         </div>
         

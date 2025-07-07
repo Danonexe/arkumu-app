@@ -28,14 +28,9 @@
                                    value="{{ file.key }}"
                                    id="file-{{ file.key|slugify }}"
                                    {% if file.key in selected_files %}checked{% endif %}
-                                   hx-post="{% url 'importer:get_organization_files' %}"
-                                   hx-vals='js:{file_key: "{{ file.key }}", organization: document.getElementById("organization-select").value, toggle_selection: "true"}'
-                                   hx-target="#file-browser"
-                                   hx-swap="innerHTML"
+                                   hx-post="{% url 'importer:toggle_file_selection' %}"
+                                   hx-vals='{"file_key": "{{ file.key }}"}'
                                    hx-trigger="change">
-                            <svg class="w-4 h-4 mr-1 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                            </svg>
                             <label for="file-{{ file.key|slugify }}" class="cursor-pointer flex-1">
                                 {{ file.name }}
                             </label>
@@ -59,14 +54,9 @@
                    value="{{ file.key }}"
                    id="file-{{ file.key|slugify }}"
                    {% if file.key in selected_files %}checked{% endif %}
-                   hx-post="{% url 'importer:get_organization_files' %}"
-                   hx-vals='js:{file_key: "{{ file.key }}", organization: document.getElementById("organization-select").value, toggle_selection: "true"}'
-                   hx-target="#file-browser"
-                   hx-swap="innerHTML"
+                   hx-post="{% url 'importer:toggle_file_selection' %}"
+                   hx-vals='{"file_key": "{{ file.key }}"}'
                    hx-trigger="change">
-            <svg class="w-4 h-4 mr-1 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-            </svg>
             <label for="file-{{ file.key|slugify }}" class="cursor-pointer flex-1">
                 {{ file.name }}
             </label>

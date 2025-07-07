@@ -7,6 +7,7 @@ from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
 from django.views import View
 from arkumu.users.mixins import GeneralLoginRequiredMixin, general_login_required
+from arkumu.users.models import Organization
 from arkumu.metadata.views.csv_mapping.mixins.base import OrganizationMixin
 from arkumu.importer.mixins.ingest_coordinator import IngestCoordinatorMixin
 
@@ -287,9 +288,11 @@ def toggle_file_selection(request):
     # Save back to session
     request.session[SELECTED_FILES_SESSION_KEY] = list(selected_files)
     
-    # Return updated count
+    # Return updated count with OOB swap for the counter
     count = len(selected_files)
-    return HttpResponse(f'{count} file{"s" if count != 1 else ""}')
+    return render(request, 'importer/partials/file_counter_oob.html', {
+        'selected_count': count
+    })
 
 
 @general_login_required 
