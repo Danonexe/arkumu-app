@@ -7,6 +7,10 @@ urlpatterns = [
     # New ingest data interface
     path("ingest/", ingest_views.ingest_data, name="ingest_data"),
     path("ingest/get-files/", ingest_views.get_organization_files_for_ingest, name="get_organization_files"),
+    path("ingest/toggle-file-selection/", ingest_views.toggle_file_selection, name="toggle_file_selection"),
+    path("ingest/select-all-files/", ingest_views.select_all_files, name="select_all_files"),
+    path("ingest/deselect-all-files/", ingest_views.deselect_all_files, name="deselect_all_files"),
+    path("ingest/toggle-folder/", ingest_views.toggle_folder, name="toggle_folder"),
     
     # CSV ingest endpoint (existing)
     path("ingest-file/", import_views.ingest_file, name="ingest_file"),

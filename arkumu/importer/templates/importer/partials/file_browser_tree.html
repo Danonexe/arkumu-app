@@ -6,14 +6,56 @@
         <span>No CSV files found in {{ organization.name }}</span>
     </div>
 {% else %}
-    <div class="text-sm text-base-content/70 mb-2">
-        Found {{ total_files }} CSV file{{ total_files|pluralize }}
+    <div class="flex justify-between items-center mb-2">
+        <div class="text-sm text-base-content/70">
+            Found {{ total_files }} CSV file{{ total_files|pluralize }}
+        </div>
+        <div class="flex gap-1">
+            <button class="btn btn-xs btn-primary"
+                    hx-post="{% url 'importer:select_all_files' %}"
+                    hx-vals='js:{organization: document.getElementById("organization-select").value}'
+                    hx-target="#file-browser"
+                    hx-swap="innerHTML">
+                Select All
+            </button>
+            <button class="btn btn-xs btn-ghost"
+                    hx-post="{% url 'importer:deselect_all_files' %}"
+                    hx-vals='js:{organization: document.getElementById("organization-select").value}'
+                    hx-target="#file-browser"
+                    hx-swap="innerHTML">
+                Clear
+            </button>
+        </div>
     </div>
     
     <!-- File Tree -->
     <div class="file-tree">
-        {% include "importer/partials/file_tree_node.html" with node=file_tree node_name="metadata" level=0 %}
+        {% include "importer/partials/file_tree_node.html" with node=file_tree node_name="metadata" level=0 selected_files=selected_files %}
     </div>
+
+    <!-- Update parent template counters -->
+    <script>
+        // Update selected count and file list in parent
+        const countEl = document.getElementById('selected-count');
+        if (countEl) {
+            countEl.textContent = '{{ selected_count }} file{{ selected_count|pluralize }}';
+        }
+        
+        const filesList = document.getElementById('selected-files-list');
+        if (filesList) {
+            {% if selected_files %}
+                const selectedFiles = [{% for file_key in selected_files %}'{{ file_key|split:"/" | last }}',{% endfor %}];
+                filesList.innerHTML = selectedFiles.map(file => `<div class="truncate">• ${file}</div>`).join('');
+            {% else %}
+                filesList.innerHTML = '<div class="text-base-content/50">No files selected</div>';
+            {% endif %}
+        }
+        
+        // Trigger button state update
+        if (typeof updateStartButton === 'function') {
+            updateStartButton();
+        }
+    </script>
 {% endif %}
 
 <style>
@@ -65,31 +107,3 @@
 }
 </style>
 
-<script>
-// Toggle folder visibility
-function toggleFolder(folderId) {
-    const toggle = document.querySelector(`[data-folder="${folderId}"] .folder-toggle`);
-    const contents = document.getElementById(folderId);
-    
-    if (toggle && contents) {
-        toggle.classList.toggle('open');
-        contents.classList.toggle('open');
-    }
-}
-
-// Handle file selection
-document.querySelectorAll('.file-checkbox').forEach(checkbox => {
-    checkbox.addEventListener('change', function() {
-        const fileItem = this.closest('.file-tree-item');
-        const fileKey = this.value;
-        
-        if (this.checked) {
-            fileItem.classList.add('selected');
-            toggleFileSelection(fileKey);
-        } else {
-            fileItem.classList.remove('selected');
-            toggleFileSelection(fileKey);
-        }
-    });
-});
-</script>

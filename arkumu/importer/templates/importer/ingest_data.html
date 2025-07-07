@@ -64,7 +64,7 @@
                         <span id="selected-count" class="badge badge-primary badge-sm ml-2">0 files</span>
                     </div>
                     <div id="selected-files-list" class="mt-2 max-h-32 overflow-y-auto">
-                        <!-- Selected files will be listed here -->
+                        <div class="text-base-content/50">No files selected</div>
                     </div>
                 </div>
             </div>
@@ -281,22 +281,24 @@
 
 {% block extra_js %}
 <script>
-// File selection management
-let selectedFiles = new Set();
-let currentOrganization = null;
-
-// Organization change handler
+// Minimal HTMX event handlers for organization and mapping changes
 document.getElementById('organization-select').addEventListener('change', function() {
-    currentOrganization = this.value;
-    selectedFiles.clear();
-    updateSelectedFilesDisplay();
-    updateStartButton();
+    // Clear selected files when organization changes  
+    fetch('{% url "importer:deselect_all_files" %}', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'Content-Type': 'application/x-www-form-urlencoded'
+        }
+    });
     
     // Trigger mapping reload
     htmx.trigger(document.body, 'organization-changed');
+    
+    // Update start button state
+    updateStartButton();
 });
 
-// Mapping selection handler
 document.getElementById('mapping-select').addEventListener('change', function() {
     const hasMapping = this.value !== '';
     document.getElementById('mapping-overview-btn').disabled = !hasMapping;
@@ -312,97 +314,31 @@ document.getElementById('mapping-select').addEventListener('change', function() 
     updateStartButton();
 });
 
-// File selection functions
-function toggleFileSelection(fileKey) {
-    if (selectedFiles.has(fileKey)) {
-        selectedFiles.delete(fileKey);
-    } else {
-        selectedFiles.add(fileKey);
-    }
-    updateSelectedFilesDisplay();
-    updateStartButton();
-}
-
-function updateSelectedFilesDisplay() {
-    const count = selectedFiles.size;
-    document.getElementById('selected-count').textContent = `${count} file${count !== 1 ? 's' : ''}`;
-    
-    const listEl = document.getElementById('selected-files-list');
-    if (count === 0) {
-        listEl.innerHTML = '<div class="text-base-content/50">No files selected</div>';
-    } else {
-        listEl.innerHTML = Array.from(selectedFiles).map(file => 
-            `<div class="truncate">• ${file.split('/').pop()}</div>`
-        ).join('');
-    }
-}
-
+// Update start button based on selections
 function updateStartButton() {
-    const hasFiles = selectedFiles.size > 0;
-    const hasOrg = currentOrganization !== null && currentOrganization !== '';
+    const hasOrg = document.getElementById('organization-select').value !== '';
+    const selectedCount = parseInt(document.getElementById('selected-count').textContent);
+    const hasFiles = selectedCount > 0;
+    
     document.getElementById('start-import-btn').disabled = !(hasFiles && hasOrg);
 }
 
-// Start import handler
-document.getElementById('start-import-btn').addEventListener('click', async function() {
-    const mappingId = document.getElementById('mapping-select').value;
-    const useMapping = document.getElementById('strategy-mapping').checked && mappingId;
-    const useTableServices = document.getElementById('use-table-services').checked;
-    const linkRowCells = document.getElementById('link-row-cells').checked;
-    
+// Listen for HTMX events to update button state
+document.body.addEventListener('htmx:afterSwap', function(event) {
+    if (event.detail.target.id === 'selected-count') {
+        updateStartButton();
+    }
+});
+
+// Start import handler (simplified)
+document.getElementById('start-import-btn').addEventListener('click', function() {
     // Show progress dashboard
     document.getElementById('import-status').innerHTML = '';
     document.getElementById('import-stats').classList.remove('hidden');
     
-    // Start import for each selected file
-    for (const fileKey of selectedFiles) {
-        await startFileImport(fileKey, {
-            organization: currentOrganization,
-            mapping_id: useMapping ? mappingId : null,
-            use_table_services: useTableServices,
-            link_row_cells: linkRowCells
-        });
-    }
+    // Add activity log entry
+    addActivityLog('Starting import process...');
 });
-
-// Import functions
-async function startFileImport(fileKey, options) {
-    const formData = new FormData();
-    formData.append('s3_object_key', fileKey);
-    formData.append('organization_id', options.organization);
-    
-    if (options.mapping_id) {
-        formData.append('mapping_id', options.mapping_id);
-        formData.append('use_mapping', 'true');
-    }
-    
-    formData.append('use_table_services', options.use_table_services);
-    formData.append('link_row_cells', options.link_row_cells);
-    
-    try {
-        const response = await fetch('{% url "importer:ingest_file" %}', {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': '{{ csrf_token }}'
-            },
-            body: formData
-        });
-        
-        if (response.ok) {
-            const html = await response.text();
-            const statusDiv = document.createElement('div');
-            statusDiv.innerHTML = html;
-            document.getElementById('import-status').appendChild(statusDiv);
-            
-            // Log activity
-            addActivityLog(`Started import: ${fileKey.split('/').pop()}`);
-        } else {
-            addActivityLog(`Failed to start import: ${fileKey.split('/').pop()}`, 'error');
-        }
-    } catch (error) {
-        addActivityLog(`Error: ${error.message}`, 'error');
-    }
-}
 
 // Activity logging
 function addActivityLog(message, level = 'info') {
@@ -414,49 +350,5 @@ function addActivityLog(message, level = 'info') {
     log.appendChild(entry);
     log.scrollTop = log.scrollHeight;
 }
-
-// Update statistics from polling results
-function updateImportStats(stats) {
-    if (stats.files_processed !== undefined) {
-        document.getElementById('stat-files').textContent = stats.files_processed;
-    }
-    if (stats.rows_processed !== undefined) {
-        document.getElementById('stat-rows').textContent = stats.rows_processed;
-    }
-    if (stats.resources_created !== undefined) {
-        document.getElementById('stat-resources').textContent = stats.resources_created;
-    }
-    if (stats.errors !== undefined) {
-        document.getElementById('stat-errors').textContent = stats.errors;
-    }
-    
-    // Update progress
-    if (stats.progress !== undefined) {
-        document.getElementById('overall-progress').value = stats.progress;
-        document.getElementById('progress-percent').textContent = `${stats.progress}%`;
-    }
-    
-    // Update current operation
-    if (stats.current_operation) {
-        document.getElementById('current-operation').textContent = stats.current_operation;
-    }
-}
-
-// Listen for HTMX events to update stats
-document.body.addEventListener('htmx:afterSwap', function(event) {
-    // Check if this is a status update
-    if (event.detail.target.closest('#import-status')) {
-        // Extract stats from the response if available
-        const statsEl = event.detail.target.querySelector('[data-import-stats]');
-        if (statsEl) {
-            try {
-                const stats = JSON.parse(statsEl.dataset.importStats);
-                updateImportStats(stats);
-            } catch (e) {
-                console.error('Failed to parse import stats:', e);
-            }
-        }
-    }
-});
 </script>
 {% endblock %}
