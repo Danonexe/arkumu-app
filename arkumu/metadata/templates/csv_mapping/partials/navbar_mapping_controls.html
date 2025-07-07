@@ -69,6 +69,9 @@
         </div>
         
         <input type="hidden" id="current-mapping-id" name="current_mapping_id" value="{{ current_mapping_id }}">
+        
+        <!-- Divider (hidden on mobile) -->
+        <div class="divider divider-horizontal mx-1 hidden lg:flex"></div>
     {% else %}
         <!-- Save New Row -->
         <div class="flex items-center gap-2">
@@ -86,12 +89,12 @@
                 Save New
             </button>
         </div>
+        
+        <!-- Divider (hidden on mobile) -->
+        <div class="divider divider-horizontal mx-1 hidden lg:flex"></div>
     {% endif %}
 
-    <!-- Divider (hidden on mobile) -->
-    <div class="divider divider-horizontal mx-1 hidden lg:flex"></div>
-
-    <!-- Load Mapping Row -->
+    <!-- Load Mapping Row - Always visible -->
     <div class="flex items-center gap-2">
         <select id="load-mapping-select" 
                 name="mapping_id"
