@@ -1,0 +1,78 @@
+{% comment %}
+Recursive template to flatten file tree into a simple list
+{% endcomment %}
+
+{% for dir_name, dir_content in node.items %}
+    {% if dir_name != 'files' and dir_name != 'dirs' %}
+        <!-- Recursively include files from subdirectories -->
+        {% include "importer/partials/file_list_items.html" with node=dir_content.dirs selected_files=selected_files prefix=prefix|add:dir_name|add:"/" %}
+        
+        <!-- Files in this directory -->
+        {% for file in dir_content.files %}
+            <div class="file-list-item{% if file.key in selected_files %} selected{% endif %}">
+                <input type="checkbox" 
+                       class="checkbox checkbox-sm file-checkbox" 
+                       value="{{ file.key }}"
+                       id="file-{{ file.key|slugify }}"
+                       {% if file.key in selected_files %}checked{% endif %}
+                       hx-post="{% url 'importer:get_organization_files' %}"
+                       hx-vals='js:{file_key: "{{ file.key }}", organization: document.getElementById("organization-select").value, toggle_selection: "true"}'
+                       hx-target="#file-browser"
+                       hx-swap="innerHTML"
+                       hx-trigger="change">
+                
+                <div class="flex-1">
+                    <div class="flex items-center">
+                        <svg class="w-4 h-4 mr-2 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        <label for="file-{{ file.key|slugify }}" class="cursor-pointer font-medium">
+                            {{ file.name }}
+                        </label>
+                        {% if file.size %}
+                            <span class="text-xs text-base-content/50 ml-auto">{{ file.size|filesizeformat }}</span>
+                        {% endif %}
+                    </div>
+                    {% if prefix %}
+                        <div class="file-path ml-6">{{ prefix }}</div>
+                    {% endif %}
+                </div>
+            </div>
+        {% endfor %}
+    {% endif %}
+{% endfor %}
+
+<!-- Files in root of current node -->
+{% if node.files %}
+    {% for file in node.files %}
+        <div class="file-list-item{% if file.key in selected_files %} selected{% endif %}">
+            <input type="checkbox" 
+                   class="checkbox checkbox-sm file-checkbox" 
+                   value="{{ file.key }}"
+                   id="file-{{ file.key|slugify }}"
+                   {% if file.key in selected_files %}checked{% endif %}
+                   hx-post="{% url 'importer:get_organization_files' %}"
+                   hx-vals='js:{file_key: "{{ file.key }}", organization: document.getElementById("organization-select").value, toggle_selection: "true"}'
+                   hx-target="#file-browser"
+                   hx-swap="innerHTML"
+                   hx-trigger="change">
+            
+            <div class="flex-1">
+                <div class="flex items-center">
+                    <svg class="w-4 h-4 mr-2 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                    <label for="file-{{ file.key|slugify }}" class="cursor-pointer font-medium">
+                        {{ file.name }}
+                    </label>
+                    {% if file.size %}
+                        <span class="text-xs text-base-content/50 ml-auto">{{ file.size|filesizeformat }}</span>
+                    {% endif %}
+                </div>
+                {% if prefix %}
+                    <div class="file-path ml-6">{{ prefix }}</div>
+                {% endif %}
+            </div>
+        </div>
+    {% endfor %}
+{% endif %} 

@@ -22,7 +22,8 @@
                             hx-target="#main-content"
                             hx-swap="innerHTML"
                             hx-trigger="change[target.value!='']"
-                            hx-include="this">
+                            hx-include="this"
+                            hx-on::after-request="htmx.ajax('GET', '{% url 'importer:navbar_controls' %}?organization=' + this.value, {target: '#navbar-end', swap: 'innerHTML'})">
                         <option value="">Choose organization...</option>
                         {% for org in organizations %}
                             <option value="{{ org.id }}" {% if org.id == organization_id %}selected{% endif %}>
@@ -36,9 +37,13 @@
         <div class="divider divider-horizontal mx-1"></div>
         
         <div class="navbar-end" id="navbar-end">
-            <div class="flex items-center gap-3">
-                <p class="text-sm text-base-content/70">Import your CSV data with intelligent mapping</p>
-            </div>
+            {% if organization_id %}
+                {% include 'importer/partials/navbar_mapping_controls.html' %}
+            {% else %}
+                <div class="flex items-center gap-3">
+                    <p class="text-sm text-base-content/70">Import your CSV data with intelligent mapping</p>
+                </div>
+            {% endif %}
         </div>
     </div>
     

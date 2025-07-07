@@ -95,34 +95,93 @@ class IngestDataView(GeneralLoginRequiredMixin, OrganizationMixin, IngestCoordin
             mapping_id = request.POST.get('mapping_id')
             logger.info(f"Loading mapping details: mapping_id={mapping_id}, organization_id={organization_id}")
             
-            if mapping_id and organization_id:
+            # Get organization object first
+            from arkumu.organizations.models import Organization
+            organization = None
+            if organization_id:
+                try:
+                    # Handle both numeric ID and code
+                    try:
+                        organization = Organization.objects.get(id=int(organization_id))
+                    except (ValueError, Organization.DoesNotExist):
+                        organization = Organization.objects.get(code=organization_id)
+                except Organization.DoesNotExist:
+                    logger.error(f"Organization not found: {organization_id}")
+            
+            if mapping_id and organization:
+                # Initialize ingestion context
+                context_key = f'ingestion_context_{organization.id}'
+                ingestion_context = request.session.get(context_key, {})
+                
                 # Get mapping details
                 try:
                     from arkumu.metadata.models import Mapping
                     selected_mapping = Mapping.objects.get(
                         id=mapping_id,
-                        organization_id=organization_id
+                        organization_id=organization.code  # Use organization code for mapping lookup
                     )
+                    
+                    # Store selected mapping in ingestion context
+                    ingestion_context['selected_mapping_id'] = mapping_id
+                    ingestion_context['selected_mapping_name'] = selected_mapping.name
+                    ingestion_context['organization_id'] = organization.id
+                    ingestion_context['organization_code'] = organization.code
+                    
+                    # Also store in legacy session key for backward compatibility
+                    request.session[f'selected_mapping_{organization.id}'] = mapping_id
+                    
+                    # Save ingestion context
+                    request.session[context_key] = ingestion_context
+                    request.session.modified = True
+                    
                     context = {
                         'selected_mapping': selected_mapping,
-                        'organization_id': organization_id
+                        'organization_id': organization.id,
+                        'organization_code': organization.code,
+                        'ingestion_context': ingestion_context
                     }
                     logger.info(f"Successfully loaded mapping: {selected_mapping.name}")
                 except Mapping.DoesNotExist:
-                    logger.warning(f"Mapping {mapping_id} not found for organization {organization_id}")
+                    logger.warning(f"Mapping {mapping_id} not found for organization {organization.code}")
+                    # Clear mapping from ingestion context
+                    ingestion_context.pop('selected_mapping_id', None)
+                    ingestion_context.pop('selected_mapping_name', None)
+                    request.session[context_key] = ingestion_context
+                    
+                    # Clear legacy session key
+                    request.session.pop(f'selected_mapping_{organization.id}', None)
+                    request.session.modified = True
+                    
                     context = {
                         'selected_mapping': None,
-                        'organization_id': organization_id
+                        'organization_id': organization.id,
+                        'organization_code': organization.code,
+                        'ingestion_context': ingestion_context
                     }
             else:
-                logger.warning(f"Missing mapping_id or organization_id: mapping_id={mapping_id}, organization_id={organization_id}")
+                logger.warning(f"Missing mapping_id or organization: mapping_id={mapping_id}, organization={organization}")
+                # Clear any previously stored mapping
+                if organization:
+                    context_key = f'ingestion_context_{organization.id}'
+                    ingestion_context = request.session.get(context_key, {})
+                    ingestion_context.pop('selected_mapping_id', None)
+                    ingestion_context.pop('selected_mapping_name', None)
+                    request.session[context_key] = ingestion_context
+                    request.session.pop(f'selected_mapping_{organization.id}', None)
+                    request.session.modified = True
+                    
                 context = {
                     'selected_mapping': None,
-                    'organization_id': organization_id
+                    'organization_id': organization.id if organization else organization_id,
+                    'organization_code': organization.code if organization else None,
+                    'ingestion_context': ingestion_context if organization else {}
                 }
             
-            logger.info(f"Returning mapping_details.html template with context: {list(context.keys())}")
-            return render(request, 'importer/partials/mapping_details.html', context)
+            logger.info(f"Returning navbar_mapping_controls.html template with context: {list(context.keys())}")
+            response = render(request, 'importer/partials/navbar_mapping_controls.html', context)
+            # Trigger execution status update
+            response['HX-Trigger'] = 'mappingSelected'
+            return response
         
         # Check if it's an HTMX request but no action or unknown action
         if request.headers.get('HX-Request'):
@@ -290,9 +349,13 @@ def toggle_file_selection(request):
     
     # Return updated count with OOB swap for the counter
     count = len(selected_files)
-    return render(request, 'importer/partials/file_counter_oob.html', {
+    response = render(request, 'importer/partials/file_counter_oob.html', {
         'selected_count': count
     })
+    
+    # Add HX-Trigger header to notify execution status to update
+    response['HX-Trigger'] = 'fileSelectionChanged'
+    return response
 
 
 @general_login_required 
@@ -334,7 +397,11 @@ def select_all_files(request):
         request.session[SELECTED_FILES_SESSION_KEY] = csv_file_keys
         
         # Re-render the file browser with all files selected
-        return get_organization_files_for_ingest(request)
+        response = get_organization_files_for_ingest(request)
+        
+        # Add HX-Trigger header to notify execution status to update
+        response['HX-Trigger'] = 'fileSelectionChanged'
+        return response
         
     except Exception as e:
         logger.error(f"Error selecting all files: {e}")
@@ -355,7 +422,11 @@ def deselect_all_files(request):
     request.session[SELECTED_FILES_SESSION_KEY] = []
     
     # Re-render the file browser
-    return get_organization_files_for_ingest(request)
+    response = get_organization_files_for_ingest(request)
+    
+    # Add HX-Trigger header to notify execution status to update
+    response['HX-Trigger'] = 'fileSelectionChanged'
+    return response
 
 
 # Note: change_organization view removed - organization changes are now handled 
@@ -377,3 +448,176 @@ def toggle_folder(request):
     # For now, just return the folder with toggled class
     # This would need more sophisticated state management
     return HttpResponse(f'<div id="{folder_id}" class="folder-contents open"></div>')
+
+
+@general_login_required
+def navbar_controls(request):
+    """
+    HTMX endpoint to return navbar controls (mapping dropdown) for a specific organization
+    """
+    if request.method != 'GET':
+        return HttpResponse('Method not allowed', status=405)
+    
+    organization_param = request.GET.get('organization')
+    if not organization_param:
+        return render(request, 'importer/partials/navbar_empty.html')
+    
+    try:
+        # Get organization - handle both ID and code
+        try:
+            # First try as numeric ID
+            organization = Organization.objects.get(id=int(organization_param))
+        except (ValueError, Organization.DoesNotExist):
+            # Fall back to code lookup
+            try:
+                organization = Organization.objects.get(code=organization_param)
+            except Organization.DoesNotExist:
+                return render(request, 'importer/partials/navbar_empty.html')
+        
+        # Render navbar controls with organization context
+        context = {
+            'organization_id': organization.id,
+            'organization_code': organization.code,
+            'selected_mapping': None,
+        }
+        
+        return render(request, 'importer/partials/navbar_mapping_controls.html', context)
+        
+    except Exception as e:
+        logger.error(f"Error rendering navbar controls: {e}")
+        return render(request, 'importer/partials/navbar_empty.html')
+
+
+@general_login_required
+def execution_status(request):
+    """
+    HTMX endpoint to return execution status content (mapping and file status)
+    """
+    if request.method != 'GET':
+        return HttpResponse('Method not allowed', status=405)
+    
+    organization_param = request.GET.get('organization')
+    if not organization_param:
+        return HttpResponse('Organization parameter required', status=400)
+    
+    try:
+        # Get organization - handle both ID and code
+        try:
+            # First try as numeric ID
+            organization = Organization.objects.get(id=int(organization_param))
+        except (ValueError, Organization.DoesNotExist):
+            # Fall back to code lookup
+            try:
+                organization = Organization.objects.get(code=organization_param)
+            except Organization.DoesNotExist:
+                return HttpResponse('Organization not found', status=404)
+        
+        # Initialize ingestion context in session if not exists
+        context_key = f'ingestion_context_{organization.id}'
+        ingestion_context = request.session.get(context_key, {})
+        
+        # Get selected files from session (backward compatibility)
+        selected_files = request.session.get(SELECTED_FILES_SESSION_KEY, [])
+        
+        # Update context with current selected files count
+        ingestion_context['selected_files_count'] = len(selected_files)
+        ingestion_context['organization_id'] = organization.id
+        ingestion_context['organization_code'] = organization.code
+        
+        # Get selected mapping from session
+        mapping_id = ingestion_context.get('selected_mapping_id')
+        selected_mapping = None
+        
+        if not mapping_id:
+            # Try legacy session keys for backward compatibility
+            mapping_id = request.session.get(f'selected_mapping_{organization.id}')
+            if not mapping_id:
+                mapping_id = request.session.get(f'selected_mapping_{organization.code}')
+            
+            # If found in legacy location, update context
+            if mapping_id:
+                ingestion_context['selected_mapping_id'] = mapping_id
+        
+        if mapping_id:
+            try:
+                from arkumu.metadata.models import Mapping
+                selected_mapping = Mapping.objects.get(id=mapping_id)
+                ingestion_context['selected_mapping_name'] = selected_mapping.name
+            except Mapping.DoesNotExist:
+                logger.warning(f"Mapping {mapping_id} not found")
+                # Clear invalid mapping from context
+                ingestion_context.pop('selected_mapping_id', None)
+                ingestion_context.pop('selected_mapping_name', None)
+                selected_mapping = None
+        
+        # Save updated context
+        request.session[context_key] = ingestion_context
+        request.session.modified = True
+        
+        logger.info(f"Execution status - Org: {organization.name}, Files: {len(selected_files)}, Mapping: {selected_mapping}")
+        
+        context = {
+            'selected_files': selected_files,
+            'selected_mapping': selected_mapping,
+            'organization_id': organization.id,
+            'ingestion_context': ingestion_context,
+        }
+        
+        return render(request, 'importer/partials/execution_status.html', context)
+        
+    except Exception as e:
+        logger.error(f"Error rendering execution status: {e}")
+        return HttpResponse('Error rendering execution status', status=500)
+
+
+@general_login_required
+def list_mappings_dropdown(request):
+    """
+    HTMX endpoint to get mappings list for dropdown in navbar
+    """
+    if request.method != 'GET':
+        return HttpResponse('Method not allowed', status=405)
+    
+    organization_param = request.GET.get('organization')
+    if not organization_param:
+        return render(request, 'importer/partials/mapping_dropdown_list.html', {
+            'mappings': []
+        })
+    
+    try:
+        # Import here to avoid circular imports
+        from arkumu.metadata.models.mappings import Mapping
+        
+        # Handle organization codes vs IDs (same logic as CSV mapping editor)
+        organization_code = None
+        try:
+            # First try as numeric ID  
+            organization_id = int(organization_param)
+            # Look up organization by ID to get its code
+            organization = Organization.objects.get(id=organization_id)
+            organization_code = organization.code
+        except (ValueError, Organization.DoesNotExist):
+            # Handle organization codes like 'fuk', 'rsh', etc.
+            organization_code = organization_param
+            try:
+                organization = Organization.objects.get(code=organization_code)
+            except Organization.DoesNotExist:
+                organization_code = None
+        
+        # Get mappings using the organization code (how they're stored)
+        if organization_code:
+            mappings = Mapping.objects.filter(
+                organization_id=organization_code
+            ).order_by('-created_at')
+        else:
+            mappings = Mapping.objects.none()
+        
+        return render(request, 'importer/partials/mapping_dropdown_list.html', {
+            'mappings': mappings
+        })
+        
+    except Exception as e:
+        logger.error(f"Error listing mappings for dropdown: {e}")
+        return render(request, 'importer/partials/mapping_dropdown_list.html', {
+            'mappings': []
+        })

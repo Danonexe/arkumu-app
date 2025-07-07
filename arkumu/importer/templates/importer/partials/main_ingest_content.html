@@ -1,8 +1,8 @@
 <!-- Main Ingest Content for HTMX Updates -->
 {% if organization_id %}
-<!-- Three-Pane Layout when organization is selected -->
+<!-- Two-Pane Layout when organization is selected -->
 <div class="container mx-auto max-w-none p-4">
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 h-[calc(100vh-160px)]">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[calc(100vh-160px)]">
         
         <!-- Left Pane: File Selection -->
         <div class="card bg-base-100 shadow-xl overflow-hidden">
@@ -22,57 +22,6 @@
             </div>
         </div>
         
-        <!-- Center Pane: Mapping Selection -->
-        <div class="card bg-base-100 shadow-xl overflow-hidden">
-            <div class="card-body p-4">
-                <h2 class="card-title text-lg mb-4">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
-                    </svg>
-                    Configure Mapping
-                </h2>
-                
-                <!-- Mapping Selection -->
-                <div id="mapping-select-container">
-                    <div class="form-control">
-                        <label class="label">
-                            <span class="label-text">Select Mapping</span>
-                            <span class="label-text-alt text-warning">Required</span>
-                        </label>
-                        <select id="mapping-select" 
-                                name="mapping_id"
-                                class="select select-bordered select-sm w-full"
-                                hx-get="{% url 'metadata:csv_list_mappings' %}"
-                                hx-trigger="load"
-                                hx-target="this"
-                                hx-swap="innerHTML"
-                                hx-vals='{"organization": "{{ organization_id }}"}'>
-                            <option value="">Loading mappings...</option>
-                        </select>
-                    </div>
-                    
-                    <!-- Load button to trigger mapping details update -->
-                    <div class="mt-3">
-                        <button class="btn btn-warning btn-sm" 
-                                hx-post="{% url 'importer:ingest_data' %}"
-                                hx-vals='{"organization": "{{ organization_id }}", "action": "load_mapping", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
-                                hx-include="#mapping-select"
-                                hx-target="#mapping-details"
-                                hx-swap="innerHTML">
-                            Load Mapping Details
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- Mapping Details will go here -->
-                <div id="mapping-details" class="mt-4">
-                    <div class="text-center py-8 text-base-content/50">
-                        <p>Select a mapping to see details</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
         <!-- Right Pane: Execution -->
         <div class="card bg-base-100 shadow-xl overflow-hidden">
             <div class="card-body p-4">
@@ -83,31 +32,47 @@
                     Execute Import
                 </h2>
                 
-                <div id="execution-status">
+                <div id="execution-status" 
+                     hx-get="{% url 'importer:execution_status' %}"
+                     hx-trigger="mappingSelected from:body, fileSelectionChanged from:body"
+                     hx-vals='{"organization": "{{ organization_id }}"}'
+                     hx-swap="innerHTML">
                     <!-- Status checks -->
-                    <div class="space-y-2 mb-4">
-                        <div class="flex items-center gap-2">
+                    <div class="space-y-3 mb-6">
+                        <div class="flex items-center gap-3 p-3 bg-base-200 rounded-lg">
                             {% if selected_files %}
-                                <span class="text-success">✓</span>
+                                <span class="text-success text-lg">✓</span>
                             {% else %}
-                                <span class="text-error">✗</span>
+                                <span class="text-error text-lg">✗</span>
                             {% endif %}
-                            <span class="text-sm">Files selected: {{ selected_files|length|default:0 }}</span>
+                            <div class="flex-1">
+                                <div class="font-medium">Files selected</div>
+                                <div class="text-sm text-base-content/60">{{ selected_files|length|default:0 }} file{{ selected_files|length|default:0|pluralize }} ready</div>
+                            </div>
                         </div>
-                        <div class="flex items-center gap-2">
+                        <div class="flex items-center gap-3 p-3 bg-base-200 rounded-lg">
                             {% if selected_mapping %}
-                                <span class="text-success">✓</span>
+                                <span class="text-success text-lg">✓</span>
                             {% else %}
-                                <span class="text-error">✗</span>
+                                <span class="text-error text-lg">✗</span>
                             {% endif %}
-                            <span class="text-sm">Mapping configured</span>
+                            <div class="flex-1">
+                                <div class="font-medium">Mapping configured</div>
+                                <div class="text-sm text-base-content/60">
+                                    {% if selected_mapping %}
+                                        Using: {{ selected_mapping.name }}
+                                    {% else %}
+                                        Select mapping from navbar
+                                    {% endif %}
+                                </div>
+                            </div>
                         </div>
                     </div>
                     
                     <!-- Execute button -->
-                    <button class="btn btn-primary w-full" 
+                    <button class="btn btn-primary btn-lg w-full" 
                             {% if not selected_files or not selected_mapping %}disabled{% endif %}>
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                         </svg>
@@ -116,7 +81,7 @@
                 </div>
                 
                 <!-- Progress will be shown here -->
-                <div id="import-progress" class="mt-4"></div>
+                <div id="import-progress" class="mt-6"></div>
             </div>
         </div>
     </div>

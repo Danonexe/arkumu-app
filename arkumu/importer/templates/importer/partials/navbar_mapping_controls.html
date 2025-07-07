@@ -1,0 +1,108 @@
+<!-- Compact Mapping Controls for Navbar -->
+<div class="flex items-center gap-3">
+    <!-- Mapping Selection Dropdown -->
+    <div class="flex items-center gap-2">
+        <span class="text-sm font-medium text-base-content/70">Mapping:</span>
+        <div class="dropdown dropdown-bottom dropdown-end">
+            <div tabindex="0" role="button" class="btn btn-sm btn-outline gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                </svg>
+                <span id="selected-mapping-name">{% if selected_mapping %}{{ selected_mapping.name }}{% else %}Select mapping{% endif %}</span>
+                <svg class="w-3 h-3 fill-current opacity-60" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2048 2048">
+                    <path d="M1799 349l242 241-1017 1017L7 590l242-241 775 775 775-775z"></path>
+                </svg>
+            </div>
+            <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-[1] w-80 p-2 shadow-lg border border-base-300">
+                <li class="menu-title">
+                    <span>Available Mappings</span>
+                </li>
+                <div id="mapping-dropdown-list" 
+                     hx-get="{% url 'importer:list_mappings_dropdown' %}"
+                     hx-trigger="load"
+                     hx-vals='{"organization": "{{ organization_id }}"}'
+                     hx-swap="innerHTML">
+                    <li><a class="text-base-content/50">Loading mappings...</a></li>
+                </div>
+                <div class="divider my-1"></div>
+                <li>
+                    <a class="text-sm text-primary" href="{% url 'metadata:csv_mapping_editor' %}">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                        </svg>
+                        Create new mapping
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    {% if selected_mapping %}
+    <!-- Mapping Actions (when mapping is selected) -->
+    <div class="flex items-center gap-1">
+        <!-- Overview Button -->
+        <button class="btn btn-xs btn-primary" 
+                hx-get="{% url 'metadata:mapping_overview_data' %}"
+                hx-vals='{"organization": "{{ organization_id }}", "mapping_id": "{{ selected_mapping.id }}"}'
+                hx-target="#mapping-overview-modal"
+                hx-swap="outerHTML"
+                title="View mapping overview">
+            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            Overview
+        </button>
+        
+        <!-- Graph Button -->
+        <button class="btn btn-xs btn-primary" 
+                hx-get="{% url 'metadata:mapping_graph_data' %}"
+                hx-vals='{"organization": "{{ organization_id }}", "mapping_id": "{{ selected_mapping.id }}"}'
+                hx-target="#mapping-graph-modal"
+                hx-swap="outerHTML"
+                title="View relationship graph">
+            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/>
+            </svg>
+            Graph
+        </button>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Hidden form for HTMX mapping selection -->
+<input type="hidden" id="selected-mapping-id" name="mapping_id" value="{{ selected_mapping.id|default:'' }}">
+
+<script>
+// Handle mapping selection from dropdown
+document.addEventListener('click', function(e) {
+    if (e.target.closest('[data-mapping-id]')) {
+        const mappingElement = e.target.closest('[data-mapping-id]');
+        const mappingId = mappingElement.dataset.mappingId;
+        const mappingName = mappingElement.dataset.mappingName;
+        
+        // Update hidden input
+        document.getElementById('selected-mapping-id').value = mappingId;
+        
+        // Update display name
+        document.getElementById('selected-mapping-name').textContent = mappingName || 'Select mapping';
+        
+        // Load mapping via HTMX
+        htmx.ajax('POST', '{% url "importer:ingest_data" %}', {
+            values: {
+                organization: '{{ organization_id }}',
+                action: 'load_mapping',
+                mapping_id: mappingId,
+                csrfmiddlewaretoken: '{{ csrf_token }}'
+            },
+            target: '#navbar-end',
+            swap: 'innerHTML'
+        }).then(() => {
+            // After navbar updates, trigger the execution status update
+            htmx.trigger('body', 'mappingSelected');
+        });
+        
+        // Close dropdown
+        document.activeElement.blur();
+    }
+});
+</script>

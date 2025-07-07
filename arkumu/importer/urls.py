@@ -11,6 +11,9 @@ urlpatterns = [
     path("ingest/select-all-files/", ingest_views.select_all_files, name="select_all_files"),
     path("ingest/deselect-all-files/", ingest_views.deselect_all_files, name="deselect_all_files"),
     path("ingest/toggle-folder/", ingest_views.toggle_folder, name="toggle_folder"),
+    path("ingest/list-mappings-dropdown/", ingest_views.list_mappings_dropdown, name="list_mappings_dropdown"),
+    path("ingest/navbar-controls/", ingest_views.navbar_controls, name="navbar_controls"),
+    path("ingest/execution-status/", ingest_views.execution_status, name="execution_status"),
     # Organization changes now handled in main ingest_data view
     
     # CSV ingest endpoint (existing)

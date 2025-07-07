@@ -1,0 +1,41 @@
+<!-- Execution Status Content -->
+<div class="space-y-3 mb-6">
+    <div class="flex items-center gap-3 p-3 bg-base-200 rounded-lg">
+        {% if selected_files %}
+            <span class="text-success text-lg">✓</span>
+        {% else %}
+            <span class="text-error text-lg">✗</span>
+        {% endif %}
+        <div class="flex-1">
+            <div class="font-medium">Files selected</div>
+            <div class="text-sm text-base-content/60">{{ selected_files|length|default:0 }} file{{ selected_files|length|default:0|pluralize }} ready</div>
+        </div>
+    </div>
+    <div class="flex items-center gap-3 p-3 bg-base-200 rounded-lg">
+        {% if selected_mapping %}
+            <span class="text-success text-lg">✓</span>
+        {% else %}
+            <span class="text-error text-lg">✗</span>
+        {% endif %}
+        <div class="flex-1">
+            <div class="font-medium">Mapping configured</div>
+            <div class="text-sm text-base-content/60">
+                {% if selected_mapping %}
+                    Using: {{ selected_mapping.name }}
+                {% else %}
+                    Select mapping from navbar
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Execute button -->
+<button class="btn btn-primary btn-lg w-full" 
+        {% if not selected_files or not selected_mapping %}disabled{% endif %}>
+    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>
+    Start Import
+</button>

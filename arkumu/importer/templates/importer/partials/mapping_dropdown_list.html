@@ -1,0 +1,22 @@
+{% if mappings %}
+    {% for mapping in mappings %}
+    <li>
+        <a data-mapping-id="{{ mapping.id }}" data-mapping-name="{{ mapping.name }}" class="flex flex-col items-start p-3 hover:bg-base-200">
+            <div class="font-medium">{{ mapping.name }}</div>
+            {% if mapping.description %}
+            <div class="text-xs text-base-content/60 mt-1">{{ mapping.description|truncatechars:60 }}</div>
+            {% endif %}
+            <div class="text-xs text-base-content/50 mt-1">
+                Updated: {{ mapping.updated_at|date:"M d, Y" }}
+            </div>
+        </a>
+    </li>
+    {% endfor %}
+{% else %}
+<li>
+    <div class="p-3 text-center">
+        <p class="text-base-content/50 text-sm">No mappings available for this organization</p>
+        <p class="text-base-content/40 text-xs mt-1">Create a mapping in the CSV Mapping Editor first</p>
+    </div>
+</li>
+{% endif %}
