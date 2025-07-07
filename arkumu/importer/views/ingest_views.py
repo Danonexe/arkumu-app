@@ -96,7 +96,7 @@ class IngestDataView(GeneralLoginRequiredMixin, OrganizationMixin, IngestCoordin
             logger.info(f"Loading mapping details: mapping_id={mapping_id}, organization_id={organization_id}")
             
             # Get organization object first
-            from arkumu.organizations.models import Organization
+            from arkumu.users.models import Organization
             organization = None
             if organization_id:
                 try:
