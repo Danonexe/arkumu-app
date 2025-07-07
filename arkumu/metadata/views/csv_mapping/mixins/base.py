@@ -18,6 +18,9 @@ class OrganizationMixin:
     Provides methods for getting organization from request and discovering available organizations.
     """
     
+    # Session key for storing the last selected organization
+    LAST_ORGANIZATION_SESSION_KEY = 'last_selected_organization'
+    
     def get_organization_id_from_request(self, request):
         """Get the organization ID from the request (following the same pattern as other views)."""
         # Extract organization from GET or POST parameters, following the same pattern as other views
@@ -25,7 +28,10 @@ class OrganizationMixin:
         
         # Handle both cases where organization might be passed
         if organization:
-            return organization.strip()
+            org_id = organization.strip()
+            # Store this as the last selected organization
+            self.set_last_selected_organization(request, org_id)
+            return org_id
         
         # For HTMX requests, try to extract organization from referrer URL
         if 'HX-Request' in request.headers:
@@ -38,9 +44,17 @@ class OrganizationMixin:
                     query_params = parse_qs(parsed_url.query)
                     org_param = query_params.get('organization', [None])[0]
                     if org_param:
-                        return org_param.strip()
+                        org_id = org_param.strip()
+                        self.set_last_selected_organization(request, org_id)
+                        return org_id
                 except Exception as e:
                     logger.warning(f"Could not extract organization from referrer URL: {e}")
+        
+        # If no organization in request, try to get the last selected organization from session
+        last_org = self.get_last_selected_organization(request)
+        if last_org:
+            logger.info(f"ORGANIZATION_MIXIN: Using last selected organization from session: {last_org}")
+            return last_org
         
         # Fallback: try to get from user if available (for future authentication integration)
         if hasattr(request, 'user') and hasattr(request.user, 'organization_id'):
@@ -120,7 +134,39 @@ class OrganizationMixin:
             'organization_id': organization_id,
             'organizations': available_organizations,
             'organization_exists': org_exists,
-        } 
+        }
+    
+    def get_last_selected_organization(self, request):
+        """
+        Get the last selected organization from session.
+        
+        Returns:
+            str: Organization ID that was last selected
+            None: If no organization was previously selected
+        """
+        return request.session.get(self.LAST_ORGANIZATION_SESSION_KEY)
+    
+    def set_last_selected_organization(self, request, organization_id):
+        """
+        Store the last selected organization in session.
+        
+        Args:
+            request: Django request object
+            organization_id: Organization ID to store
+        """
+        if organization_id and organization_id != 'default-org':
+            request.session[self.LAST_ORGANIZATION_SESSION_KEY] = organization_id
+            request.session.modified = True
+            logger.info(f"ORGANIZATION_MIXIN: Stored last selected organization: {organization_id}")
+    
+    def clear_last_selected_organization(self, request):
+        """
+        Clear the last selected organization from session.
+        """
+        if self.LAST_ORGANIZATION_SESSION_KEY in request.session:
+            del request.session[self.LAST_ORGANIZATION_SESSION_KEY]
+            request.session.modified = True
+            logger.info("ORGANIZATION_MIXIN: Cleared last selected organization") 
     
     def _discover_available_organizations(self, analyzer):
         """

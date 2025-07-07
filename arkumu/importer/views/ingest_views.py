@@ -35,7 +35,8 @@ class IngestDataView(GeneralLoginRequiredMixin, OrganizationMixin, IngestCoordin
         # Handle case where no valid organization is provided
         if not org_context['organization_exists']:
             # Clear any existing organization state
-            self.clear_current_organization(request)
+            if hasattr(self, 'clear_current_organization'):
+                self.clear_current_organization(request)
             
             # Return template with no organization selected state
             context = {
@@ -52,10 +53,14 @@ class IngestDataView(GeneralLoginRequiredMixin, OrganizationMixin, IngestCoordin
             return render(request, self.template_name, context)
         
         # Organization exists - set it as current if it's different
-        current_org = self.get_current_organization(request)
+        current_org = None
+        if hasattr(self, 'get_current_organization'):
+            current_org = self.get_current_organization(request)
+        
         if not current_org or current_org['code'] != organization_id:
             # Organization changed - handle the change
-            self.handle_organization_change(request, organization_id)
+            if hasattr(self, 'handle_organization_change'):
+                self.handle_organization_change(request, organization_id)
         
         # Get ingest-specific context using IngestCoordinatorMixin
         ingest_context = self.get_ingest_context(request)

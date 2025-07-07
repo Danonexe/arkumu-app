@@ -255,6 +255,10 @@ class IngestCoordinatorMixin:
         # Set new organization
         org_data = self.set_current_organization(request, new_organization_id)
         
+        # Also store this organization for cross-view persistence (if OrganizationMixin is available)
+        if hasattr(self, 'set_last_selected_organization'):
+            self.set_last_selected_organization(request, new_organization_id)
+        
         return org_data
     
     def get_file_browser_context(self, request, organization_id):
