@@ -11,6 +11,7 @@ urlpatterns = [
     path("ingest/select-all-files/", ingest_views.select_all_files, name="select_all_files"),
     path("ingest/deselect-all-files/", ingest_views.deselect_all_files, name="deselect_all_files"),
     path("ingest/toggle-folder/", ingest_views.toggle_folder, name="toggle_folder"),
+    # Organization changes now handled in main ingest_data view
     
     # CSV ingest endpoint (existing)
     path("ingest-file/", import_views.ingest_file, name="ingest_file"),

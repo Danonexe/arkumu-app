@@ -539,45 +539,60 @@ class ListMappingsView(GeneralLoginRequiredMixin, CSVMappingCoordinatorMixin, Vi
                 return JsonResponse({'error': 'Organization ID is required'}, status=400)
             
             # Handle organization codes vs IDs
+            from arkumu.users.models import Organization
+            organization = None
+            organization_code = None
+            
             try:
-                # First try as numeric ID
+                # First try as numeric ID  
                 organization_id = int(organization_param)
-                # Get mappings for organization (for numeric IDs)
-                mappings = Mapping.objects.filter(
-                    organization_id=organization_id
-                ).order_by('-created_at')
+                logger.info(f"LIST_MAPPINGS: Looking up organization by ID: {organization_id}")
+                
+                # Look up organization by ID to get its code
+                organization = Organization.objects.get(id=organization_id)
+                organization_code = organization.code
+                logger.info(f"LIST_MAPPINGS: Found organization '{organization.name}' (id: {organization_id}, code: {organization_code})")
+                
             except ValueError:
                 # Handle organization codes like 'fuk', 'rsh', etc.
-                # Look up organization by code
-                from arkumu.users.models import Organization
+                organization_code = organization_param
+                logger.info(f"LIST_MAPPINGS: Using organization code directly: {organization_code}")
+                
                 try:
-                    organization = Organization.objects.get(code=organization_param)
-                    organization_id = organization.id
-                    logger.info(f"LIST_MAPPINGS: Found organization '{organization.name}' (code: {organization_param}, id: {organization_id})")
-                    
-                    # Get mappings for this organization
-                    mappings = Mapping.objects.filter(
-                        organization_id=organization_id
-                    ).order_by('-created_at')
-                    
+                    organization = Organization.objects.get(code=organization_code)
+                    logger.info(f"LIST_MAPPINGS: Found organization '{organization.name}' (code: {organization_code}, id: {organization.id})")
                 except Organization.DoesNotExist:
-                    logger.warning(f"LIST_MAPPINGS: Organization with code '{organization_param}' not found in database")
-                    # Return empty mappings for unknown organization codes
-                    if request.headers.get('HX-Request'):
-                        # Return HTML options for select dropdown with empty state
-                        options_html = '<option value="">No mappings available for this organization</option>'
-                        return HttpResponse(options_html)
-                    else:
-                        # Return JSON for API calls
-                        return JsonResponse({
-                            'success': True,
-                            'mappings': [],
-                            'total_count': 0,
-                            'message': f'No mappings found for organization {organization_param}'
-                        })
-                except Exception as e:
-                    logger.error(f"LIST_MAPPINGS: Error looking up organization '{organization_param}': {str(e)}")
-                    return JsonResponse({'error': f'Error looking up organization: {organization_param}'}, status=400)
+                    logger.warning(f"LIST_MAPPINGS: Organization with code '{organization_code}' not found in database")
+                    
+            except Organization.DoesNotExist:
+                logger.warning(f"LIST_MAPPINGS: Organization with ID '{organization_param}' not found in database")
+                organization_code = None
+            
+            # Try to get mappings using the organization code (how they're stored)
+            if organization_code:
+                logger.info(f"LIST_MAPPINGS: Searching for mappings with organization_id='{organization_code}'")
+                mappings = Mapping.objects.filter(
+                    organization_id=organization_code
+                ).order_by('-created_at')
+                logger.info(f"LIST_MAPPINGS: Found {mappings.count()} mappings for organization code '{organization_code}'")
+            else:
+                logger.warning(f"LIST_MAPPINGS: No valid organization code found for parameter '{organization_param}'")
+                mappings = Mapping.objects.none()
+                
+            # Return empty state if no organization found or no mappings
+            if not organization_code or mappings.count() == 0:
+                if request.headers.get('HX-Request'):
+                    # Return HTML options for select dropdown with empty state
+                    options_html = '<option value="">No mappings available for this organization</option>'
+                    return HttpResponse(options_html)
+                else:
+                    # Return JSON for API calls
+                    return JsonResponse({
+                        'success': True,
+                        'mappings': [],
+                        'total_count': 0,
+                        'message': f'No mappings found for organization {organization_param}'
+                    })
             
             # Serialize mapping list
             mapping_list = []
@@ -606,7 +621,7 @@ class ListMappingsView(GeneralLoginRequiredMixin, CSVMappingCoordinatorMixin, Vi
                     'last_executed': mapping.last_executed.isoformat() if mapping.last_executed else None
                 })
             
-            logger.info(f"LIST_MAPPINGS: Found {len(mapping_list)} mappings for organization {organization_id}")
+            logger.info(f"LIST_MAPPINGS: Found {len(mapping_list)} mappings for organization {organization_code}")
             
             # Check if this is an HTMX request for populating select dropdown
             if request.headers.get('HX-Request'):

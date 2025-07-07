@@ -5,8 +5,10 @@ import logging
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
-from arkumu.users.mixins import general_login_required
-from arkumu.users.models import Organization
+from django.views import View
+from arkumu.users.mixins import GeneralLoginRequiredMixin, general_login_required
+from arkumu.metadata.views.csv_mapping.mixins.base import OrganizationMixin
+from arkumu.importer.mixins.ingest_coordinator import IngestCoordinatorMixin
 
 logger = logging.getLogger(__name__)
 
@@ -14,20 +16,72 @@ logger = logging.getLogger(__name__)
 SELECTED_FILES_SESSION_KEY = 'ingest_selected_files'
 
 
+class IngestDataView(GeneralLoginRequiredMixin, OrganizationMixin, IngestCoordinatorMixin, View):
+    """
+    Main view for the new ingest data interface with three-pane layout
+    
+    Uses mixins in the same pattern as CSV mapping:
+    - OrganizationMixin: Organization discovery and management
+    - IngestCoordinatorMixin: Coordinating file selection and mapping
+    """
+    template_name = 'importer/ingest_data.html'
+    
+    def get(self, request):
+        """Handle GET requests for the ingest data interface"""
+        # Get organization context using OrganizationMixin (same as CSV mapping)
+        org_context = self.get_organization_context(request)
+        organization_id = org_context['organization_id']
+        
+        # Handle case where no valid organization is provided
+        if not org_context['organization_exists']:
+            # Clear any existing organization state
+            self.clear_current_organization(request)
+            
+            # Return template with no organization selected state
+            context = {
+                **org_context,
+                'selected_files': [],
+                'selected_mapping': None,
+                'available_mappings': [],
+                'page_title': 'Data Ingestion Center'
+            }
+            
+            # Handle HTMX requests
+            if request.headers.get('HX-Request'):
+                return render(request, 'importer/partials/main_ingest_content.html', context)
+            return render(request, self.template_name, context)
+        
+        # Organization exists - set it as current if it's different
+        current_org = self.get_current_organization(request)
+        if not current_org or current_org['code'] != organization_id:
+            # Organization changed - handle the change
+            self.handle_organization_change(request, organization_id)
+        
+        # Get ingest-specific context using IngestCoordinatorMixin
+        ingest_context = self.get_ingest_context(request)
+        
+        # Merge contexts - org_context takes precedence for organization data
+        context = {
+            **org_context,  # organization_id, organizations, organization_exists
+            **ingest_context,  # selected_files, mapping data, file browser data, etc.
+            'page_title': 'Data Ingestion Center'
+        }
+        
+        # Handle HTMX requests - return just the main content
+        if request.headers.get('HX-Request'):
+            # Return main content partial for organization changes
+            return render(request, 'importer/partials/main_ingest_content.html', context)
+        
+        return render(request, self.template_name, context)
+
+
 @general_login_required
 def ingest_data(request):
     """
-    Main view for the new ingest data interface with three-pane layout
+    Function-based wrapper for IngestDataView (for URL compatibility)
     """
-    # Get organizations for the user
-    organizations = Organization.objects.all().order_by('name')
-    
-    context = {
-        'organizations': organizations,
-        'page_title': 'Data Ingestion Center'
-    }
-    
-    return render(request, 'importer/ingest_data.html', context)
+    view = IngestDataView()
+    return view.get(request)
 
 
 @general_login_required
@@ -238,6 +292,10 @@ def deselect_all_files(request):
     
     # Re-render the file browser
     return get_organization_files_for_ingest(request)
+
+
+# Note: change_organization view removed - organization changes are now handled 
+# directly in IngestDataView.get() following the CSV mapping pattern
 
 
 @general_login_required

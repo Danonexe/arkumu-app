@@ -44,8 +44,7 @@
         const filesList = document.getElementById('selected-files-list');
         if (filesList) {
             {% if selected_files %}
-                const selectedFiles = [{% for file_key in selected_files %}'{{ file_key|split:"/" | last }}',{% endfor %}];
-                filesList.innerHTML = selectedFiles.map(file => `<div class="truncate">• ${file}</div>`).join('');
+                filesList.innerHTML = `{% for file_key in selected_files %}<div class="truncate">• {{ file_key }}</div>{% endfor %}`;
             {% else %}
                 filesList.innerHTML = '<div class="text-base-content/50">No files selected</div>';
             {% endif %}
