@@ -33,7 +33,11 @@
                         <label class="label">
                             <span class="label-text">Organization</span> 
                         </label>
-                        <select id="organization" name="organization" class="select select-bordered w-full select-sm">
+                        <select id="organization" name="organization" class="select select-bordered w-full select-sm"
+                                hx-get="/storage/dashboard/"
+                                hx-target="body"
+                                hx-trigger="change"
+                                hx-include="this">
                             <option value="">Choose organization...</option>
                             {% for org in organizations %}
                                 <option value="{{ org.id }}" {% if org.id == selected_org_slug %}selected{% endif %}>
@@ -148,8 +152,8 @@
                         <span class="label-text">Select an organization to browse S3 files</span>
                     </label>
                     <select id="organization-select" class="select select-bordered w-full"
-                            hx-get="/storage/organizations/browse/"
-                            hx-target="#file-browser-content"
+                            hx-get="/storage/dashboard/"
+                            hx-target="body"
                             hx-trigger="change"
                             hx-include="this"
                             name="organization">
@@ -226,42 +230,25 @@ document.addEventListener('DOMContentLoaded', function() {
     const uploadHandler = new UploadFormHandler();
     console.log('✅ UploadFormHandler initialized');
     
-    // Sync organization selections between upload form and browser
-    const uploadOrgSelect = document.getElementById('organization');
-    const browserOrgSelect = document.getElementById('organization-select');
-    
-    if (uploadOrgSelect && browserOrgSelect) {
-        // When upload org changes, update browser org and refresh file list
-        uploadOrgSelect.addEventListener('change', function() {
-            if (this.value) {
-                console.log('📋 Syncing organization selection:', this.value);
-                browserOrgSelect.value = this.value;
-                htmx.trigger(browserOrgSelect, 'change');
-                
-                // Store organization in session by redirecting with org parameter
-                const currentUrl = new URL(window.location);
-                currentUrl.searchParams.set('org', this.value);
-                window.history.replaceState({}, '', currentUrl);
-            }
-        });
-        
-        // When browser org changes, update upload org
-        browserOrgSelect.addEventListener('change', function() {
-            if (this.value) {
-                uploadOrgSelect.value = this.value;
-                
-                // Store organization in session by redirecting with org parameter
-                const currentUrl = new URL(window.location);
-                currentUrl.searchParams.set('org', this.value);
-                window.history.replaceState({}, '', currentUrl);
-            }
-        });
-        
-        // Auto-trigger file browser if organization is already selected (from session persistence)
-        if (browserOrgSelect.value) {
-            console.log('🚀 Auto-loading files for organization:', browserOrgSelect.value);
-            htmx.trigger(browserOrgSelect, 'change');
+    // Handle file browser loading after page swaps (from browser organization select)
+    document.addEventListener('htmx:afterSwap', function(evt) {
+        // Check if this was a page reload triggered by browser organization select
+        const browserOrgSelect = document.getElementById('organization-select');
+        if (browserOrgSelect && browserOrgSelect.value && evt.detail.target === document.body) {
+            console.log('🔄 Loading files after page swap for organization:', browserOrgSelect.value);
+            htmx.ajax('GET', '/storage/organizations/browse/?organization=' + browserOrgSelect.value, {
+                target: '#file-browser-content'
+            });
         }
+    });
+    
+    // Auto-trigger file browser if organization is already selected (from session persistence)
+    const browserOrgSelect = document.getElementById('organization-select');
+    if (browserOrgSelect && browserOrgSelect.value) {
+        console.log('🚀 Auto-loading files for organization:', browserOrgSelect.value);
+        htmx.ajax('GET', '/storage/organizations/browse/?organization=' + browserOrgSelect.value, {
+            target: '#file-browser-content'
+        });
     }
     
     // Override the upload completion handler to refresh file browser
@@ -271,14 +258,13 @@ document.addEventListener('DOMContentLoaded', function() {
         originalHandleUploadComplete.call(this, summary);
         
         // Then refresh file browser if upload was successful
-        if (summary.success && uploadOrgSelect && browserOrgSelect) {
-            const selectedOrg = uploadOrgSelect.value;
-            if (selectedOrg && browserOrgSelect.value === selectedOrg) {
-                console.log('🔄 Refreshing file browser after successful upload');
-                setTimeout(() => {
-                        htmx.trigger(browserOrgSelect, 'change');
-                }, 1500); // Delay to ensure upload is fully complete
-            }
+        if (summary.success && browserOrgSelect && browserOrgSelect.value) {
+            console.log('🔄 Refreshing file browser after successful upload');
+            setTimeout(() => {
+                htmx.ajax('GET', '/storage/organizations/browse/?organization=' + browserOrgSelect.value, {
+                    target: '#file-browser-content'
+                });
+            }, 1500); // Delay to ensure upload is fully complete
         }
     };
     
