@@ -24,7 +24,9 @@ class OrganizationMixin:
     def get_organization_id_from_request(self, request):
         """Get the organization ID from the request (following the same pattern as other views)."""
         # Extract organization from GET or POST parameters, following the same pattern as other views
-        organization = request.GET.get('organization') or request.POST.get('organization')
+        # Support both 'organization' (used by CSV mapping/ingestion) and 'org' (used by archivist dashboard)
+        organization = (request.GET.get('organization') or request.POST.get('organization') or 
+                       request.GET.get('org') or request.POST.get('org'))
         
         # Handle both cases where organization might be passed
         if organization:
@@ -36,13 +38,14 @@ class OrganizationMixin:
         # For HTMX requests, try to extract organization from referrer URL
         if 'HX-Request' in request.headers:
             referrer = request.headers.get('Referer', '')
-            if '?organization=' in referrer:
-                # Extract organization from URL like "...?organization=rsh"
+            if '?organization=' in referrer or '?org=' in referrer or '&organization=' in referrer or '&org=' in referrer:
+                # Extract organization from URL like "...?organization=rsh" or "...?org=rsh"
                 try:
                     from urllib.parse import urlparse, parse_qs
                     parsed_url = urlparse(referrer)
                     query_params = parse_qs(parsed_url.query)
-                    org_param = query_params.get('organization', [None])[0]
+                    # Check both parameter names
+                    org_param = query_params.get('organization', [None])[0] or query_params.get('org', [None])[0]
                     if org_param:
                         org_id = org_param.strip()
                         self.set_last_selected_organization(request, org_id)

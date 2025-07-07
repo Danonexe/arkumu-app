@@ -36,15 +36,15 @@
                         <select id="organization" name="organization" class="select select-bordered w-full select-sm">
                             <option value="">Choose organization...</option>
                             {% for org in organizations %}
-                                <option value="{{ org.id }}">
+                                <option value="{{ org.id }}" {% if org.id == selected_org_slug %}selected{% endif %}>
                                     {{ org.name }}{% if org.status == 'active' %} ✓{% endif %}
                                 </option>
                             {% empty %}
-                                <option value="rsh">Robert Schumann Hochschule Düsseldorf</option>
-                                <option value="khm">Kunsthochschule für Medien Köln</option>
-                                <option value="fuk">Folkwang Universität der Künste</option>
-                                <option value="hmt">Hochschule für Musik und Tanz Köln</option>
-                                <option value="det">Hochschule für Musik Detmold</option>
+                                <option value="rsh" {% if selected_org_slug == 'rsh' %}selected{% endif %}>Robert Schumann Hochschule Düsseldorf</option>
+                                <option value="khm" {% if selected_org_slug == 'khm' %}selected{% endif %}>Kunsthochschule für Medien Köln</option>
+                                <option value="fuk" {% if selected_org_slug == 'fuk' %}selected{% endif %}>Folkwang Universität der Künste</option>
+                                <option value="hmt" {% if selected_org_slug == 'hmt' %}selected{% endif %}>Hochschule für Musik und Tanz Köln</option>
+                                <option value="det" {% if selected_org_slug == 'det' %}selected{% endif %}>Hochschule für Musik Detmold</option>
                             {% endfor %}
                         </select>
                         <div class="label">
@@ -155,15 +155,15 @@
                             name="organization">
                         <option value="">Choose organization...</option>
                         {% for org in organizations %}
-                            <option value="{{ org.id }}">
+                            <option value="{{ org.id }}" {% if org.id == selected_org_slug %}selected{% endif %}>
                                 {{ org.name }}{% if org.status == 'active' %} ✓{% endif %}
                             </option>
                         {% empty %}
-                            <option value="rsh">Robert Schumann Hochschule Düsseldorf</option>
-                            <option value="khm">Kunsthochschule für Medien Köln</option>
-                            <option value="fuk">Folkwang Universität der Künste</option>
-                            <option value="hmt">Hochschule für Musik und Tanz Köln</option>
-                            <option value="det">Hochschule für Musik Detmold</option>
+                            <option value="rsh" {% if selected_org_slug == 'rsh' %}selected{% endif %}>Robert Schumann Hochschule Düsseldorf</option>
+                            <option value="khm" {% if selected_org_slug == 'khm' %}selected{% endif %}>Kunsthochschule für Medien Köln</option>
+                            <option value="fuk" {% if selected_org_slug == 'fuk' %}selected{% endif %}>Folkwang Universität der Künste</option>
+                            <option value="hmt" {% if selected_org_slug == 'hmt' %}selected{% endif %}>Hochschule für Musik und Tanz Köln</option>
+                            <option value="det" {% if selected_org_slug == 'det' %}selected{% endif %}>Hochschule für Musik Detmold</option>
                         {% endfor %}
                     </select>
                     <div class="label">
@@ -237,6 +237,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.log('📋 Syncing organization selection:', this.value);
                 browserOrgSelect.value = this.value;
                 htmx.trigger(browserOrgSelect, 'change');
+                
+                // Store organization in session by redirecting with org parameter
+                const currentUrl = new URL(window.location);
+                currentUrl.searchParams.set('org', this.value);
+                window.history.replaceState({}, '', currentUrl);
             }
         });
         
@@ -244,8 +249,19 @@ document.addEventListener('DOMContentLoaded', function() {
         browserOrgSelect.addEventListener('change', function() {
             if (this.value) {
                 uploadOrgSelect.value = this.value;
+                
+                // Store organization in session by redirecting with org parameter
+                const currentUrl = new URL(window.location);
+                currentUrl.searchParams.set('org', this.value);
+                window.history.replaceState({}, '', currentUrl);
             }
         });
+        
+        // Auto-trigger file browser if organization is already selected (from session persistence)
+        if (browserOrgSelect.value) {
+            console.log('🚀 Auto-loading files for organization:', browserOrgSelect.value);
+            htmx.trigger(browserOrgSelect, 'change');
+        }
     }
     
     // Override the upload completion handler to refresh file browser
