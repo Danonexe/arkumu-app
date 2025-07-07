@@ -20,7 +20,7 @@
                 <div id="mapping-dropdown-list" 
                      hx-get="{% url 'importer:list_mappings_dropdown' %}"
                      hx-trigger="load"
-                     hx-vals='{"organization": "{{ organization_id }}"}'
+                     hx-vals='{"organization": "{{ organization_code }}"}'
                      hx-swap="innerHTML">
                     <li><a class="text-base-content/50">Loading mappings...</a></li>
                 </div>
@@ -43,7 +43,7 @@
         <!-- Overview Button -->
         <button class="btn btn-xs btn-primary" 
                 hx-get="{% url 'metadata:mapping_overview_data' %}"
-                hx-vals='{"organization": "{{ organization_id }}", "mapping_id": "{{ selected_mapping.id }}"}'
+                hx-vals='{"organization": "{{ organization_code }}", "mapping_id": "{{ selected_mapping.id }}"}'
                 hx-target="#mapping-overview-modal"
                 hx-swap="outerHTML"
                 title="View mapping overview">
@@ -56,7 +56,7 @@
         <!-- Graph Button -->
         <button class="btn btn-xs btn-primary" 
                 hx-get="{% url 'metadata:mapping_graph_data' %}"
-                hx-vals='{"organization": "{{ organization_id }}", "mapping_id": "{{ selected_mapping.id }}"}'
+                hx-vals='{"organization": "{{ organization_code }}", "mapping_id": "{{ selected_mapping.id }}"}'
                 hx-target="#mapping-graph-modal"
                 hx-swap="outerHTML"
                 title="View relationship graph">
