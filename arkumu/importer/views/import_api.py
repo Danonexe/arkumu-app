@@ -14,7 +14,7 @@ from django.views.decorators.http import require_POST
 from django.http import HttpResponse
 from arkumu.users.mixins import ge, GeneralLoginRequiredMixinneral_login_required
 
-from arkumu.importer.services.importer.import_workflow import ImportWorkflowService
+from arkumu.importer.services.orchestrator.import_orchestrator import ImportOrchestrator
 from arkumu.importer.services.file_upload.s3_upload_service import S3UploadService
 
 logger = logging.getLogger(__name__)

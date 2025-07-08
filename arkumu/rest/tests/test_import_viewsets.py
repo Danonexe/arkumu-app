@@ -32,7 +32,7 @@ class ImportViewSetTests(TestCase):
         # Clean up the temp directory
         shutil.rmtree(self.temp_dir)
     
-    @patch('arkumu.importer.services.importer.import_workflow.ImportWorkflowService.import_csv_directory')
+    @patch('arkumu.common.import_service_bridge.bridge_service.import_csv_directory')
     def test_import_directory_with_path(self, mock_import):
         """Test importing from a directory path"""
         # Mock the import_csv_directory method
@@ -57,7 +57,7 @@ class ImportViewSetTests(TestCase):
         self.assertEqual(kwargs["institution"], "TEST")
         self.assertEqual(kwargs["delimiter"], ";")
     
-    @patch('arkumu.importer.services.importer.import_workflow.ImportWorkflowService.import_csv_directory')
+    @patch('arkumu.common.import_service_bridge.bridge_service.import_csv_directory')
     def test_import_directory_with_zip(self, mock_import):
         """Test importing from a ZIP file upload"""
         # Mock the import_csv_directory method

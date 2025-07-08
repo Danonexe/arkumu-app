@@ -26,7 +26,7 @@ class ArchivistDashboardView(GeneralLoginRequiredMixin, OrganizationMixin, View)
     Dashboard for archivists to manage organization buckets.
     
     Now uses OrganizationMixin for cross-view session persistence with 
-    CSV mapping editor and Data Ingestion Center.
+    CSV mapping editor and Metadata Ingestion.
     """
     
     def get(self, request):

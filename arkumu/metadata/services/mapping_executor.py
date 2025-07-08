@@ -14,7 +14,7 @@ from django.utils import timezone
 from arkumu.metadata.models.mappings import Mapping
 from arkumu.metadata.models.resource import Resource, ResourceType
 from arkumu.metadata.models.triples import Triple
-from arkumu.importer.services.importer.uri_utils import mint_uri, slugify_uri_part
+from arkumu.common.uri_utils import mint_uri, slugify_uri_part
 
 logger = logging.getLogger(__name__)
 

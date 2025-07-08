@@ -2,8 +2,8 @@ import os
 import json
 import csv
 from django.core.management.base import BaseCommand, CommandError
-from arkumu.importer.services.importer.bulk_update_engine import UpdateStrategy
-from arkumu.importer.services.importer.bulk_relationship_processor import FKRelationship
+from arkumu.common.enums import UpdateStrategy
+from arkumu.metadata.services.mapping import FKConfig
 
 
 class Command(BaseCommand):
@@ -69,12 +69,11 @@ class Command(BaseCommand):
                 # Create FK relationships for SmartBulkUpdaterPolars
                 fk_relationships = []
                 for fk_col in fk_columns:
-                    fk_relationships.append(FKRelationship(
+                    fk_relationships.append(FKConfig(
                         source_column=fk_col["column"],
                         source_dataset=dataset_name,
                         target_column=fk_col["target_column"],
-                        target_dataset=fk_col["target_table"],
-                        relationship_type="relation"
+                        target_dataset=fk_col["target_table"]
                     ))
                 
                 # Use SmartBulkUpdaterPolars for relationship processing

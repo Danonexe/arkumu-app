@@ -10,7 +10,7 @@ import polars as pl
 
 from arkumu.metadata.models import Resource
 from arkumu.metadata.models.triples import Triple
-from arkumu.importer.services.importer.bulk_update_engine import UpdateStrategy
+from arkumu.common.enums import UpdateStrategy
 from .resource_manager import ResourceManager
 from .statistics import ExecutionStatistics
 

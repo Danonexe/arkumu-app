@@ -117,8 +117,8 @@ from typing import Dict, List, Any
 
 from arkumu.metadata.models.mappings import Mapping
 from arkumu.metadata.services.data_analysis.s3_direct_data_analyzer import S3DirectDataAnalyzer
-from arkumu.importer.services.importer.bulk_update_engine import UpdateStrategy
-from arkumu.importer.services.importer.mapping_processor import GUIMappingProcessor
+from arkumu.common.enums import UpdateStrategy
+from arkumu.importer.services.execution.execution_engine import MappingExecutionEngine
 from arkumu.metadata.views.csv_mapping.mixins.coordinator import CSVMappingCoordinatorMixin
 from arkumu.metadata.views.csv_mapping.mixins.base import OrganizationMixin
 
@@ -258,15 +258,12 @@ class ExecuteGUIMappingView(GeneralLoginRequiredMixin, OrganizationMixin, CSVMap
         }
         update_strategy = strategy_map.get(strategy, UpdateStrategy.SKIP_EXISTING)
         
-        # STEP 5: Initialize enhanced SmartBulkUpdater with processing plan
-        smart_updater = SmartBulkUpdaterPolars(
-            # processing_plan=processing_plan,  # TODO: Pass complete plan when SmartBulkUpdater supports it
-            default_strategy=update_strategy,
-            institution=organization_id,
+        # STEP 5: Initialize enhanced execution engine with processing plan
+        execution_engine = MappingExecutionEngine(
+            organization_id=organization_id,
             base_uri="http://arkumu.org/data",
-            link_row_cells=True,
-            link_topology="first_column",  # TODO: Use processing_plan.anchor_columns
-            multi_value_threshold=0.2
+            default_strategy=update_strategy,
+            batch_size=1000
         )
         
         # STEP 6: Analyze plan complexity for reporting
@@ -317,16 +314,14 @@ class ExecuteGUIMappingView(GeneralLoginRequiredMixin, OrganizationMixin, CSVMap
                     
                     logger.info(f"Processing dataset {dataset} with enhanced mapping support")
                     
-                    # ENHANCED: Stream process with mapping awareness
-                    # TODO: Once SmartBulkUpdater supports processing_plan, pass it here
-                    stats = analyzer.stream_process_s3_source_with_smart_updater(
+                    # ENHANCED: Stream process with mapping awareness using execution engine
+                    stats = analyzer.stream_process_s3_source_with_execution_engine(
                         source_info=source_info,
-                        smart_updater=smart_updater,
+                        execution_engine=execution_engine,
                         dataset_name=dataset,
                         batch_size=1000,
-                        organization_id=organization_id
-                        # TODO: Pass processing_plan when supported
-                        # processing_plan=processing_plan
+                        organization_id=organization_id,
+                        processing_plan=processing_plan
                     )
                     
                     # TODO: Collect enhanced statistics when available
@@ -346,8 +341,8 @@ class ExecuteGUIMappingView(GeneralLoginRequiredMixin, OrganizationMixin, CSVMap
                 except Exception as e:
                     logger.error(f"Error processing dataset {dataset}: {str(e)}")
                     if combined_stats is None:
-                        from arkumu.importer.services.importer.smart_bulk_updater_polars import BulkUpdateStats
-                        combined_stats = BulkUpdateStats()
+                        from arkumu.importer.services.execution.statistics import ExecutionMetrics
+                        combined_stats = ExecutionMetrics()
                     combined_stats.errors += 1
         
         if not combined_stats or combined_stats.rows_processed == 0:

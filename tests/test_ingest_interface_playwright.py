@@ -31,7 +31,7 @@ class TestIngestInterface:
         expect(page).to_have_title("arkumu")
         
         # Verify main interface elements are present
-        expect(page.locator('h1:has-text("Data Ingestion Center")')).to_be_visible()
+        expect(page.locator('h1:has-text("Metadata Ingestion")')).to_be_visible()
         expect(page.locator('h2:has-text("Select Files")')).to_be_visible()
         expect(page.locator('h2:has-text("Configure Mapping")')).to_be_visible()
         expect(page.locator('h2:has-text("Progress Dashboard")')).to_be_visible()

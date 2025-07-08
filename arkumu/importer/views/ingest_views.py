@@ -45,7 +45,7 @@ class IngestDataView(GeneralLoginRequiredMixin, OrganizationMixin, IngestCoordin
                 'selected_files': [],
                 'selected_mapping': None,
                 'available_mappings': [],
-                'page_title': 'Data Ingestion Center'
+                'page_title': 'Metadata Ingestion'
             }
             
             # Handle HTMX requests
@@ -70,7 +70,7 @@ class IngestDataView(GeneralLoginRequiredMixin, OrganizationMixin, IngestCoordin
         context = {
             **org_context,  # organization_id, organizations, organization_exists
             **ingest_context,  # selected_files, mapping data, file browser data, etc.
-            'page_title': 'Data Ingestion Center'
+            'page_title': 'Metadata Ingestion'
         }
         
         # Handle HTMX requests - return just the main content

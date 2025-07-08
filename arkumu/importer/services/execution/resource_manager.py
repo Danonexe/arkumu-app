@@ -10,8 +10,9 @@ import polars as pl
 from arkumu.metadata.models import Resource
 from arkumu.metadata.models.resource import ResourceType
 from arkumu.metadata.models.triples import Triple
-from arkumu.importer.services.importer.uri_utils import mint_uri, slugify_uri_part
-from arkumu.importer.services.importer.bulk_data_analyzer import MAX_INDEXED_VALUE_SIZE
+from arkumu.common.uri_utils import mint_uri, slugify_uri_part
+# Define MAX_INDEXED_VALUE_SIZE locally since bulk_data_analyzer was removed
+MAX_INDEXED_VALUE_SIZE = 1000  # Maximum size for indexed values in bytes
 from .statistics import ExecutionStatistics
 
 logger = logging.getLogger(__name__)

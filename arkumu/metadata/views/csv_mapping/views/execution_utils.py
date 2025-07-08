@@ -14,7 +14,7 @@ import logging
 from typing import Dict, List, Any, Optional
 from django.utils import timezone
 
-from arkumu.importer.services.importer.smart_bulk_updater_polars import UpdateStrategy
+from arkumu.common.enums import UpdateStrategy
 from arkumu.metadata.services.data_analysis.s3_direct_data_analyzer import S3DirectDataAnalyzer
 
 logger = logging.getLogger(__name__)

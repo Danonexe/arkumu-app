@@ -17,10 +17,10 @@ from typing import Dict, List, Any, Optional
 
 from arkumu.metadata.models import Resource, Triple
 from arkumu.metadata.models.resource import ResourceType
-from arkumu.importer.services.importer.smart_bulk_updater_polars import BulkUpdateStats, UpdateStrategy
-from arkumu.importer.services.importer.smart_bulk_updater_polars import SmartBulkUpdaterPolars
-from arkumu.importer.services.importer.uri_utils import mint_uri, slugify_uri_part
-from arkumu.importer.services.importer.entity_centric_processor import EntityCentricMappingProcessor
+from arkumu.common.data_types import BulkUpdateStats
+from arkumu.common.enums import UpdateStrategy
+from arkumu.importer.services.execution.execution_engine import MappingExecutionEngine
+from arkumu.common.uri_utils import mint_uri, slugify_uri_part
 from arkumu.metadata.services.data_analysis.s3_direct_data_analyzer import S3DirectDataAnalyzer
 
 logger = logging.getLogger(__name__)
@@ -432,7 +432,7 @@ class ContextProcessor:
         # TODO: Implement proper junction table processing
         # For now, use standard processing but this could be enhanced
         # to create proper junction entities and linking triples
-        from arkumu.importer.services.importer.smart_bulk_updater_polars import UpdateStrategy
+        from arkumu.common.enums import UpdateStrategy
         
         strategy_map = {
             'SKIP_EXISTING': UpdateStrategy.SKIP_EXISTING,
@@ -464,9 +464,9 @@ class EntityCentricProcessor:
         logger.info(f"Starting entity-centric mapping execution for {dataset_name}")
         
         # Initialize entity-centric processor
-        entity_processor = EntityCentricMappingProcessor(
+        entity_processor = MappingExecutionEngine(
+            organization_id=self.organization_id,
             base_uri=self.base_uri,
-            institution=self.organization_id,
             default_strategy=self._convert_strategy_string(strategy)
         )
         
@@ -499,28 +499,27 @@ class EntityCentricProcessor:
         
         # Process with entity-centric approach
         try:
-            results = entity_processor.process_gui_mapping_entity_centric(
-                mapping_config=mapping_config,
+            results = entity_processor.execute_simple_import(
                 csv_data=all_data,
-                organization_id=self.organization_id,
-                dataset_name=dataset_name
+                dataset_name=dataset_name,
+                mapping_config=mapping_config
             )
             
             # Convert to expected format
             return {
-                'total_rows_processed': results.get('total_rows', 0),
-                'total_resources_created': results.get('total_resources_created', 0),
-                'total_triples_created': results.get('total_triples_created', 0),
-                'total_values_created': results.get('total_values_created', 0),
-                'resources_updated': 0,  # Entity-centric doesn't track updates separately
-                'resources_skipped': 0,
-                'errors': results.get('total_errors', 0),
-                'truncated_values': 0,
-                'cells_processed': len(all_data),
-                'engine_used': 'EntityCentricMappingProcessor',
+                'total_rows_processed': results.rows_processed,
+                'total_resources_created': results.resources_created,
+                'total_triples_created': results.triples_created,
+                'total_values_created': results.values_created,
+                'resources_updated': results.resources_updated,
+                'resources_skipped': results.resources_skipped,
+                'errors': results.errors,
+                'truncated_values': results.values_truncated,
+                'cells_processed': results.cells_processed,
+                'engine_used': 'MappingExecutionEngine',
                 'datasets_processed': len(dataset_sources),
                 'processing_method': 'entity_centric_single_pass',
-                'entity_models_used': results.get('entity_models_used', 0)
+                'entity_models_used': 0  # Not tracked in new engine
             }
             
         except Exception as e:

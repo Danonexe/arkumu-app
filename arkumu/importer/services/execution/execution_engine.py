@@ -6,7 +6,7 @@ import logging
 from typing import Dict, List, Any, Optional, Union
 import polars as pl
 
-from arkumu.importer.services.importer.bulk_update_engine import UpdateStrategy
+from arkumu.common.enums import UpdateStrategy
 from arkumu.metadata.services.mapping import MappingCoordinator, FKProcessingPlan
 from .data_processor import DataProcessor
 from .resource_manager import ResourceManager

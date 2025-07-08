@@ -27,7 +27,7 @@ class TestIngestInterface:
         page.goto("http://localhost:8000/importer/ingest/")
         
         # Verify page loaded correctly
-        expect(page.locator("h1")).to_have_text("Data Ingestion Center")
+        expect(page.locator("h1")).to_have_text("Metadata Ingestion")
         
         # Select fuk organization
         organization_select = page.locator("#organization-select")

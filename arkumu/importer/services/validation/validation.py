@@ -54,7 +54,7 @@ class MappingValidator:
         
         # Use common normalization from uri_utils if available
         try:
-            from arkumu.importer.services.uri_utils import slugify_uri_part
+            from arkumu.common.uri_utils import slugify_uri_part
         except ImportError:
             # Fall back to simple normalization if uri_utils is not available
             def slugify_uri_part(text):

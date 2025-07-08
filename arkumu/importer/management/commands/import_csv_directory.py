@@ -2,7 +2,7 @@ import os
 import json
 import logging
 from django.core.management.base import BaseCommand
-from arkumu.importer.services.importer.import_workflow import ImportWorkflowService
+from arkumu.importer.services.orchestrator.import_orchestrator import ImportOrchestrator
 from arkumu.importer.services.file_upload.s3_upload_service import S3UploadService
 
 logger = logging.getLogger(__name__)

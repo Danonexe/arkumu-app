@@ -22,8 +22,10 @@ except ImportError:
     # Thus, it should not be passed explicitly to @db_task.
 
 # Arkumu specific imports
-from arkumu.importer.services.importer.import_workflow import ImportWorkflowService
-from arkumu.importer.services.importer.bulk_update_engine import UpdateStrategy, BulkUpdateStats
+from arkumu.importer.services.orchestrator.import_orchestrator import ImportOrchestrator
+from arkumu.common.enums import UpdateStrategy
+from arkumu.common.data_types import BulkUpdateStats
+from arkumu.common.import_service_bridge import bridge_service
 from arkumu.storage.services.bucket_service import BucketService # Added to download S3 file
 
 # Django cache
@@ -173,11 +175,14 @@ def run_csv_import_workflow(
         # Choose import method based on configuration
         if use_table_services or (use_mapping and mapping_config):
             logger.info(f"Task {actual_task_id or 'UnknownID'}: Using table-based services with mapping")
-            stats: BulkUpdateStats = ImportWorkflowService.import_csv_with_table_services(
-                csv_path=temp_local_path,
-                dataset_name=dataset_name,
-                institution=institution,
-                base_uri=base_uri,
+            # Get organization (this is a simplified version - in production you'd get it from the session)
+            from arkumu.metadata.models import Organization
+            organization = Organization.objects.get(code=institution)
+            
+            stats: BulkUpdateStats = bridge_service.import_csv_with_table_services(
+                file_path=temp_local_path,
+                organization=organization,
+                user=None,  # TODO: Get user from session
                 delimiter=delimiter,
                 has_quoted_fields=has_quoted_fields,
                 auto_mapping=True,
@@ -185,18 +190,21 @@ def run_csv_import_workflow(
             )
         else:
             logger.info(f"Task {actual_task_id or 'UnknownID'}: Using standard import workflow")
-            stats: BulkUpdateStats = ImportWorkflowService.import_csv(
-                csv_path=temp_local_path,
-                dataset_name=dataset_name,
-                institution=institution,
-                base_uri=base_uri,
+            # Get organization (this is a simplified version - in production you'd get it from the session)
+            from arkumu.metadata.models import Organization
+            organization = Organization.objects.get(code=institution)
+            
+            stats: BulkUpdateStats = bridge_service.import_csv(
+                file_path=temp_local_path,
+                organization=organization,
+                user=None,  # TODO: Get user from session
+                update_strategy=update_strategy.value,
                 delimiter=delimiter,
                 has_quoted_fields=has_quoted_fields,
                 link_row_cells=link_row_cells,
                 link_to_first_column=link_to_first_column,
                 use_smart_updater=True,
                 use_polars=True,
-                update_strategy=update_strategy,
                 use_table_services=use_table_services
             )
         
@@ -483,10 +491,15 @@ def run_csv_directory_import_workflow(
         progress_thread.start()
         
         try:
-            aggregate_stats = ImportWorkflowService.import_csv_directory(
+            # Get organization (this is a simplified version - in production you'd get it from the session)
+            from arkumu.metadata.models import Organization
+            organization = Organization.objects.get(code=institution)
+            
+            aggregate_stats = bridge_service.import_csv_directory(
                 directory_path=temp_directory_path,
-                institution=institution,
-                base_uri=base_uri,
+                organization=organization,
+                user=None,  # TODO: Get user from session
+                update_strategy=update_strategy.value,
                 delimiter=delimiter,
                 has_quoted_fields=has_quoted_fields,
                 relationship_config_path=relationship_config_path,
@@ -497,7 +510,6 @@ def run_csv_directory_import_workflow(
                 link_to_first_column=link_to_first_column,
                 use_smart_updater=use_smart_updater,
                 use_polars=use_polars,
-                update_strategy=update_strategy,
                 timestamp_column=timestamp_column
             )
         finally:

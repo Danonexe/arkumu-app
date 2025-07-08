@@ -15,8 +15,8 @@ from arkumu.metadata.models.resource import Resource, ResourceType
 from arkumu.metadata.models.triples import Triple
 from arkumu.metadata.services.mapping_executor import MappingExecutor
 from arkumu.metadata.services.mapping import MappingCoordinator
-from arkumu.importer.services.importer.smart_bulk_updater_polars import SmartBulkUpdaterPolars
-from arkumu.importer.services.importer.bulk_update_engine import UpdateStrategy
+from arkumu.importer.services.execution.execution_engine import MappingExecutionEngine
+from arkumu.common.enums import UpdateStrategy
 
 
 @pytest.mark.django_db
@@ -153,13 +153,11 @@ class TestMappingExecutionIntegration:
         )
         assert validation.is_valid
         
-        # Initialize updater
-        updater = SmartBulkUpdaterPolars(
-            default_strategy=UpdateStrategy.SKIP_EXISTING,
-            institution="test-org",
+        # Initialize execution engine
+        execution_engine = MappingExecutionEngine(
+            organization_id="test-org",
             base_uri="http://arkumu.org/data",
-            link_row_cells=True,
-            link_topology="first_column"
+            default_strategy=UpdateStrategy.SKIP_EXISTING
         )
         
         # Process each dataset

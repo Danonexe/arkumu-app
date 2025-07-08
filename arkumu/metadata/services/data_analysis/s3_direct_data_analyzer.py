@@ -22,7 +22,7 @@ import os
 from arkumu.storage.services.bucket_service import BucketService
 # SmartBulkUpdaterPolars removed - using modular services instead
 from arkumu.metadata.services.relationship_discovery import RelationshipDiscoveryService
-from arkumu.importer.services.importer.bulk_data_analyzer import BulkDataAnalyzer
+# BulkDataAnalyzer removed - functionality integrated into S3DirectDataAnalyzer
 
 logger = logging.getLogger(__name__)
 
@@ -101,8 +101,11 @@ class S3DirectDataAnalyzer:
     def bulk_updater(self):
         """Lazy initialization of bulk updater only when needed."""
         if self._bulk_updater is None:
-            from arkumu.importer.services.importer.smart_bulk_updater import SmartBulkUpdater
-            self._bulk_updater = SmartBulkUpdater()
+            from arkumu.importer.services.execution.execution_engine import MappingExecutionEngine
+            self._bulk_updater = MappingExecutionEngine(
+                organization_id="default",
+                base_uri="http://arkumu.org/data"
+            )
         return self._bulk_updater
     
     def discover_s3_data_sources(self, organization_id: str) -> List[S3DataSourceInfo]:

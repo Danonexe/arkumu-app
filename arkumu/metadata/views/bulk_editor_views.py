@@ -1305,7 +1305,7 @@ def service_powered_csv_import(request):
     
     try:
         from arkumu.storage.services.bucket_service import BucketService
-        from arkumu.importer.services.importer.import_workflow import ImportWorkflowService
+        from arkumu.common.import_service_bridge import bridge_service
         import tempfile
         import os
         
@@ -1338,11 +1338,10 @@ def service_powered_csv_import(request):
             # Use the modern table-based import approach
             logger.info(f"Importing {dataset_name} using table-based services")
             
-            import_result = ImportWorkflowService.import_csv_with_table_services(
-                csv_path=temp_path,
-                dataset_name=dataset_name,
-                institution=organization,
-                base_uri="http://arkumu.org/data",
+            import_result = bridge_service.import_csv_with_table_services(
+                file_path=temp_path,
+                organization=organization_obj,
+                user=request.user,
                 delimiter=';',
                 has_quoted_fields=False,
                 auto_mapping=use_auto_mapping,

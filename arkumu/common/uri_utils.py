@@ -1,3 +1,4 @@
+"""Common URI utility functions shared across the Arkumu application."""
 import re
 import unicodedata
 
@@ -98,4 +99,4 @@ def mint_uri(base_uri_for_institution, institution_code_slug, *parts):
 
     final_uri = effective_base_uri + uri_path
     # logger.debug(f"Minted URI: {final_uri}") # Logger won't be available here directly
-    return final_uri 
+    return final_uri

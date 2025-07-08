@@ -15,7 +15,7 @@ from rest_framework.permissions import AllowAny
 from rdflib import Graph
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 
-from arkumu.importer.services.importer.import_workflow import ImportWorkflowService
+from arkumu.importer.services.orchestrator.import_orchestrator import ImportOrchestrator
 from arkumu.importer.services.file_upload.s3_upload_service import S3UploadService
 from arkumu.storage.models import UploadSession, S3FileObject
 from arkumu.rest.serializers import (

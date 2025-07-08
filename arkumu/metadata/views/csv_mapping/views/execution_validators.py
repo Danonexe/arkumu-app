@@ -13,7 +13,7 @@ Extracted from execution_views.py to improve maintainability.
 import logging
 from typing import Dict, List, Any, Optional
 
-from arkumu.importer.services.importer.mapping_processor import GUIMappingProcessor
+from arkumu.importer.services.execution.execution_engine import MappingExecutionEngine
 from arkumu.metadata.services.data_analysis.s3_direct_data_analyzer import S3DirectDataAnalyzer
 
 logger = logging.getLogger(__name__)
