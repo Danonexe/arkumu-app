@@ -1,0 +1,51 @@
+{
+    "name": "Simple Person Mapping",
+    "description": "Basic mapping for person data with name, age, and location",
+    "organization_id": "TEST_UNIV",
+    "mapping_config": {
+        "workspace_columns": {
+            "name": {
+                "type": "string",
+                "required": true,
+                "ontology_mapping": {
+                    "class": "E21",
+                    "property": "P1"
+                }
+            },
+            "age": {
+                "type": "integer",
+                "required": false,
+                "ontology_mapping": {
+                    "class": "E21",
+                    "property": "P3"
+                }
+            },
+            "location": {
+                "type": "string",
+                "required": false,
+                "ontology_mapping": {
+                    "class": "E53",
+                    "property": "P1"
+                }
+            }
+        },
+        "relationships": [
+            {
+                "from_column": "name",
+                "to_column": "location",
+                "relationship_type": "P7",
+                "description": "Person took place at location"
+            }
+        ],
+        "ontology_config": {
+            "base_class": "E21",
+            "namespace": "http://arkumu.org/test/",
+            "property_mappings": {
+                "name": "P1",
+                "age": "P3"
+            }
+        }
+    },
+    "source_datasets": ["person_data.csv"],
+    "validation_status": "validated"
+}

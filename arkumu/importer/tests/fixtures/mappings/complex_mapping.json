@@ -1,0 +1,100 @@
+{
+    "name": "Complex Event Mapping",
+    "description": "Complex mapping with multiple relationships and data types",
+    "organization_id": "TEST_UNIV",
+    "mapping_config": {
+        "workspace_columns": {
+            "event_name": {
+                "type": "string",
+                "required": true,
+                "ontology_mapping": {
+                    "class": "E5",
+                    "property": "P1"
+                }
+            },
+            "event_date": {
+                "type": "date",
+                "required": true,
+                "ontology_mapping": {
+                    "class": "E5",
+                    "property": "P4"
+                }
+            },
+            "location": {
+                "type": "string",
+                "required": false,
+                "ontology_mapping": {
+                    "class": "E53",
+                    "property": "P1"
+                }
+            },
+            "participant": {
+                "type": "string",
+                "required": false,
+                "ontology_mapping": {
+                    "class": "E21",
+                    "property": "P1"
+                }
+            },
+            "description": {
+                "type": "text",
+                "required": false,
+                "ontology_mapping": {
+                    "class": "E5",
+                    "property": "P3"
+                }
+            },
+            "duration": {
+                "type": "integer",
+                "required": false,
+                "ontology_mapping": {
+                    "class": "E5",
+                    "property": "P3"
+                }
+            }
+        },
+        "relationships": [
+            {
+                "from_column": "event_name",
+                "to_column": "location",
+                "relationship_type": "P7",
+                "description": "Event took place at location"
+            },
+            {
+                "from_column": "event_name",
+                "to_column": "participant",
+                "relationship_type": "P11",
+                "description": "Event had participant"
+            },
+            {
+                "from_column": "participant",
+                "to_column": "location",
+                "relationship_type": "P74",
+                "description": "Participant has current location"
+            }
+        ],
+        "ontology_config": {
+            "base_class": "E5",
+            "namespace": "http://arkumu.org/test/events/",
+            "property_mappings": {
+                "event_name": "P1",
+                "event_date": "P4",
+                "description": "P3",
+                "duration": "P3"
+            }
+        },
+        "validation_rules": {
+            "event_date": {
+                "format": "YYYY-MM-DD",
+                "min_date": "1900-01-01",
+                "max_date": "2030-12-31"
+            },
+            "duration": {
+                "min": 0,
+                "max": 86400
+            }
+        }
+    },
+    "source_datasets": ["events_data.csv", "participants_data.csv"],
+    "validation_status": "validated"
+}

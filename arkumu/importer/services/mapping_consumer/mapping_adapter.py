@@ -63,7 +63,7 @@ class MappingAdapter:
             logger.info(f"Loaded mapping '{mapping.name}' (ID: {mapping_id})")
             
             # Parse the mapping configuration
-            config = mapping.configuration
+            config = mapping.mapping_config
             if not isinstance(config, dict):
                 raise ValueError(f"Mapping {mapping_id} has invalid configuration format")
                 
@@ -71,7 +71,7 @@ class MappingAdapter:
             config['_metadata'] = {
                 'mapping_id': mapping.id,
                 'mapping_name': mapping.name,
-                'organization': mapping.organization,
+                'organization': mapping.organization_id,
                 'created_at': mapping.created_at,
                 'updated_at': mapping.updated_at,
                 'created_by': mapping.created_by.username if mapping.created_by else None
@@ -98,7 +98,7 @@ class MappingAdapter:
         """
         try:
             mapping = Mapping.objects.get(id=mapping_id)
-            config = mapping.configuration
+            config = mapping.mapping_config
             
             # Extract basic statistics
             workspace_columns = config.get('workspace_columns', {})
@@ -111,7 +111,7 @@ class MappingAdapter:
             return MappingInfo(
                 id=mapping.id,
                 name=mapping.name,
-                organization=mapping.organization,
+                organization=mapping.organization_id,
                 created_at=mapping.created_at,
                 updated_at=mapping.updated_at,
                 version=config.get('version', '1.0'),
@@ -136,7 +136,7 @@ class MappingAdapter:
             List of MappingInfo objects
         """
         try:
-            mappings = Mapping.objects.filter(organization=organization).order_by('-updated_at')
+            mappings = Mapping.objects.filter(organization_id=organization).order_by('-updated_at')
             
             mapping_infos = []
             for mapping in mappings:

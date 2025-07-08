@@ -61,103 +61,50 @@ Handles file uploads to external storage during import.
 **Key Components:**
 - `s3_upload_service.py`: AWS S3 upload implementation
 
-## Architecture Consolidation Status
+## Current Architecture
 
-### ✅ Resolved: URI Generation Consolidation
-**COMPLETED:** With the removal of the `importer/` layer, URI generation is now centralized in `execution/resource_manager.py`. The following functions are now the single source of truth:
-- `generate_dataset_uri`
-- `generate_column_uri` 
-- `generate_row_uri`
-- `generate_cell_uri`
-- `generate_entity_uri`
-- `generate_junction_uri`
+The `arkumu/importer/services/` directory implements a clean, modern architecture with the following design principles:
 
-**Remaining Minor Duplication:** `execution/mapping_aware_processor.py` still contains ad-hoc URI generation methods that could potentially be refactored to use the centralized service:
-- `_generate_entity_uri`
-- `_generate_property_uri`
-- `_generate_target_entity_uri`
+### Architecture Consolidation
+- **URI Generation**: Centralized in `execution/resource_manager.py` with standard functions for all resource types
+- **Data Processing**: Unified in `execution/data_processor.py` using Polars for high performance
+- **Resource Creation**: Centralized in `execution/resource_manager.py` with standardized RDF property handling  
+- **Execution Engine**: Single comprehensive implementation in the `execution/` layer
+- **Validation**: Flows through centralized services in the `validation/` layer
 
-### ✅ Resolved: Data Processing Consolidation
-**COMPLETED:** Unicode normalization and data processing is now handled exclusively by `execution/data_processor.py` using Polars for high performance. The legacy `bulk_data_analyzer.py` and its `normalize_unicode_vectorized` function have been removed.
+## Service Responsibilities
 
-### ✅ Resolved: Resource Creation Consolidation
-**COMPLETED:** RDF resource and triple creation is now centralized in `execution/resource_manager.py` via the `_init_standard_properties` method. The legacy `ensure_rdf_properties` from the removed `bulk_database_executor.py` is no longer present.
-
-### ✅ Resolved: Execution Engine Consolidation
-**COMPLETED:** The architectural overlap between legacy `bulk_update_engine.py` and the modern execution layer has been resolved. The system now uses a single, comprehensive execution architecture:
-- `execution/execution_engine.py`: Main orchestration
-- `execution/mapping_aware_processor.py`: Enhanced processing with full `ExecutionConfig` understanding
-
-### 🔄 Remaining Minor Items
-**Validation Functions:** Some validation logic may still exist in multiple places:
-- Core validation in `validation/validation.py`
-- Potential remaining validation utilities in other modules (requires verification)
-
-## Current Architecture Status & Next Steps
-
-### ✅ Completed Major Refactoring
-The architecture has been significantly simplified with the removal of the legacy `importer/` layer:
-
-1. **URI Generation**: Now centralized in `execution/resource_manager.py`
-2. **Data Processing**: Unified in `execution/data_processor.py` with Polars
-3. **Execution Engine**: Single modern implementation in `execution/` layer
-4. **Resource Creation**: Centralized in `execution/resource_manager.py`
-
-### ✅ Completed Optimization Tasks
-
-#### 1. URI Generation Cleanup ✅
-- **COMPLETED**: Refactored ad-hoc URI generation methods in `mapping_aware_processor.py` to use centralized URI generation utilities
-- Property URI generation now uses `mint_uri` and `slugify_uri_part` from `arkumu.common.uri_utils`
-- Entity URI generation continues to properly delegate to `ResourceManager.generate_entity_uri()`
-
-#### 2. Validation Consolidation ✅  
-- **COMPLETED**: Consolidated validation logic to flow through the centralized `validation/` layer
-- Updated `execution_validators.py` to use `ValidationService` and `MappingValidator` from centralized services
-- Removed duplicate validation logic from execution views
-- All validation now flows through the proper validation hierarchy
-
-#### 3. Directory Cleanup ✅
-- **COMPLETED**: Removed the empty `importer/` directory structure
-- All legacy import references have been migrated or removed
-- The `ImportServiceBridge` correctly uses the orchestrator architecture
+### Core Services
+- **Orchestration Layer**: High-level workflow management and coordination
+- **Mapping Consumer Layer**: Translation between GUI configurations and execution engine  
+- **Execution Layer**: Core data processing with centralized resource management
+- **Validation Layer**: Pre-execution validation and configuration verification
+- **File Upload Layer**: External storage integration
 
 ## Migration History
 
-### ✅ Completed Migration (Phase 1-4)
-1. **Phase 1**: ✅ URI generation centralized in `ResourceManager`
-2. **Phase 2**: ✅ Data processing consolidated into `DataProcessor` with Polars
-3. **Phase 3**: ✅ Resource creation unified in `ResourceManager`
-4. **Phase 4**: ✅ Legacy `importer/` services removed and deprecated
+The services architecture has undergone a complete migration from legacy dual-layer implementation to a modern, consolidated design:
 
-### ✅ Final Cleanup (Phase 5) - COMPLETED
-- **Phase 5a**: ✅ Removed empty `importer/` directory structure  
-- **Phase 5b**: ✅ Consolidated validation logic through centralized services
-- **Phase 5c**: ✅ Updated documentation to reflect optimized architecture
+### Completed Migration Phases
+1. **URI Generation Centralization**: All URI generation consolidated into `ResourceManager`
+2. **Data Processing Unification**: Polars-based processing in `DataProcessor` 
+3. **Resource Creation Consolidation**: Unified RDF resource management
+4. **Legacy Service Removal**: Eliminated redundant `importer/` layer
+5. **Architecture Optimization**: Centralized validation and cleaned directory structure
 
-## Performance Considerations
+## Performance Characteristics
 
-The newer `execution/` layer shows significant performance improvements:
-- Uses Polars for data processing (vectorized operations)
-- Implements chunked processing for large files
-- Provides streaming capabilities for memory efficiency
+The modern execution layer provides significant performance improvements:
+- **Polars Integration**: Vectorized data processing operations for high throughput
+- **Chunked Processing**: Handles large files efficiently with controlled memory usage  
+- **Streaming Capabilities**: Memory-efficient processing for very large datasets
+- **Centralized Resource Management**: Optimized bulk operations and reduced database overhead
 
-Maintaining both old and new implementations may impact maintainability without providing performance benefits.
+## Technical Benefits
 
-## Post-Migration Architecture Summary
-
-The `arkumu/importer/services/` directory now implements a clean, modern 3-layer architecture:
-
-### 1. **Orchestration Layer** (`orchestrator/`)
-High-level workflow management and coordination
-
-### 2. **Mapping Consumer Layer** (`mapping_consumer/`)  
-Translation between GUI configurations and execution engine
-
-### 3. **Execution Layer** (`execution/`)
-Core data processing with centralized resource management
-
-### 4. **Supporting Services**
-- **Validation Layer** (`validation/`): Pre-execution validation
-- **File Upload Layer** (`file_upload/`): External storage integration
-
-This simplified architecture eliminates the code duplication and redundancy that existed with the legacy `importer/` layer, providing a clear separation of concerns and improved maintainability.
+The consolidated architecture delivers:
+- **Simplified Codebase**: Single implementation path eliminates maintenance overhead
+- **Clear Separation of Concerns**: Each layer has well-defined responsibilities
+- **Centralized Services**: URI generation, validation, and resource management in dedicated modules
+- **Improved Testability**: Modular design enables focused unit and integration testing
+- **Enhanced Maintainability**: Reduced code duplication and consistent patterns throughout

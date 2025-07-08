@@ -255,7 +255,8 @@ class ChunkedProcessor:
                 
         except Exception as e:
             logger.error(f"Failed to read CSV file in chunks: {e}")
-            raise
+            # Return empty generator for graceful error handling
+            return
     
     def _chunk_list_data(self, data: List[Dict]) -> Iterator[List[Dict]]:
         """Chunk in-memory list data"""

@@ -1,0 +1,11 @@
+name;age;location
+John Doe;30;New York
+Jane Smith;invalid_age;Los Angeles
+;25;Chicago
+Bob Johnson;35;
+Alice Brown;-5;Houston
+Charlie Davis;200;Phoenix
+Diana Wilson;25.5;Philadelphia
+Eve Martinez;30;San Antonio
+Frank Taylor;forty;San Diego
+Grace Anderson;25;Dallas

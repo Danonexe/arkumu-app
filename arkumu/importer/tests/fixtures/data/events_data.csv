@@ -1,0 +1,11 @@
+event_name;event_date;location;participant;description;duration
+Conference 2024;2024-03-15;New York;John Doe;Annual tech conference;480
+Workshop;2024-04-20;Los Angeles;Jane Smith;Python workshop;240
+Meeting;2024-05-10;Chicago;Bob Johnson;Project planning meeting;90
+Seminar;2024-06-05;Houston;Alice Brown;AI seminar;180
+Training;2024-07-12;Phoenix;Charlie Davis;Leadership training;360
+Presentation;2024-08-22;Philadelphia;Diana Wilson;Product presentation;120
+Summit;2024-09-30;San Antonio;Eve Martinez;Industry summit;600
+Forum;2024-10-15;San Diego;Frank Taylor;Open source forum;300
+Convention;2024-11-08;Dallas;Grace Anderson;Developer convention;720
+Symposium;2024-12-03;San Jose;Henry Thomas;Research symposium;420

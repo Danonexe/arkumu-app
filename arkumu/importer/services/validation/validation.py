@@ -642,6 +642,10 @@ def validate_mapping_columns(mapping_file: str, csv_file: str, print_output: boo
     all_referenced_columns = set()
     missing_columns = set()
     
+    # Add anchor column to referenced columns if it exists
+    if anchor_column and anchor_column in csv_columns:
+        all_referenced_columns.add(anchor_column)
+    
     # Check all mapping rules
     for i, rule in enumerate(mapping.get("mappings", [])):
         source_column = rule.get("source_column")

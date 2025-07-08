@@ -144,6 +144,11 @@ class UpdateAnalyzer:
     def _would_value_change(self, existing_resource: Dict, new_value: str) -> bool:
         """Check if importing would change an existing value."""
         existing_value = existing_resource.get('value', '')
+        
+        # Handle None - consider it different from any value (including empty string)  
+        if existing_value is None:
+            return True
+        
         return existing_value != new_value
     
     def _get_column_type(self, column_name: str, mapping_config: Optional[Dict]) -> str:
@@ -151,7 +156,12 @@ class UpdateAnalyzer:
         if not mapping_config or 'columns' not in mapping_config:
             return "regular"
         
-        column_config = mapping_config['columns'].get(column_name, {})
+        # Handle case where columns is None or not a dict
+        columns = mapping_config.get('columns')
+        if not columns or not isinstance(columns, dict):
+            return "regular"
+        
+        column_config = columns.get(column_name, {})
         
         if column_config.get('is_anchor', False):
             return "anchor"

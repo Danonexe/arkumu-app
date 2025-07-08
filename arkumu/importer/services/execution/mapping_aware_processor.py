@@ -719,7 +719,7 @@ class MappingAwareProcessor:
                 "is_anchor": column.is_anchor,
                 "arkumu_type": column.arkumu_type,
                 "datatype": column.datatype,
-                "fk_config": column.fk_config
+                "fk_config": getattr(column, 'fk_config', None)
             }
         
         # Include FK relationships
