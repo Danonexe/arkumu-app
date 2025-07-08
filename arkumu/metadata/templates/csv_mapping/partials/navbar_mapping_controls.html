@@ -42,10 +42,7 @@
             <button class="btn btn-neutral btn-xs"
                     hx-post="{% url 'metadata:csv_save_mapping_htmx' %}"
                     hx-vals='{"organization": "{{ organization_id }}", "csrfmiddlewaretoken": "{{ csrf_token }}", "action": "update", "mapping_name": "{{ current_mapping_name }}"}'
-                    hx-include="#current-mapping-id"
-                    hx-target="#save-feedback"
-                    hx-swap="innerHTML"
-                    hx-on::after-request="if(event.detail.xhr.status === 200) { showMappingGraphModal('{{ current_mapping_id }}', '{{ current_mapping_name }}', '{{ current_mapping_description|default:'' }}'); }">
+                    hx-include="#current-mapping-id">
                 Save
             </button>
             
@@ -60,10 +57,7 @@
             <button class="btn btn-outline btn-xs"
                     hx-post="{% url 'metadata:csv_save_mapping_htmx' %}"
                     hx-vals='{"organization": "{{ organization_id }}", "csrfmiddlewaretoken": "{{ csrf_token }}", "action": "create"}'
-                    hx-include="#save-as-name"
-                    hx-target="#save-feedback"
-                    hx-swap="innerHTML"
-                    hx-on::after-request="if(event.detail.xhr.status === 200) { htmx.trigger('#load-mapping-select', 'load'); document.getElementById('save-as-name').value = ''; const newMappingName = document.getElementById('save-as-name').getAttribute('data-last-saved') || 'New Mapping'; showMappingGraphModal(event.detail.xhr.getResponseHeader('X-Mapping-ID') || '{{ current_mapping_id }}', newMappingName); }">
+                    hx-include="#save-as-name">
                 Save As
             </button>
         </div>
@@ -83,9 +77,7 @@
             <button class="btn btn-neutral btn-xs flex-shrink-0"
                     hx-post="{% url 'metadata:csv_save_mapping_htmx' %}"
                     hx-vals='{"organization": "{{ organization_id }}", "csrfmiddlewaretoken": "{{ csrf_token }}", "action": "create"}'
-                    hx-include="#new-mapping-name"
-                    hx-target="#save-feedback"
-                    hx-swap="innerHTML">
+                    hx-include="#new-mapping-name">
                 Save New
             </button>
         </div>
@@ -110,7 +102,7 @@
                 hx-post="{% url 'metadata:csv_load_mapping_htmx' %}"
                 hx-vals='{"organization": "{{ organization_id }}", "csrfmiddlewaretoken": "{{ csrf_token }}"}'
                 hx-include="#load-mapping-select"
-                hx-target="#mapping-status"
+                hx-target="#workspace-content"
                 hx-swap="innerHTML"
                 hx-confirm="Replace current work?">
             Load

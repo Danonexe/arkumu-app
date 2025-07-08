@@ -19,7 +19,7 @@
                 </li>
                 <div id="mapping-dropdown-list" 
                      hx-get="{% url 'importer:list_mappings_dropdown' %}"
-                     hx-trigger="load"
+                     hx-trigger="load once"
                      hx-vals='{"organization": "{{ organization_code }}"}'
                      hx-swap="innerHTML">
                     <li><a class="text-base-content/50">Loading mappings...</a></li>
@@ -61,20 +61,38 @@
 <input type="hidden" id="selected-mapping-id" name="mapping_id" value="{{ selected_mapping.id|default:'' }}">
 
 <script>
-// Handle mapping selection from dropdown
-document.addEventListener('click', function(e) {
-    if (e.target.closest('[data-mapping-id]')) {
+// Handle mapping selection from dropdown - use event delegation with a unique handler
+(function() {
+    // Remove any existing handlers to prevent duplicates
+    if (window.navbarMappingHandler) {
+        document.removeEventListener('click', window.navbarMappingHandler);
+    }
+    
+    // Create and store the event handler
+    window.navbarMappingHandler = function(e) {
         const mappingElement = e.target.closest('[data-mapping-id]');
+        if (!mappingElement) return;
+        
+        // Prevent multiple rapid clicks
+        if (mappingElement.dataset.loading === 'true') return;
+        mappingElement.dataset.loading = 'true';
+        
         const mappingId = mappingElement.dataset.mappingId;
         const mappingName = mappingElement.dataset.mappingName;
         
         // Update hidden input
-        document.getElementById('selected-mapping-id').value = mappingId;
+        const hiddenInput = document.getElementById('selected-mapping-id');
+        if (hiddenInput) {
+            hiddenInput.value = mappingId;
+        }
         
         // Update display name
-        document.getElementById('selected-mapping-name').textContent = mappingName || 'Select mapping';
+        const nameDisplay = document.getElementById('selected-mapping-name');
+        if (nameDisplay) {
+            nameDisplay.textContent = mappingName || 'Select mapping';
+        }
         
-        // Load mapping via HTMX
+        // Load mapping via HTMX - directly update execution status instead of navbar
         htmx.ajax('POST', '{% url "importer:ingest_data" %}', {
             values: {
                 organization: '{{ organization_id }}',
@@ -82,15 +100,25 @@ document.addEventListener('click', function(e) {
                 mapping_id: mappingId,
                 csrfmiddlewaretoken: '{{ csrf_token }}'
             },
-            target: '#navbar-end',
-            swap: 'innerHTML'
+            target: '#execution-status',
+            swap: 'outerHTML'
         }).then(() => {
-            // After navbar updates, trigger the execution status update
-            htmx.trigger('body', 'mappingSelected');
+            // Clean up loading state
+            mappingElement.dataset.loading = 'false';
+            // Trigger custom event for other components that need to know
+            htmx.trigger('body', 'mappingSelected', {mappingId: mappingId, mappingName: mappingName});
+        }).catch(() => {
+            // Clean up loading state on error
+            mappingElement.dataset.loading = 'false';
         });
         
         // Close dropdown
-        document.activeElement.blur();
-    }
-});
+        if (document.activeElement) {
+            document.activeElement.blur();
+        }
+    };
+    
+    // Add the event listener
+    document.addEventListener('click', window.navbarMappingHandler);
+})();
 </script>

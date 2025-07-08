@@ -43,6 +43,9 @@ class BaseCoordinatorMixin:
         - Without org: 'csv_mapping_current_organization'
         - No prefix: 'workspace_columns_{org_id}'
         
+        SHARED STATE: Organization keys are shared across all coordinators to ensure
+        consistent organization selection across different views.
+        
         Args:
             base_key (str): Base key name (e.g., 'workspace_columns', 'selected_files')
             organization_id (str, optional): Organization ID to append
@@ -51,10 +54,14 @@ class BaseCoordinatorMixin:
         Returns:
             str: Standardized session key
         """
-        if include_prefix:
-            key = f"{self.SESSION_PREFIX}_{base_key}"
+        # Special case: organization state should be shared across all coordinators
+        if base_key == 'current_organization':
+            key = 'shared_current_organization'
         else:
-            key = base_key
+            if include_prefix:
+                key = f"{self.SESSION_PREFIX}_{base_key}"
+            else:
+                key = base_key
             
         if organization_id:
             key = f"{key}_{organization_id}"

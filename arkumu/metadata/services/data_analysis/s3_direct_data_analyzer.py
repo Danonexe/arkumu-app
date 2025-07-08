@@ -152,6 +152,11 @@ class S3DirectDataAnalyzer:
                 
                 logger.info(f"File analysis: name='{name}', ext='{ext}', size={s3_obj.get('size', 0)}")
                 
+                # Skip mapping configuration files - these are not datasets
+                if self._is_mapping_config_file(object_key, name):
+                    logger.info(f"Skipping mapping config file: {file_name}")
+                    continue
+                
                 if ext.lower() in supported_extensions and s3_obj.get('size', 0) > 0:
                     try:
                         source_info = S3DataSourceInfo(
@@ -184,6 +189,40 @@ class S3DirectDataAnalyzer:
         
         logger.info(f"Total sources found: {len(sources)}")
         return sorted(sources, key=lambda x: x.name)
+    
+    def _is_mapping_config_file(self, object_key: str, file_name: str) -> bool:
+        """
+        Determine if a file is a mapping configuration file that should be excluded 
+        from data source discovery.
+        
+        Args:
+            object_key: Full S3 object key/path
+            file_name: Just the file name
+            
+        Returns:
+            True if this is a mapping config file, False if it's a data file
+        """
+        # Be very specific - only skip actual mapping configuration files
+        # NOT all files in metadata/ since that's where datasets live too
+        
+        # Skip specific mapping config files by name pattern
+        if file_name.endswith('_mapping.json') or file_name.endswith('_mapping.yaml'):
+            return True
+            
+        # Skip HTML error/log files
+        if file_name.endswith('.html') and ('error' in file_name.lower() or 'log' in file_name.lower()):
+            return True
+            
+        # Skip hidden/system files
+        if file_name.startswith('.'):
+            return True
+            
+        # Skip system/config directories only - not metadata directories
+        system_paths = ['config/', 'configs/', '.arkumu/', 'system/', 'admin/']
+        if any(config_path in object_key for config_path in system_paths):
+            return True
+            
+        return False
     
     def _get_all_files_in_organization(self, organization_id: str) -> List[Dict[str, Any]]:
         """
@@ -321,7 +360,31 @@ class S3DirectDataAnalyzer:
                 return df.lazy()
             
             elif source_info.format in ['json', 'jsonl']:
-                return pl.scan_ndjson(temp_file_path)
+                # Determine if this is NDJSON or regular JSON
+                try:
+                    # Try reading as NDJSON first (more common for data files)
+                    return pl.scan_ndjson(temp_file_path)
+                except Exception as ndjson_error:
+                    # If NDJSON fails, try reading as regular JSON
+                    try:
+                        import json
+                        with open(temp_file_path, 'r') as f:
+                            json_data = json.load(f)
+                        
+                        # Convert JSON to DataFrame format
+                        if isinstance(json_data, list):
+                            # JSON array of objects
+                            df = pl.DataFrame(json_data)
+                        elif isinstance(json_data, dict):
+                            # Single JSON object - convert to single-row DataFrame
+                            df = pl.DataFrame([json_data])
+                        else:
+                            raise ValueError(f"Unsupported JSON structure: {type(json_data)}")
+                        
+                        return df.lazy()
+                    except Exception as json_error:
+                        logger.error(f"Failed to parse both NDJSON and JSON formats: NDJSON error: {ndjson_error}, JSON error: {json_error}")
+                        raise ndjson_error  # Re-raise original NDJSON error
             
             else:
                 raise ValueError(f"Unsupported file format: {source_info.format}")
@@ -383,8 +446,32 @@ class S3DirectDataAnalyzer:
                 return df.head(n_rows) if n_rows else df
             
             elif source_info.format in ['json', 'jsonl']:
-                df = pl.read_ndjson(temp_file_path)
-                return df.head(n_rows) if n_rows else df
+                # Determine if this is NDJSON or regular JSON
+                try:
+                    # Try reading as NDJSON first (more common for data files)
+                    df = pl.read_ndjson(temp_file_path)
+                    return df.head(n_rows) if n_rows else df
+                except Exception as ndjson_error:
+                    # If NDJSON fails, try reading as regular JSON
+                    try:
+                        import json
+                        with open(temp_file_path, 'r') as f:
+                            json_data = json.load(f)
+                        
+                        # Convert JSON to DataFrame format
+                        if isinstance(json_data, list):
+                            # JSON array of objects
+                            df = pl.DataFrame(json_data)
+                        elif isinstance(json_data, dict):
+                            # Single JSON object - convert to single-row DataFrame
+                            df = pl.DataFrame([json_data])
+                        else:
+                            raise ValueError(f"Unsupported JSON structure: {type(json_data)}")
+                        
+                        return df.head(n_rows) if n_rows else df
+                    except Exception as json_error:
+                        logger.error(f"Failed to parse both NDJSON and JSON formats: NDJSON error: {ndjson_error}, JSON error: {json_error}")
+                        raise ndjson_error  # Re-raise original NDJSON error
             
             else:
                 raise ValueError(f"Unsupported file format: {source_info.format}")
@@ -433,8 +520,30 @@ class S3DirectDataAnalyzer:
                 return len(df)
             
             elif source_info.format in ['json', 'jsonl']:
-                lazy_df = pl.scan_ndjson(temp_file_path)
-                return lazy_df.select(pl.count()).collect().item()
+                # Determine if this is NDJSON or regular JSON
+                try:
+                    # Try reading as NDJSON first (more common for data files)
+                    lazy_df = pl.scan_ndjson(temp_file_path)
+                    return lazy_df.select(pl.count()).collect().item()
+                except Exception as ndjson_error:
+                    # If NDJSON fails, try reading as regular JSON
+                    try:
+                        import json
+                        with open(temp_file_path, 'r') as f:
+                            json_data = json.load(f)
+                        
+                        # Convert JSON to DataFrame format
+                        if isinstance(json_data, list):
+                            # JSON array of objects
+                            return len(json_data)
+                        elif isinstance(json_data, dict):
+                            # Single JSON object - one row
+                            return 1
+                        else:
+                            raise ValueError(f"Unsupported JSON structure: {type(json_data)}")
+                    except Exception as json_error:
+                        logger.error(f"Failed to parse both NDJSON and JSON formats: NDJSON error: {ndjson_error}, JSON error: {json_error}")
+                        raise ndjson_error  # Re-raise original NDJSON error
             
             else:
                 raise ValueError(f"Unsupported file format: {source_info.format}")

@@ -48,6 +48,8 @@ class CSVMappingCoordinatorMixin(BaseCoordinatorMixin, CSVDataMixin, MappingWork
         This is more efficient than get_selected_datasets_with_details() when
         you only need the names and not the full dataset objects.
         
+        BACKWARDS COMPATIBILITY: Checks both new coordinator pattern and legacy pattern.
+        
         Args:
             request: Django request object
             organization_id (str): Organization ID
@@ -55,8 +57,16 @@ class CSVMappingCoordinatorMixin(BaseCoordinatorMixin, CSVDataMixin, MappingWork
         Returns:
             list: List of selected dataset names
         """
-        selected_datasets_key = self.get_session_key('selected_datasets', organization_id)
-        return request.session.get(selected_datasets_key, [])
+        # Try new coordinator pattern first
+        coordinator_key = self.get_session_key('selected_datasets', organization_id)
+        datasets = request.session.get(coordinator_key)
+        
+        if datasets is not None:
+            return datasets
+            
+        # Fallback to legacy pattern for backwards compatibility
+        legacy_key = f"selected_datasets_{organization_id}"
+        return request.session.get(legacy_key, [])
     
     # ==========================================================================
     # Column ID Management (Dataset-Aware)
