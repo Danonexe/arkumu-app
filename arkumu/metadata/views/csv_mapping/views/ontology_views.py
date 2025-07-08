@@ -16,13 +16,12 @@ from django.views import View
 from arkumu.users.mixins import GeneralLoginRequiredMixin
 
 from arkumu.metadata.views.csv_mapping.mixins.coordinator import CSVMappingCoordinatorMixin
-from arkumu.metadata.views.csv_mapping.mixins.base import OrganizationMixin
 from arkumu.metadata.views.csv_mapping.mixins.template_helpers import CSVMappingTemplateHelperMixin
 
 logger = logging.getLogger(__name__)
 
 
-class ToggleExternalOntologyFormView(GeneralLoginRequiredMixin, OrganizationMixin, 
+class ToggleExternalOntologyFormView(GeneralLoginRequiredMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
     View):
@@ -33,7 +32,11 @@ class ToggleExternalOntologyFormView(GeneralLoginRequiredMixin, OrganizationMixi
     def post(self, request):
         """Handle POST requests for toggling external ontology forms."""
         try:
-            organization_id = self.get_organization_id_from_request(request)
+            # Get current organization using BaseCoordinatorMixin
+            current_org = self.get_current_organization(request)
+            if not current_org:
+                return HttpResponse("No organization selected", status=400)
+            organization_id = current_org['code']
             column_id = request.POST.get('column_id') or request.GET.get('column_id')
             
             logger.info(f"CSV_TOGGLE_EXTERNAL_ONTOLOGY_FORM: column_id='{column_id}', org='{organization_id}'")
@@ -236,7 +239,7 @@ class ToggleExternalOntologyFormView(GeneralLoginRequiredMixin, OrganizationMixi
             return HttpResponse('<div class="text-error text-sm">Error opening external ontology configuration</div>')
 
 
-class SaveInlineExternalOntologyView(GeneralLoginRequiredMixin, OrganizationMixin, 
+class SaveInlineExternalOntologyView(GeneralLoginRequiredMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
     View):
@@ -250,7 +253,11 @@ class SaveInlineExternalOntologyView(GeneralLoginRequiredMixin, OrganizationMixi
             # Debug: Log all POST parameters
             logger.info(f"CSV_SAVE_EXTERNAL_ONTOLOGY: POST params: {dict(request.POST)}")
             
-            organization_id = self.get_organization_id_from_request(request)
+            # Get current organization using BaseCoordinatorMixin
+            current_org = self.get_current_organization(request)
+            if not current_org:
+                return HttpResponse("No organization selected", status=400)
+            organization_id = current_org['code']
             
             # Extract form data
             column_id = request.POST.get('column_id')
@@ -337,7 +344,7 @@ class SaveInlineExternalOntologyView(GeneralLoginRequiredMixin, OrganizationMixi
             return HttpResponse('<div class="text-error text-xs p-2">Error saving external ontology configuration</div>')
 
 
-class HideExternalOntologyFormView(GeneralLoginRequiredMixin, OrganizationMixin, 
+class HideExternalOntologyFormView(GeneralLoginRequiredMixin, 
     CSVMappingCoordinatorMixin, 
     View):
     """
@@ -360,7 +367,7 @@ class HideExternalOntologyFormView(GeneralLoginRequiredMixin, OrganizationMixin,
             return HttpResponse('<div class="text-error text-sm">Error hiding external ontology form</div>')
 
 
-class RemoveExternalOntologyView(GeneralLoginRequiredMixin, OrganizationMixin, 
+class RemoveExternalOntologyView(GeneralLoginRequiredMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
     View):
@@ -371,7 +378,11 @@ class RemoveExternalOntologyView(GeneralLoginRequiredMixin, OrganizationMixin,
     def post(self, request):
         """Handle POST requests for removing external ontology configurations."""
         try:
-            organization_id = self.get_organization_id_from_request(request)
+            # Get current organization using BaseCoordinatorMixin
+            current_org = self.get_current_organization(request)
+            if not current_org:
+                return HttpResponse("No organization selected", status=400)
+            organization_id = current_org['code']
             column_id = request.POST.get('column_id')
             
             logger.info(f"CSV_REMOVE_EXTERNAL_ONTOLOGY: column_id='{column_id}', org='{organization_id}'")
@@ -411,7 +422,7 @@ class RemoveExternalOntologyView(GeneralLoginRequiredMixin, OrganizationMixin,
             return HttpResponse('<div class="text-error text-xs p-2">Error removing external ontology configuration</div>')
 
 
-class RemoveIndividualExternalOntologyView(GeneralLoginRequiredMixin, OrganizationMixin, 
+class RemoveIndividualExternalOntologyView(GeneralLoginRequiredMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
     View):
@@ -422,7 +433,11 @@ class RemoveIndividualExternalOntologyView(GeneralLoginRequiredMixin, Organizati
     def post(self, request):
         """Handle POST requests for removing individual external ontology configurations."""
         try:
-            organization_id = self.get_organization_id_from_request(request)
+            # Get current organization using BaseCoordinatorMixin
+            current_org = self.get_current_organization(request)
+            if not current_org:
+                return HttpResponse("No organization selected", status=400)
+            organization_id = current_org['code']
             column_id = request.POST.get('column_id')
             ontology_type = request.POST.get('ontology_type')
             
@@ -480,7 +495,7 @@ class RemoveIndividualExternalOntologyView(GeneralLoginRequiredMixin, Organizati
             return HttpResponse('<div class="text-error text-xs p-2">Error removing individual ontology configuration</div>')
 
 
-class ValidateExternalOntologyIdentifierView(GeneralLoginRequiredMixin, OrganizationMixin, 
+class ValidateExternalOntologyIdentifierView(GeneralLoginRequiredMixin, 
     CSVMappingCoordinatorMixin, 
     View):
     """
@@ -490,7 +505,11 @@ class ValidateExternalOntologyIdentifierView(GeneralLoginRequiredMixin, Organiza
     def post(self, request):
         """Handle POST requests for validating external ontology identifiers."""
         try:
-            organization_id = self.get_organization_id_from_request(request)
+            # Get current organization using BaseCoordinatorMixin
+            current_org = self.get_current_organization(request)
+            if not current_org:
+                return HttpResponse("No organization selected", status=400)
+            organization_id = current_org['code']
             
             # Extract validation data
             column_id = request.POST.get('column_id')

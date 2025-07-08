@@ -18,13 +18,12 @@ from arkumu.users.mixins import GeneralLoginRequiredMixin
 
 from arkumu.metadata.services.data_analysis.s3_direct_data_analyzer import S3DirectDataAnalyzer
 from arkumu.metadata.views.csv_mapping.mixins.coordinator import CSVMappingCoordinatorMixin
-from arkumu.metadata.views.csv_mapping.mixins.base import OrganizationMixin
 from arkumu.metadata.views.csv_mapping.mixins.template_helpers import CSVMappingTemplateHelperMixin
 
 logger = logging.getLogger(__name__)
 
 
-class CSVDatasetCardView(GeneralLoginRequiredMixin, OrganizationMixin, 
+class CSVDatasetCardView(GeneralLoginRequiredMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
     View):
@@ -38,7 +37,11 @@ class CSVDatasetCardView(GeneralLoginRequiredMixin, OrganizationMixin,
     def get(self, request):
         """Handle GET requests for dataset card preview."""
         try:
-            organization_id = self.get_organization_id_from_request(request)
+            # Get current organization using BaseCoordinatorMixin
+            current_org = self.get_current_organization(request)
+            if not current_org:
+                return HttpResponse("No organization selected", status=400)
+            organization_id = current_org['code']
             dataset_name = request.GET.get('dataset_name') or request.GET.get('dataset')
             source_name = request.GET.get('source')
             
@@ -93,7 +96,7 @@ class CSVDatasetCardView(GeneralLoginRequiredMixin, OrganizationMixin,
             return HttpResponse(f'<div class="text-danger">Error: {str(e)}</div>')
 
 
-class ToggleDatasetSelectionView(GeneralLoginRequiredMixin, OrganizationMixin, 
+class ToggleDatasetSelectionView(GeneralLoginRequiredMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
     View):
@@ -108,7 +111,11 @@ class ToggleDatasetSelectionView(GeneralLoginRequiredMixin, OrganizationMixin,
     def post(self, request):
         """Handle POST requests for toggling dataset selection with cascade."""
         try:
-            organization_id = self.get_organization_id_from_request(request)
+            # Get current organization using BaseCoordinatorMixin
+            current_org = self.get_current_organization(request)
+            if not current_org:
+                return HttpResponse("No organization selected", status=400)
+            organization_id = current_org['code']
             dataset_name = request.POST.get('dataset')
             action = request.POST.get('action', 'toggle')  # 'add', 'remove', or 'toggle'
             
@@ -223,7 +230,7 @@ class ToggleDatasetSelectionView(GeneralLoginRequiredMixin, OrganizationMixin,
             return HttpResponse(f'<div class="text-danger">Error: {str(e)}</div>')
 
 
-class LoadMoreDatasetRowsView(GeneralLoginRequiredMixin, OrganizationMixin, 
+class LoadMoreDatasetRowsView(GeneralLoginRequiredMixin, 
     CSVMappingCoordinatorMixin, 
     View):
     """
@@ -236,7 +243,11 @@ class LoadMoreDatasetRowsView(GeneralLoginRequiredMixin, OrganizationMixin,
     def get(self, request):
         """Handle GET requests for loading more dataset rows."""
         try:
-            organization_id = self.get_organization_id_from_request(request)
+            # Get current organization using BaseCoordinatorMixin
+            current_org = self.get_current_organization(request)
+            if not current_org:
+                return HttpResponse("No organization selected", status=400)
+            organization_id = current_org['code']
             dataset_name = request.GET.get('dataset')
             source_name = request.GET.get('source')
             offset = int(request.GET.get('offset', 0))
@@ -283,7 +294,7 @@ class LoadMoreDatasetRowsView(GeneralLoginRequiredMixin, OrganizationMixin,
             return HttpResponse(f'<tr><td colspan="100%" class="text-danger">Error: {str(e)}</td></tr>')
 
 
-class GetDatasetBadgesView(GeneralLoginRequiredMixin, OrganizationMixin, 
+class GetDatasetBadgesView(GeneralLoginRequiredMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
     View):
@@ -296,7 +307,11 @@ class GetDatasetBadgesView(GeneralLoginRequiredMixin, OrganizationMixin,
     def get(self, request):
         """Handle GET requests for dataset badges content."""
         try:
-            organization_id = self.get_organization_id_from_request(request)
+            # Get current organization using BaseCoordinatorMixin
+            current_org = self.get_current_organization(request)
+            if not current_org:
+                return HttpResponse("No organization selected", status=400)
+            organization_id = current_org['code']
             
             # Use template helper to render badges content consistently
             badges_html = self.render_dataset_badges_template(request, organization_id)
@@ -308,7 +323,7 @@ class GetDatasetBadgesView(GeneralLoginRequiredMixin, OrganizationMixin,
             return HttpResponse(f'<div class="text-danger">Error: {str(e)}</div>')
 
 
-class LazyDatasetPreviewView(GeneralLoginRequiredMixin, OrganizationMixin,
+class LazyDatasetPreviewView(GeneralLoginRequiredMixin,
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin, View):
     """

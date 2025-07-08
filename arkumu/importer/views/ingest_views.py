@@ -8,7 +8,6 @@ from django.http import HttpResponse
 from django.views import View
 from arkumu.users.mixins import GeneralLoginRequiredMixin, general_login_required
 from arkumu.users.models import Organization
-from arkumu.metadata.views.csv_mapping.mixins.base import OrganizationMixin
 from arkumu.importer.mixins.ingest_coordinator import IngestCoordinatorMixin
 
 logger = logging.getLogger(__name__)
@@ -17,64 +16,76 @@ logger = logging.getLogger(__name__)
 SELECTED_FILES_SESSION_KEY = 'ingest_selected_files'
 
 
-class IngestDataView(GeneralLoginRequiredMixin, OrganizationMixin, IngestCoordinatorMixin, View):
+class IngestDataView(GeneralLoginRequiredMixin, IngestCoordinatorMixin, View):
     """
     Main view for the new ingest data interface with three-pane layout
     
     Uses mixins in the same pattern as CSV mapping:
-    - OrganizationMixin: Organization discovery and management
     - IngestCoordinatorMixin: Coordinating file selection and mapping
+      (inherits from BaseCoordinatorMixin for organization management)
     """
     template_name = 'importer/ingest_data.html'
     
     def get(self, request):
         """Handle GET requests for the ingest data interface"""
-        # Get organization context using OrganizationMixin (same as CSV mapping)
-        org_context = self.get_organization_context(request)
-        organization_id = org_context['organization_id']
+        # Handle organization parameter from URL - set in session if provided
+        organization_param = request.GET.get('organization')
+        if organization_param:
+            self.set_current_organization(request, organization_param)
         
-        # Handle case where no valid organization is provided
-        if not org_context['organization_exists']:
-            # Clear any existing organization state
-            if hasattr(self, 'clear_current_organization'):
-                self.clear_current_organization(request)
+        # Get current organization from session (works for both URL param and navigation)
+        current_org = self.get_current_organization(request)
+        if not current_org:
+            # No organization selected - still render template but with no data
+            # Get all organizations for dropdown
+            organizations = Organization.objects.all().order_by('name')
+            organizations_list = [
+                {
+                    'id': org.code,  # Use code for compatibility with templates
+                    'name': org.name,
+                    'status': 'active'  # Template expects status
+                }
+                for org in organizations
+            ]
             
-            # Return template with no organization selected state
             context = {
-                **org_context,
+                **self.get_base_template_context(request),
+                'organization_id': None,
+                'organization_code': None,
+                'organization_name': None,
+                'organization_numeric_id': None,
+                'organizations': organizations_list,
                 'selected_files': [],
                 'selected_mapping': None,
                 'available_mappings': [],
-                'page_title': 'Metadata Ingestion'
+                'page_title': 'Metadata Ingestion',
             }
-            
-            # Handle HTMX requests
             if request.headers.get('HX-Request'):
                 return render(request, 'importer/partials/main_ingest_content.html', context)
             return render(request, self.template_name, context)
         
-        # Organization exists - set it as current if it's different
-        current_org = None
-        if hasattr(self, 'get_current_organization'):
-            current_org = self.get_current_organization(request)
-        
-        # Only trigger organization change if we have a current org and it's actually different
-        # This prevents false positives when navigating between views for the same organization
-        if current_org and current_org['code'] != organization_id:
-            # Organization changed - handle the change
-            if hasattr(self, 'handle_organization_change'):
-                self.handle_organization_change(request, organization_id)
-        elif not current_org:
-            # No current organization - set it without triggering change logic
-            if hasattr(self, 'set_current_organization'):
-                self.set_current_organization(request, organization_id)
-        
         # Get ingest-specific context using IngestCoordinatorMixin
         ingest_context = self.get_ingest_context(request)
         
-        # Merge contexts - org_context takes precedence for organization data
+        # Get all organizations for dropdown
+        organizations = Organization.objects.all().order_by('name')
+        organizations_list = [
+            {
+                'id': org.code,  # Use code for compatibility with templates
+                'name': org.name,
+                'status': 'active'  # Template expects status
+            }
+            for org in organizations
+        ]
+        
+        # Build context using BaseCoordinatorMixin
         context = {
-            **org_context,  # organization_id, organizations, organization_exists
+            **self.get_base_template_context(request),
+            'organization_id': current_org['code'],  # Use organization code for compatibility
+            'organization_code': current_org['code'],
+            'organization_name': current_org['name'],
+            'organization_numeric_id': current_org['id'],
+            'organizations': organizations_list,
             **ingest_context,  # selected_files, mapping data, file browser data, etc.
             'page_title': 'Metadata Ingestion'
         }
@@ -92,9 +103,9 @@ class IngestDataView(GeneralLoginRequiredMixin, OrganizationMixin, IngestCoordin
         logger.info(f"POST data: {dict(request.POST)}")
         logger.info(f"Is HTMX request: {request.headers.get('HX-Request')}")
         
-        # Get organization context
-        org_context = self.get_organization_context(request)
-        organization_id = org_context.get('organization_id')
+        # Get current organization using BaseCoordinatorMixin
+        current_org = self.get_current_organization(request)
+        organization_id = current_org['id'] if current_org else None
         
         # Handle load_mapping action
         if request.POST.get('action') == 'load_mapping':

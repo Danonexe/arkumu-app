@@ -120,7 +120,6 @@ from arkumu.metadata.services.data_analysis.s3_direct_data_analyzer import S3Dir
 from arkumu.common.enums import UpdateStrategy
 from arkumu.importer.services.execution.execution_engine import MappingExecutionEngine
 from arkumu.metadata.views.csv_mapping.mixins.coordinator import CSVMappingCoordinatorMixin
-from arkumu.metadata.views.csv_mapping.mixins.base import OrganizationMixin
 
 # ENHANCED: Import mapping analysis modules
 from arkumu.metadata.services.mapping import MappingCoordinator
@@ -128,13 +127,17 @@ from arkumu.metadata.services.mapping import MappingCoordinator
 logger = logging.getLogger(__name__)
 
 
-class ExecuteGUIMappingView(GeneralLoginRequiredMixin, OrganizationMixin, CSVMappingCoordinatorMixin, View):
+class ExecuteGUIMappingView(GeneralLoginRequiredMixin, CSVMappingCoordinatorMixin, View):
     """Execute CSV mapping using enhanced SmartBulkUpdaterPolars with full FK and ontology support."""
     
     def post(self, request):
         """Execute a saved GUI mapping configuration."""
         try:
-            organization_id = self.get_organization_id_from_request(request)
+            # Get current organization using BaseCoordinatorMixin
+            current_org = self.get_current_organization(request)
+            if not current_org:
+                return HttpResponse("No organization selected", status=400)
+            organization_id = current_org['code']
             
             # Get execution parameters
             mapping_id = request.POST.get('mapping_id')
@@ -372,13 +375,17 @@ class ExecuteGUIMappingView(GeneralLoginRequiredMixin, OrganizationMixin, CSVMap
         }
 
 
-class GetMappingExecutionStatusView(GeneralLoginRequiredMixin, OrganizationMixin, CSVMappingCoordinatorMixin, View):
+class GetMappingExecutionStatusView(GeneralLoginRequiredMixin, CSVMappingCoordinatorMixin, View):
     """Get execution status preview."""
     
     def get(self, request):
         """Get execution status and preview for a mapping."""
         try:
-            organization_id = self.get_organization_id_from_request(request)
+            # Get current organization using BaseCoordinatorMixin
+            current_org = self.get_current_organization(request)
+            if not current_org:
+                return HttpResponse("No organization selected", status=400)
+            organization_id = current_org['code']
             mapping_id = request.GET.get('mapping_id')
             dataset_name = request.GET.get('dataset_name')
             
@@ -423,13 +430,17 @@ class GetMappingExecutionStatusView(GeneralLoginRequiredMixin, OrganizationMixin
             }, status=500)
 
 
-class ValidateMappingExecutionView(GeneralLoginRequiredMixin, OrganizationMixin, View):
+class ValidateMappingExecutionView(GeneralLoginRequiredMixin, View):
     """Validate mapping for execution."""
     
     def post(self, request):
         """Validate mapping for execution readiness."""
         try:
-            organization_id = self.get_organization_id_from_request(request)
+            # Get current organization using BaseCoordinatorMixin
+            current_org = self.get_current_organization(request)
+            if not current_org:
+                return HttpResponse("No organization selected", status=400)
+            organization_id = current_org['code']
             mapping_id = request.POST.get('mapping_id')
             
             if not mapping_id:

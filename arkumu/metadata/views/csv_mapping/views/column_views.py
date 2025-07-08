@@ -17,13 +17,12 @@ from arkumu.users.mixins import GeneralLoginRequiredMixin
 
 from arkumu.metadata.services.data_analysis.s3_direct_data_analyzer import S3DirectDataAnalyzer
 from arkumu.metadata.views.csv_mapping.mixins.coordinator import CSVMappingCoordinatorMixin
-from arkumu.metadata.views.csv_mapping.mixins.base import OrganizationMixin
 from arkumu.metadata.views.csv_mapping.mixins.template_helpers import CSVMappingTemplateHelperMixin
 
 logger = logging.getLogger(__name__)
 
 
-class AddColumnToWorkspaceView(GeneralLoginRequiredMixin, OrganizationMixin, 
+class AddColumnToWorkspaceView(GeneralLoginRequiredMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
     View):
@@ -37,7 +36,11 @@ class AddColumnToWorkspaceView(GeneralLoginRequiredMixin, OrganizationMixin,
     def post(self, request):
         """Handle POST requests for adding columns to workspace with validation."""
         try:
-            organization_id = self.get_organization_id_from_request(request)
+            # Get current organization using BaseCoordinatorMixin
+            current_org = self.get_current_organization(request)
+            if not current_org:
+                return HttpResponse("No organization selected", status=400)
+            organization_id = current_org['code']
             
             # Handle different POST data formats from the template
             column_name = request.POST.get('column') or request.POST.get('column_name')
@@ -86,7 +89,7 @@ class AddColumnToWorkspaceView(GeneralLoginRequiredMixin, OrganizationMixin,
             return HttpResponse(f'<div class="alert alert-error">Error: {str(e)}</div>')
 
 
-class RemoveColumnFromWorkspaceView(GeneralLoginRequiredMixin, OrganizationMixin, 
+class RemoveColumnFromWorkspaceView(GeneralLoginRequiredMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
     View):
@@ -100,7 +103,11 @@ class RemoveColumnFromWorkspaceView(GeneralLoginRequiredMixin, OrganizationMixin
     def post(self, request):
         """Handle POST requests for removing columns from workspace."""
         try:
-            organization_id = self.get_organization_id_from_request(request)
+            # Get current organization using BaseCoordinatorMixin
+            current_org = self.get_current_organization(request)
+            if not current_org:
+                return HttpResponse("No organization selected", status=400)
+            organization_id = current_org['code']
             
             # Handle different POST data formats
             column_name = request.POST.get('column') or request.POST.get('column_name')
@@ -160,7 +167,7 @@ class RemoveColumnFromWorkspaceView(GeneralLoginRequiredMixin, OrganizationMixin
             return HttpResponse(f'<div class="alert alert-error">Error: {str(e)}</div>')
 
 
-class SelectAllDatasetColumnsView(GeneralLoginRequiredMixin, OrganizationMixin, 
+class SelectAllDatasetColumnsView(GeneralLoginRequiredMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
     View):
@@ -173,7 +180,11 @@ class SelectAllDatasetColumnsView(GeneralLoginRequiredMixin, OrganizationMixin,
     def post(self, request):
         """Handle POST requests for selecting all columns from a dataset."""
         try:
-            organization_id = self.get_organization_id_from_request(request)
+            # Get current organization using BaseCoordinatorMixin
+            current_org = self.get_current_organization(request)
+            if not current_org:
+                return HttpResponse("No organization selected", status=400)
+            organization_id = current_org['code']
             dataset_name = request.POST.get('dataset')
             source_name = request.POST.get('source')
             
@@ -234,7 +245,7 @@ class SelectAllDatasetColumnsView(GeneralLoginRequiredMixin, OrganizationMixin,
             return HttpResponse(f'<div class="alert alert-error">Error: {str(e)}</div>')
 
 
-class DeselectAllDatasetColumnsView(GeneralLoginRequiredMixin, OrganizationMixin, 
+class DeselectAllDatasetColumnsView(GeneralLoginRequiredMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
     View):
@@ -247,7 +258,11 @@ class DeselectAllDatasetColumnsView(GeneralLoginRequiredMixin, OrganizationMixin
     def post(self, request):
         """Handle POST requests for deselecting all columns from a dataset."""
         try:
-            organization_id = self.get_organization_id_from_request(request)
+            # Get current organization using BaseCoordinatorMixin
+            current_org = self.get_current_organization(request)
+            if not current_org:
+                return HttpResponse("No organization selected", status=400)
+            organization_id = current_org['code']
             dataset_name = request.POST.get('dataset')
             source_name = request.POST.get('source')
             
@@ -297,7 +312,7 @@ class DeselectAllDatasetColumnsView(GeneralLoginRequiredMixin, OrganizationMixin
             return HttpResponse(f'<div class="alert alert-error">Error: {str(e)}</div>')
 
 
-class SetAnchorColumnView(GeneralLoginRequiredMixin, OrganizationMixin, 
+class SetAnchorColumnView(GeneralLoginRequiredMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
     View):
@@ -310,7 +325,11 @@ class SetAnchorColumnView(GeneralLoginRequiredMixin, OrganizationMixin,
     
     def post(self, request):
         try:
-            organization_id = self.get_organization_id_from_request(request)
+            # Get current organization using BaseCoordinatorMixin
+            current_org = self.get_current_organization(request)
+            if not current_org:
+                return HttpResponse("No organization selected", status=400)
+            organization_id = current_org['code']
             column_id = request.POST.get('column_id')
             
             logger.info(f"🚨 SET_ANCHOR: Received column_id='{column_id}' for org='{organization_id}'")
@@ -352,7 +371,7 @@ class SetAnchorColumnView(GeneralLoginRequiredMixin, OrganizationMixin,
             return HttpResponse(f'<div class="alert alert-error">Error: {str(e)}</div>')
 
 
-class ToggleMultiValueColumnView(GeneralLoginRequiredMixin, OrganizationMixin, 
+class ToggleMultiValueColumnView(GeneralLoginRequiredMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
     View):
@@ -364,7 +383,11 @@ class ToggleMultiValueColumnView(GeneralLoginRequiredMixin, OrganizationMixin,
     
     def post(self, request):
         try:
-            organization_id = self.get_organization_id_from_request(request)
+            # Get current organization using BaseCoordinatorMixin
+            current_org = self.get_current_organization(request)
+            if not current_org:
+                return HttpResponse("No organization selected", status=400)
+            organization_id = current_org['code']
             column_id = request.POST.get('column_id')
             
             logger.info(f"🚨 TOGGLE_MULTI_VALUE: Received column_id='{column_id}' for org='{organization_id}'")
@@ -410,7 +433,7 @@ class ToggleMultiValueColumnView(GeneralLoginRequiredMixin, OrganizationMixin,
 # Pure Selection Interface Views (No Workspace Operations)
 # ==============================================================================
 
-class ToggleColumnSelectionView(GeneralLoginRequiredMixin, OrganizationMixin, 
+class ToggleColumnSelectionView(GeneralLoginRequiredMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
     View):
@@ -424,7 +447,11 @@ class ToggleColumnSelectionView(GeneralLoginRequiredMixin, OrganizationMixin,
     def post(self, request):
         """Handle POST requests for toggling column selection (browsing only)."""
         try:
-            organization_id = self.get_organization_id_from_request(request)
+            # Get current organization using BaseCoordinatorMixin
+            current_org = self.get_current_organization(request)
+            if not current_org:
+                return HttpResponse("No organization selected", status=400)
+            organization_id = current_org['code']
             column_name = request.POST.get('column')
             dataset_name = request.POST.get('dataset')
             source_name = request.POST.get('source')
@@ -473,7 +500,7 @@ class ToggleColumnSelectionView(GeneralLoginRequiredMixin, OrganizationMixin,
             return HttpResponse(f'<div class="alert alert-error">Error: {str(e)}</div>')
 
 
-class SelectAllColumnsView(GeneralLoginRequiredMixin, OrganizationMixin, 
+class SelectAllColumnsView(GeneralLoginRequiredMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
     View):
@@ -486,7 +513,11 @@ class SelectAllColumnsView(GeneralLoginRequiredMixin, OrganizationMixin,
     def post(self, request):
         """Handle POST requests for selecting all columns (browsing only)."""
         try:
-            organization_id = self.get_organization_id_from_request(request)
+            # Get current organization using BaseCoordinatorMixin
+            current_org = self.get_current_organization(request)
+            if not current_org:
+                return HttpResponse("No organization selected", status=400)
+            organization_id = current_org['code']
             dataset_name = request.POST.get('dataset')
             source_name = request.POST.get('source')
             
@@ -525,7 +556,7 @@ class SelectAllColumnsView(GeneralLoginRequiredMixin, OrganizationMixin,
             return HttpResponse(f'<div class="alert alert-error">Error: {str(e)}</div>')
 
 
-class DeselectAllColumnsView(GeneralLoginRequiredMixin, OrganizationMixin, 
+class DeselectAllColumnsView(GeneralLoginRequiredMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
     View):
@@ -538,7 +569,11 @@ class DeselectAllColumnsView(GeneralLoginRequiredMixin, OrganizationMixin,
     def post(self, request):
         """Handle POST requests for deselecting all columns (browsing only)."""
         try:
-            organization_id = self.get_organization_id_from_request(request)
+            # Get current organization using BaseCoordinatorMixin
+            current_org = self.get_current_organization(request)
+            if not current_org:
+                return HttpResponse("No organization selected", status=400)
+            organization_id = current_org['code']
             dataset_name = request.POST.get('dataset')
             source_name = request.POST.get('source')
             
@@ -569,7 +604,7 @@ class DeselectAllColumnsView(GeneralLoginRequiredMixin, OrganizationMixin,
             return HttpResponse(f'<div class="alert alert-error">Error: {str(e)}</div>')
 
 
-class AddSelectedColumnsToWorkspaceView(GeneralLoginRequiredMixin, OrganizationMixin, 
+class AddSelectedColumnsToWorkspaceView(GeneralLoginRequiredMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
     View):
@@ -583,7 +618,11 @@ class AddSelectedColumnsToWorkspaceView(GeneralLoginRequiredMixin, OrganizationM
     def post(self, request):
         """Handle POST requests for adding selected columns to workspace."""
         try:
-            organization_id = self.get_organization_id_from_request(request)
+            # Get current organization using BaseCoordinatorMixin
+            current_org = self.get_current_organization(request)
+            if not current_org:
+                return HttpResponse("No organization selected", status=400)
+            organization_id = current_org['code']
             dataset_name = request.POST.get('dataset')
             source_name = request.POST.get('source')
             selected_columns = request.POST.getlist('columns')

@@ -16,14 +16,13 @@ from django.http import JsonResponse, HttpResponse
 from arkumu.users.mixins import GeneralLoginRequiredMixin, general_login_required
 
 from arkumu.metadata.views.csv_mapping.mixins.coordinator import CSVMappingCoordinatorMixin
-from arkumu.metadata.views.csv_mapping.mixins.base import OrganizationMixin
 from arkumu.metadata.views.csv_mapping.mixins.import_strategy import ImportStrategyMixin
 from arkumu.metadata.views.csv_mapping.mixins.template_helpers import CSVMappingTemplateHelperMixin
 
 logger = logging.getLogger(__name__)
 
 
-class CSVMappingEditorView(GeneralLoginRequiredMixin, OrganizationMixin, 
+class CSVMappingEditorView(GeneralLoginRequiredMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
     ImportStrategyMixin, 
@@ -33,12 +32,12 @@ class CSVMappingEditorView(GeneralLoginRequiredMixin, OrganizationMixin,
     
     REFACTORED FROM: csv_mapping_editor_view function
     ARCHITECTURE: Uses coordinator mixin for proper dataset-column relationships:
-    - OrganizationMixin: Organization discovery and management
     - CSVMappingCoordinatorMixin: Coordinates CSV data + workspace with dataset-column relationships
+      (inherits from BaseCoordinatorMixin for organization management)
     - CSVMappingTemplateHelperMixin: Reduces template rendering duplication
     - ImportStrategyMixin: Import configuration and strategy management
     
-    The coordinator mixin inherits from CSVDataMixin and MappingWorkspaceMixin, 
+    The coordinator mixin inherits from BaseCoordinatorMixin, CSVDataMixin and MappingWorkspaceMixin, 
     providing all their functionality plus relationship management.
     """
     
@@ -50,34 +49,64 @@ class CSVMappingEditorView(GeneralLoginRequiredMixin, OrganizationMixin,
             logger.info(f"🚀 CSV_MAPPING_EDITOR: CSV mapping editor called! 🚀")
             logger.info(f"CSV_MAPPING_EDITOR: Method={request.method}, GET params={dict(request.GET)}")
             
-            # Get organization context using OrganizationMixin
+            # Get organization context using BaseCoordinatorMixin
             logger.info(f"🔍 CORE_EDITOR: Getting organization context...")
             logger.info(f"🔍 CORE_EDITOR: URL parameters: {dict(request.GET)}")
             logger.info(f"🔍 CORE_EDITOR: Session keys: {list(request.session.keys())}")
-            logger.info(f"🔍 CORE_EDITOR: Session organization: {request.session.get('last_selected_organization')}")
+            logger.info(f"🔍 CORE_EDITOR: Session current_organization: {request.session.get('current_organization')}")
             
-            org_context = self.get_organization_context(request)
-            organization_id = org_context['organization_id']
+            # Handle organization parameter from URL - set in session if provided
+            organization_param = request.GET.get('organization')
+            if organization_param:
+                org_data = self.set_current_organization(request, organization_param)
+                logger.info(f"🔍 CORE_EDITOR: Set organization from URL param: {org_data}")
             
-            logger.info(f"🔍 CORE_EDITOR: Organization context: {org_context}")
-            logger.info(f"🔍 CORE_EDITOR: Organization ID: {organization_id}")
+            # Get current organization from session (works for both URL param and navigation)
+            current_org = self.get_current_organization(request)
+            logger.info(f"🔍 CORE_EDITOR: Current organization from session: {current_org}")
             
-            # Handle case where no valid organization is provided
-            if not org_context['organization_exists']:
-                if not organization_id or organization_id == 'default-org':
-                    error_msg = 'Organization parameter required. Please add ?organization=YOUR_ORG_ID to the URL (e.g., ?organization=rsh)'
-                else:
-                    available_orgs = ", ".join([org["id"] for org in org_context['organizations']])
-                    error_msg = f'Organization "{organization_id}" not found in S3. Available organizations: {available_orgs}'
+            if not current_org:
+                # No organization selected - still render template but with no data
+                # Get all organizations for dropdown
+                from arkumu.users.models import Organization
+                organizations = Organization.objects.all().order_by('name')
+                organizations_list = [
+                    {
+                        'id': org.code,  # Use code for compatibility with templates
+                        'name': org.name,
+                        'status': 'active'  # Template expects status
+                    }
+                    for org in organizations
+                ]
                 
                 context = {
-                    **org_context,
-                    'sources': [],
-                    'selected_source': '',
-                    'error': error_msg,
-                    'show_organization_help': True
+                    **self.get_base_template_context(request),
+                    'organization_id': None,
+                    'organization_code': None,
+                    'organization_name': None,
+                    'organization_numeric_id': None,
+                    'organizations': organizations_list,
+                    'datasets': [],
+                    'csv_datasets': [],
+                    'selected_datasets': [],
+                    'selected_datasets_with_details': [],
+                    'selected_columns': [],
+                    'import_strategy': {},
+                    'import_strategy_summary': {},
+                    'workspace_summary': {},
+                    'current_mapping_id': None,
+                    'current_mapping_name': None,
+                    'current_mapping_description': None,
+                    'current_mapping_updated': None,
+                    'current_mapping_status': None,
                 }
                 return render(request, self.template_name, context)
+            
+            # Use organization code for dataset discovery (maintains compatibility)
+            organization_id = current_org['code']
+            
+            logger.info(f"🔍 CORE_EDITOR: Current organization: {current_org}")
+            logger.info(f"🔍 CORE_EDITOR: Organization ID (code): {organization_id}")
             
             # Discover CSV datasets using CSVDataMixin
             csv_datasets = self.get_csv_datasets_for_organization(organization_id)
@@ -151,9 +180,26 @@ class CSVMappingEditorView(GeneralLoginRequiredMixin, OrganizationMixin,
             else:
                 logger.info(f"🟡 CORE_EDITOR: No loaded mapping found in session")
             
-            # Build complete context
+            # Get all organizations for dropdown
+            from arkumu.users.models import Organization
+            organizations = Organization.objects.all().order_by('name')
+            organizations_list = [
+                {
+                    'id': org.code,  # Use code for compatibility with templates
+                    'name': org.name,
+                    'status': 'active'  # Template expects status
+                }
+                for org in organizations
+            ]
+            
+            # Build complete context using BaseCoordinatorMixin
             context = {
-                **org_context,
+                **self.get_base_template_context(request),
+                'organization_id': organization_id,  # Use organization code for compatibility
+                'organization_code': current_org['code'],
+                'organization_name': current_org['name'],
+                'organization_numeric_id': current_org['id'],
+                'organizations': organizations_list,
                 'datasets': csv_datasets,  # For template compatibility
                 'csv_datasets': csv_datasets,
                 'selected_datasets': selected_datasets,
@@ -167,7 +213,6 @@ class CSVMappingEditorView(GeneralLoginRequiredMixin, OrganizationMixin,
                 'current_mapping_description': current_mapping_description,
                 'current_mapping_updated': current_mapping_updated,
                 'current_mapping_status': current_mapping_status,
-                'csrf_token': request.META.get('CSRF_COOKIE'),
             }
             
             # Handle HTMX requests - return just the partial content
@@ -215,6 +260,9 @@ class CSVMappingEditorView(GeneralLoginRequiredMixin, OrganizationMixin,
         except Exception as e:
             logger.error(f"CSV_MAPPING_EDITOR: Error loading editor: {e}", exc_info=True)
             context = {
+                'organization_id': None,
+                'organization_code': None,
+                'organization_name': None,
                 'organizations': [],
                 'error': f'Error loading CSV mapping editor: {str(e)}'
             }
@@ -235,7 +283,7 @@ def csv_mapping_editor_view(request):
     return view.get(request)
 
 
-class MappingGraphDataView(GeneralLoginRequiredMixin, OrganizationMixin, CSVMappingCoordinatorMixin, View):
+class MappingGraphDataView(GeneralLoginRequiredMixin, CSVMappingCoordinatorMixin, View):
     """
     Provides graph visualization data for CSV mapping relationships.
     
@@ -248,21 +296,22 @@ class MappingGraphDataView(GeneralLoginRequiredMixin, OrganizationMixin, CSVMapp
     def get(self, request):
         """Generate graph data for current mapping configuration."""
         try:
-            # Get organization context
-            org_context = self.get_organization_context(request)
-            organization_id = org_context['organization_id']
-            
-            if not org_context['organization_exists']:
+            # Get current organization using BaseCoordinatorMixin
+            current_org = self.get_current_organization(request)
+            if not current_org:
                 if request.headers.get('HX-Request'):
                     context = {
                         'graph_data': {'nodes': [], 'edges': []},
                         'mapping_name': None,
                         'mapping_description': None,
-                        'error': 'Invalid organization'
+                        'error': 'No organization selected'
                     }
                     return render(request, 'csv_mapping/partials/mapping_graph_content.html', context)
                 else:
-                    return JsonResponse({'error': 'Invalid organization'}, status=400)
+                    return JsonResponse({'error': 'No organization selected'}, status=400)
+            
+            # Use organization code for compatibility
+            organization_id = current_org['code']
             
             # Check if specific mapping ID is requested
             mapping_id = request.GET.get('mapping_id')
@@ -457,7 +506,7 @@ def mapping_graph_data_view(request):
     return view.get(request)
 
 
-class MappingOverviewDataView(GeneralLoginRequiredMixin, OrganizationMixin, CSVMappingCoordinatorMixin, View):
+class MappingOverviewDataView(GeneralLoginRequiredMixin, CSVMappingCoordinatorMixin, View):
     """
     Provides text-based overview of CSV mapping configuration.
     
@@ -473,21 +522,22 @@ class MappingOverviewDataView(GeneralLoginRequiredMixin, OrganizationMixin, CSVM
     def get(self, request):
         """Generate text overview for current mapping configuration."""
         try:
-            # Get organization context
-            org_context = self.get_organization_context(request)
-            organization_id = org_context['organization_id']
-            
-            if not org_context['organization_exists']:
+            # Get current organization using BaseCoordinatorMixin
+            current_org = self.get_current_organization(request)
+            if not current_org:
                 if request.headers.get('HX-Request'):
                     context = {
                         'overview_data': None,
                         'mapping_name': None,
                         'mapping_description': None,
-                        'error': 'Invalid organization'
+                        'error': 'No organization selected'
                     }
                     return render(request, 'csv_mapping/partials/mapping_overview_content.html', context)
                 else:
-                    return JsonResponse({'error': 'Invalid organization'}, status=400)
+                    return JsonResponse({'error': 'No organization selected'}, status=400)
+            
+            # Use organization code for compatibility
+            organization_id = current_org['code']
             
             # Check if specific mapping ID is requested
             mapping_id = request.GET.get('mapping_id')

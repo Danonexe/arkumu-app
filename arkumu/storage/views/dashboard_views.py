@@ -6,7 +6,7 @@ from arkumu.storage.services.bucket_service import BucketService
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.http import require_http_methods
 from arkumu.users.mixins import GeneralLoginRequiredMixin, general_login_required
-from arkumu.metadata.views.csv_mapping.mixins.base import OrganizationMixin
+from arkumu.common.mixins.base_coordinator import BaseCoordinatorMixin
 
 logger = logging.getLogger(__name__)
 
@@ -21,11 +21,11 @@ def storage_dashboard(request):
     return redirect('storage:archivist_dashboard')
 
 
-class ArchivistDashboardView(GeneralLoginRequiredMixin, OrganizationMixin, View):
+class ArchivistDashboardView(GeneralLoginRequiredMixin, BaseCoordinatorMixin, View):
     """
     Dashboard for archivists to manage organization buckets.
     
-    Now uses OrganizationMixin for cross-view session persistence with 
+    Now uses BaseCoordinatorMixin for cross-view session persistence with 
     CSV mapping editor and Metadata Ingestion.
     """
     
@@ -37,18 +37,15 @@ class ArchivistDashboardView(GeneralLoginRequiredMixin, OrganizationMixin, View)
             bucket_service = BucketService()
             logger.info("BucketService initialized.")
             
-            # Use OrganizationMixin to get organization with session persistence
-            # This will check for 'organization' or 'org' parameter, then fall back to session
-            org_context = self.get_organization_context(request)
-            selected_org_slug = org_context.get('organization_id')
+            # Handle organization parameter from URL (support both 'org' and 'organization')
+            org_param = request.GET.get('org') or request.GET.get('organization')
+            if org_param:
+                # Set organization using BaseCoordinatorMixin
+                self.set_current_organization(request, org_param)
             
-            # Also check for 'org' parameter specifically (archivist dashboard uses 'org' instead of 'organization')
-            if not selected_org_slug:
-                org_param = request.GET.get('org')
-                if org_param:
-                    selected_org_slug = org_param.strip()
-                    # Store this selection for cross-view persistence
-                    self.set_last_selected_organization(request, selected_org_slug)
+            # Get current organization using BaseCoordinatorMixin
+            current_org = self.get_current_organization(request)
+            selected_org_slug = current_org['code'] if current_org else None
             
             logger.info("Attempting to get available organizations...")
             organizations = bucket_service.get_available_organizations()

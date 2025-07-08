@@ -17,13 +17,12 @@ from django.shortcuts import render
 from arkumu.users.mixins import GeneralLoginRequiredMixin
 
 from arkumu.metadata.views.csv_mapping.mixins.coordinator import CSVMappingCoordinatorMixin
-from arkumu.metadata.views.csv_mapping.mixins.base import OrganizationMixin
 from arkumu.metadata.views.csv_mapping.mixins.template_helpers import CSVMappingTemplateHelperMixin
 
 logger = logging.getLogger(__name__)
 
 
-class ToggleFKFormView(GeneralLoginRequiredMixin, OrganizationMixin, 
+class ToggleFKFormView(GeneralLoginRequiredMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
     View):
@@ -37,7 +36,11 @@ class ToggleFKFormView(GeneralLoginRequiredMixin, OrganizationMixin,
     def post(self, request):
         """Handle POST requests for toggling FK forms."""
         try:
-            organization_id = self.get_organization_id_from_request(request)
+            # Get current organization using BaseCoordinatorMixin
+            current_org = self.get_current_organization(request)
+            if not current_org:
+                return HttpResponse("No organization selected", status=400)
+            organization_id = current_org['code']
             column_id = request.POST.get('column_id') or request.GET.get('column_id')
             
             logger.info(f"CSV_TOGGLE_FK_FORM: column_id='{column_id}', org='{organization_id}'")
@@ -84,7 +87,7 @@ class ToggleFKFormView(GeneralLoginRequiredMixin, OrganizationMixin,
             return HttpResponse('<div class="text-error text-sm">Error opening FK configuration</div>')
 
 
-class HideFKFormView(GeneralLoginRequiredMixin, OrganizationMixin, 
+class HideFKFormView(GeneralLoginRequiredMixin, 
     CSVMappingCoordinatorMixin, 
     View):
     """
@@ -105,7 +108,7 @@ class HideFKFormView(GeneralLoginRequiredMixin, OrganizationMixin,
             return HttpResponse('<div class="text-error text-sm">Error hiding FK form</div>')
 
 
-class UpdateFKTargetColumnsView(GeneralLoginRequiredMixin, OrganizationMixin, 
+class UpdateFKTargetColumnsView(GeneralLoginRequiredMixin, 
     CSVMappingCoordinatorMixin, 
     View):
     """
@@ -115,7 +118,11 @@ class UpdateFKTargetColumnsView(GeneralLoginRequiredMixin, OrganizationMixin,
     def post(self, request):
         """Handle POST requests for updating FK target columns."""
         try:
-            organization_id = self.get_organization_id_from_request(request)
+            # Get current organization using BaseCoordinatorMixin
+            current_org = self.get_current_organization(request)
+            if not current_org:
+                return HttpResponse("No organization selected", status=400)
+            organization_id = current_org['code']
             column_id = request.POST.get('column_id') or request.GET.get('column_id')
             target_dataset = request.POST.get('target_dataset') or request.GET.get('target_dataset')
             
@@ -152,7 +159,7 @@ class UpdateFKTargetColumnsView(GeneralLoginRequiredMixin, OrganizationMixin,
             return HttpResponse('<option value="">Error loading columns</option>')
 
 
-class SaveInlineFKConfigView(GeneralLoginRequiredMixin, OrganizationMixin, 
+class SaveInlineFKConfigView(GeneralLoginRequiredMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
     View):
@@ -165,7 +172,11 @@ class SaveInlineFKConfigView(GeneralLoginRequiredMixin, OrganizationMixin,
     def post(self, request):
         """Handle POST requests for saving FK configurations."""
         try:
-            organization_id = self.get_organization_id_from_request(request)
+            # Get current organization using BaseCoordinatorMixin
+            current_org = self.get_current_organization(request)
+            if not current_org:
+                return HttpResponse("No organization selected", status=400)
+            organization_id = current_org['code']
             
             # Extract form data
             column_id = request.POST.get('column_id')
@@ -219,7 +230,7 @@ class SaveInlineFKConfigView(GeneralLoginRequiredMixin, OrganizationMixin,
             return HttpResponse('<div class="text-error text-xs p-2">Error saving FK configuration</div>')
 
 
-class RemoveFKConfigView(GeneralLoginRequiredMixin, OrganizationMixin, 
+class RemoveFKConfigView(GeneralLoginRequiredMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
     View):
@@ -232,7 +243,11 @@ class RemoveFKConfigView(GeneralLoginRequiredMixin, OrganizationMixin,
     def post(self, request):
         """Handle POST requests for removing FK configurations."""
         try:
-            organization_id = self.get_organization_id_from_request(request)
+            # Get current organization using BaseCoordinatorMixin
+            current_org = self.get_current_organization(request)
+            if not current_org:
+                return HttpResponse("No organization selected", status=400)
+            organization_id = current_org['code']
             column_id = request.POST.get('column_id')
             
             logger.info(f"CSV_REMOVE_FK_CONFIG: column_id='{column_id}', org='{organization_id}'")
@@ -276,7 +291,7 @@ class RemoveFKConfigView(GeneralLoginRequiredMixin, OrganizationMixin,
 # Relationship Context Views (Junction Tables with Attributes)
 # ==============================================================================
 
-class ToggleRelationshipContextFormView(GeneralLoginRequiredMixin, OrganizationMixin, 
+class ToggleRelationshipContextFormView(GeneralLoginRequiredMixin, 
     CSVMappingCoordinatorMixin, 
     View):
     """
@@ -289,7 +304,11 @@ class ToggleRelationshipContextFormView(GeneralLoginRequiredMixin, OrganizationM
     def post(self, request):
         """Handle POST requests for toggling relationship context forms."""
         try:
-            organization_id = self.get_organization_id_from_request(request)
+            # Get current organization using BaseCoordinatorMixin
+            current_org = self.get_current_organization(request)
+            if not current_org:
+                return HttpResponse("No organization selected", status=400)
+            organization_id = current_org['code']
             column_id = request.POST.get('column_id') or request.GET.get('column_id')
             
             logger.info(f"CSV_TOGGLE_RELATIONSHIP_CONTEXT_FORM: column_id='{column_id}', org='{organization_id}'")
@@ -345,7 +364,7 @@ class ToggleRelationshipContextFormView(GeneralLoginRequiredMixin, OrganizationM
             return HttpResponse('<div class="text-error text-sm">Error opening relationship context configuration</div>')
 
 
-class SaveInlineRelationshipContextView(GeneralLoginRequiredMixin, OrganizationMixin, 
+class SaveInlineRelationshipContextView(GeneralLoginRequiredMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
     View):
@@ -358,7 +377,11 @@ class SaveInlineRelationshipContextView(GeneralLoginRequiredMixin, OrganizationM
     def post(self, request):
         """Handle POST requests for saving relationship context configurations."""
         try:
-            organization_id = self.get_organization_id_from_request(request)
+            # Get current organization using BaseCoordinatorMixin
+            current_org = self.get_current_organization(request)
+            if not current_org:
+                return HttpResponse("No organization selected", status=400)
+            organization_id = current_org['code']
             
             # Extract form data
             column_id = request.POST.get('column_id')
@@ -416,7 +439,7 @@ class SaveInlineRelationshipContextView(GeneralLoginRequiredMixin, OrganizationM
             return HttpResponse('<div class="text-error text-xs p-2">Error saving relationship context configuration</div>')
 
 
-class HideRelationshipContextFormView(GeneralLoginRequiredMixin, OrganizationMixin, 
+class HideRelationshipContextFormView(GeneralLoginRequiredMixin, 
     CSVMappingCoordinatorMixin, 
     View):
     """
@@ -439,7 +462,7 @@ class HideRelationshipContextFormView(GeneralLoginRequiredMixin, OrganizationMix
             return HttpResponse('<div class="text-error text-sm">Error hiding relationship context form</div>')
 
 
-class RemoveRelationshipContextView(GeneralLoginRequiredMixin, OrganizationMixin, 
+class RemoveRelationshipContextView(GeneralLoginRequiredMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
     View):
@@ -452,7 +475,11 @@ class RemoveRelationshipContextView(GeneralLoginRequiredMixin, OrganizationMixin
     def post(self, request):
         """Handle POST requests for removing relationship context configurations."""
         try:
-            organization_id = self.get_organization_id_from_request(request)
+            # Get current organization using BaseCoordinatorMixin
+            current_org = self.get_current_organization(request)
+            if not current_org:
+                return HttpResponse("No organization selected", status=400)
+            organization_id = current_org['code']
             column_id = request.POST.get('column_id')
             
             logger.info(f"CSV_REMOVE_RELATIONSHIP_CONTEXT: column_id='{column_id}', org='{organization_id}'")
@@ -492,7 +519,7 @@ class RemoveRelationshipContextView(GeneralLoginRequiredMixin, OrganizationMixin
             return HttpResponse('<div class="text-error text-xs p-2">Error removing relationship context configuration</div>')
 
 
-class UpdateRelationshipContextColumnsView(GeneralLoginRequiredMixin, OrganizationMixin, 
+class UpdateRelationshipContextColumnsView(GeneralLoginRequiredMixin, 
     CSVMappingCoordinatorMixin, 
     View):
     """
@@ -502,7 +529,11 @@ class UpdateRelationshipContextColumnsView(GeneralLoginRequiredMixin, Organizati
     def post(self, request):
         """Handle POST requests for updating relationship context column options."""
         try:
-            organization_id = self.get_organization_id_from_request(request)
+            # Get current organization using BaseCoordinatorMixin
+            current_org = self.get_current_organization(request)
+            if not current_org:
+                return HttpResponse("No organization selected", status=400)
+            organization_id = current_org['code']
             column_id = request.POST.get('column_id')
             field_type = request.POST.get('field_type')  # 'primary' or 'secondary'
             
@@ -555,7 +586,7 @@ class UpdateRelationshipContextColumnsView(GeneralLoginRequiredMixin, Organizati
 # Legacy placeholder for unimplemented FK relationship configuration
 # ==============================================================================
 
-class ConfigureFKRelationshipView(GeneralLoginRequiredMixin, OrganizationMixin, 
+class ConfigureFKRelationshipView(GeneralLoginRequiredMixin, 
     CSVMappingCoordinatorMixin, 
     View):
     """

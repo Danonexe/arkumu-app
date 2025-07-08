@@ -19,7 +19,6 @@ from django.utils import timezone
 from arkumu.users.mixins import GeneralLoginRequiredMixin
 
 from arkumu.metadata.views.csv_mapping.mixins.coordinator import CSVMappingCoordinatorMixin
-from arkumu.metadata.views.csv_mapping.mixins.base import OrganizationMixin
 from arkumu.metadata.views.csv_mapping.mixins.import_strategy import ImportStrategyMixin
 from arkumu.metadata.views.csv_mapping.mixins.template_helpers import CSVMappingTemplateHelperMixin
 
@@ -30,7 +29,7 @@ logger = logging.getLogger(__name__)
 # Clear Operations (Separated by Responsibility)
 # ==============================================================================
 
-class ClearSelectedDatasetsView(GeneralLoginRequiredMixin, OrganizationMixin, 
+class ClearSelectedDatasetsView(GeneralLoginRequiredMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
     View):
@@ -44,7 +43,11 @@ class ClearSelectedDatasetsView(GeneralLoginRequiredMixin, OrganizationMixin,
     def post(self, request):
         """Handle POST requests for clearing only selected datasets."""
         try:
-            organization_id = self.get_organization_id_from_request(request)
+            # Get current organization using BaseCoordinatorMixin
+            current_org = self.get_current_organization(request)
+            if not current_org:
+                return HttpResponse("No organization selected", status=400)
+            organization_id = current_org['code']
             
             # Use coordinator for specific clear operation
             datasets_cleared, workspace_preserved = self.clear_selected_datasets_only(request, organization_id)
@@ -80,7 +83,7 @@ class ClearSelectedDatasetsView(GeneralLoginRequiredMixin, OrganizationMixin,
             return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
 
-class ClearWorkspaceColumnsView(GeneralLoginRequiredMixin, OrganizationMixin, 
+class ClearWorkspaceColumnsView(GeneralLoginRequiredMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
     View):
@@ -94,7 +97,11 @@ class ClearWorkspaceColumnsView(GeneralLoginRequiredMixin, OrganizationMixin,
     def post(self, request):
         """Handle POST requests for clearing only workspace columns."""
         try:
-            organization_id = self.get_organization_id_from_request(request)
+            # Get current organization using BaseCoordinatorMixin
+            current_org = self.get_current_organization(request)
+            if not current_org:
+                return HttpResponse("No organization selected", status=400)
+            organization_id = current_org['code']
             
             # Use coordinator for specific clear operation
             columns_cleared, datasets_preserved = self.clear_workspace_columns_only(request, organization_id)
@@ -121,7 +128,7 @@ class ClearWorkspaceColumnsView(GeneralLoginRequiredMixin, OrganizationMixin,
             return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
 
-class ClearAllMappingStateView(GeneralLoginRequiredMixin, OrganizationMixin, 
+class ClearAllMappingStateView(GeneralLoginRequiredMixin, 
     CSVMappingCoordinatorMixin, 
     CSVMappingTemplateHelperMixin,
     View):
@@ -135,7 +142,11 @@ class ClearAllMappingStateView(GeneralLoginRequiredMixin, OrganizationMixin,
     def post(self, request):
         """Handle POST requests for clearing all mapping state."""
         try:
-            organization_id = self.get_organization_id_from_request(request)
+            # Get current organization using BaseCoordinatorMixin
+            current_org = self.get_current_organization(request)
+            if not current_org:
+                return HttpResponse("No organization selected", status=400)
+            organization_id = current_org['code']
             
             # Use coordinator for complete reset operation
             datasets_cleared, columns_cleared, summary = self.reset_all_coordinator_state(request, organization_id)
@@ -169,7 +180,7 @@ class ClearAllDatasetsView(ClearSelectedDatasetsView):
 # JSON Export View (Single Export Button)
 # ==============================================================================
 
-class ExportMappingJSONView(GeneralLoginRequiredMixin, OrganizationMixin, 
+class ExportMappingJSONView(GeneralLoginRequiredMixin, 
     CSVMappingCoordinatorMixin, 
     View):
     """
@@ -183,7 +194,11 @@ class ExportMappingJSONView(GeneralLoginRequiredMixin, OrganizationMixin,
     def get(self, request):
         """Handle GET requests for exporting mapping JSON."""
         try:
-            organization_id = self.get_organization_id_from_request(request)
+            # Get current organization using BaseCoordinatorMixin
+            current_org = self.get_current_organization(request)
+            if not current_org:
+                return HttpResponse("No organization selected", status=400)
+            organization_id = current_org['code']
             
             # Check if we have a valid organization
             org_context = self.get_organization_context(request)
@@ -227,7 +242,7 @@ class ExportMappingJSONView(GeneralLoginRequiredMixin, OrganizationMixin,
 # Import Strategy Management
 # ==============================================================================
 
-class UpdateImportStrategyView(GeneralLoginRequiredMixin, OrganizationMixin, 
+class UpdateImportStrategyView(GeneralLoginRequiredMixin, 
     ImportStrategyMixin, 
     View):
     """
@@ -239,7 +254,11 @@ class UpdateImportStrategyView(GeneralLoginRequiredMixin, OrganizationMixin,
     def post(self, request):
         """Handle POST requests for import strategy updates."""
         try:
-            organization_id = self.get_organization_id_from_request(request)
+            # Get current organization using BaseCoordinatorMixin
+            current_org = self.get_current_organization(request)
+            if not current_org:
+                return HttpResponse("No organization selected", status=400)
+            organization_id = current_org['code']
             
             # Get strategy updates from POST data
             strategy_updates = {}
