@@ -4,49 +4,44 @@ Integration Tests for CSVMappingCoordinatorMixin with BaseCoordinatorMixin
 These tests verify that CSVMappingCoordinatorMixin properly inherits from BaseCoordinatorMixin
 while maintaining CSV mapping functionality and proper session management.
 
-IMPORTANT FINDINGS - SESSION KEY COMPATIBILITY:
-===============================================
+IMPORTANT FINDINGS - SINGLE SOURCE OF TRUTH SESSION KEYS:
+=======================================================
 
-During testing, we discovered important session key compatibility issues between the coordinator
-and its constituent mixins that are documented here for future refactoring:
+These tests verify the new single source of truth session key architecture:
 
 1. **BaseCoordinatorMixin Integration**: ✅ WORKING
    - CSVMappingCoordinatorMixin properly inherits from BaseCoordinatorMixin
-   - SESSION_PREFIX = 'csv_mapping' is correctly set
-   - Organization management methods work correctly with prefixed session keys
+   - SESSION_PREFIX has been removed for unified session key management
+   - Organization management methods work correctly with shared session keys
 
-2. **Session Key Mismatch Issues**: ⚠️ COMPATIBILITY ISSUE
-   - CSVDataMixin uses legacy session keys: 'selected_datasets_{org_id}'
-   - MappingWorkspaceMixin uses legacy session keys: 'workspace_columns_{org_id}'
-   - Coordinator methods use prefixed session keys: 'csv_mapping_*_{org_id}'
-   
-   This means:
+2. **Unified Session Key Management**: ✅ IMPLEMENTED
+   - All coordinators now use shared session keys without prefixes
+   - Session keys use format: 'workspace_columns_{org_id}', 'selected_datasets_{org_id}'
+   - No more coordinator-specific prefixes like 'csv_mapping_*'
+   - True coordination between different coordinators is now possible
+
+3. **Consistent Behavior**: ✅ VERIFIED
    - coordinator.toggle_dataset_selection() stores data in 'selected_datasets_{org_id}'
-   - coordinator.get_selected_dataset_names() looks for 'csv_mapping_selected_datasets_{org_id}'
+   - coordinator.get_selected_dataset_names() reads from 'selected_datasets_{org_id}'
    - coordinator.add_column_to_workspace() stores data in 'workspace_columns_{org_id}'
-   - coordinator.get_workspace_columns() looks for 'workspace_columns_{org_id}' (MappingWorkspaceMixin)
-   - coordinator.deserialize_mapping_state() stores data in 'csv_mapping_workspace_columns_{org_id}'
+   - coordinator.get_workspace_columns() reads from 'workspace_columns_{org_id}'
+   - All methods use numeric organization IDs for consistency
 
-3. **Current Behavior**: ✅ DOCUMENTED AND TESTED
-   - All functionality works as designed
-   - Session key mismatches are expected until future refactor
-   - Tests document current behavior and verify state isolation
-   - Organization change handling properly clears all session keys
-
-4. **Future Refactor Recommendations**:
-   - Unify session key generation across all mixins
-   - Either override workspace/CSV data methods in coordinator to use prefixed keys
-   - Or modify mixins to accept a session key generator function
+4. **Architecture Benefits**:
+   - Single source of truth for session state
+   - True coordination between CSV mapping and data ingest coordinators
+   - Simplified session key management
+   - Consistent organization ID usage (numeric IDs)
 
 Tests focus on:
 1. Inheritance relationship with BaseCoordinatorMixin ✅
-2. Session key generation with 'csv_mapping_' prefix ✅ 
+2. Session key generation without prefixes ✅
 3. Organization change handling and state cleanup ✅
 4. CSV mapping functionality preservation ✅
-5. Integration with all mixins (CSVDataMixin, MappingWorkspaceMixin) ✅
-6. Session key compatibility documentation ✅
+5. Integration with all mixins using shared session keys ✅
+6. Consistent numeric organization ID usage ✅
 
-All 20 tests pass, documenting current behavior and compatibility expectations.
+All tests pass, verifying the new unified session key architecture.
 """
 
 import pytest
@@ -155,22 +150,23 @@ class TestInheritanceAndSessionPrefix:
         base_coordinator_index = mro.index(BaseCoordinatorMixin)
         assert base_coordinator_index > 0, "BaseCoordinatorMixin should be in MRO"
     
-    def test_session_prefix_is_csv_mapping(self):
-        """Test that SESSION_PREFIX is set to 'csv_mapping'"""
+    def test_session_prefix_removed(self):
+        """Test that SESSION_PREFIX is removed in new single source of truth architecture"""
         coordinator = CSVMappingCoordinatorMixin()
-        assert coordinator.SESSION_PREFIX == 'csv_mapping'
+        # SESSION_PREFIX should not exist in the new architecture
+        assert not hasattr(coordinator, 'SESSION_PREFIX')
     
-    def test_session_key_generation_with_prefix(self):
-        """Test session key generation uses 'csv_mapping_' prefix"""
+    def test_session_key_generation_without_prefix(self):
+        """Test session key generation uses no prefix (single source of truth)"""
         coordinator = CSVMappingCoordinatorMixin()
         
         # Test with organization ID
         key = coordinator.get_session_key('workspace_columns', 123)
-        assert key == 'csv_mapping_workspace_columns_123'
+        assert key == 'workspace_columns_123'
         
         # Test without organization ID
         key = coordinator.get_session_key('selected_datasets')
-        assert key == 'csv_mapping_selected_datasets'
+        assert key == 'selected_datasets'
         
         # Test shared organization key (no prefix)
         shared_key = coordinator._get_shared_session_key('current_organization')
@@ -265,7 +261,7 @@ class TestOrganizationManagement:
             'column_selection',
             'workspace_columns',
             'all_datasets_fk',
-            'loaded_mapping'
+            # Note: 'current_mapping' is now managed at base level and shared across coordinators
         ]
         
         # Add test data to all keys using numeric organization ID
@@ -318,22 +314,15 @@ class TestCSVMappingFunctionalityPreservation:
         assert all(ds['name'].endswith('.csv') for ds in datasets)
         
         # Test dataset selection
-        selected_datasets, was_added = coordinator.toggle_dataset_selection(request, organization.code, 'users.csv')
+        selected_datasets, was_added = coordinator.toggle_dataset_selection(request, organization.id, 'users.csv')
         assert was_added is True
         assert 'users.csv' in selected_datasets
         
-        # Test getting selected datasets - NOTE: Session key compatibility issue
-        # IMPORTANT: CSVDataMixin uses 'selected_datasets_{org}' session keys 
-        # but coordinator's get_selected_dataset_names expects 'csv_mapping_selected_datasets_{org}'
-        # This is expected behavior until session keys are unified in a future refactor
-        selected_names = coordinator.get_selected_dataset_names(request, organization.code)
+        # Test getting selected datasets - now using shared keys consistently
+        selected_names = coordinator.get_selected_dataset_names(request, organization.id)
         
-        # The coordinator method returns empty because it looks for the prefixed key
-        assert selected_names == []
-        
-        # But the data is actually stored in the CSVDataMixin's session key format
-        legacy_key = f"selected_datasets_{organization.code}"
-        assert 'users.csv' in request.session.get(legacy_key, [])
+        # The coordinator method now uses shared keys consistently
+        assert 'users.csv' in selected_names
     
     def test_mapping_workspace_mixin_functionality(self, request_factory, organization):
         """Test that MappingWorkspaceMixin functionality is preserved"""
@@ -341,19 +330,19 @@ class TestCSVMappingFunctionalityPreservation:
         coordinator = CSVMappingCoordinatorMixin()
         
         # Test workspace column management
-        initial_columns = coordinator.get_workspace_columns(request, organization.code)
+        initial_columns = coordinator.get_workspace_columns(request, organization.id)
         assert initial_columns == []
         
         # Add a column
         success, new_column, total = coordinator.add_column_to_workspace(
-            request, organization.code, 'users.csv::id', 'id', 'users.csv', 'csv'
+            request, organization.id, 'users.csv::id', 'id', 'users.csv', 'csv'
         )
         assert success is True
         assert new_column['id'] == 'users.csv::id'
         assert total == 1
         
         # Verify column was added
-        columns = coordinator.get_workspace_columns(request, organization.code)
+        columns = coordinator.get_workspace_columns(request, organization.id)
         assert len(columns) == 1
         assert columns[0]['id'] == 'users.csv::id'
     
@@ -373,7 +362,7 @@ class TestCSVMappingFunctionalityPreservation:
         assert parsed['column'] == 'name'
         
         # Test validation methods
-        is_unique, duplicates, cleaned = coordinator.validate_workspace_column_uniqueness(request, organization.code)
+        is_unique, duplicates, cleaned = coordinator.validate_workspace_column_uniqueness(request, organization.id)
         assert is_unique is True
         assert len(duplicates) == 0
         assert len(cleaned) == 0
@@ -383,8 +372,8 @@ class TestCSVMappingFunctionalityPreservation:
 class TestSessionKeyConsistency:
     """Test session key consistency across different operations"""
     
-    def test_session_keys_use_correct_prefix(self, request_factory, organization):
-        """Test that coordinator's own session keys use the correct 'csv_mapping_' prefix"""
+    def test_session_keys_use_shared_format(self, request_factory, organization):
+        """Test that coordinator's session keys use the shared format without prefixes"""
         request = add_session_to_request(request_factory.get('/'))
         coordinator = CSVMappingCoordinatorMixin()
         
@@ -396,8 +385,8 @@ class TestSessionKeyConsistency:
             request, organization.id, 'test::col', 'col', 'test', 'csv'
         )
         
-        # Toggle dataset selection (uses legacy CSV data mixin session keys)
-        coordinator.toggle_dataset_selection(request, organization.code, 'test.csv')
+        # Toggle dataset selection (uses shared session keys)
+        coordinator.toggle_dataset_selection(request, organization.id, 'test.csv')
         
         # Check session keys
         all_keys = list(request.session.keys())
@@ -406,15 +395,15 @@ class TestSessionKeyConsistency:
         # Organization is stored in shared key (no prefix)
         assert 'current_organization' in request.session  # Shared key, no prefix
         
-        # Workspace columns use coordinator keys with numeric ID
-        assert f'csv_mapping_workspace_columns_{organization.id}' in request.session
+        # Workspace columns use shared keys with numeric ID
+        assert f'workspace_columns_{organization.id}' in request.session
         
-        # Dataset selection still uses legacy keys (future refactor item)
-        assert f'selected_datasets_{organization.code}' in request.session
+        # Dataset selection uses shared keys with numeric ID
+        assert f'selected_datasets_{organization.id}' in request.session
         
         # Verify the session key format is correct for coordinator methods
         test_key = coordinator.get_session_key('test_key', organization.id)
-        assert test_key == f'csv_mapping_test_key_{organization.id}'
+        assert test_key == f'test_key_{organization.id}'
     
     def test_session_key_isolation_by_organization(self, request_factory, organization, another_organization):
         """Test that session keys are properly isolated by organization"""
@@ -423,32 +412,28 @@ class TestSessionKeyConsistency:
         
         # Add data for first organization
         coordinator.add_column_to_workspace(
-            request, organization.code, 'org1::col', 'col', 'test', 'csv'
+            request, organization.id, 'org1::col', 'col', 'test', 'csv'
         )
-        coordinator.toggle_dataset_selection(request, organization.code, 'org1.csv')
+        coordinator.toggle_dataset_selection(request, organization.id, 'org1.csv')
         
         # Add data for second organization
         coordinator.add_column_to_workspace(
-            request, another_organization.code, 'org2::col', 'col', 'test', 'csv'
+            request, another_organization.id, 'org2::col', 'col', 'test', 'csv'
         )
-        coordinator.toggle_dataset_selection(request, another_organization.code, 'org2.csv')
+        coordinator.toggle_dataset_selection(request, another_organization.id, 'org2.csv')
         
         # Verify workspace isolation (this works correctly)
-        org1_workspace = coordinator.get_workspace_columns(request, organization.code)
-        org2_workspace = coordinator.get_workspace_columns(request, another_organization.code)
+        org1_workspace = coordinator.get_workspace_columns(request, organization.id)
+        org2_workspace = coordinator.get_workspace_columns(request, another_organization.id)
         
         assert len(org1_workspace) == 1
         assert len(org2_workspace) == 1
         assert org1_workspace[0]['id'] == 'org1::col'
         assert org2_workspace[0]['id'] == 'org2::col'
         
-        # Verify dataset selection isolation using the legacy session keys
-        # Note: coordinator's get_selected_dataset_names looks for prefixed keys, so we check directly
-        org1_legacy_key = f'selected_datasets_{organization.code}'
-        org2_legacy_key = f'selected_datasets_{another_organization.code}'
-        
-        org1_datasets = request.session.get(org1_legacy_key, [])
-        org2_datasets = request.session.get(org2_legacy_key, [])
+        # Verify dataset selection isolation using shared session keys
+        org1_datasets = coordinator.get_selected_dataset_names(request, organization.id)
+        org2_datasets = coordinator.get_selected_dataset_names(request, another_organization.id)
         
         assert 'org1.csv' in org1_datasets
         assert 'org2.csv' in org2_datasets
@@ -467,33 +452,31 @@ class TestCoordinatorStateMaintenance:
         
         # Create comprehensive state
         coordinator.add_column_to_workspace(
-            request, organization.code, 'test::col1', 'col1', 'test', 'csv'
+            request, organization.id, 'test::col1', 'col1', 'test', 'csv'
         )
         coordinator.add_column_to_workspace(
-            request, organization.code, 'test::col2', 'col2', 'test', 'csv'
+            request, organization.id, 'test::col2', 'col2', 'test', 'csv'
         )
-        coordinator.toggle_dataset_selection(request, organization.code, 'dataset1.csv')
-        coordinator.toggle_dataset_selection(request, organization.code, 'dataset2.csv')
+        coordinator.toggle_dataset_selection(request, organization.id, 'dataset1.csv')
+        coordinator.toggle_dataset_selection(request, organization.id, 'dataset2.csv')
         
         # Verify state exists
-        assert len(coordinator.get_workspace_columns(request, organization.code)) == 2
-        # Check legacy session key for dataset selection since coordinator uses prefixed keys
-        legacy_datasets_key = f"selected_datasets_{organization.code}"
-        assert len(request.session.get(legacy_datasets_key, [])) == 2
+        assert len(coordinator.get_workspace_columns(request, organization.id)) == 2
+        # Check shared session key for dataset selection
+        assert len(coordinator.get_selected_dataset_names(request, organization.id)) == 2
         
         # Reset all state
         datasets_cleared, columns_cleared, summary = coordinator.reset_all_coordinator_state(
-            request, organization.code
+            request, organization.id
         )
         
-        # Verify reset - Note: datasets_cleared will be 0 due to session key mismatch
-        # The coordinator's reset method clears using its own session key methods
-        assert datasets_cleared == 0  # coordinator looks for prefixed key but data is in legacy key
+        # Verify reset - now using shared keys consistently
+        assert datasets_cleared == 2  # coordinator now uses shared keys
         assert columns_cleared == 2
         assert summary['is_completely_clean'] is True  # workspace is properly cleared
-        assert len(coordinator.get_workspace_columns(request, organization.code)) == 0
+        assert len(coordinator.get_workspace_columns(request, organization.id)) == 0
         # Check that datasets were cleared using coordinator's method
-        assert len(coordinator.get_selected_dataset_names(request, organization.code)) == 0
+        assert len(coordinator.get_selected_dataset_names(request, organization.id)) == 0
     
     def test_workspace_summary_with_base_coordinator(self, request_factory, organization):
         """Test workspace summary functionality with BaseCoordinatorMixin integration"""
@@ -505,21 +488,21 @@ class TestCoordinatorStateMaintenance:
         
         # Add test data
         coordinator.add_column_to_workspace(
-            request, organization.code, 'test::col1', 'col1', 'test', 'csv'
+            request, organization.id, 'test::col1', 'col1', 'test', 'csv'
         )
-        coordinator.toggle_dataset_selection(request, organization.code, 'test.csv')
+        coordinator.toggle_dataset_selection(request, organization.id, 'test.csv')
         
         # Get workspace summary
-        summary = coordinator.get_workspace_summary(request, organization.code)
+        summary = coordinator.get_workspace_summary(request, organization.id)
         
-        # Verify summary - note that selected_datasets_count will be 0 due to session key mismatch
-        # but datasets_with_columns will be 1 since workspace columns exist
-        assert summary['total_columns'] == 1
-        assert summary['selected_datasets_count'] == 0  # coordinator looks for prefixed key
+        # Verify summary - now using shared keys consistently
+        assert summary['total_items'] == 1  # base coordinator uses 'total_items' not 'total_columns'
+        assert summary['selected_datasets_count'] == 1  # coordinator now uses shared keys
         assert summary['datasets_with_columns'] == 1
-        # This will be False due to the "orphaned dataset" (has columns but not selected)
-        assert summary['is_consistent'] is False
-        assert len(summary['orphaned_datasets']) == 1
+        # The column has dataset='test' but selected dataset is 'test.csv', so they don't match
+        # This is expected behavior and is actually working correctly
+        assert summary['is_consistent'] is False  # Changed to False since dataset names don't match
+        assert len(summary['orphaned_datasets']) == 1  # 'test' dataset has columns but 'test.csv' is selected
     
     def test_coordinator_debug_info(self, request_factory, organization):
         """Test coordinator debug information"""
@@ -529,7 +512,7 @@ class TestCoordinatorStateMaintenance:
         # Set organization and create state
         coordinator.set_current_organization(request, organization.code)
         coordinator.add_column_to_workspace(
-            request, organization.code, 'test::col', 'col', 'test', 'csv'
+            request, organization.id, 'test::col', 'col', 'test', 'csv'
         )
         
         # Get debug info
@@ -537,10 +520,10 @@ class TestCoordinatorStateMaintenance:
         
         # Verify debug info
         assert debug_info['coordinator_type'] == 'CSVMappingCoordinatorMixin'
-        assert debug_info['session_prefix'] == 'csv_mapping'
         assert debug_info['current_organization'] is not None
         assert debug_info['coordinator_session_count'] > 0
-        assert any(key.startswith('csv_mapping_') for key in debug_info['coordinator_sessions'].keys())
+        # Check that we have session keys for this organization
+        assert any(key.endswith(f'_{organization.id}') for key in debug_info['coordinator_sessions'].keys())
 
 
 @pytest.mark.django_db
@@ -557,19 +540,19 @@ class TestMappingPersistence:
         
         # Create mapping state
         coordinator.add_column_to_workspace(
-            request, organization.code, 'test::col1', 'col1', 'test', 'csv'
+            request, organization.id, 'test::col1', 'col1', 'test', 'csv'
         )
         coordinator.add_column_to_workspace(
-            request, organization.code, 'test::col2', 'col2', 'test', 'csv'
+            request, organization.id, 'test::col2', 'col2', 'test', 'csv'
         )
         
         # Serialize mapping
         mapping_config = coordinator.serialize_current_mapping_state(
-            request, organization.code, 'test_mapping'
+            request, organization.id, 'test_mapping'
         )
         
         # Verify serialization
-        assert mapping_config['organization_id'] == organization.code
+        assert mapping_config['organization_id'] == organization.id
         assert len(mapping_config['workspace_columns']) == 2
         assert mapping_config['metadata']['mapping_name'] == 'test_mapping'
         assert mapping_config['version'] == '1.2'
@@ -585,7 +568,7 @@ class TestMappingPersistence:
         # Create test mapping config
         mapping_config = {
             'version': '1.2',
-            'organization_id': organization.code,
+            'organization_id': organization.id,
             'workspace_datasets': ['test.csv'],
             'workspace_columns': {
                 'test::col1': {
@@ -601,36 +584,36 @@ class TestMappingPersistence:
             'entity_mappings': {},
             'metadata': {
                 'mapping_name': 'test_mapping',
-                'total_columns': 1
+                'total_items': 1  # base coordinator uses 'total_items' not 'total_columns'
             }
         }
         
         # Deserialize mapping
         summary = coordinator.deserialize_mapping_state(
-            request, organization.code, mapping_config, 'test_id', 'test_mapping'
+            request, organization.id, mapping_config, 'test_id', 'test_mapping'
         )
         
         # Verify deserialization
         assert summary['columns_restored'] == 1
         assert summary['mapping_name'] == 'test_mapping'
         
-        # Verify state was restored - FIXED: Session key mismatch resolved
-        # Both deserialize method and get_workspace_columns now use coordinator's session key format
-        workspace_columns = coordinator.get_workspace_columns(request, organization.code)
-        assert len(workspace_columns) == 1  # Fixed: Now correctly returns restored columns
+        # Verify state was restored - using shared session keys consistently
+        workspace_columns = coordinator.get_workspace_columns(request, organization.id)
+        assert len(workspace_columns) == 1
         assert workspace_columns[0]['id'] == 'test::col1'
         
-        # Verify the data is stored in the coordinator's session key format
-        coordinator_workspace_key = coordinator.get_session_key('workspace_columns', organization.code)
+        # Verify the data is stored in the shared session key format
+        coordinator_workspace_key = coordinator.get_session_key('workspace_columns', organization.id)
         actual_columns = request.session.get(coordinator_workspace_key, [])
         assert len(actual_columns) == 1
         assert actual_columns[0]['id'] == 'test::col1'
         
         # Verify loaded mapping context
-        loaded_context = coordinator.get_loaded_mapping_context(request, organization.code)
+        loaded_context = coordinator.get_current_mapping(request)
         assert loaded_context is not None
-        assert loaded_context['mapping_id'] == 'test_id'
-        assert loaded_context['mapping_name'] == 'test_mapping'
+        # Check the actual field names returned by the base coordinator
+        assert loaded_context['id'] == 'test_id'  # base coordinator uses 'id' not 'mapping_id'
+        assert loaded_context['name'] == 'test_mapping'  # base coordinator uses 'name' not 'mapping_name'
 
 
 @pytest.mark.django_db
@@ -656,16 +639,16 @@ class TestErrorHandlingAndEdgeCases:
         coordinator = CSVMappingCoordinatorMixin()
         
         # Test operations on empty workspace
-        columns = coordinator.get_workspace_columns(request, organization.code)
+        columns = coordinator.get_workspace_columns(request, organization.id)
         assert columns == []
         
-        summary = coordinator.get_workspace_summary(request, organization.code)
-        assert summary['total_columns'] == 0
+        summary = coordinator.get_workspace_summary(request, organization.id)
+        assert summary['total_items'] == 0  # base coordinator uses 'total_items' not 'total_columns'
         assert summary['is_consistent'] is True
         
         # Test cleanup on empty workspace
         datasets_cleared, columns_cleared, summary = coordinator.reset_all_coordinator_state(
-            request, organization.code
+            request, organization.id
         )
         assert datasets_cleared == 0
         assert columns_cleared == 0
@@ -689,11 +672,11 @@ class TestErrorHandlingAndEdgeCases:
         
         # Test adding duplicate column
         success1, _, _ = coordinator.add_column_to_workspace(
-            request, organization.code, 'test::col', 'col', 'test', 'csv'
+            request, organization.id, 'test::col', 'col', 'test', 'csv'
         )
         assert success1 is True
         
         success2, _, _ = coordinator.add_column_to_workspace(
-            request, organization.code, 'test::col', 'col', 'test', 'csv'
+            request, organization.id, 'test::col', 'col', 'test', 'csv'
         )
         assert success2 is False  # Should fail for duplicate
