@@ -406,8 +406,9 @@ class TestSessionKeyConsistency:
         # Should have the coordinator's own session keys with prefix
         assert 'csv_mapping_current_organization' in request.session
         
-        # But workspace and dataset selection still use legacy keys (future refactor item)
-        assert f'workspace_columns_{organization.code}' in request.session
+        # Workspace columns now use coordinator keys (fixed session key mismatch)
+        assert f'csv_mapping_workspace_columns_{organization.code}' in request.session
+        # But dataset selection still uses legacy keys (future refactor item)
         assert f'selected_datasets_{organization.code}' in request.session
         
         # Verify the session key format is correct for coordinator methods
@@ -612,12 +613,13 @@ class TestMappingPersistence:
         assert summary['columns_restored'] == 1
         assert summary['mapping_name'] == 'test_mapping'
         
-        # Verify state was restored - NOTE: Session key mismatch issue
-        # The deserialize method uses coordinator's session key format but get_workspace_columns uses legacy format
+        # Verify state was restored - FIXED: Session key mismatch resolved
+        # Both deserialize method and get_workspace_columns now use coordinator's session key format
         workspace_columns = coordinator.get_workspace_columns(request, organization.code)
-        assert len(workspace_columns) == 0  # This is empty due to session key mismatch
+        assert len(workspace_columns) == 1  # Fixed: Now correctly returns restored columns
+        assert workspace_columns[0]['id'] == 'test::col1'
         
-        # But the data is actually stored in the coordinator's session key format
+        # Verify the data is stored in the coordinator's session key format
         coordinator_workspace_key = coordinator.get_session_key('workspace_columns', organization.code)
         actual_columns = request.session.get(coordinator_workspace_key, [])
         assert len(actual_columns) == 1

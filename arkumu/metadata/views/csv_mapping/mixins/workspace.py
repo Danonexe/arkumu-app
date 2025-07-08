@@ -28,7 +28,13 @@ class MappingWorkspaceMixin:
         Returns:
             list: List of workspace columns
         """
-        workspace_key = f"workspace_columns_{organization_id}"
+        # Use coordinator's session key format if get_session_key is available (via MRO)
+        # Otherwise fall back to direct format for standalone usage
+        if hasattr(self, 'get_session_key'):
+            workspace_key = self.get_session_key('workspace_columns', organization_id)
+        else:
+            workspace_key = f"workspace_columns_{organization_id}"
+        
         columns = request.session.get(workspace_key, [])
         
         # DEBUG: Log every time workspace is accessed
@@ -47,7 +53,13 @@ class MappingWorkspaceMixin:
             organization_id (str): Organization ID
             columns (list): List of column configurations
         """
-        workspace_key = f"workspace_columns_{organization_id}"
+        # Use coordinator's session key format if get_session_key is available (via MRO)
+        # Otherwise fall back to direct format for standalone usage
+        if hasattr(self, 'get_session_key'):
+            workspace_key = self.get_session_key('workspace_columns', organization_id)
+        else:
+            workspace_key = f"workspace_columns_{organization_id}"
+        
         request.session[workspace_key] = columns
         request.session.modified = True
         
@@ -73,7 +85,13 @@ class MappingWorkspaceMixin:
             request: Django request object
             organization_id (str): Organization ID
         """
-        workspace_key = f"workspace_columns_{organization_id}"
+        # Use coordinator's session key format if get_session_key is available (via MRO)
+        # Otherwise fall back to direct format for standalone usage
+        if hasattr(self, 'get_session_key'):
+            workspace_key = self.get_session_key('workspace_columns', organization_id)
+        else:
+            workspace_key = f"workspace_columns_{organization_id}"
+        
         request.session[workspace_key] = []
         request.session.modified = True
         logger.info(f"WORKSPACE_MIXIN: Cleared workspace for org={organization_id}")
