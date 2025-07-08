@@ -136,6 +136,9 @@ class CSVDataMixin:
         """
         Get selected datasets with their detailed information.
         
+        This method now uses the base coordinator for consistency
+        and enhanced session key management.
+        
         Args:
             request: Django request object
             organization_id (str): Organization ID
@@ -144,9 +147,14 @@ class CSVDataMixin:
         Returns:
             tuple: (selected_datasets, selected_datasets_with_details)
         """
-        # Get selected datasets from session
-        selected_datasets_key = f"selected_datasets_{organization_id}"
-        selected_datasets = request.session.get(selected_datasets_key, [])
+        # Get selected datasets from session using base coordinator if available
+        if hasattr(self, 'get_selected_datasets') and hasattr(self, 'SESSION_PREFIX'):
+            # Use base coordinator method if available (when inherited by coordinator)
+            selected_datasets = self.get_selected_datasets(request, organization_id, 'datasets')
+        else:
+            # Fallback to old method if base coordinator not available
+            selected_datasets_key = f"selected_datasets_{organization_id}"
+            selected_datasets = request.session.get(selected_datasets_key, [])
         
         # Get selected datasets with details, preserving selection order (newest first)
         selected_datasets_with_details = []
@@ -162,19 +170,32 @@ class CSVDataMixin:
         """
         Update selected datasets in session.
         
+        This method now delegates to the base coordinator for consistency
+        and enhanced session key management.
+        
         Args:
             request: Django request object
             organization_id (str): Organization ID
             selected_datasets (list): List of selected dataset names
         """
-        selected_datasets_key = f"selected_datasets_{organization_id}"
-        request.session[selected_datasets_key] = selected_datasets
-        request.session.modified = True
-        logger.info(f"CSV_DATA_MIXIN: Updated selected datasets for org={organization_id}: {selected_datasets}")
+        if hasattr(self, 'set_selected_datasets'):
+            # Use base coordinator method if available (when inherited by coordinator)
+            success, final_list, error = self.set_selected_datasets(request, organization_id, selected_datasets, 'datasets')
+            if not success:
+                logger.error(f"CSV_DATA_MIXIN: Failed to update selected datasets: {error}")
+        else:
+            # Fallback to old method if base coordinator not available
+            selected_datasets_key = f"selected_datasets_{organization_id}"
+            request.session[selected_datasets_key] = selected_datasets
+            request.session.modified = True
+            logger.info(f"CSV_DATA_MIXIN: Updated selected datasets for org={organization_id}: {selected_datasets}")
     
-    def toggle_dataset_selection(self, request, organization_id, dataset_name):
+    def toggle_dataset_selection_legacy(self, request, organization_id, dataset_name):
         """
-        Toggle selection of a dataset.
+        Toggle selection of a dataset (legacy method for backward compatibility).
+        
+        This method provides the old implementation for cases where the
+        BaseCoordinatorMixin is not available.
         
         Args:
             request: Django request object
@@ -184,6 +205,7 @@ class CSVDataMixin:
         Returns:
             tuple: (updated_selected_datasets, was_added)
         """
+        # Legacy method implementation
         selected_datasets_key = f"selected_datasets_{organization_id}"
         selected_datasets = request.session.get(selected_datasets_key, [])
         
@@ -202,13 +224,17 @@ class CSVDataMixin:
         self.update_selected_datasets(request, organization_id, selected_datasets)
         return selected_datasets, was_added
     
-    def clear_selected_datasets(self, request, organization_id):
+    def clear_selected_datasets_legacy(self, request, organization_id):
         """
-        Clear all selected datasets.
+        Clear all selected datasets (legacy method for backward compatibility).
+        
+        This method provides the old implementation for cases where the
+        BaseCoordinatorMixin is not available.
         
         Args:
             request: Django request object
             organization_id (str): Organization ID
         """
+        # Legacy method implementation
         self.update_selected_datasets(request, organization_id, [])
         logger.info(f"CSV_DATA_MIXIN: Cleared all selected datasets for org={organization_id}") 

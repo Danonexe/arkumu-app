@@ -129,9 +129,9 @@ class RemoveColumnFromWorkspaceView(GeneralLoginRequiredMixin, OrganizationMixin
             self.update_workspace_columns(request, organization_id, updated_columns)
             
             # Clear loaded mapping context since workspace has been modified
-            cleared_mapping = self.clear_loaded_mapping_context(request, organization_id)
+            cleared_mapping = self.clear_current_mapping(request)
             if cleared_mapping:
-                logger.info(f"REMOVE_COLUMN: Cleared loaded mapping '{cleared_mapping.get('mapping_name')}' due to workspace modification")
+                logger.info(f"REMOVE_COLUMN: Cleared loaded mapping '{cleared_mapping.get('name')}' due to workspace modification")
             
             # Return updated column badges HTML with workspace update via hx-swap-oob using template helpers
             column_badges_html = self.render_column_badges_template(

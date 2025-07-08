@@ -51,8 +51,16 @@ class CSVMappingEditorView(GeneralLoginRequiredMixin, OrganizationMixin,
             logger.info(f"CSV_MAPPING_EDITOR: Method={request.method}, GET params={dict(request.GET)}")
             
             # Get organization context using OrganizationMixin
+            logger.info(f"🔍 CORE_EDITOR: Getting organization context...")
+            logger.info(f"🔍 CORE_EDITOR: URL parameters: {dict(request.GET)}")
+            logger.info(f"🔍 CORE_EDITOR: Session keys: {list(request.session.keys())}")
+            logger.info(f"🔍 CORE_EDITOR: Session organization: {request.session.get('last_selected_organization')}")
+            
             org_context = self.get_organization_context(request)
             organization_id = org_context['organization_id']
+            
+            logger.info(f"🔍 CORE_EDITOR: Organization context: {org_context}")
+            logger.info(f"🔍 CORE_EDITOR: Organization ID: {organization_id}")
             
             # Handle case where no valid organization is provided
             if not org_context['organization_exists']:
@@ -88,23 +96,22 @@ class CSVMappingEditorView(GeneralLoginRequiredMixin, OrganizationMixin,
             # Get enhanced workspace summary using coordinator
             workspace_summary = self.get_workspace_summary(request, organization_id)
             
-            # Get current mapping info for navbar
+            # Get current mapping info using BaseCoordinatorMixin (proper session key)
             current_mapping_id = None
             current_mapping_name = None
             current_mapping_description = None
             current_mapping_updated = None
             current_mapping_status = None
             
-            # Check if there's a loaded mapping in session
-            mapping_key = f"loaded_mapping_{organization_id}"
-            logger.info(f"🔍 CORE_EDITOR: Checking for mapping session key: {mapping_key}")
+            # Check if there's a loaded mapping using the shared session key
+            current_mapping = self.get_current_mapping(request)
+            logger.info(f"🔍 CORE_EDITOR: Checking for current mapping using BaseCoordinatorMixin")
             logger.info(f"🔍 CORE_EDITOR: Session keys: {list(request.session.keys())}")
             
-            if mapping_key in request.session:
-                mapping_info = request.session[mapping_key]
-                current_mapping_id = mapping_info.get('mapping_id')
-                current_mapping_name = mapping_info.get('mapping_name')
-                current_mapping_description = mapping_info.get('description', '')
+            if current_mapping:
+                current_mapping_id = current_mapping.get('id')
+                current_mapping_name = current_mapping.get('name')
+                current_mapping_description = current_mapping.get('description', '')
                 
                 # Get actual mapping from database for real updated time
                 if current_mapping_id:
@@ -113,7 +120,30 @@ class CSVMappingEditorView(GeneralLoginRequiredMixin, OrganizationMixin,
                         mapping_obj = Mapping.objects.get(id=current_mapping_id)
                         current_mapping_updated = mapping_obj.updated_at.strftime('%Y-%m-%d %H:%M')
                         current_mapping_status = mapping_obj.validation_status
+                        
+                        # Restore the full mapping state (workspace columns, FK relationships)
+                        logger.info(f"🔄 CORE_EDITOR: Restoring mapping state for {current_mapping_name}")
+                        self.deserialize_mapping_state(
+                            request, 
+                            organization_id, 
+                            mapping_obj.mapping_config,
+                            mapping_id=current_mapping_id,
+                            mapping_name=current_mapping_name
+                        )
+                        
+                        # Update coordinator context after restoration - refresh the data
+                        # Need to get csv_datasets first for other methods
+                        csv_datasets = self.get_csv_datasets_for_organization(organization_id)
+                        selected_datasets, selected_datasets_with_details = self.get_selected_datasets_with_details(
+                            request, organization_id, csv_datasets
+                        )
+                        selected_columns = self.get_workspace_columns(request, organization_id)
+                        import_strategy = self.get_import_strategy(request, organization_id)
+                        import_strategy_summary = self.get_import_strategy_summary(request, organization_id)
+                        workspace_summary = self.get_workspace_summary(request, organization_id)
+                        
                     except Mapping.DoesNotExist:
+                        logger.error(f"🔴 CORE_EDITOR: Mapping {current_mapping_id} not found in database")
                         current_mapping_updated = "Unknown"
                         current_mapping_status = "draft"
                 

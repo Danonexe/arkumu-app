@@ -173,15 +173,14 @@ class SaveMappingHTMXView(GeneralLoginRequiredMixin, CSVMappingCoordinatorMixin,
         
         # Update loaded mapping context in session if this was an update
         if is_update and mapping_id:
-            loaded_mapping_key = f"loaded_mapping_{organization_id}"
-            mapping_data = {
-                'mapping_id': mapping_id,
-                'mapping_name': mapping_name,
-                'loaded_at': timezone.now().isoformat()
-            }
-            logger.info(f"💾 SAVE_HTMX_SUCCESS: Updating session with key={loaded_mapping_key}, data={mapping_data}")
-            self.request.session[loaded_mapping_key] = mapping_data
-            self.request.session.modified = True
+            # Use BaseCoordinatorMixin's set_current_mapping method for proper session management
+            mapping_data = self.set_current_mapping(
+                self.request, 
+                mapping_id, 
+                mapping_name, 
+                organization_id
+            )
+            logger.info(f"💾 SAVE_HTMX_SUCCESS: Updated current mapping using BaseCoordinatorMixin: {mapping_data}")
             logger.info(f"💾 SAVE_HTMX_SUCCESS: Session updated successfully")
         
         # Build custom response that includes navbar update (no success message)
@@ -218,25 +217,20 @@ class SaveMappingHTMXView(GeneralLoginRequiredMixin, CSVMappingCoordinatorMixin,
         # Update session state for loaded mapping using coordinator method
         if is_update and mapping_id:
             # Use coordinator method to properly set loaded mapping context
-            loaded_mapping_key = f"loaded_mapping_{organization_id}"
-            mapping_data = {
-                'mapping_id': mapping_id,
-                'mapping_name': mapping_name,
-                'loaded_at': timezone.now().isoformat()
-            }
-            
-            # Log session state before setting
-            logger.info(f"OOB_UPDATES: Session before setting: {list(self.request.session.keys())}")
-            
-            self.request.session[loaded_mapping_key] = mapping_data
-            self.request.session.modified = True
+            # Use BaseCoordinatorMixin's set_current_mapping method for proper session management
+            mapping_data = self.set_current_mapping(
+                self.request, 
+                mapping_id, 
+                mapping_name, 
+                organization_id
+            )
             
             # Log session state after setting
             logger.info(f"OOB_UPDATES: Session after setting: {list(self.request.session.keys())}")
-            logger.info(f"OOB_UPDATES: Set loaded mapping context: {mapping_data}")
+            logger.info(f"OOB_UPDATES: Set loaded mapping context using BaseCoordinatorMixin: {mapping_data}")
             
             # Verify it was set correctly
-            retrieved_data = self.request.session.get(loaded_mapping_key)
+            retrieved_data = self.get_current_mapping(self.request)
             logger.info(f"OOB_UPDATES: Retrieved data verification: {retrieved_data}")
         
         # SIMPLIFIED: Don't render navbar controls yet - just update session

@@ -9,6 +9,9 @@ Key principles:
 - Dataset deselection cascades to remove related columns
 - Column addition validates dataset selection
 - Column IDs include dataset context for uniqueness
+
+This refactored version focuses on CSV-specific functionality while leveraging
+the enhanced BaseCoordinatorMixin for generic operations.
 """
 
 import logging
@@ -23,44 +26,24 @@ logger = logging.getLogger(__name__)
 
 class CSVMappingCoordinatorMixin(BaseCoordinatorMixin, CSVDataMixin, MappingWorkspaceMixin):
     """
-    Coordinator mixin that properly handles dataset-column relationships.
+    Coordinator mixin that properly handles dataset-column relationships for CSV mapping.
     
-    This mixin inherits from BaseCoordinatorMixin for shared organization management,
+    This refactored mixin inherits from BaseCoordinatorMixin for shared organization management,
     CSVDataMixin for dataset operations, and MappingWorkspaceMixin for workspace operations
     to provide coordinated operations that maintain the integrity of dataset-column relationships.
+    
+    Focuses on CSV-specific functionality:
+    - CSV column ID parsing and generation
+    - CSV dataset discovery and S3 integration
+    - CSV-specific FK configuration and UI logic
+    - Dataset-column relationship management specific to CSV format
     """
     
     # Set session prefix for BaseCoordinatorMixin
     SESSION_PREFIX = 'csv_mapping'
     
     # ==========================================================================
-    # Column ID Management (Dataset-Aware)
-    # ==========================================================================
-    
-    # ==========================================================================
-    # Selected Dataset Retrieval (Direct Session Access)
-    # ==========================================================================
-    
-    def get_selected_dataset_names(self, request, organization_id):
-        """
-        Get only the selected dataset names from session (lightweight).
-        
-        This is more efficient than get_selected_datasets_with_details() when
-        you only need the names and not the full dataset objects.
-        
-        Args:
-            request: Django request object
-            organization_id (int): Organization numeric ID
-            
-        Returns:
-            list: List of selected dataset names
-        """
-        # Use unified session key system with numeric ID
-        session_key = self.get_session_key('selected_datasets', organization_id)
-        return request.session.get(session_key, [])
-    
-    # ==========================================================================
-    # Column ID Management (Dataset-Aware)
+    # CSV-Specific Column ID Management
     # ==========================================================================
     
     @staticmethod
@@ -121,7 +104,176 @@ class CSVMappingCoordinatorMixin(BaseCoordinatorMixin, CSVDataMixin, MappingWork
             }
     
     # ==========================================================================
-    # Coordinated Dataset Selection (with Column Cascade)
+    # Compatibility Layer - Dataset Selection (wrapper methods)
+    # ==========================================================================
+    
+    def get_selected_dataset_names(self, request, organization_id):
+        """
+        Get only the selected dataset names from session (lightweight).
+        
+        This is more efficient than get_selected_datasets_with_details() when
+        you only need the names and not the full dataset objects.
+        
+        This method now uses the generic base coordinator dataset selection method
+        for consistency and shared functionality.
+        
+        Args:
+            request: Django request object
+            organization_id (int): Organization numeric ID
+            
+        Returns:
+            list: List of selected dataset names
+        """
+        # Use base coordinator method for consistency
+        return self.get_selected_datasets(request, organization_id, 'datasets')
+    
+    def toggle_dataset_selection(self, request, organization_id, dataset_name):
+        """
+        Toggle dataset selection without column cascade (CSV mapping compatibility).
+        
+        This method provides compatibility with the original CSV mapping interface
+        by returning the expected tuple format (selected_datasets, was_added).
+        
+        Args:
+            request: Django request object
+            organization_id (int): Organization numeric ID
+            dataset_name (str): Dataset name to toggle
+            
+        Returns:
+            tuple: (updated_selected_datasets, was_added)
+        """
+        # Use base coordinator method and adapt return format
+        success, final_list, was_added, error = super().toggle_dataset_selection(
+            request, organization_id, dataset_name, 'datasets'
+        )
+        
+        if not success:
+            logger.error(f"CSV_COORDINATOR: Failed to toggle dataset selection: {error}")
+            return [], False
+        
+        return final_list, was_added
+
+    def clear_selected_datasets(self, request, organization_id):
+        """
+        Clear all selected datasets (CSV mapping compatibility).
+        
+        This method provides compatibility with the original CSV mapping interface.
+        
+        Args:
+            request: Django request object
+            organization_id (int): Organization numeric ID
+        """
+        # Use base coordinator method
+        success, items_cleared, error = super().clear_selected_datasets(
+            request, organization_id, 'datasets'
+        )
+        
+        if not success:
+            logger.error(f"CSV_COORDINATOR: Failed to clear selected datasets: {error}")
+        
+        logger.info(f"CSV_COORDINATOR: Cleared {items_cleared} selected datasets for org={organization_id}")
+    
+    # ==========================================================================
+    # Compatibility Layer - Workspace Column Management (wrapper methods)
+    # ==========================================================================
+    
+    def get_workspace_columns(self, request, organization_id):
+        """
+        Get workspace columns from session (CSV mapping compatibility).
+        
+        Wrapper around BaseCoordinatorMixin.get_workspace_items for backward compatibility.
+        
+        Args:
+            request: Django request object
+            organization_id (int): Organization numeric ID
+            
+        Returns:
+            list: List of workspace column dictionaries
+        """
+        return self.get_workspace_items(request, organization_id, 'columns')
+    
+    def update_workspace_columns(self, request, organization_id, columns):
+        """
+        Update workspace columns in session (CSV mapping compatibility).
+        
+        Wrapper around BaseCoordinatorMixin.update_workspace_items for backward compatibility.
+        
+        Args:
+            request: Django request object
+            organization_id (int): Organization numeric ID
+            columns (list): List of column dictionaries to store
+        """
+        return self.update_workspace_items(request, organization_id, columns, 'columns')
+    
+    def clear_workspace_columns(self, request, organization_id):
+        """
+        Clear workspace columns (CSV mapping compatibility).
+        
+        Wrapper around BaseCoordinatorMixin.clear_workspace_items for backward compatibility.
+        
+        Args:
+            request: Django request object
+            organization_id (int): Organization numeric ID
+        """
+        return self.clear_workspace_items(request, organization_id, 'columns')
+    
+    def add_column_to_workspace(self, request, organization_id, column_id, column_name, dataset_name, source_name):
+        """
+        Add a column to workspace (CSV mapping compatibility).
+        
+        Wrapper around BaseCoordinatorMixin.add_workspace_item for backward compatibility.
+        
+        Args:
+            request: Django request object
+            organization_id (int): Organization numeric ID
+            column_id (str): Column ID
+            column_name (str): Column name
+            dataset_name (str): Dataset name
+            source_name (str): Source name
+            
+        Returns:
+            tuple: (success, new_column, total_columns)
+        """
+        # Create column data structure
+        column_data = {
+            'id': column_id,
+            'name': column_name,
+            'dataset': dataset_name,
+            'source': source_name,
+            'type': 'string',
+            'is_fk': False,
+            'is_anchor': False,
+            'is_multi_value': False,
+            'added_at': datetime.now().isoformat()
+        }
+        
+        # Use base coordinator method
+        success, new_column, total_columns, error = self.add_workspace_item(
+            request, organization_id, column_data, 'columns'
+        )
+        
+        if success:
+            return True, new_column, total_columns
+        else:
+            return False, None, total_columns
+    
+    def get_workspace_statistics(self, request, organization_id):
+        """
+        Get workspace statistics (CSV mapping compatibility).
+        
+        Wrapper around BaseCoordinatorMixin.get_workspace_statistics for backward compatibility.
+        
+        Args:
+            request: Django request object
+            organization_id (int): Organization numeric ID
+            
+        Returns:
+            dict: Workspace statistics
+        """
+        return super().get_workspace_statistics(request, organization_id, 'columns')
+    
+    # ==========================================================================
+    # CSV-Specific Coordinated Dataset Selection (with Column Cascade)
     # ==========================================================================
     
     def toggle_dataset_selection_with_cascade(self, request, organization_id, dataset_name):
@@ -152,7 +304,7 @@ class CSVMappingCoordinatorMixin(BaseCoordinatorMixin, CSVDataMixin, MappingWork
         """
         logger.info(f"COORDINATOR: Toggling dataset '{dataset_name}' with cascade for org='{organization_id}'")
         
-        # Toggle dataset selection using CSVDataMixin
+        # Toggle dataset selection using compatibility method
         selected_datasets, was_added = self.toggle_dataset_selection(
             request, organization_id, dataset_name
         )
@@ -221,7 +373,7 @@ class CSVMappingCoordinatorMixin(BaseCoordinatorMixin, CSVDataMixin, MappingWork
         return columns_removed
     
     # ==========================================================================
-    # Coordinated Column Management (with Dataset Validation)
+    # CSV-Specific Coordinated Column Management (with Dataset Validation)
     # ==========================================================================
     
     def add_column_with_validation(self, request, organization_id, column_name, dataset_name, source_name):
@@ -285,7 +437,7 @@ class CSVMappingCoordinatorMixin(BaseCoordinatorMixin, CSVDataMixin, MappingWork
         if not is_unique:
             logger.warning(f"🔍 COORDINATOR: Found {len(duplicates)} duplicates before adding '{column_id}' - auto-cleaned")
         
-        # 3. Add column using MappingWorkspaceMixin
+        # 3. Add column using compatibility method
         success, new_column, total_columns = self.add_column_to_workspace(
             request, organization_id, column_id, column_name, dataset_name, source_name
         )
@@ -553,7 +705,7 @@ class CSVMappingCoordinatorMixin(BaseCoordinatorMixin, CSVDataMixin, MappingWork
         return total_added, skipped_duplicates, final_count, None
     
     # ==========================================================================
-    # Unified Column Tracking & Validation (Single Source of Truth)
+    # CSV-Specific Validation & Tracking
     # ==========================================================================
     
     def validate_workspace_column_uniqueness(self, request, organization_id):
@@ -622,7 +774,7 @@ class CSVMappingCoordinatorMixin(BaseCoordinatorMixin, CSVDataMixin, MappingWork
         return None
 
     # ==========================================================================
-    # Enhanced Workspace Operations (Dataset-Aware)
+    # CSV-Specific Dataset Operations
     # ==========================================================================
     
     def get_columns_by_dataset(self, request, organization_id):
@@ -683,7 +835,7 @@ class CSVMappingCoordinatorMixin(BaseCoordinatorMixin, CSVDataMixin, MappingWork
         }
     
     # ==========================================================================
-    # Template Data Preparation
+    # CSV-Specific Template Data Preparation
     # ==========================================================================
     
     def _prepare_datasets_with_columns(self, workspace_columns):
@@ -777,7 +929,7 @@ class CSVMappingCoordinatorMixin(BaseCoordinatorMixin, CSVDataMixin, MappingWork
         return datasets_with_columns
 
     # ==========================================================================
-    # Coordinator State Reset (Complete Clear All)
+    # CSV-Specific State Reset Operations
     # ==========================================================================
     
     def reset_all_coordinator_state(self, request, organization_id):
@@ -954,80 +1106,7 @@ class CSVMappingCoordinatorMixin(BaseCoordinatorMixin, CSVDataMixin, MappingWork
         }
 
     # ==========================================================================
-    # Consistency Maintenance
-    # ==========================================================================
-    
-    def cleanup_orphaned_columns(self, request, organization_id):
-        """
-        Remove columns from workspace that belong to unselected datasets.
-        
-        This is a maintenance operation to fix any inconsistencies that might
-        have occurred due to previous bugs or data migration.
-        
-        Args:
-            request: Django request object
-            organization_id (str): Organization ID
-            
-        Returns:
-            tuple: (columns_removed, remaining_columns_count)
-        """
-        logger.info(f"COORDINATOR: Cleaning up orphaned columns for org='{organization_id}'")
-        
-        # Get current state
-        workspace_columns = self.get_workspace_columns(request, organization_id)
-        selected_datasets = self.get_selected_dataset_names(request, organization_id)
-        
-        # Find columns from unselected datasets
-        valid_columns = [
-            col for col in workspace_columns
-            if col.get('dataset') in selected_datasets
-        ]
-        
-        columns_removed = len(workspace_columns) - len(valid_columns)
-        
-        if columns_removed > 0:
-            self.update_workspace_columns(request, organization_id, valid_columns)
-            logger.info(f"COORDINATOR: Removed {columns_removed} orphaned columns")
-        
-        return columns_removed, len(valid_columns)
-    
-    def validate_workspace_consistency(self, request, organization_id):
-        """
-        Validate that the workspace is in a consistent state.
-        
-        Args:
-            request: Django request object
-            organization_id (str): Organization ID
-            
-        Returns:
-            tuple: (is_consistent, issues, suggestions)
-        """
-        workspace_summary = self.get_workspace_summary(request, organization_id)
-        
-        issues = []
-        suggestions = []
-        
-        # Check for orphaned datasets
-        if workspace_summary['orphaned_datasets']:
-            issues.append(f"Columns exist for unselected datasets: {workspace_summary['orphaned_datasets']}")
-            suggestions.append("Run cleanup_orphaned_columns() to remove orphaned columns")
-        
-        # Check for empty workspace with selected datasets
-        if workspace_summary['selected_datasets_count'] > 0 and workspace_summary['total_columns'] == 0:
-            issues.append("Datasets are selected but no columns are in workspace")
-            suggestions.append("Add columns from selected datasets to workspace")
-        
-        # Check for anchor column consistency
-        if workspace_summary['anchor_columns'] > 1:
-            issues.append(f"Multiple anchor columns found ({workspace_summary['anchor_columns']})")
-            suggestions.append("Only one anchor column should be set")
-        
-        is_consistent = len(issues) == 0
-        
-        return is_consistent, issues, suggestions 
-        
-    # ==========================================================================
-    # FK Configuration Support (All Available Datasets with Session Caching)
+    # CSV-Specific FK Configuration Support (All Available Datasets with Session Caching)
     # ==========================================================================
     
     def get_all_datasets_with_columns_for_fk(self, request, organization_id, force_refresh=False):
@@ -1148,7 +1227,7 @@ class CSVMappingCoordinatorMixin(BaseCoordinatorMixin, CSVDataMixin, MappingWork
                 (source.format and source.format.lower() in ['csv', 'tsv', 'text']))
 
     # ==========================================================================
-    # Mapping Persistence (Save/Load State)
+    # CSV-Specific Mapping Persistence (Save/Load State)
     # ==========================================================================
     
     def serialize_current_mapping_state(self, request, organization_id, mapping_name=None):
@@ -1452,12 +1531,8 @@ class CSVMappingCoordinatorMixin(BaseCoordinatorMixin, CSVDataMixin, MappingWork
         return validation_result
     
     # ==========================================================================
-    # Loaded Mapping Context Management
+    # Loaded Mapping Context Management (Using BaseCoordinatorMixin)
     # ==========================================================================
-    # Now using shared mapping methods from BaseCoordinatorMixin:
-    # - get_current_mapping(request)
-    # - set_current_mapping(request, mapping_id, mapping_name, organization_id)
-    # - clear_current_mapping(request)
     
     def is_mapping_loaded(self, request):
         """
@@ -1520,9 +1595,3 @@ class CSVMappingCoordinatorMixin(BaseCoordinatorMixin, CSVDataMixin, MappingWork
         
         # Call parent implementation
         super().clear_organization_specific_state(request, organization_id)
-    
-    # ==========================================================================
-    # Pure HTMX Helper Methods (no JavaScript)
-    # ==========================================================================
-    # Note: Previously had add_workspace_update_trigger method but removed
-    # for pure HTMX approach with component separation
