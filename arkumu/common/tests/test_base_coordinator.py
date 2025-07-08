@@ -70,14 +70,14 @@ class TestSessionKeyGeneration:
         assert key == 'base_current_organization'
     
     def test_session_key_without_prefix(self, coordinator):
-        """Test session key generation without prefix."""
-        key = coordinator.get_session_key('workspace_columns', 'test_org', include_prefix=False)
-        assert key == 'workspace_columns_test_org'
+        """Test shared session key generation."""
+        key = coordinator._get_shared_session_key('current_organization')
+        assert key == 'current_organization'
     
     def test_session_key_custom_prefix(self, coordinator_with_prefix):
         """Test session key generation with custom prefix."""
-        key = coordinator_with_prefix.get_session_key('selected_files', 'test_org')
-        assert key == 'test_coordinator_selected_files_test_org'
+        key = coordinator_with_prefix.get_session_key('workspace_columns', 'test_org')
+        assert key == 'test_coordinator_workspace_columns_test_org'
     
     def test_session_key_empty_org_id(self, coordinator):
         """Test session key generation with empty organization ID."""
@@ -146,11 +146,11 @@ class TestOrganizationManagement:
         assert coordinator.get_current_organization(mock_request) is None
     
     def test_organization_session_key_consistency(self, mock_request, coordinator_with_prefix, test_organization):
-        """Test that organization is stored with correct session key."""
+        """Test that organization is stored with correct shared session key."""
         coordinator_with_prefix.set_current_organization(mock_request, test_organization.code)
         
-        # Check that the session key follows the expected pattern
-        expected_key = 'test_coordinator_current_organization'
+        # Check that the session key follows the shared pattern (not prefixed)
+        expected_key = 'current_organization'  # Shared key, no prefix
         assert expected_key in mock_request.session
         assert mock_request.session[expected_key]['code'] == test_organization.code
 
@@ -241,10 +241,11 @@ class TestOrganizationChangeHandling:
     
     def test_handle_organization_change(self, mock_request, coordinator, test_organization):
         """Test basic organization change handling."""
-        org_data = coordinator.handle_organization_change(mock_request, test_organization.code)
+        new_org_data, old_org_data = coordinator.handle_organization_change(mock_request, test_organization.code)
         
-        assert org_data is not None
-        assert org_data['code'] == test_organization.code
+        assert new_org_data is not None
+        assert new_org_data['code'] == test_organization.code
+        assert old_org_data is None  # No previous organization
         
         # Verify organization was actually set
         current_org = coordinator.get_current_organization(mock_request)
@@ -303,7 +304,7 @@ class TestSessionIsolation:
         coordinator2 = BaseCoordinatorMixin()
         coordinator2.SESSION_PREFIX = 'coordinator2'
         
-        # Set organization in both coordinators
+        # Set organization in both coordinators - they share the same organization state
         coordinator1.set_current_organization(mock_request, test_organization.code)
         coordinator2.set_current_organization(mock_request, test_organization.code)
         
@@ -316,12 +317,17 @@ class TestSessionIsolation:
         assert org1['code'] == test_organization.code
         assert org2['code'] == test_organization.code
         
-        # Clear one coordinator
+        # Clear using coordinator1 - this clears the shared organization
         coordinator1.clear_current_organization(mock_request)
         
-        # Only coordinator1 should be cleared
+        # Both coordinators should have no organization (shared state)
         assert coordinator1.get_current_organization(mock_request) is None
-        assert coordinator2.get_current_organization(mock_request) is not None
+        assert coordinator2.get_current_organization(mock_request) is None
+        
+        # But their individual session keys should still be isolated
+        key1 = coordinator1.get_session_key('workspace_columns', 123)
+        key2 = coordinator2.get_session_key('workspace_columns', 123)
+        assert key1 != key2
     
     def test_session_key_generation_isolation(self, mock_request):
         """Test that session keys are properly isolated by prefix."""
@@ -331,12 +337,12 @@ class TestSessionIsolation:
         coordinator2 = BaseCoordinatorMixin()
         coordinator2.SESSION_PREFIX = 'ingest'
         
-        key1 = coordinator1.get_session_key('workspace_columns', 'test_org')
-        key2 = coordinator2.get_session_key('workspace_columns', 'test_org')
+        key1 = coordinator1.get_session_key('workspace_columns', 123)
+        key2 = coordinator2.get_session_key('workspace_columns', 123)
         
         assert key1 != key2
-        assert key1 == 'csv_mapping_workspace_columns_test_org'
-        assert key2 == 'ingest_workspace_columns_test_org'
+        assert key1 == 'csv_mapping_workspace_columns_123'
+        assert key2 == 'ingest_workspace_columns_123'
 
 
 @pytest.mark.django_db
@@ -408,8 +414,9 @@ class TestIntegrationScenarios:
         assert error is None
         
         # 6. Handle organization change
-        new_org_data = coordinator.handle_organization_change(mock_request, test_organization.id)
+        new_org_data, old_org_data = coordinator.handle_organization_change(mock_request, test_organization.id)
         assert new_org_data['id'] == test_organization.id
+        assert old_org_data['id'] == test_organization.id  # Same organization, so old and new are the same
         
         # 7. Clear organization
         coordinator.clear_current_organization(mock_request)

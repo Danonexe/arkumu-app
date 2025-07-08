@@ -48,25 +48,16 @@ class CSVMappingCoordinatorMixin(BaseCoordinatorMixin, CSVDataMixin, MappingWork
         This is more efficient than get_selected_datasets_with_details() when
         you only need the names and not the full dataset objects.
         
-        BACKWARDS COMPATIBILITY: Checks both new coordinator pattern and legacy pattern.
-        
         Args:
             request: Django request object
-            organization_id (str): Organization ID
+            organization_id (int): Organization numeric ID
             
         Returns:
             list: List of selected dataset names
         """
-        # Try new coordinator pattern first
-        coordinator_key = self.get_session_key('selected_datasets', organization_id)
-        datasets = request.session.get(coordinator_key)
-        
-        if datasets is not None:
-            return datasets
-            
-        # Fallback to legacy pattern for backwards compatibility
-        legacy_key = f"selected_datasets_{organization_id}"
-        return request.session.get(legacy_key, [])
+        # Use unified session key system with numeric ID
+        session_key = self.get_session_key('selected_datasets', organization_id)
+        return request.session.get(session_key, [])
     
     # ==========================================================================
     # Column ID Management (Dataset-Aware)
@@ -1521,19 +1512,14 @@ class CSVMappingCoordinatorMixin(BaseCoordinatorMixin, CSVDataMixin, MappingWork
         
         Args:
             request: Django request object
-            new_organization_id: New organization ID
+            new_organization_id: New organization ID or code
             
         Returns:
-            dict: New organization data
+            tuple: (new_org_data, old_org_data) - New and old organization data
         """
         logger.info(f"CSV_COORDINATOR: Handling organization change to {new_organization_id}")
         
-        # Get current organization for cleanup
-        current_org = self.get_current_organization(request)
-        if current_org:
-            self.clear_organization_specific_state(request, current_org['code'])
-        
-        # Call parent to set new organization
+        # Call parent to handle organization change safely
         return super().handle_organization_change(request, new_organization_id)
     
     def clear_organization_specific_state(self, request, organization_id):
@@ -1544,9 +1530,9 @@ class CSVMappingCoordinatorMixin(BaseCoordinatorMixin, CSVDataMixin, MappingWork
         
         Args:
             request: Django request object
-            organization_id (str): Organization ID to clear state for
+            organization_id (int): Organization numeric ID to clear state for
         """
-        logger.info(f"CSV_COORDINATOR: Clearing organization-specific state for {organization_id}")
+        logger.info(f"CSV_COORDINATOR: Clearing organization-specific state for org ID {organization_id}")
         
         # Clear all CSV mapping session keys for this organization
         keys_to_clear = [

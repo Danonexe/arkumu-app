@@ -47,7 +47,7 @@ class IngestCoordinatorMixin(BaseCoordinatorMixin):
         
         Args:
             request: Django request object
-            organization_id (str, optional): Organization ID. If not provided, uses current organization.
+            organization_id (int, optional): Organization numeric ID. If not provided, uses current organization.
         
         Returns:
             list: List of selected file paths
@@ -56,7 +56,7 @@ class IngestCoordinatorMixin(BaseCoordinatorMixin):
             current_org = self.get_current_organization(request)
             if not current_org:
                 return []
-            organization_id = current_org['code']
+            organization_id = current_org['id']  # Use numeric ID consistently
         
         session_key = self.get_session_key('selected_files', organization_id)
         return request.session.get(session_key, [])
@@ -68,19 +68,19 @@ class IngestCoordinatorMixin(BaseCoordinatorMixin):
         Args:
             request: Django request object
             file_paths: List of file paths
-            organization_id (str, optional): Organization ID. If not provided, uses current organization.
+            organization_id (int, optional): Organization numeric ID. If not provided, uses current organization.
         """
         if not organization_id:
             current_org = self.get_current_organization(request)
             if not current_org:
                 logger.warning("INGEST_COORDINATOR: Cannot set files without current organization")
                 return
-            organization_id = current_org['code']
+            organization_id = current_org['id']  # Use numeric ID consistently
         
         session_key = self.get_session_key('selected_files', organization_id)
         request.session[session_key] = file_paths
         request.session.modified = True
-        logger.info(f"INGEST_COORDINATOR: Set {len(file_paths)} selected files for org {organization_id}")
+        logger.info(f"INGEST_COORDINATOR: Set {len(file_paths)} selected files for org ID {organization_id}")
     
     def add_selected_file(self, request, file_path, organization_id=None):
         """
@@ -89,7 +89,7 @@ class IngestCoordinatorMixin(BaseCoordinatorMixin):
         Args:
             request: Django request object
             file_path: File path to add
-            organization_id (str, optional): Organization ID. If not provided, uses current organization.
+            organization_id (int, optional): Organization numeric ID. If not provided, uses current organization.
             
         Returns:
             list: Updated selected files list
@@ -107,7 +107,7 @@ class IngestCoordinatorMixin(BaseCoordinatorMixin):
         Args:
             request: Django request object
             file_path: File path to remove
-            organization_id (str, optional): Organization ID. If not provided, uses current organization.
+            organization_id (int, optional): Organization numeric ID. If not provided, uses current organization.
             
         Returns:
             list: Updated selected files list
@@ -125,7 +125,7 @@ class IngestCoordinatorMixin(BaseCoordinatorMixin):
         Args:
             request: Django request object
             file_path: File path to toggle
-            organization_id (str, optional): Organization ID. If not provided, uses current organization.
+            organization_id (int, optional): Organization numeric ID. If not provided, uses current organization.
             
         Returns:
             tuple: (updated_files_list, was_added)
@@ -149,7 +149,7 @@ class IngestCoordinatorMixin(BaseCoordinatorMixin):
         
         Args:
             request: Django request object
-            organization_id (str, optional): Organization ID. If not provided, uses current organization.
+            organization_id (int, optional): Organization numeric ID. If not provided, uses current organization.
         """
         self.set_selected_files(request, [], organization_id)
     
@@ -159,7 +159,7 @@ class IngestCoordinatorMixin(BaseCoordinatorMixin):
         
         Args:
             request: Django request object
-            organization_id (str, optional): Organization ID. If not provided, uses current organization.
+            organization_id (int, optional): Organization numeric ID. If not provided, uses current organization.
         
         Returns:
             dict: Mapping data with keys: id, name, organization
@@ -169,7 +169,7 @@ class IngestCoordinatorMixin(BaseCoordinatorMixin):
             current_org = self.get_current_organization(request)
             if not current_org:
                 return None
-            organization_id = current_org['code']
+            organization_id = current_org['id']  # Use numeric ID consistently
         
         session_key = self.get_session_key('selected_mapping', organization_id)
         return request.session.get(session_key)
@@ -182,26 +182,26 @@ class IngestCoordinatorMixin(BaseCoordinatorMixin):
             request: Django request object
             mapping_id: Mapping ID
             mapping_name: Optional mapping name
-            organization_id (str, optional): Organization ID. If not provided, uses current organization.
+            organization_id (int, optional): Organization numeric ID. If not provided, uses current organization.
         """
         if not organization_id:
             current_org = self.get_current_organization(request)
             if not current_org:
                 logger.warning("INGEST_COORDINATOR: Cannot set mapping without current organization")
                 return None
-            organization_id = current_org['code']
+            organization_id = current_org['id']  # Use numeric ID consistently
         
         mapping_data = {
             'id': mapping_id,
             'name': mapping_name or f"Mapping {mapping_id}",
-            'organization': organization_id
+            'organization_id': organization_id  # Store numeric ID
         }
         
         session_key = self.get_session_key('selected_mapping', organization_id)
         request.session[session_key] = mapping_data
         request.session.modified = True
         
-        logger.info(f"INGEST_COORDINATOR: Set selected mapping to {mapping_data['name']} (id: {mapping_id}) for org {organization_id}")
+        logger.info(f"INGEST_COORDINATOR: Set selected mapping to {mapping_data['name']} (id: {mapping_id}) for org ID {organization_id}")
         return mapping_data
     
     def clear_selected_mapping(self, request, organization_id=None):
@@ -210,19 +210,19 @@ class IngestCoordinatorMixin(BaseCoordinatorMixin):
         
         Args:
             request: Django request object
-            organization_id (str, optional): Organization ID. If not provided, uses current organization.
+            organization_id (int, optional): Organization numeric ID. If not provided, uses current organization.
         """
         if not organization_id:
             current_org = self.get_current_organization(request)
             if not current_org:
                 return
-            organization_id = current_org['code']
+            organization_id = current_org['id']  # Use numeric ID consistently
         
         session_key = self.get_session_key('selected_mapping', organization_id)
         if session_key in request.session:
             del request.session[session_key]
             request.session.modified = True
-            logger.info(f"INGEST_COORDINATOR: Cleared selected mapping for org {organization_id}")
+            logger.info(f"INGEST_COORDINATOR: Cleared selected mapping for org ID {organization_id}")
     
     def handle_organization_change(self, request, new_organization_id):
         """
@@ -232,22 +232,15 @@ class IngestCoordinatorMixin(BaseCoordinatorMixin):
         
         Args:
             request: Django request object
-            new_organization_id: New organization ID
+            new_organization_id: New organization ID or code
             
         Returns:
-            dict: New organization data
+            tuple: (new_org_data, old_org_data) - New and old organization data
         """
         logger.info(f"INGEST_COORDINATOR: Handling organization change to {new_organization_id}")
         
-        # Get current organization to clear its specific state
-        current_org = self.get_current_organization(request)
-        if current_org:
-            self.clear_organization_specific_state(request, current_org['code'])
-        
-        # Call parent implementation to set new organization
-        org_data = super().handle_organization_change(request, new_organization_id)
-        
-        return org_data
+        # Call parent implementation to handle organization change safely
+        return super().handle_organization_change(request, new_organization_id)
     
     def get_file_browser_context(self, request, organization_id):
         """
@@ -389,7 +382,7 @@ class IngestCoordinatorMixin(BaseCoordinatorMixin):
         
         # Clear organization-specific state if we have an organization
         if current_org:
-            self.clear_organization_specific_state(request, current_org['code'])
+            self.clear_organization_specific_state(request, current_org['id'])
         
         # Clear current organization
         self.clear_current_organization(request)
@@ -411,9 +404,9 @@ class IngestCoordinatorMixin(BaseCoordinatorMixin):
         
         Args:
             request: Django request object
-            organization_id (str): Organization ID to clear state for
+            organization_id (int): Organization numeric ID to clear state for
         """
-        logger.info(f"INGEST_COORDINATOR: Clearing organization-specific state for {organization_id}")
+        logger.info(f"INGEST_COORDINATOR: Clearing organization-specific state for org ID {organization_id}")
         
         # Clear files and mapping for this specific organization
         self.clear_selected_files(request, organization_id)

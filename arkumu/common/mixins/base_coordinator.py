@@ -34,39 +34,43 @@ class BaseCoordinatorMixin:
     # Subclasses should override this to provide their own prefix
     SESSION_PREFIX = 'base'
     
-    def get_session_key(self, base_key, organization_id=None, include_prefix=True):
+    # Shared session keys (no prefix, used across all coordinators)
+    SHARED_CURRENT_ORGANIZATION_KEY = 'current_organization'
+    
+    def get_session_key(self, base_key, organization_id=None):
         """
-        Generate standardized session key with optional organization ID and prefix.
+        Generate standardized session key with organization ID.
         
         This ensures consistent session key patterns across all coordinators:
-        - With org: 'csv_mapping_workspace_columns_{org_id}'
-        - Without org: 'csv_mapping_current_organization'
-        - No prefix: 'workspace_columns_{org_id}'
-        
-        SHARED STATE: Organization keys are shared across all coordinators to ensure
-        consistent organization selection across different views.
+        - With org: 'csv_mapping_workspace_columns_123'
+        - Without org: 'csv_mapping_selected_mapping'
         
         Args:
             base_key (str): Base key name (e.g., 'workspace_columns', 'selected_files')
-            organization_id (str, optional): Organization ID to append
-            include_prefix (bool): Whether to include the SESSION_PREFIX
+            organization_id (int, optional): Organization numeric ID to append
             
         Returns:
             str: Standardized session key
         """
-        # Special case: organization state should be shared across all coordinators
-        if base_key == 'current_organization':
-            key = 'shared_current_organization'
-        else:
-            if include_prefix:
-                key = f"{self.SESSION_PREFIX}_{base_key}"
-            else:
-                key = base_key
-            
+        key = f"{self.SESSION_PREFIX}_{base_key}"
+        
         if organization_id:
+            # Always use numeric ID for consistency
             key = f"{key}_{organization_id}"
             
         return key
+    
+    def _get_shared_session_key(self, base_key):
+        """
+        Generate shared session key (no prefix) for cross-coordinator state.
+        
+        Args:
+            base_key (str): Base key name
+            
+        Returns:
+            str: Shared session key
+        """
+        return base_key
     
     def get_current_organization(self, request):
         """
@@ -79,16 +83,16 @@ class BaseCoordinatorMixin:
             dict: Organization data with keys: id, code, name
             None: If no organization is selected
         """
-        session_key = self.get_session_key('current_organization')
+        session_key = self._get_shared_session_key(self.SHARED_CURRENT_ORGANIZATION_KEY)
         return request.session.get(session_key)
     
-    def set_current_organization(self, request, organization_id):
+    def set_current_organization(self, request, organization_identifier):
         """
         Set the current organization in session.
         
         Args:
             request: Django request object
-            organization_id: Organization ID (can be numeric ID or code string)
+            organization_identifier: Organization ID (numeric) or code (string)
             
         Returns:
             dict: Organization data that was set
@@ -96,11 +100,11 @@ class BaseCoordinatorMixin:
         """
         try:
             # Try to parse as numeric ID first
-            if str(organization_id).isdigit():
-                organization = Organization.objects.get(id=int(organization_id))
+            if str(organization_identifier).isdigit():
+                organization = Organization.objects.get(id=int(organization_identifier))
             else:
                 # Treat as organization code
-                organization = Organization.objects.get(code=organization_id)
+                organization = Organization.objects.get(code=organization_identifier)
             
             org_data = {
                 'id': organization.id,
@@ -108,7 +112,7 @@ class BaseCoordinatorMixin:
                 'name': organization.name
             }
             
-            session_key = self.get_session_key('current_organization')
+            session_key = self._get_shared_session_key(self.SHARED_CURRENT_ORGANIZATION_KEY)
             request.session[session_key] = org_data
             request.session.modified = True
             
@@ -116,7 +120,7 @@ class BaseCoordinatorMixin:
             return org_data
             
         except (Organization.DoesNotExist, ValueError) as e:
-            logger.warning(f"BASE_COORDINATOR: Organization '{organization_id}' not found: {e}")
+            logger.warning(f"BASE_COORDINATOR: Organization '{organization_identifier}' not found: {e}")
             return None
     
     def clear_current_organization(self, request):
@@ -126,7 +130,7 @@ class BaseCoordinatorMixin:
         Args:
             request: Django request object
         """
-        session_key = self.get_session_key('current_organization')
+        session_key = self._get_shared_session_key(self.SHARED_CURRENT_ORGANIZATION_KEY)
         if session_key in request.session:
             del request.session[session_key]
             request.session.modified = True
@@ -163,30 +167,42 @@ class BaseCoordinatorMixin:
                 'has_organization': False
             }
     
-    def handle_organization_change(self, request, new_organization_id):
+    def handle_organization_change(self, request, new_organization_identifier):
         """
         Handle organization change with proper state cleanup.
         
-        Base implementation sets the new organization. Subclasses should
-        override this to add their own state cleanup logic.
+        SAFER IMPLEMENTATION: Sets new organization first, then clears old state.
+        This prevents data loss if setting the new organization fails.
         
         Args:
             request: Django request object
-            new_organization_id: New organization ID
+            new_organization_identifier: New organization ID or code
             
         Returns:
-            dict: New organization data
+            tuple: (org_data, old_org_data) - New organization data and old organization data
         """
-        logger.info(f"BASE_COORDINATOR: Handling organization change to {new_organization_id}")
+        logger.info(f"BASE_COORDINATOR: Handling organization change to {new_organization_identifier}")
         
-        # Set new organization
-        org_data = self.set_current_organization(request, new_organization_id)
+        # Get current organization for cleanup
+        old_org = self.get_current_organization(request)
+        
+        # Set new organization FIRST (safer - prevents data loss on failure)
+        new_org_data = self.set_current_organization(request, new_organization_identifier)
+        
+        if not new_org_data:
+            logger.error(f"BASE_COORDINATOR: Failed to set new organization {new_organization_identifier}")
+            return None, old_org
+        
+        # Only clear old state AFTER successfully setting new organization
+        if old_org and old_org['id'] != new_org_data['id']:
+            logger.info(f"BASE_COORDINATOR: Clearing old organization state for {old_org['code']} (ID: {old_org['id']})")
+            self.clear_organization_specific_state(request, old_org['id'])
         
         # Also store this organization for cross-view persistence (if OrganizationMixin is available)
         if hasattr(self, 'set_last_selected_organization'):
-            self.set_last_selected_organization(request, new_organization_id)
+            self.set_last_selected_organization(request, new_organization_identifier)
         
-        return org_data
+        return new_org_data, old_org
     
     def get_base_template_context(self, request, additional_context=None):
         """
@@ -232,16 +248,65 @@ class BaseCoordinatorMixin:
         """
         Clear all session state specific to an organization.
         
-        Base implementation does nothing. Subclasses should override
-        to clear their specific organization-related session data.
+        IMPORTANT: Subclasses MUST implement this method to clear their
+        specific organization-related session data.
         
         Args:
             request: Django request object
-            organization_id (str): Organization ID to clear state for
+            organization_id (int): Organization numeric ID to clear state for
         """
-        logger.info(f"BASE_COORDINATOR: Clearing organization-specific state for {organization_id}")
+        logger.info(f"BASE_COORDINATOR: Clearing organization-specific state for org ID {organization_id}")
         # Subclasses should implement specific state clearing
-        pass
+        # This is intentionally a no-op in the base class
+    
+    def clear_all_coordinator_state(self, request):
+        """
+        Clear ALL coordinator-related session data for the current user.
+        
+        This is a "nuclear option" that clears:
+        1. Current organization selection
+        2. All coordinator-prefixed session keys
+        3. Organization-specific state for all coordinators
+        
+        Use this for logout, session reset, or debugging.
+        
+        Args:
+            request: Django request object
+            
+        Returns:
+            dict: Summary of what was cleared
+        """
+        logger.info("BASE_COORDINATOR: GLOBAL COORDINATOR STATE RESET")
+        
+        # Get current organization before clearing
+        current_org = self.get_current_organization(request)
+        
+        # Clear current organization selection
+        self.clear_current_organization(request)
+        
+        # Find all coordinator-related session keys
+        coordinator_keys = []
+        for key in list(request.session.keys()):
+            if ('_mapping' in key or '_ingest' in key or '_base' in key or 
+                key.startswith('csv_') or key.startswith('ingest_') or key.startswith('base_')):
+                coordinator_keys.append(key)
+        
+        # Remove all coordinator session keys
+        for key in coordinator_keys:
+            del request.session[key]
+            logger.info(f"BASE_COORDINATOR: Cleared session key: {key}")
+        
+        request.session.modified = True
+        
+        summary = {
+            'organization_cleared': current_org is not None,
+            'organization_name': current_org['name'] if current_org else None,
+            'session_keys_cleared': len(coordinator_keys),
+            'cleared_keys': coordinator_keys
+        }
+        
+        logger.info(f"BASE_COORDINATOR: GLOBAL RESET COMPLETE - {summary}")
+        return summary
     
     def get_coordinator_debug_info(self, request):
         """
@@ -264,11 +329,18 @@ class BaseCoordinatorMixin:
             if key.startswith(prefix)
         }
         
+        # Get all shared keys
+        shared_sessions = {
+            key: value for key, value in request.session.items()
+            if key in [self.SHARED_CURRENT_ORGANIZATION_KEY]
+        }
+        
         return {
             'coordinator_type': self.__class__.__name__,
             'session_prefix': self.SESSION_PREFIX,
             'current_organization': current_org,
             'coordinator_sessions': coordinator_sessions,
+            'shared_sessions': shared_sessions,
             'total_session_keys': len(request.session.keys()),
             'coordinator_session_count': len(coordinator_sessions)
         }
