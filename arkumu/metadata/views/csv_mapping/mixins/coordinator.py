@@ -39,8 +39,8 @@ class CSVMappingCoordinatorMixin(BaseCoordinatorMixin, CSVDataMixin, MappingWork
     - Dataset-column relationship management specific to CSV format
     """
     
-    # Set session prefix for BaseCoordinatorMixin
-    SESSION_PREFIX = 'csv_mapping'
+    # NOTE: SESSION_PREFIX removed to implement single source of truth session keys
+    # CSV coordinator now uses shared keys without prefixes
     
     # ==========================================================================
     # CSV-Specific Column ID Management

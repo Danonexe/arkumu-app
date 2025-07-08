@@ -92,7 +92,7 @@
             nameDisplay.textContent = mappingName || 'Select mapping';
         }
         
-        // Load mapping via HTMX - directly update execution status instead of navbar
+        // Load mapping via HTMX - update navbar controls and let execution status update via event
         htmx.ajax('POST', '{% url "importer:ingest_data" %}', {
             values: {
                 organization: '{{ organization_id }}',
@@ -100,12 +100,12 @@
                 mapping_id: mappingId,
                 csrfmiddlewaretoken: '{{ csrf_token }}'
             },
-            target: '#execution-status',
-            swap: 'outerHTML'
+            target: '#navbar-end',
+            swap: 'innerHTML'
         }).then(() => {
             // Clean up loading state
             mappingElement.dataset.loading = 'false';
-            // Trigger custom event for other components that need to know
+            // Trigger custom event for execution status to update itself
             htmx.trigger('body', 'mappingSelected', {mappingId: mappingId, mappingName: mappingName});
         }).catch(() => {
             // Clean up loading state on error

@@ -52,8 +52,8 @@ class IngestCoordinatorMixin(BaseCoordinatorMixin):
     - Validation of ingest configurations
     """
     
-    # Set the session prefix for this coordinator
-    SESSION_PREFIX = 'ingest'
+    # NOTE: SESSION_PREFIX removed to implement single source of truth session keys
+    # Ingest coordinator now uses shared keys without prefixes
     
     # Organization management methods are inherited from BaseCoordinatorMixin
     # No need to reimplement - they use standardized session keys and patterns
@@ -180,7 +180,7 @@ class IngestCoordinatorMixin(BaseCoordinatorMixin):
         
         # Use base coordinator's generic selection management
         result = self.toggle_dataset_selection(request, organization_id, file_path, 'selected_files')
-        return result[1], result[0]  # Return (updated_files_list, was_added)
+        return result[1], result[2]  # Return (updated_files_list, was_added)
     
     def clear_selected_files(self, request, organization_id=None):
         """
@@ -1328,6 +1328,10 @@ class IngestCoordinatorMixin(BaseCoordinatorMixin):
             'enhanced_context': True
         }
         
+        # Ensure organization_id remains the code (from org_context) not the numeric ID (from file_browser_context)
+        if org_context['organization_id']:
+            enhanced_context['organization_id'] = org_context['organization_id']
+        
         logger.info(f"INGEST_COORDINATOR: Enhanced ingest context for org {org_context['organization_id']} - " +
                    f"Files: {len(selected_files)}, Ready: {readiness_indicators['ready_for_import']}")
         
@@ -1379,6 +1383,10 @@ class IngestCoordinatorMixin(BaseCoordinatorMixin):
         
         # Clear current organization
         self.clear_current_organization(request)
+        
+        # Clear current mapping as part of full reset
+        if had_mapping:
+            self.clear_current_mapping(request)
         
         summary = {
             'organization_cleared': True,

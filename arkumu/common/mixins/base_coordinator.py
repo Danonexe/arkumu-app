@@ -36,8 +36,8 @@ class BaseCoordinatorMixin:
     while leveraging these shared utilities.
     """
     
-    # Subclasses should override this to provide their own prefix
-    SESSION_PREFIX = 'base'
+    # NOTE: SESSION_PREFIX removed to implement single source of truth session keys
+    # All coordinators now use shared keys without prefixes
     
     # Shared session keys (no prefix, used across all coordinators)
     SHARED_CURRENT_ORGANIZATION_KEY = 'current_organization'
@@ -48,17 +48,19 @@ class BaseCoordinatorMixin:
         Generate standardized session key with organization ID.
         
         This ensures consistent session key patterns across all coordinators:
-        - With org: 'csv_mapping_workspace_columns_123'
-        - Without org: 'csv_mapping_selected_mapping'
+        - With org: 'workspace_columns_123'
+        - Without org: 'current_mapping'
+        
+        Single source of truth session keys enable true coordination between coordinators.
         
         Args:
             base_key (str): Base key name (e.g., 'workspace_columns', 'selected_files')
             organization_id (int, optional): Organization numeric ID to append
             
         Returns:
-            str: Standardized session key
+            str: Standardized session key without prefixes
         """
-        key = f"{self.SESSION_PREFIX}_{base_key}"
+        key = base_key
         
         if organization_id:
             # Always use numeric ID for consistency
@@ -412,8 +414,8 @@ class BaseCoordinatorMixin:
         Returns:
             str: Enhanced session key with pattern applied
         """
-        # Apply the coordinator prefix to the pattern
-        enhanced_key = f"{self.SESSION_PREFIX}_{pattern}"
+        # Apply the pattern without prefix (single source of truth)
+        enhanced_key = pattern
         
         # Add organization ID if provided
         if organization_id:
@@ -450,9 +452,9 @@ class BaseCoordinatorMixin:
         for pattern in patterns:
             # Generate the full session key pattern
             if organization_id:
-                full_pattern = f"{self.SESSION_PREFIX}_{pattern}_{organization_id}"
+                full_pattern = f"{pattern}_{organization_id}"
             else:
-                full_pattern = f"{self.SESSION_PREFIX}_{pattern}"
+                full_pattern = pattern
             
             # Find matching keys (supports partial matching)
             matching_keys = [key for key in all_keys if full_pattern in key]
@@ -494,17 +496,18 @@ class BaseCoordinatorMixin:
         """
         logger.debug(f"BASE_COORDINATOR: Getting coordinator session keys for org_id: {organization_id}")
         
-        prefix = f"{self.SESSION_PREFIX}_"
+        # With single source of truth, we don't filter by prefix
         coordinator_keys = {}
         
         for key, value in request.session.items():
-            if key.startswith(prefix):
-                # If organization_id is specified, filter by it
-                if organization_id:
-                    if key.endswith(f"_{organization_id}"):
-                        coordinator_keys[key] = value
-                else:
-                    coordinator_keys[key] = value
+            # Include organization-scoped keys and shared keys
+            if organization_id and key.endswith(f"_{organization_id}"):
+                coordinator_keys[key] = value
+            elif key in [self.SHARED_CURRENT_ORGANIZATION_KEY, self.SHARED_CURRENT_MAPPING_KEY]:
+                coordinator_keys[key] = value
+            elif not organization_id:
+                # Include non-organization-scoped keys when no org_id specified
+                coordinator_keys[key] = value
         
         logger.debug(f"BASE_COORDINATOR: Found {len(coordinator_keys)} coordinator session keys")
         return coordinator_keys
@@ -528,10 +531,8 @@ class BaseCoordinatorMixin:
         logger.info(f"BASE_COORDINATOR: Migrating session key from '{old_key}' to '{new_key}'")
         
         # Handle both full keys and base keys
-        if not old_key.startswith(self.SESSION_PREFIX):
-            old_key = f"{self.SESSION_PREFIX}_{old_key}"
-        if not new_key.startswith(self.SESSION_PREFIX):
-            new_key = f"{self.SESSION_PREFIX}_{new_key}"
+        # With single source of truth, keys don't need prefix validation
+        # old_key and new_key remain as provided
         
         migration_status = {
             'old_key': old_key,
@@ -603,9 +604,8 @@ class BaseCoordinatorMixin:
         for key, value in coordinator_keys.items():
             key_issues = []
             
-            # Check if key follows expected pattern
-            if not key.startswith(f"{self.SESSION_PREFIX}_"):
-                key_issues.append(f"Key doesn't start with expected prefix '{self.SESSION_PREFIX}_'")
+            # With single source of truth, no prefix validation needed
+            # Keys can be shared across coordinators
             
             # Check if key ends with organization ID
             if not key.endswith(f"_{organization_id}"):
@@ -668,11 +668,9 @@ class BaseCoordinatorMixin:
         """
         current_org = self.get_current_organization(request)
         
-        # Get all session keys that match our prefix
-        prefix = f"{self.SESSION_PREFIX}_"
+        # Get all session keys (no prefix filtering for single source of truth)
         coordinator_sessions = {
             key: value for key, value in request.session.items()
-            if key.startswith(prefix)
         }
         
         # Get all shared keys
@@ -683,7 +681,7 @@ class BaseCoordinatorMixin:
         
         return {
             'coordinator_type': self.__class__.__name__,
-            'session_prefix': self.SESSION_PREFIX,
+            'session_prefix': None,  # No prefix for single source of truth
             'current_organization': current_org,
             'coordinator_sessions': coordinator_sessions,
             'shared_sessions': shared_sessions,
@@ -1352,7 +1350,7 @@ class BaseCoordinatorMixin:
             },
             'session_info': {
                 'session_key': self.get_session_key(f'workspace_{item_type}', organization_id),
-                'coordinator_prefix': self.SESSION_PREFIX,
+                'coordinator_prefix': None,  # No prefix for single source of truth
                 'items_in_session': len(current_items)
             },
             'metadata': {
@@ -1438,7 +1436,7 @@ class BaseCoordinatorMixin:
             filtered_keys = {}
             for key, value in all_coordinator_keys.items():
                 # Extract base key name (remove prefix and org ID)
-                base_key = key.replace(f"{self.SESSION_PREFIX}_", "").replace(f"_{organization_id}", "")
+                base_key = key.replace(f"_{organization_id}", "")
                 
                 # Apply include/exclude filters
                 if include_keys and base_key not in include_keys:
@@ -1480,7 +1478,7 @@ class BaseCoordinatorMixin:
             # Build serialized state
             serialized_state = {
                 'coordinator_type': self.__class__.__name__,
-                'session_prefix': self.SESSION_PREFIX,
+                'session_prefix': None,  # No prefix for single source of truth
                 'organization_id': organization_id,
                 'state_version': '1.0',
                 'serialized_at': timezone.now().isoformat(),
@@ -2296,7 +2294,7 @@ class BaseCoordinatorMixin:
             # Process each key
             for key, value in all_keys.items():
                 # Extract base key
-                base_key = key.replace(f"{self.SESSION_PREFIX}_", "").replace(f"_{organization_id}", "")
+                base_key = key.replace(f"_{organization_id}", "")
                 
                 # Check exclusions
                 if base_key in exclude_keys:
@@ -2426,7 +2424,7 @@ class BaseCoordinatorMixin:
             metadata = {
                 'organization_id': organization_id,
                 'coordinator_type': self.__class__.__name__,
-                'session_prefix': self.SESSION_PREFIX,
+                'session_prefix': None,  # No prefix for single source of truth
                 'metadata_generated_at': timezone.now().isoformat()
             }
             
@@ -2467,7 +2465,7 @@ class BaseCoordinatorMixin:
                         saved_states_info['total_saved_states'] += 1
                         
                         # Extract state name
-                        state_name = key.replace(f"{self.SESSION_PREFIX}_saved_states_", "").replace(f"_{organization_id}", "")
+                        state_name = key.replace(f"saved_states_", "").replace(f"_{organization_id}", "")
                         
                         state_metadata = value.get('metadata', {})
                         state_info = {
@@ -2538,7 +2536,7 @@ class BaseCoordinatorMixin:
                 debug_info = self.get_coordinator_debug_info(request)
                 debug_info['organization_specific'] = {
                     'organization_id': organization_id,
-                    'session_key_pattern': f"{self.SESSION_PREFIX}_*_{organization_id}",
+                    'session_key_pattern': f"*_{organization_id}",
                     'key_validation': self.validate_session_key_consistency(request, organization_id)
                 }
                 metadata['debug_info'] = debug_info
@@ -2553,7 +2551,7 @@ class BaseCoordinatorMixin:
                 
                 # Analyze key usage patterns
                 for key in all_keys.keys():
-                    base_key = key.replace(f"{self.SESSION_PREFIX}_", "").replace(f"_{organization_id}", "")
+                    base_key = key.replace(f"_{organization_id}", "")
                     category = 'other'
                     
                     if base_key.startswith('saved_states_'):
@@ -3447,7 +3445,8 @@ class BaseCoordinatorMixin:
                 # Get all session keys and check for orphans
                 all_keys = list(request.session.keys())
                 for key in all_keys:
-                    if key.startswith(f"{self.SESSION_PREFIX}_"):
+                    # With single source of truth, no prefix filtering needed
+                    if True:  # Include all keys
                         # Check if key has valid organization ID
                         parts = key.split('_')
                         if len(parts) >= 3 and parts[-1].isdigit():

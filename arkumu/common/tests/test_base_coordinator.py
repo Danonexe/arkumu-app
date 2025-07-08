@@ -49,45 +49,45 @@ def test_organization(db):
 
 
 @pytest.fixture
-def coordinator_with_prefix():
-    """Create a BaseCoordinatorMixin with custom prefix."""
+def coordinator_with_custom_type():
+    """Create a BaseCoordinatorMixin with custom type for testing."""
     coordinator = BaseCoordinatorMixin()
-    coordinator.SESSION_PREFIX = 'test_coordinator'
+    # No SESSION_PREFIX since it's removed in the new architecture
     return coordinator
 
 
 class TestSessionKeyGeneration:
     """Test session key generation with various configurations."""
     
-    def test_session_key_with_prefix_and_org(self, coordinator):
-        """Test session key generation with prefix and organization ID."""
+    def test_session_key_with_org(self, coordinator):
+        """Test session key generation with organization ID."""
         key = coordinator.get_session_key('workspace_columns', 'test_org')
-        assert key == 'base_workspace_columns_test_org'
+        assert key == 'workspace_columns_test_org'
     
-    def test_session_key_with_prefix_no_org(self, coordinator):
-        """Test session key generation with prefix but no organization ID."""
+    def test_session_key_no_org(self, coordinator):
+        """Test session key generation without organization ID."""
         key = coordinator.get_session_key('current_organization')
-        assert key == 'base_current_organization'
+        assert key == 'current_organization'
     
     def test_session_key_without_prefix(self, coordinator):
         """Test shared session key generation."""
         key = coordinator._get_shared_session_key('current_organization')
         assert key == 'current_organization'
     
-    def test_session_key_custom_prefix(self, coordinator_with_prefix):
-        """Test session key generation with custom prefix."""
-        key = coordinator_with_prefix.get_session_key('workspace_columns', 'test_org')
-        assert key == 'test_coordinator_workspace_columns_test_org'
+    def test_session_key_consistency(self, coordinator_with_custom_type):
+        """Test session key generation consistency across coordinators."""
+        key = coordinator_with_custom_type.get_session_key('workspace_columns', 'test_org')
+        assert key == 'workspace_columns_test_org'
     
     def test_session_key_empty_org_id(self, coordinator):
         """Test session key generation with empty organization ID."""
         key = coordinator.get_session_key('workspace_columns', '')
-        assert key == 'base_workspace_columns'
+        assert key == 'workspace_columns'
     
     def test_session_key_none_org_id(self, coordinator):
         """Test session key generation with None organization ID."""
         key = coordinator.get_session_key('workspace_columns', None)
-        assert key == 'base_workspace_columns'
+        assert key == 'workspace_columns'
 
 
 @pytest.mark.django_db
@@ -145,9 +145,9 @@ class TestOrganizationManagement:
         coordinator.clear_current_organization(mock_request)
         assert coordinator.get_current_organization(mock_request) is None
     
-    def test_organization_session_key_consistency(self, mock_request, coordinator_with_prefix, test_organization):
+    def test_organization_session_key_consistency(self, mock_request, coordinator_with_custom_type, test_organization):
         """Test that organization is stored with correct shared session key."""
-        coordinator_with_prefix.set_current_organization(mock_request, test_organization.code)
+        coordinator_with_custom_type.set_current_organization(mock_request, test_organization.code)
         
         # Check that the session key follows the shared pattern (not prefixed)
         expected_key = 'current_organization'  # Shared key, no prefix
@@ -273,17 +273,17 @@ class TestStateManagement:
         coordinator.clear_organization_specific_state(mock_request, 'test_org')
         # No assertions needed - just verify it doesn't crash
     
-    def test_get_coordinator_debug_info(self, mock_request, coordinator_with_prefix, test_organization):
+    def test_get_coordinator_debug_info(self, mock_request, coordinator_with_custom_type, test_organization):
         """Test debug information generation."""
         # Set up some state
-        coordinator_with_prefix.set_current_organization(mock_request, test_organization.code)
-        mock_request.session['test_coordinator_some_data'] = 'test_value'
-        mock_request.session['other_coordinator_data'] = 'other_value'
+        coordinator_with_custom_type.set_current_organization(mock_request, test_organization.code)
+        mock_request.session['some_data'] = 'test_value'
+        mock_request.session['other_data'] = 'other_value'
         
-        debug_info = coordinator_with_prefix.get_coordinator_debug_info(mock_request)
+        debug_info = coordinator_with_custom_type.get_coordinator_debug_info(mock_request)
         
         assert debug_info['coordinator_type'] == 'BaseCoordinatorMixin'
-        assert debug_info['session_prefix'] == 'test_coordinator'
+        assert debug_info['session_prefix'] is None  # No prefix in single source of truth
         assert debug_info['current_organization'] is not None
         assert debug_info['current_organization']['code'] == test_organization.code
         assert 'coordinator_sessions' in debug_info
@@ -293,22 +293,18 @@ class TestStateManagement:
 
 
 @pytest.mark.django_db
-class TestSessionIsolation:
-    """Test that different coordinator instances maintain separate sessions."""
+class TestSessionSharing:
+    """Test that coordinator instances share session state correctly."""
     
-    def test_different_prefixes_isolate_sessions(self, mock_request, test_organization):
-        """Test that coordinators with different prefixes don't interfere."""
+    def test_coordinators_share_organization_state(self, mock_request, test_organization):
+        """Test that coordinators share the same organization state."""
         coordinator1 = BaseCoordinatorMixin()
-        coordinator1.SESSION_PREFIX = 'coordinator1'
-        
         coordinator2 = BaseCoordinatorMixin()
-        coordinator2.SESSION_PREFIX = 'coordinator2'
         
-        # Set organization in both coordinators - they share the same organization state
+        # Set organization in one coordinator
         coordinator1.set_current_organization(mock_request, test_organization.code)
-        coordinator2.set_current_organization(mock_request, test_organization.code)
         
-        # Both should work independently
+        # Both coordinators should see the same organization state
         org1 = coordinator1.get_current_organization(mock_request)
         org2 = coordinator2.get_current_organization(mock_request)
         
@@ -323,26 +319,19 @@ class TestSessionIsolation:
         # Both coordinators should have no organization (shared state)
         assert coordinator1.get_current_organization(mock_request) is None
         assert coordinator2.get_current_organization(mock_request) is None
-        
-        # But their individual session keys should still be isolated
-        key1 = coordinator1.get_session_key('workspace_columns', 123)
-        key2 = coordinator2.get_session_key('workspace_columns', 123)
-        assert key1 != key2
     
-    def test_session_key_generation_isolation(self, mock_request):
-        """Test that session keys are properly isolated by prefix."""
+    def test_session_key_generation_consistency(self, mock_request):
+        """Test that session keys are consistent across coordinators."""
         coordinator1 = BaseCoordinatorMixin()
-        coordinator1.SESSION_PREFIX = 'csv_mapping'
-        
         coordinator2 = BaseCoordinatorMixin()
-        coordinator2.SESSION_PREFIX = 'ingest'
         
         key1 = coordinator1.get_session_key('workspace_columns', 123)
         key2 = coordinator2.get_session_key('workspace_columns', 123)
         
-        assert key1 != key2
-        assert key1 == 'csv_mapping_workspace_columns_123'
-        assert key2 == 'ingest_workspace_columns_123'
+        # Keys should be identical (single source of truth)
+        assert key1 == key2
+        assert key1 == 'workspace_columns_123'
+        assert key2 == 'workspace_columns_123'
 
 
 @pytest.mark.django_db
@@ -426,8 +415,6 @@ class TestIntegrationScenarios:
         """Test how subclasses would use the base coordinator."""
         
         class MockCSVMappingCoordinator(BaseCoordinatorMixin):
-            SESSION_PREFIX = 'csv_mapping'
-            
             def get_workspace_columns(self, request, org_id):
                 key = self.get_session_key('workspace_columns', org_id)
                 return request.session.get(key, [])
@@ -438,8 +425,6 @@ class TestIntegrationScenarios:
                 request.session.modified = True
         
         class MockIngestCoordinator(BaseCoordinatorMixin):
-            SESSION_PREFIX = 'ingest'
-            
             def get_selected_files(self, request, org_id):
                 key = self.get_session_key('selected_files', org_id)
                 return request.session.get(key, [])
@@ -452,25 +437,31 @@ class TestIntegrationScenarios:
         csv_coord = MockCSVMappingCoordinator()
         ingest_coord = MockIngestCoordinator()
         
-        # Both coordinators can manage organization independently
+        # Both coordinators share organization state
         csv_coord.set_current_organization(mock_request, test_organization.code)
-        ingest_coord.set_current_organization(mock_request, test_organization.code)
         
-        # Both should have organization set
+        # Both should have organization set (shared state)
         assert csv_coord.get_current_organization(mock_request) is not None
         assert ingest_coord.get_current_organization(mock_request) is not None
         
-        # Each coordinator maintains its own specific state
+        # Each coordinator can store their own data using different base keys
         csv_coord.set_workspace_columns(mock_request, test_organization.code, ['col1', 'col2'])
         ingest_coord.set_selected_files(mock_request, test_organization.code, ['file1.csv', 'file2.csv'])
         
-        # State should be isolated
+        # Data should be accessible from their respective coordinators
         assert csv_coord.get_workspace_columns(mock_request, test_organization.code) == ['col1', 'col2']
         assert ingest_coord.get_selected_files(mock_request, test_organization.code) == ['file1.csv', 'file2.csv']
         
-        # Debug info should show different prefixes
+        # Check that different coordinators can access each other's data (shared session)
+        csv_key = csv_coord.get_session_key('workspace_columns', test_organization.code)
+        ingest_key = ingest_coord.get_session_key('selected_files', test_organization.code)
+        
+        assert csv_key == 'workspace_columns_TEST_ORG'
+        assert ingest_key == 'selected_files_TEST_ORG'
+        
+        # Both coordinators should have no session prefix
         csv_debug = csv_coord.get_coordinator_debug_info(mock_request)
         ingest_debug = ingest_coord.get_coordinator_debug_info(mock_request)
         
-        assert csv_debug['session_prefix'] == 'csv_mapping'
-        assert ingest_debug['session_prefix'] == 'ingest'
+        assert csv_debug['session_prefix'] is None
+        assert ingest_debug['session_prefix'] is None
