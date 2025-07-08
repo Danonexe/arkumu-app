@@ -20,7 +20,7 @@
                 <div id="mapping-dropdown-list" 
                      hx-get="{% url 'importer:list_mappings_dropdown' %}"
                      hx-trigger="load once"
-                     hx-vals='{"organization": "{{ organization_code }}"}'
+                     hx-vals='{"organization": "{{ organization_id }}"}'
                      hx-swap="innerHTML">
                     <li><a class="text-base-content/50">Loading mappings...</a></li>
                 </div>
