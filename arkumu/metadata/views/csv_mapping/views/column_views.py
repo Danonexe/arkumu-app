@@ -222,7 +222,7 @@ class SelectAllDatasetColumnsView(GeneralLoginRequiredMixin, OrganizationMixin,
             
             # Build OOB response - this is a workspace operation so it should update workspace
             oob_updates = {
-                'selected-columns-workspace': workspace_html
+                'workspace-content': workspace_html
             }
             response_html = self.build_oob_response(column_badges_html, oob_updates)
             
@@ -285,7 +285,7 @@ class DeselectAllDatasetColumnsView(GeneralLoginRequiredMixin, OrganizationMixin
             
             # Build OOB response - this is a workspace operation so it should update workspace
             oob_updates = {
-                'selected-columns-workspace': workspace_html
+                'workspace-content': workspace_html
             }
             response_html = self.build_oob_response(column_badges_html, oob_updates)
             

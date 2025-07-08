@@ -197,9 +197,9 @@ class SaveMappingHTMXView(GeneralLoginRequiredMixin, CSVMappingCoordinatorMixin,
         )
         logger.info(f"🎯 SAVE_HTMX_SUCCESS: Navbar template rendered ({len(navbar_html)} chars)")
         
-        # Build OOB updates - ONLY navbar
+        # Build OOB updates - ONLY navbar mapping controls
         oob_updates = {
-            'navbar-end': navbar_html,
+            'navbar-mapping-controls': navbar_html,
         }
         logger.info(f"📦 SAVE_HTMX_SUCCESS: OOB updates prepared (navbar only): {list(oob_updates.keys())}")
         
@@ -280,6 +280,12 @@ class SaveMappingHTMXView(GeneralLoginRequiredMixin, CSVMappingCoordinatorMixin,
             }
             
             logger.info(f"🎯 RENDER_NAVBAR: Final context: {context}")
+            logger.info(f"🎯 RENDER_NAVBAR: DETAILED CONTEXT VALUES:")
+            logger.info(f"🎯   - current_mapping_id: '{current_mapping_id}' (type: {type(current_mapping_id)}, bool: {bool(current_mapping_id)})")
+            logger.info(f"🎯   - current_mapping_name: '{current_mapping_name}' (type: {type(current_mapping_name)}, bool: {bool(current_mapping_name)})")
+            logger.info(f"🎯   - current_mapping_updated: '{current_mapping_updated}' (type: {type(current_mapping_updated)}, bool: {bool(current_mapping_updated)})")
+            logger.info(f"🎯   - current_mapping_status: '{current_mapping_status}' (type: {type(current_mapping_status)}, bool: {bool(current_mapping_status)})")
+            logger.info(f"🎯   - organization_id: '{organization_id}' (type: {type(organization_id)}, bool: {bool(organization_id)})")
             logger.info(f"🎯 RENDER_NAVBAR: About to render template 'csv_mapping/partials/navbar_mapping_controls.html'")
             
             rendered_html = render_to_string(

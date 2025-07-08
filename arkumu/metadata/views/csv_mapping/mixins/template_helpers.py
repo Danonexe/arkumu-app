@@ -35,8 +35,11 @@ class CSVMappingTemplateHelperMixin:
             workspace_columns = self.get_workspace_columns(request, organization_id)
         
         logger.info(f"🎨 TEMPLATE_HELPER: render_workspace_template called with {len(workspace_columns)} workspace columns")
+        logger.info(f"🖥️ WORKSPACE_RENDER: About to call _prepare_datasets_with_columns with workspace_columns count: {len(workspace_columns)}")
         
         datasets_with_columns = self._prepare_datasets_with_columns(workspace_columns)
+        
+        logger.info(f"🖥️ WORKSPACE_RENDER: _prepare_datasets_with_columns returned {len(datasets_with_columns)} datasets")
         
         logger.info(f"🎨 TEMPLATE_HELPER: Final template render order - {len(datasets_with_columns)} datasets:")
         for i, dataset_group in enumerate(datasets_with_columns):

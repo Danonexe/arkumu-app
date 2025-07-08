@@ -106,7 +106,17 @@ class LoadMappingHTMXView(GeneralLoginRequiredMixin, CSVMappingCoordinatorMixin,
         mapping_id = data.get('mapping_id', '')
         mapping_name = data.get('mapping_name', 'Unknown')
         
+        logger.info(f"🚀🚀🚀 _render_consolidated_load_success_response CALLED! mapping='{mapping_name}' (ID: {mapping_id}) 🚀🚀🚀")
         logger.info(f"🟢 LOAD_MAPPING_HTMX: Building success response for mapping '{mapping_name}' (ID: {mapping_id})")
+        
+        # CRITICAL: Ensure session is fully synchronized before rendering workspace
+        # The LoadMappingView.post() modified the session, but we need to ensure
+        # the current request context sees those changes
+        self.request.session.save()
+        
+        # Verify workspace columns are actually in session before rendering
+        workspace_columns = self.get_workspace_columns(self.request, organization_id)
+        logger.info(f"🟢 LOAD_MAPPING_HTMX: Verified {len(workspace_columns)} workspace columns in session before rendering")
         
         # Just render the workspace since that's what has the loaded columns
         workspace_html = self.render_workspace_template(self.request, organization_id)
@@ -131,6 +141,12 @@ class LoadMappingHTMXView(GeneralLoginRequiredMixin, CSVMappingCoordinatorMixin,
             'csrf_token': get_token(self.request),
         }
         logger.info(f"🔍 LOAD_MAPPING: Rendering navbar with context: {navbar_context}")
+        logger.info(f"🔍 LOAD_MAPPING: DETAILED CONTEXT VALUES:")
+        logger.info(f"🔍   - current_mapping_id: '{mapping_id}' (type: {type(mapping_id)}, bool: {bool(mapping_id)})")
+        logger.info(f"🔍   - current_mapping_name: '{mapping_name}' (type: {type(mapping_name)}, bool: {bool(mapping_name)})")
+        logger.info(f"🔍   - current_mapping_updated: '{updated_time}' (type: {type(updated_time)}, bool: {bool(updated_time)})")
+        logger.info(f"🔍   - current_mapping_status: '{validation_status}' (type: {type(validation_status)}, bool: {bool(validation_status)})")
+        logger.info(f"🔍   - organization_id: '{organization_id}' (type: {type(organization_id)}, bool: {bool(organization_id)})")
         
         navbar_html = render_to_string(
             'csv_mapping/partials/navbar_mapping_controls.html',
@@ -143,7 +159,7 @@ class LoadMappingHTMXView(GeneralLoginRequiredMixin, CSVMappingCoordinatorMixin,
         # Build OOB updates for workspace and navbar
         oob_updates = {
             'workspace-content': workspace_html,
-            'navbar-end': navbar_html,
+            'navbar-mapping-controls': navbar_html,
         }
         logger.info(f"🔍 LOAD_MAPPING: Building OOB response with targets: {list(oob_updates.keys())}")
         
@@ -156,6 +172,13 @@ class LoadMappingHTMXView(GeneralLoginRequiredMixin, CSVMappingCoordinatorMixin,
     def _generate_consolidated_load_oob_updates(self, organization_id, mapping_id, mapping_name):
         """Generate necessary OOB updates for mapping load (workspace and save section only)"""
         logger.info(f"🔵 LOAD_MAPPING_HTMX: Rendering workspace template...")
+        
+        # CRITICAL: Ensure session is fully synchronized before rendering workspace
+        self.request.session.save()
+        
+        # Verify workspace columns are actually in session before rendering
+        workspace_columns = self.get_workspace_columns(self.request, organization_id)
+        logger.info(f"🔵 LOAD_MAPPING_HTMX: Verified {len(workspace_columns)} workspace columns in session before rendering")
         
         # Use template helper methods for consistent rendering
         try:
