@@ -13,6 +13,7 @@ while maintaining clean separation of their specific responsibilities.
 import logging
 from arkumu.users.models import Organization
 from django.middleware.csrf import get_token
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,7 @@ class BaseCoordinatorMixin:
     
     # Shared session keys (no prefix, used across all coordinators)
     SHARED_CURRENT_ORGANIZATION_KEY = 'current_organization'
+    SHARED_CURRENT_MAPPING_KEY = 'current_mapping'
     
     def get_session_key(self, base_key, organization_id=None):
         """
@@ -136,6 +138,73 @@ class BaseCoordinatorMixin:
             request.session.modified = True
             logger.info(f"BASE_COORDINATOR: Cleared current organization from key: {session_key}")
     
+    def get_current_mapping(self, request):
+        """
+        Get the currently selected mapping from session (shared across all coordinators).
+        
+        Args:
+            request: Django request object
+            
+        Returns:
+            dict: Mapping data with keys: id, name, organization_id, loaded_at
+            None: If no mapping is selected
+        """
+        session_key = self._get_shared_session_key(self.SHARED_CURRENT_MAPPING_KEY)
+        return request.session.get(session_key)
+    
+    def set_current_mapping(self, request, mapping_id, mapping_name=None, organization_id=None):
+        """
+        Set the current mapping in session (shared across all coordinators).
+        
+        Args:
+            request: Django request object
+            mapping_id: Mapping ID
+            mapping_name: Mapping name (optional)
+            organization_id: Organization ID (optional, uses current if not provided)
+            
+        Returns:
+            dict: Mapping data that was set
+        """
+        if not organization_id:
+            current_org = self.get_current_organization(request)
+            if not current_org:
+                logger.warning("BASE_COORDINATOR: Cannot set mapping without organization")
+                return None
+            organization_id = current_org['id']
+        
+        mapping_data = {
+            'id': mapping_id,
+            'name': mapping_name or f"Mapping {mapping_id}",
+            'organization_id': organization_id,
+            'loaded_at': timezone.now().isoformat()
+        }
+        
+        session_key = self._get_shared_session_key(self.SHARED_CURRENT_MAPPING_KEY)
+        request.session[session_key] = mapping_data
+        request.session.modified = True
+        
+        logger.info(f"BASE_COORDINATOR: Set current mapping to '{mapping_data['name']}' (id: {mapping_id}) for org ID {organization_id}")
+        return mapping_data
+    
+    def clear_current_mapping(self, request):
+        """
+        Clear the current mapping from session.
+        
+        Args:
+            request: Django request object
+            
+        Returns:
+            dict: The mapping data that was cleared, or None
+        """
+        session_key = self._get_shared_session_key(self.SHARED_CURRENT_MAPPING_KEY)
+        if session_key in request.session:
+            mapping_data = request.session[session_key]
+            del request.session[session_key]
+            request.session.modified = True
+            logger.info(f"BASE_COORDINATOR: Cleared current mapping '{mapping_data.get('name', 'unknown')}' (id: {mapping_data.get('id', 'unknown')})")
+            return mapping_data
+        return None
+    
     def get_organization_context(self, request):
         """
         Get organization context for templates.
@@ -197,6 +266,8 @@ class BaseCoordinatorMixin:
         if old_org and old_org['id'] != new_org_data['id']:
             logger.info(f"BASE_COORDINATOR: Clearing old organization state for {old_org['code']} (ID: {old_org['id']})")
             self.clear_organization_specific_state(request, old_org['id'])
+            # Also clear the current mapping since it belongs to the old organization
+            self.clear_current_mapping(request)
         
         # Also store this organization for cross-view persistence (if OrganizationMixin is available)
         if hasattr(self, 'set_last_selected_organization'):
@@ -208,8 +279,8 @@ class BaseCoordinatorMixin:
         """
         Get base template context that all coordinators can use.
         
-        This provides common context items like organization info, CSRF token,
-        and any additional context passed in.
+        This provides common context items like organization info, mapping info,
+        CSRF token, and any additional context passed in.
         
         Args:
             request: Django request object
@@ -220,6 +291,7 @@ class BaseCoordinatorMixin:
         """
         context = {
             **self.get_organization_context(request),
+            'current_mapping': self.get_current_mapping(request),
             'csrf_token': get_token(request),
         }
         
@@ -278,11 +350,13 @@ class BaseCoordinatorMixin:
         """
         logger.info("BASE_COORDINATOR: GLOBAL COORDINATOR STATE RESET")
         
-        # Get current organization before clearing
+        # Get current organization and mapping before clearing
         current_org = self.get_current_organization(request)
+        current_mapping = self.get_current_mapping(request)
         
-        # Clear current organization selection
+        # Clear current organization and mapping selection
         self.clear_current_organization(request)
+        self.clear_current_mapping(request)
         
         # Find all coordinator-related session keys
         coordinator_keys = []

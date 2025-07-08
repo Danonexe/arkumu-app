@@ -1298,21 +1298,12 @@ class CSVMappingCoordinatorMixin(BaseCoordinatorMixin, CSVDataMixin, MappingWork
         
         logger.info(f"🟡 DESERIALIZE_MAPPING: Tracking loaded mapping context...")
         
-        # Track loaded mapping context
+        # Track loaded mapping context using shared mapping state
         if mapping_id and mapping_name:
-            loaded_mapping_key = self.get_session_key('loaded_mapping', organization_id)
-            mapping_data = {
-                'mapping_id': mapping_id,
-                'mapping_name': mapping_name,
-                'loaded_at': timezone.now().isoformat()
-            }
-            request.session[loaded_mapping_key] = mapping_data
-            request.session.modified = True
-            logger.info(f"🟢 DESERIALIZE_MAPPING: SET SESSION - Key: {loaded_mapping_key}")
-            logger.info(f"🟢 DESERIALIZE_MAPPING: SET SESSION - Data: {mapping_data}")
-            logger.info(f"🟢 DESERIALIZE_MAPPING: SET SESSION - Session now has: {list(request.session.keys())}")
+            self.set_current_mapping(request, mapping_id, mapping_name, organization_id)
+            logger.info(f"🟢 DESERIALIZE_MAPPING: Set current mapping to '{mapping_name}' (ID: {mapping_id})")
         else:
-            logger.warning(f"🟡 DESERIALIZE_MAPPING: No mapping_id or mapping_name provided - not setting session")
+            logger.warning(f"🟡 DESERIALIZE_MAPPING: No mapping_id or mapping_name provided - not setting current mapping")
         
         # NOTE: Do NOT restore selected datasets from mapping
         # Selected datasets are UI browsing state, not mapping configuration state
@@ -1463,42 +1454,19 @@ class CSVMappingCoordinatorMixin(BaseCoordinatorMixin, CSVDataMixin, MappingWork
     # ==========================================================================
     # Loaded Mapping Context Management
     # ==========================================================================
+    # Now using shared mapping methods from BaseCoordinatorMixin:
+    # - get_current_mapping(request)
+    # - set_current_mapping(request, mapping_id, mapping_name, organization_id)
+    # - clear_current_mapping(request)
     
-    def get_loaded_mapping_context(self, request, organization_id):
-        """
-        Get currently loaded mapping context from session.
-        
-        Returns:
-            dict: Loaded mapping info with keys: mapping_id, mapping_name, loaded_at
-                  or None if no mapping is loaded
-        """
-        loaded_mapping_key = self.get_session_key('loaded_mapping', organization_id)
-        return request.session.get(loaded_mapping_key)
-    
-    def clear_loaded_mapping_context(self, request, organization_id):
-        """
-        Clear loaded mapping context from session.
-        
-        This should be called when workspace is modified to indicate
-        the session state no longer matches the loaded mapping.
-        """
-        loaded_mapping_key = self.get_session_key('loaded_mapping', organization_id)
-        if loaded_mapping_key in request.session:
-            mapping_info = request.session[loaded_mapping_key]
-            del request.session[loaded_mapping_key]
-            request.session.modified = True
-            logger.info(f"CLEAR_LOADED_MAPPING: Cleared loaded mapping context for '{mapping_info.get('mapping_name', 'unknown')}'")
-            return mapping_info
-        return None
-    
-    def is_mapping_loaded(self, request, organization_id):
+    def is_mapping_loaded(self, request):
         """
         Check if a mapping is currently loaded.
         
         Returns:
             bool: True if a mapping is loaded, False otherwise
         """
-        return self.get_loaded_mapping_context(request, organization_id) is not None
+        return self.get_current_mapping(request) is not None
     
     # ==========================================================================
     # Organization Change Handling (BaseCoordinatorMixin Integration)
@@ -1540,7 +1508,7 @@ class CSVMappingCoordinatorMixin(BaseCoordinatorMixin, CSVDataMixin, MappingWork
             self.get_session_key('column_selection', organization_id),
             self.get_session_key('workspace_columns', organization_id),
             self.get_session_key('all_datasets_fk', organization_id),
-            self.get_session_key('loaded_mapping', organization_id),
+            # Note: loaded_mapping is now managed at the base level as current_mapping
         ]
         
         for key in keys_to_clear:

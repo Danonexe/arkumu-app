@@ -153,76 +153,8 @@ class IngestCoordinatorMixin(BaseCoordinatorMixin):
         """
         self.set_selected_files(request, [], organization_id)
     
-    def get_selected_mapping(self, request, organization_id=None):
-        """
-        Get currently selected mapping from session for specific organization.
-        
-        Args:
-            request: Django request object
-            organization_id (int, optional): Organization numeric ID. If not provided, uses current organization.
-        
-        Returns:
-            dict: Mapping data with keys: id, name, organization
-            None: If no mapping is selected
-        """
-        if not organization_id:
-            current_org = self.get_current_organization(request)
-            if not current_org:
-                return None
-            organization_id = current_org['id']  # Use numeric ID consistently
-        
-        session_key = self.get_session_key('selected_mapping', organization_id)
-        return request.session.get(session_key)
-    
-    def set_selected_mapping(self, request, mapping_id, mapping_name=None, organization_id=None):
-        """
-        Set the selected mapping in session for specific organization.
-        
-        Args:
-            request: Django request object
-            mapping_id: Mapping ID
-            mapping_name: Optional mapping name
-            organization_id (int, optional): Organization numeric ID. If not provided, uses current organization.
-        """
-        if not organization_id:
-            current_org = self.get_current_organization(request)
-            if not current_org:
-                logger.warning("INGEST_COORDINATOR: Cannot set mapping without current organization")
-                return None
-            organization_id = current_org['id']  # Use numeric ID consistently
-        
-        mapping_data = {
-            'id': mapping_id,
-            'name': mapping_name or f"Mapping {mapping_id}",
-            'organization_id': organization_id  # Store numeric ID
-        }
-        
-        session_key = self.get_session_key('selected_mapping', organization_id)
-        request.session[session_key] = mapping_data
-        request.session.modified = True
-        
-        logger.info(f"INGEST_COORDINATOR: Set selected mapping to {mapping_data['name']} (id: {mapping_id}) for org ID {organization_id}")
-        return mapping_data
-    
-    def clear_selected_mapping(self, request, organization_id=None):
-        """
-        Clear the selected mapping from session for specific organization.
-        
-        Args:
-            request: Django request object
-            organization_id (int, optional): Organization numeric ID. If not provided, uses current organization.
-        """
-        if not organization_id:
-            current_org = self.get_current_organization(request)
-            if not current_org:
-                return
-            organization_id = current_org['id']  # Use numeric ID consistently
-        
-        session_key = self.get_session_key('selected_mapping', organization_id)
-        if session_key in request.session:
-            del request.session[session_key]
-            request.session.modified = True
-            logger.info(f"INGEST_COORDINATOR: Cleared selected mapping for org ID {organization_id}")
+    # Mapping methods are now inherited from BaseCoordinatorMixin
+    # get_current_mapping, set_current_mapping, clear_current_mapping are available
     
     def handle_organization_change(self, request, new_organization_id):
         """
@@ -347,7 +279,7 @@ class IngestCoordinatorMixin(BaseCoordinatorMixin):
         """
         org_context = self.get_organization_context(request)
         selected_files = self.get_selected_files(request)
-        selected_mapping = self.get_selected_mapping(request)
+        selected_mapping = self.get_current_mapping(request)  # Use shared mapping from base
         
         # Get file browser context if organization is selected
         if org_context['organization_id']:
@@ -378,7 +310,7 @@ class IngestCoordinatorMixin(BaseCoordinatorMixin):
         # Get current state for summary
         current_org = self.get_current_organization(request)
         selected_files_count = len(self.get_selected_files(request)) if current_org else 0
-        had_mapping = self.get_selected_mapping(request) is not None if current_org else False
+        had_mapping = self.get_current_mapping(request) is not None if current_org else False
         
         # Clear organization-specific state if we have an organization
         if current_org:
@@ -408,9 +340,9 @@ class IngestCoordinatorMixin(BaseCoordinatorMixin):
         """
         logger.info(f"INGEST_COORDINATOR: Clearing organization-specific state for org ID {organization_id}")
         
-        # Clear files and mapping for this specific organization
+        # Clear files for this specific organization
         self.clear_selected_files(request, organization_id)
-        self.clear_selected_mapping(request, organization_id)
+        # Note: Mapping is now shared and cleared at the base level when organization changes
         
         # Call parent implementation
         super().clear_organization_specific_state(request, organization_id)

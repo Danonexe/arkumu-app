@@ -121,14 +121,14 @@ class IngestDataView(GeneralLoginRequiredMixin, OrganizationMixin, IngestCoordin
                         organization_id=organization.code  # Use organization code for mapping lookup
                     )
                     
-                    # Store selected mapping in ingestion context
+                    # Use the shared set_current_mapping method from BaseCoordinatorMixin
+                    self.set_current_mapping(request, mapping_id, selected_mapping.name, organization.id)
+                    
+                    # Keep ingestion context for backward compatibility if needed
                     ingestion_context['selected_mapping_id'] = mapping_id
                     ingestion_context['selected_mapping_name'] = selected_mapping.name
                     ingestion_context['organization_id'] = organization.id
                     ingestion_context['organization_code'] = organization.code
-                    
-                    # Also store in legacy session key for backward compatibility (use organization code)
-                    request.session[f'selected_mapping_{organization.code}'] = mapping_id
                     
                     # Save ingestion context
                     request.session[context_key] = ingestion_context
@@ -143,13 +143,13 @@ class IngestDataView(GeneralLoginRequiredMixin, OrganizationMixin, IngestCoordin
                     logger.info(f"Successfully loaded mapping: {selected_mapping.name}")
                 except Mapping.DoesNotExist:
                     logger.warning(f"Mapping {mapping_id} not found for organization {organization.code}")
-                    # Clear mapping from ingestion context
+                    # Clear mapping using shared method
+                    self.clear_current_mapping(request)
+                    
+                    # Clear mapping from ingestion context for backward compatibility
                     ingestion_context.pop('selected_mapping_id', None)
                     ingestion_context.pop('selected_mapping_name', None)
                     request.session[context_key] = ingestion_context
-                    
-                    # Clear legacy session key (use organization code)
-                    request.session.pop(f'selected_mapping_{organization.code}', None)
                     request.session.modified = True
                     
                     context = {
@@ -160,14 +160,15 @@ class IngestDataView(GeneralLoginRequiredMixin, OrganizationMixin, IngestCoordin
                     }
             else:
                 logger.warning(f"Missing mapping_id or organization: mapping_id={mapping_id}, organization={organization}")
-                # Clear any previously stored mapping
+                # Clear any previously stored mapping using shared method
+                self.clear_current_mapping(request)
+                
                 if organization:
                     context_key = f'ingestion_context_{organization.code}'
                     ingestion_context = request.session.get(context_key, {})
                     ingestion_context.pop('selected_mapping_id', None)
                     ingestion_context.pop('selected_mapping_name', None)
                     request.session[context_key] = ingestion_context
-                    request.session.pop(f'selected_mapping_{organization.code}', None)
                     request.session.modified = True
                     
                 context = {
