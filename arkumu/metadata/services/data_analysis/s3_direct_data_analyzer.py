@@ -92,7 +92,7 @@ class S3DirectDataAnalyzer:
         # Initialize services for S3 access and analysis
         self.bucket_service = BucketService()
         self.relationship_service = RelationshipDiscoveryService()
-        self.bulk_analyzer = BulkDataAnalyzer()
+        # Note: BulkDataAnalyzer functionality integrated into S3DirectDataAnalyzer
         
         # Initialize bulk updater only when needed (lazy initialization)
         self._bulk_updater = None
@@ -496,7 +496,8 @@ class S3DirectDataAnalyzer:
                 # Take a smaller subset for analysis if needed
                 analysis_sample_df = sample_df.head(self.sample_size_for_analysis)
                 sample_data = analysis_sample_df.to_dicts()
-                multi_value_analysis = self.bulk_analyzer.analyze_dataset_multi_values(analysis_sample_df)
+                # Multi-value analysis integrated into S3DirectDataAnalyzer
+                multi_value_analysis = self._analyze_multi_values_simple(analysis_sample_df)
             else:
                 # Skip expensive analysis for lazy loading
                 sample_data = []
@@ -882,11 +883,11 @@ class S3DirectDataAnalyzer:
         # Convert list of dicts to DataFrame for the new analyzer
         import polars as pl
         df = pl.DataFrame(csv_data)
-        changes_analysis = self.bulk_analyzer.analyze_dataset_changes(
+        # Changes analysis integrated into S3DirectDataAnalyzer
+        changes_analysis = self._analyze_dataset_changes_simple(
             dataset_name=dataset_name,
             df=df,
-            base_uri="https://example.org/",  # TODO: Get from config
-            institution=organization_id
+            organization_id=organization_id
         )
         
         return {
@@ -1009,4 +1010,94 @@ class S3DirectDataAnalyzer:
             logger.warning(f"Some datasets failed to load: {errors}")
         
         logger.info(f"Successfully loaded {len(datasets_data)} out of {len(dataset_names)} datasets")
-        return datasets_data 
+        return datasets_data
+    
+    def _analyze_multi_values_simple(self, df) -> Dict[str, Any]:
+        """
+        Simple multi-value analysis to replace BulkDataAnalyzer functionality.
+        
+        Args:
+            df: Polars DataFrame to analyze
+            
+        Returns:
+            Dictionary with multi-value analysis results
+        """
+        multi_value_columns = {}
+        
+        try:
+            for column in df.columns:
+                # Simple heuristic: check if any values contain common separators
+                sample_values = df[column].drop_nulls().head(100).to_list()
+                separators_found = set()
+                
+                for value in sample_values:
+                    if isinstance(value, str):
+                        if ',' in value:
+                            separators_found.add(',')
+                        if ';' in value:
+                            separators_found.add(';')
+                        if '|' in value:
+                            separators_found.add('|')
+                
+                if separators_found:
+                    multi_value_columns[column] = {
+                        'likely_multi_value': True,
+                        'detected_separators': list(separators_found),
+                        'recommended_separator': ',' if ',' in separators_found else list(separators_found)[0]
+                    }
+                else:
+                    multi_value_columns[column] = {
+                        'likely_multi_value': False,
+                        'detected_separators': [],
+                        'recommended_separator': None
+                    }
+        except Exception as e:
+            logger.warning(f"Error in multi-value analysis: {e}")
+        
+        return multi_value_columns
+    
+    def _analyze_dataset_changes_simple(self, dataset_name: str, df, organization_id: str) -> Dict[str, Any]:
+        """
+        Simple dataset changes analysis to replace BulkDataAnalyzer functionality.
+        
+        Args:
+            dataset_name: Name of the dataset
+            df: Polars DataFrame with the data
+            organization_id: Organization ID
+            
+        Returns:
+            Dictionary with changes analysis results
+        """
+        try:
+            row_count = df.height
+            column_count = len(df.columns)
+            
+            # Simple analysis - estimate resources that would be created
+            estimated_resources = row_count * column_count
+            estimated_triples = estimated_resources * 2  # Rough estimate
+            
+            return {
+                'dataset_name': dataset_name,
+                'organization_id': organization_id,
+                'estimated_changes': {
+                    'rows_to_process': row_count,
+                    'columns_to_process': column_count,
+                    'estimated_resources': estimated_resources,
+                    'estimated_triples': estimated_triples
+                },
+                'analysis_status': 'completed_simple'
+            }
+        except Exception as e:
+            logger.error(f"Error in dataset changes analysis: {e}")
+            return {
+                'dataset_name': dataset_name,
+                'organization_id': organization_id,
+                'estimated_changes': {
+                    'rows_to_process': 0,
+                    'columns_to_process': 0,
+                    'estimated_resources': 0,
+                    'estimated_triples': 0
+                },
+                'analysis_status': 'error',
+                'error': str(e)
+            } 

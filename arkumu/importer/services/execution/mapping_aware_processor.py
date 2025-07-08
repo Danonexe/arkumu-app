@@ -643,13 +643,15 @@ class MappingAwareProcessor:
         return [v.strip() for v in value.split(separator) if v.strip()]
     
     def _generate_property_uri(self, arkumu_type: str) -> str:
-        """Generate property URI from arkumu_type"""
+        """Generate property URI from arkumu_type using centralized URI generation"""
         # Check if it's already a full URI
         if arkumu_type.startswith('http://') or arkumu_type.startswith('https://'):
             return arkumu_type
         
-        # Generate arkumu property URI
-        return f"{self.base_uri}/properties/{arkumu_type}"
+        # Use centralized URI generation from common utilities
+        from arkumu.common.uri_utils import mint_uri, slugify_uri_part
+        safe_arkumu_type = slugify_uri_part(arkumu_type)
+        return mint_uri(self.base_uri, self.institution, "properties", safe_arkumu_type)
     
     def _generate_external_ontology_uri(self, column: ColumnConfig, value: str) -> Optional[str]:
         """Generate external ontology URI"""
