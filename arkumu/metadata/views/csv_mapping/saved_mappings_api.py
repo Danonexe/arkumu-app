@@ -517,7 +517,7 @@ class LoadMappingView(GeneralLoginRequiredMixin, CSVMappingCoordinatorMixin, Vie
                     ingest_coordinator.set_current_organization(request, organization_id)
                 
                 # Set the selected mapping in ingest coordinator
-                ingest_result = ingest_coordinator.set_selected_mapping(
+                ingest_result = ingest_coordinator.set_current_mapping(
                     request, 
                     mapping_id=str(mapping.id), 
                     mapping_name=mapping.name

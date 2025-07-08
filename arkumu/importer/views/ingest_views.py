@@ -58,10 +58,16 @@ class IngestDataView(GeneralLoginRequiredMixin, OrganizationMixin, IngestCoordin
         if hasattr(self, 'get_current_organization'):
             current_org = self.get_current_organization(request)
         
-        if not current_org or current_org['code'] != organization_id:
+        # Only trigger organization change if we have a current org and it's actually different
+        # This prevents false positives when navigating between views for the same organization
+        if current_org and current_org['code'] != organization_id:
             # Organization changed - handle the change
             if hasattr(self, 'handle_organization_change'):
                 self.handle_organization_change(request, organization_id)
+        elif not current_org:
+            # No current organization - set it without triggering change logic
+            if hasattr(self, 'set_current_organization'):
+                self.set_current_organization(request, organization_id)
         
         # Get ingest-specific context using IngestCoordinatorMixin
         ingest_context = self.get_ingest_context(request)

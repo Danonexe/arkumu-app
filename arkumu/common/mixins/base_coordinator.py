@@ -266,8 +266,14 @@ class BaseCoordinatorMixin:
         if old_org and old_org['id'] != new_org_data['id']:
             logger.info(f"BASE_COORDINATOR: Clearing old organization state for {old_org['code']} (ID: {old_org['id']})")
             self.clear_organization_specific_state(request, old_org['id'])
-            # Also clear the current mapping since it belongs to the old organization
-            self.clear_current_mapping(request)
+            
+            # Only clear the current mapping if it belongs to the old organization
+            current_mapping = self.get_current_mapping(request)
+            if current_mapping and current_mapping.get('organization_id') == old_org['id']:
+                logger.info(f"BASE_COORDINATOR: Clearing mapping '{current_mapping.get('name')}' that belongs to old organization")
+                self.clear_current_mapping(request)
+            else:
+                logger.info(f"BASE_COORDINATOR: Preserving mapping - it doesn't belong to old organization or no mapping exists")
         
         # Also store this organization for cross-view persistence (if OrganizationMixin is available)
         if hasattr(self, 'set_last_selected_organization'):
