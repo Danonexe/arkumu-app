@@ -501,6 +501,37 @@ class LoadMappingView(GeneralLoginRequiredMixin, CSVMappingCoordinatorMixin, Vie
             logger.info(f"🟢 LOAD_MAPPING_API: Successfully loaded mapping '{mapping.name}' with ID {mapping.id}")
             logger.info(f"🟢 LOAD_MAPPING_API: Summary: {summary}")
             
+            # Also save mapping in ingest coordinator session for cross-interface compatibility
+            try:
+                from arkumu.importer.mixins.ingest_coordinator import IngestCoordinatorMixin
+                
+                # Create a temporary instance of IngestCoordinatorMixin to access its methods
+                class TempIngestCoordinator(IngestCoordinatorMixin):
+                    pass
+                
+                ingest_coordinator = TempIngestCoordinator()
+                
+                # Set the current organization in ingest coordinator if not already set
+                current_org = ingest_coordinator.get_current_organization(request)
+                if not current_org or current_org.get('code') != organization_id:
+                    ingest_coordinator.set_current_organization(request, organization_id)
+                
+                # Set the selected mapping in ingest coordinator
+                ingest_result = ingest_coordinator.set_selected_mapping(
+                    request, 
+                    mapping_id=str(mapping.id), 
+                    mapping_name=mapping.name
+                )
+                
+                if ingest_result:
+                    logger.info(f"🟢 LOAD_MAPPING_API: Also saved mapping in ingest coordinator session")
+                else:
+                    logger.warning(f"🟡 LOAD_MAPPING_API: Could not save mapping in ingest coordinator session")
+                    
+            except Exception as e:
+                logger.warning(f"🟡 LOAD_MAPPING_API: Error saving to ingest coordinator session: {e}")
+                # Don't fail the entire operation if ingest coordinator update fails
+            
             # Return success response that triggers UI refresh
             response_data = {
                 'success': True,

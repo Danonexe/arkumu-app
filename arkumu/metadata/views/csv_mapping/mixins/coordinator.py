@@ -14,19 +14,24 @@ Key principles:
 import logging
 from .csv_data import CSVDataMixin
 from .workspace import MappingWorkspaceMixin
+from arkumu.common.mixins.base_coordinator import BaseCoordinatorMixin
 from django.utils import timezone
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
 
-class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
+class CSVMappingCoordinatorMixin(BaseCoordinatorMixin, CSVDataMixin, MappingWorkspaceMixin):
     """
     Coordinator mixin that properly handles dataset-column relationships.
     
-    This mixin inherits from both CSVDataMixin and MappingWorkspaceMixin to provide
-    coordinated operations that maintain the integrity of dataset-column relationships.
+    This mixin inherits from BaseCoordinatorMixin for shared organization management,
+    CSVDataMixin for dataset operations, and MappingWorkspaceMixin for workspace operations
+    to provide coordinated operations that maintain the integrity of dataset-column relationships.
     """
+    
+    # Set session prefix for BaseCoordinatorMixin
+    SESSION_PREFIX = 'csv_mapping'
     
     # ==========================================================================
     # Column ID Management (Dataset-Aware)
@@ -50,7 +55,7 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         Returns:
             list: List of selected dataset names
         """
-        selected_datasets_key = f"selected_datasets_{organization_id}"
+        selected_datasets_key = self.get_session_key('selected_datasets', organization_id)
         return request.session.get(selected_datasets_key, [])
     
     # ==========================================================================
@@ -190,7 +195,7 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         # CRITICAL: Also clear column selection state for this dataset to prevent htmx:targetError
         # When dataset is deselected, its column badges container is removed from DOM,
         # but pending HTMX requests might still try to update it
-        selection_key = f"column_selection_{organization_id}"
+        selection_key = self.get_session_key('column_selection', organization_id)
         column_selections = request.session.get(selection_key, {})
         
         # Find all dataset keys that match this dataset name (could have different sources)
@@ -420,7 +425,7 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
                 updated_selected = list(current_selected) + [dataset_name]
                 
                 # Update the selection
-                session_key = f'selected_datasets_{organization_id}'
+                session_key = self.get_session_key('selected_datasets', organization_id)
                 request.session[session_key] = updated_selected
                 request.session.modified = True
                 
@@ -850,7 +855,7 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         # CRITICAL: Also clear ALL column selection state to prevent conflicts
         # When datasets are cleared, any lingering column selections can cause htmx:targetError
         # when new datasets are selected and try to update non-existent elements
-        selection_key = f"column_selection_{organization_id}"
+        selection_key = self.get_session_key('column_selection', organization_id)
         column_selections = request.session.get(selection_key, {})
         columns_selections_cleared = len(column_selections)
         
@@ -1040,7 +1045,7 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         Returns:
             list: All datasets with their column details
         """
-        cache_key = f"all_datasets_fk_{organization_id}"
+        cache_key = self.get_session_key('all_datasets_fk', organization_id)
         
         # Check if we have cached data and don't need refresh
         if not force_refresh and cache_key in request.session:
@@ -1105,7 +1110,7 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
             request: Django request object
             organization_id (str): Organization ID
         """
-        cache_key = f"all_datasets_fk_{organization_id}"
+        cache_key = self.get_session_key('all_datasets_fk', organization_id)
         if cache_key in request.session:
             del request.session[cache_key]
             request.session.modified = True
@@ -1294,7 +1299,7 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         
         # Track loaded mapping context
         if mapping_id and mapping_name:
-            loaded_mapping_key = f"loaded_mapping_{organization_id}"
+            loaded_mapping_key = self.get_session_key('loaded_mapping', organization_id)
             mapping_data = {
                 'mapping_id': mapping_id,
                 'mapping_name': mapping_name,
@@ -1324,7 +1329,7 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         if workspace_columns_dict:
             # Convert dict back to list format expected by workspace
             workspace_columns_list = list(workspace_columns_dict.values())
-            workspace_key = f"workspace_columns_{organization_id}"
+            workspace_key = self.get_session_key('workspace_columns', organization_id)
             request.session[workspace_key] = workspace_columns_list
             logger.info(f"🟢 DESERIALIZE_MAPPING: Restored {len(workspace_columns_list)} workspace columns to session")
             
@@ -1377,7 +1382,8 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         Returns:
             dict: Validation results with warnings/errors
         """
-        logger.info(f"VALIDATE_MAPPING: Validating mapping compatibility for organization {organization_id}")
+        logger.info(f"🔍 VALIDATE_MAPPING: Starting validation for organization {organization_id}")
+        logger.info(f"🔍 VALIDATE_MAPPING: Mapping config keys: {list(mapping_config.keys())}")
         
         validation_result = {
             'is_valid': True,
@@ -1389,19 +1395,27 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         
         # Get available datasets for this organization
         try:
+            logger.info(f"🔍 VALIDATE_MAPPING: Getting available datasets for organization {organization_id}")
             available_datasets = self.get_csv_datasets_for_organization(organization_id)
             available_dataset_names = [ds['name'] for ds in available_datasets]
+            logger.info(f"🔍 VALIDATE_MAPPING: Found {len(available_dataset_names)} available datasets: {available_dataset_names[:5]}{'...' if len(available_dataset_names) > 5 else ''}")
         except Exception as e:
+            logger.error(f"🔴 VALIDATE_MAPPING: Failed to get available datasets: {str(e)}", exc_info=True)
             validation_result['errors'].append(f"Failed to get available datasets: {str(e)}")
             validation_result['is_valid'] = False
             return validation_result
         
         # Check dataset availability (support both old and new format)
         required_datasets = mapping_config.get('workspace_datasets', mapping_config.get('selected_datasets', []))
+        logger.info(f"🔍 VALIDATE_MAPPING: Required datasets from mapping: {required_datasets}")
+        
         for dataset_name in required_datasets:
             if dataset_name not in available_dataset_names:
+                logger.warning(f"🟡 VALIDATE_MAPPING: Missing dataset '{dataset_name}' not found in available datasets")
                 validation_result['missing_datasets'].append(dataset_name)
                 validation_result['is_valid'] = False
+            else:
+                logger.info(f"✅ VALIDATE_MAPPING: Dataset '{dataset_name}' is available")
         
         # Check column availability
         workspace_columns = mapping_config.get('workspace_columns', {})
@@ -1432,11 +1446,17 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         if validation_result['missing_datasets']:
             validation_result['errors'].append(f"Missing datasets: {', '.join(validation_result['missing_datasets'])}")
             validation_result['is_valid'] = False
+            logger.error(f"🔴 VALIDATE_MAPPING: Validation FAILED - Missing datasets: {validation_result['missing_datasets']}")
         
         if validation_result['missing_columns']:
             validation_result['warnings'].append(f"Some columns may not be available: {len(validation_result['missing_columns'])} columns")
+            logger.warning(f"🟡 VALIDATE_MAPPING: Warning - Missing columns: {len(validation_result['missing_columns'])}")
         
-        logger.info(f"VALIDATE_MAPPING: Validation result - Valid: {validation_result['is_valid']}, Warnings: {len(validation_result['warnings'])}, Errors: {len(validation_result['errors'])}")
+        if validation_result['is_valid']:
+            logger.info(f"✅ VALIDATE_MAPPING: Validation PASSED - Valid: {validation_result['is_valid']}, Warnings: {len(validation_result['warnings'])}")
+        else:
+            logger.error(f"🔴 VALIDATE_MAPPING: Validation FAILED - Valid: {validation_result['is_valid']}, Errors: {validation_result['errors']}")
+        
         return validation_result
     
     # ==========================================================================
@@ -1451,7 +1471,7 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
             dict: Loaded mapping info with keys: mapping_id, mapping_name, loaded_at
                   or None if no mapping is loaded
         """
-        loaded_mapping_key = f"loaded_mapping_{organization_id}"
+        loaded_mapping_key = self.get_session_key('loaded_mapping', organization_id)
         return request.session.get(loaded_mapping_key)
     
     def clear_loaded_mapping_context(self, request, organization_id):
@@ -1461,7 +1481,7 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
         This should be called when workspace is modified to indicate
         the session state no longer matches the loaded mapping.
         """
-        loaded_mapping_key = f"loaded_mapping_{organization_id}"
+        loaded_mapping_key = self.get_session_key('loaded_mapping', organization_id)
         if loaded_mapping_key in request.session:
             mapping_info = request.session[loaded_mapping_key]
             del request.session[loaded_mapping_key]
@@ -1478,6 +1498,64 @@ class CSVMappingCoordinatorMixin(CSVDataMixin, MappingWorkspaceMixin):
             bool: True if a mapping is loaded, False otherwise
         """
         return self.get_loaded_mapping_context(request, organization_id) is not None
+    
+    # ==========================================================================
+    # Organization Change Handling (BaseCoordinatorMixin Integration)
+    # ==========================================================================
+    
+    def handle_organization_change(self, request, new_organization_id):
+        """
+        Handle organization change with CSV mapping-specific state cleanup.
+        
+        Extends BaseCoordinatorMixin.handle_organization_change with CSV mapping cleanup.
+        
+        Args:
+            request: Django request object
+            new_organization_id: New organization ID
+            
+        Returns:
+            dict: New organization data
+        """
+        logger.info(f"CSV_COORDINATOR: Handling organization change to {new_organization_id}")
+        
+        # Get current organization for cleanup
+        current_org = self.get_current_organization(request)
+        if current_org:
+            self.clear_organization_specific_state(request, current_org['code'])
+        
+        # Call parent to set new organization
+        return super().handle_organization_change(request, new_organization_id)
+    
+    def clear_organization_specific_state(self, request, organization_id):
+        """
+        Clear all CSV mapping state specific to an organization.
+        
+        Overrides BaseCoordinatorMixin to provide CSV mapping-specific cleanup.
+        
+        Args:
+            request: Django request object
+            organization_id (str): Organization ID to clear state for
+        """
+        logger.info(f"CSV_COORDINATOR: Clearing organization-specific state for {organization_id}")
+        
+        # Clear all CSV mapping session keys for this organization
+        keys_to_clear = [
+            self.get_session_key('selected_datasets', organization_id),
+            self.get_session_key('column_selection', organization_id),
+            self.get_session_key('workspace_columns', organization_id),
+            self.get_session_key('all_datasets_fk', organization_id),
+            self.get_session_key('loaded_mapping', organization_id),
+        ]
+        
+        for key in keys_to_clear:
+            if key in request.session:
+                del request.session[key]
+                logger.info(f"CSV_COORDINATOR: Cleared session key: {key}")
+        
+        request.session.modified = True
+        
+        # Call parent implementation
+        super().clear_organization_specific_state(request, organization_id)
     
     # ==========================================================================
     # Pure HTMX Helper Methods (no JavaScript)

@@ -109,8 +109,8 @@ class IngestDataView(GeneralLoginRequiredMixin, OrganizationMixin, IngestCoordin
                     logger.error(f"Organization not found: {organization_id}")
             
             if mapping_id and organization:
-                # Initialize ingestion context
-                context_key = f'ingestion_context_{organization.id}'
+                # Initialize ingestion context - use organization code for consistency with CSV mapping editor
+                context_key = f'ingestion_context_{organization.code}'
                 ingestion_context = request.session.get(context_key, {})
                 
                 # Get mapping details
@@ -127,8 +127,8 @@ class IngestDataView(GeneralLoginRequiredMixin, OrganizationMixin, IngestCoordin
                     ingestion_context['organization_id'] = organization.id
                     ingestion_context['organization_code'] = organization.code
                     
-                    # Also store in legacy session key for backward compatibility
-                    request.session[f'selected_mapping_{organization.id}'] = mapping_id
+                    # Also store in legacy session key for backward compatibility (use organization code)
+                    request.session[f'selected_mapping_{organization.code}'] = mapping_id
                     
                     # Save ingestion context
                     request.session[context_key] = ingestion_context
@@ -148,8 +148,8 @@ class IngestDataView(GeneralLoginRequiredMixin, OrganizationMixin, IngestCoordin
                     ingestion_context.pop('selected_mapping_name', None)
                     request.session[context_key] = ingestion_context
                     
-                    # Clear legacy session key
-                    request.session.pop(f'selected_mapping_{organization.id}', None)
+                    # Clear legacy session key (use organization code)
+                    request.session.pop(f'selected_mapping_{organization.code}', None)
                     request.session.modified = True
                     
                     context = {
@@ -162,12 +162,12 @@ class IngestDataView(GeneralLoginRequiredMixin, OrganizationMixin, IngestCoordin
                 logger.warning(f"Missing mapping_id or organization: mapping_id={mapping_id}, organization={organization}")
                 # Clear any previously stored mapping
                 if organization:
-                    context_key = f'ingestion_context_{organization.id}'
+                    context_key = f'ingestion_context_{organization.code}'
                     ingestion_context = request.session.get(context_key, {})
                     ingestion_context.pop('selected_mapping_id', None)
                     ingestion_context.pop('selected_mapping_name', None)
                     request.session[context_key] = ingestion_context
-                    request.session.pop(f'selected_mapping_{organization.id}', None)
+                    request.session.pop(f'selected_mapping_{organization.code}', None)
                     request.session.modified = True
                     
                 context = {
@@ -512,8 +512,8 @@ def execution_status(request):
             except Organization.DoesNotExist:
                 return HttpResponse('Organization not found', status=404)
         
-        # Initialize ingestion context in session if not exists
-        context_key = f'ingestion_context_{organization.id}'
+        # Initialize ingestion context in session if not exists - use organization code for consistency
+        context_key = f'ingestion_context_{organization.code}'
         ingestion_context = request.session.get(context_key, {})
         
         # Get selected files from session (backward compatibility)
@@ -529,12 +529,20 @@ def execution_status(request):
         selected_mapping = None
         
         if not mapping_id:
-            # Try legacy session keys for backward compatibility
-            mapping_id = request.session.get(f'selected_mapping_{organization.id}')
+            # Try legacy session keys for backward compatibility - prioritize organization code
+            mapping_id = request.session.get(f'selected_mapping_{organization.code}')
             if not mapping_id:
-                mapping_id = request.session.get(f'selected_mapping_{organization.code}')
+                mapping_id = request.session.get(f'selected_mapping_{organization.id}')
             
-            # If found in legacy location, update context
+            # If still not found, try to get from CSV mapping editor's loaded mapping context
+            if not mapping_id:
+                loaded_mapping_key = f'loaded_mapping_{organization.code}'
+                loaded_mapping_context = request.session.get(loaded_mapping_key)
+                if loaded_mapping_context:
+                    mapping_id = loaded_mapping_context.get('mapping_id')
+                    logger.info(f"INGEST_EXECUTION_STATUS: Found mapping from CSV editor context: {mapping_id}")
+            
+            # If found in any legacy location, update context
             if mapping_id:
                 ingestion_context['selected_mapping_id'] = mapping_id
         
@@ -554,13 +562,23 @@ def execution_status(request):
         request.session[context_key] = ingestion_context
         request.session.modified = True
         
-        logger.info(f"Execution status - Org: {organization.name}, Files: {len(selected_files)}, Mapping: {selected_mapping}")
+        # Also check for workspace columns from CSV mapping editor for better integration
+        workspace_columns_count = 0
+        if organization.code:
+            workspace_columns_key = f'workspace_columns_{organization.code}'
+            workspace_columns = request.session.get(workspace_columns_key, [])
+            workspace_columns_count = len(workspace_columns)
+            if workspace_columns_count > 0:
+                logger.info(f"INGEST_EXECUTION_STATUS: Found {workspace_columns_count} workspace columns from CSV mapping editor")
+        
+        logger.info(f"Execution status - Org: {organization.name}, Files: {len(selected_files)}, Mapping: {selected_mapping}, Workspace columns: {workspace_columns_count}")
         
         context = {
             'selected_files': selected_files,
             'selected_mapping': selected_mapping,
             'organization_id': organization.id,
             'ingestion_context': ingestion_context,
+            'workspace_columns_count': workspace_columns_count,
         }
         
         return render(request, 'importer/partials/execution_status.html', context)

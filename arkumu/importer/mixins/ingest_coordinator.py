@@ -7,175 +7,130 @@ Manages state for the ingest interface including:
 - Mapping selection
 - Import configuration
 
-Follows the same pattern as CSVMappingCoordinatorMixin but for ingest workflow.
+Inherits from BaseCoordinatorMixin for standardized organization management
+and session key patterns. Provides ingest-specific state management while
+leveraging shared coordinator functionality.
 """
 
 import logging
 from django.core.cache import cache
 from arkumu.users.models import Organization
+from arkumu.common.mixins.base_coordinator import BaseCoordinatorMixin
 
 logger = logging.getLogger(__name__)
 
 
-class IngestCoordinatorMixin:
+class IngestCoordinatorMixin(BaseCoordinatorMixin):
     """
     Coordinator mixin for ingest interface state management.
     
-    Maintains server-side state for:
-    - Current organization selection
-    - Selected files
+    Inherits from BaseCoordinatorMixin to leverage:
+    - Standardized organization management
+    - Organization-scoped session key patterns
+    - Base organization change handling
+    
+    Provides ingest-specific state for:
+    - Selected files for import
     - Mapping selection
     - Import configuration
     """
     
-    # Session keys
-    SELECTED_FILES_KEY = 'ingest_selected_files'
-    CURRENT_ORG_KEY = 'ingest_current_organization'
-    SELECTED_MAPPING_KEY = 'ingest_selected_mapping'
+    # Set the session prefix for this coordinator
+    SESSION_PREFIX = 'ingest'
     
-    def get_current_organization(self, request):
-        """
-        Get the currently selected organization from session.
-        
-        Returns:
-            dict: Organization data with keys: id, code, name
-            None: If no organization is selected
-        """
-        return request.session.get(self.CURRENT_ORG_KEY)
+    # Organization management methods are inherited from BaseCoordinatorMixin
+    # No need to reimplement - they use standardized session keys and patterns
     
-    def set_current_organization(self, request, organization_id):
+    def get_selected_files(self, request, organization_id=None):
         """
-        Set the current organization in session.
+        Get currently selected files from session for specific organization.
         
         Args:
             request: Django request object
-            organization_id: Organization ID (can be numeric ID or code string)
-            
-        Returns:
-            dict: Organization data that was set
-            None: If organization not found
-        """
-        try:
-            # Try to parse as numeric ID first
-            if organization_id.isdigit():
-                organization = Organization.objects.get(id=int(organization_id))
-            else:
-                # Treat as organization code
-                organization = Organization.objects.get(code=organization_id)
-            
-            org_data = {
-                'id': organization.id,
-                'code': organization.code,
-                'name': organization.name
-            }
-            
-            request.session[self.CURRENT_ORG_KEY] = org_data
-            request.session.modified = True
-            
-            logger.info(f"INGEST_COORDINATOR: Set current organization to {org_data['name']} (code: {org_data['code']}, id: {org_data['id']})")
-            return org_data
-            
-        except (Organization.DoesNotExist, ValueError):
-            logger.warning(f"INGEST_COORDINATOR: Organization '{organization_id}' not found")
-            return None
-    
-    def clear_current_organization(self, request):
-        """Clear the current organization from session."""
-        if self.CURRENT_ORG_KEY in request.session:
-            del request.session[self.CURRENT_ORG_KEY]
-            request.session.modified = True
-            logger.info("INGEST_COORDINATOR: Cleared current organization")
-    
-    def get_organization_context(self, request):
-        """
-        Get organization context for templates.
-        
-        Returns:
-            dict: Context with organization_id, organization_code, etc.
-        """
-        current_org = self.get_current_organization(request)
-        if current_org:
-            return {
-                'organization_id': current_org['code'],  # Use code for mapping compatibility
-                'organization_code': current_org['code'],
-                'organization_name': current_org['name'],
-                'organization_numeric_id': current_org['id']
-            }
-        else:
-            return {
-                'organization_id': None,
-                'organization_code': None,
-                'organization_name': None,
-                'organization_numeric_id': None
-            }
-    
-    def get_selected_files(self, request):
-        """
-        Get currently selected files from session.
+            organization_id (str, optional): Organization ID. If not provided, uses current organization.
         
         Returns:
             list: List of selected file paths
         """
-        return request.session.get(self.SELECTED_FILES_KEY, [])
+        if not organization_id:
+            current_org = self.get_current_organization(request)
+            if not current_org:
+                return []
+            organization_id = current_org['code']
+        
+        session_key = self.get_session_key('selected_files', organization_id)
+        return request.session.get(session_key, [])
     
-    def set_selected_files(self, request, file_paths):
+    def set_selected_files(self, request, file_paths, organization_id=None):
         """
-        Set selected files in session.
+        Set selected files in session for specific organization.
         
         Args:
             request: Django request object
             file_paths: List of file paths
+            organization_id (str, optional): Organization ID. If not provided, uses current organization.
         """
-        request.session[self.SELECTED_FILES_KEY] = file_paths
+        if not organization_id:
+            current_org = self.get_current_organization(request)
+            if not current_org:
+                logger.warning("INGEST_COORDINATOR: Cannot set files without current organization")
+                return
+            organization_id = current_org['code']
+        
+        session_key = self.get_session_key('selected_files', organization_id)
+        request.session[session_key] = file_paths
         request.session.modified = True
-        logger.info(f"INGEST_COORDINATOR: Set {len(file_paths)} selected files")
+        logger.info(f"INGEST_COORDINATOR: Set {len(file_paths)} selected files for org {organization_id}")
     
-    def add_selected_file(self, request, file_path):
+    def add_selected_file(self, request, file_path, organization_id=None):
         """
-        Add a file to the selection.
+        Add a file to the selection for specific organization.
         
         Args:
             request: Django request object
             file_path: File path to add
+            organization_id (str, optional): Organization ID. If not provided, uses current organization.
             
         Returns:
             list: Updated selected files list
         """
-        selected_files = set(self.get_selected_files(request))
+        selected_files = set(self.get_selected_files(request, organization_id))
         selected_files.add(file_path)
         updated_files = list(selected_files)
-        self.set_selected_files(request, updated_files)
+        self.set_selected_files(request, updated_files, organization_id)
         return updated_files
     
-    def remove_selected_file(self, request, file_path):
+    def remove_selected_file(self, request, file_path, organization_id=None):
         """
-        Remove a file from the selection.
+        Remove a file from the selection for specific organization.
         
         Args:
             request: Django request object
             file_path: File path to remove
+            organization_id (str, optional): Organization ID. If not provided, uses current organization.
             
         Returns:
             list: Updated selected files list
         """
-        selected_files = set(self.get_selected_files(request))
+        selected_files = set(self.get_selected_files(request, organization_id))
         selected_files.discard(file_path)
         updated_files = list(selected_files)
-        self.set_selected_files(request, updated_files)
+        self.set_selected_files(request, updated_files, organization_id)
         return updated_files
     
-    def toggle_file_selection(self, request, file_path):
+    def toggle_file_selection(self, request, file_path, organization_id=None):
         """
-        Toggle file selection state.
+        Toggle file selection state for specific organization.
         
         Args:
             request: Django request object
             file_path: File path to toggle
+            organization_id (str, optional): Organization ID. If not provided, uses current organization.
             
         Returns:
             tuple: (updated_files_list, was_added)
         """
-        selected_files = set(self.get_selected_files(request))
+        selected_files = set(self.get_selected_files(request, organization_id))
         
         if file_path in selected_files:
             selected_files.remove(file_path)
@@ -185,59 +140,95 @@ class IngestCoordinatorMixin:
             was_added = True
         
         updated_files = list(selected_files)
-        self.set_selected_files(request, updated_files)
+        self.set_selected_files(request, updated_files, organization_id)
         return updated_files, was_added
     
-    def clear_selected_files(self, request):
-        """Clear all selected files."""
-        self.set_selected_files(request, [])
-    
-    def get_selected_mapping(self, request):
+    def clear_selected_files(self, request, organization_id=None):
         """
-        Get currently selected mapping from session.
+        Clear all selected files for specific organization.
+        
+        Args:
+            request: Django request object
+            organization_id (str, optional): Organization ID. If not provided, uses current organization.
+        """
+        self.set_selected_files(request, [], organization_id)
+    
+    def get_selected_mapping(self, request, organization_id=None):
+        """
+        Get currently selected mapping from session for specific organization.
+        
+        Args:
+            request: Django request object
+            organization_id (str, optional): Organization ID. If not provided, uses current organization.
         
         Returns:
             dict: Mapping data with keys: id, name, organization
             None: If no mapping is selected
         """
-        return request.session.get(self.SELECTED_MAPPING_KEY)
+        if not organization_id:
+            current_org = self.get_current_organization(request)
+            if not current_org:
+                return None
+            organization_id = current_org['code']
+        
+        session_key = self.get_session_key('selected_mapping', organization_id)
+        return request.session.get(session_key)
     
-    def set_selected_mapping(self, request, mapping_id, mapping_name=None):
+    def set_selected_mapping(self, request, mapping_id, mapping_name=None, organization_id=None):
         """
-        Set the selected mapping in session.
+        Set the selected mapping in session for specific organization.
         
         Args:
             request: Django request object
             mapping_id: Mapping ID
             mapping_name: Optional mapping name
+            organization_id (str, optional): Organization ID. If not provided, uses current organization.
         """
-        current_org = self.get_current_organization(request)
-        if not current_org:
-            logger.warning("INGEST_COORDINATOR: Cannot set mapping without current organization")
-            return None
+        if not organization_id:
+            current_org = self.get_current_organization(request)
+            if not current_org:
+                logger.warning("INGEST_COORDINATOR: Cannot set mapping without current organization")
+                return None
+            organization_id = current_org['code']
         
         mapping_data = {
             'id': mapping_id,
             'name': mapping_name or f"Mapping {mapping_id}",
-            'organization': current_org['code']
+            'organization': organization_id
         }
         
-        request.session[self.SELECTED_MAPPING_KEY] = mapping_data
+        session_key = self.get_session_key('selected_mapping', organization_id)
+        request.session[session_key] = mapping_data
         request.session.modified = True
         
-        logger.info(f"INGEST_COORDINATOR: Set selected mapping to {mapping_data['name']} (id: {mapping_id})")
+        logger.info(f"INGEST_COORDINATOR: Set selected mapping to {mapping_data['name']} (id: {mapping_id}) for org {organization_id}")
         return mapping_data
     
-    def clear_selected_mapping(self, request):
-        """Clear the selected mapping from session."""
-        if self.SELECTED_MAPPING_KEY in request.session:
-            del request.session[self.SELECTED_MAPPING_KEY]
+    def clear_selected_mapping(self, request, organization_id=None):
+        """
+        Clear the selected mapping from session for specific organization.
+        
+        Args:
+            request: Django request object
+            organization_id (str, optional): Organization ID. If not provided, uses current organization.
+        """
+        if not organization_id:
+            current_org = self.get_current_organization(request)
+            if not current_org:
+                return
+            organization_id = current_org['code']
+        
+        session_key = self.get_session_key('selected_mapping', organization_id)
+        if session_key in request.session:
+            del request.session[session_key]
             request.session.modified = True
-            logger.info("INGEST_COORDINATOR: Cleared selected mapping")
+            logger.info(f"INGEST_COORDINATOR: Cleared selected mapping for org {organization_id}")
     
     def handle_organization_change(self, request, new_organization_id):
         """
         Handle organization change with proper state cleanup.
+        
+        Overrides BaseCoordinatorMixin to add ingest-specific cleanup.
         
         Args:
             request: Django request object
@@ -248,16 +239,13 @@ class IngestCoordinatorMixin:
         """
         logger.info(f"INGEST_COORDINATOR: Handling organization change to {new_organization_id}")
         
-        # Clear state that depends on organization
-        self.clear_selected_files(request)
-        self.clear_selected_mapping(request)
+        # Get current organization to clear its specific state
+        current_org = self.get_current_organization(request)
+        if current_org:
+            self.clear_organization_specific_state(request, current_org['code'])
         
-        # Set new organization
-        org_data = self.set_current_organization(request, new_organization_id)
-        
-        # Also store this organization for cross-view persistence (if OrganizationMixin is available)
-        if hasattr(self, 'set_last_selected_organization'):
-            self.set_last_selected_organization(request, new_organization_id)
+        # Call parent implementation to set new organization
+        org_data = super().handle_organization_change(request, new_organization_id)
         
         return org_data
     
@@ -339,8 +327,8 @@ class IngestCoordinatorMixin:
                         parent['files'] = []
                     parent['files'].append(file)
             
-            # Get selected files from session
-            selected_files = set(self.get_selected_files(request))
+            # Get selected files from session for current organization
+            selected_files = set(self.get_selected_files(request, organization_id))
             
             return {
                 'organization': organization,
@@ -380,7 +368,6 @@ class IngestCoordinatorMixin:
             'selected_files': selected_files,
             'selected_files_count': len(selected_files),
             'selected_mapping': selected_mapping,
-            'has_organization': org_context['organization_id'] is not None,
             'has_files': len(selected_files) > 0,
             'has_mapping': selected_mapping is not None,
             'ready_to_import': org_context['organization_id'] is not None and len(selected_files) > 0
@@ -397,13 +384,15 @@ class IngestCoordinatorMixin:
         
         # Get current state for summary
         current_org = self.get_current_organization(request)
-        selected_files_count = len(self.get_selected_files(request))
-        had_mapping = self.get_selected_mapping(request) is not None
+        selected_files_count = len(self.get_selected_files(request)) if current_org else 0
+        had_mapping = self.get_selected_mapping(request) is not None if current_org else False
         
-        # Clear all state
+        # Clear organization-specific state if we have an organization
+        if current_org:
+            self.clear_organization_specific_state(request, current_org['code'])
+        
+        # Clear current organization
         self.clear_current_organization(request)
-        self.clear_selected_files(request)
-        self.clear_selected_mapping(request)
         
         summary = {
             'organization_cleared': current_org is not None,
@@ -413,3 +402,22 @@ class IngestCoordinatorMixin:
         
         logger.info(f"INGEST_COORDINATOR: Reset complete - {summary}")
         return summary
+    
+    def clear_organization_specific_state(self, request, organization_id):
+        """
+        Clear all ingest state specific to an organization.
+        
+        Overrides BaseCoordinatorMixin to provide ingest-specific cleanup.
+        
+        Args:
+            request: Django request object
+            organization_id (str): Organization ID to clear state for
+        """
+        logger.info(f"INGEST_COORDINATOR: Clearing organization-specific state for {organization_id}")
+        
+        # Clear files and mapping for this specific organization
+        self.clear_selected_files(request, organization_id)
+        self.clear_selected_mapping(request, organization_id)
+        
+        # Call parent implementation
+        super().clear_organization_specific_state(request, organization_id)
