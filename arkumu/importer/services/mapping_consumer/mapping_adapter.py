@@ -108,6 +108,28 @@ class MappingAdapter:
             
             total_columns = sum(len(columns) for columns in workspace_columns.values())
             
+            # Use workspace_columns keys as datasets if selected_datasets is empty
+            if selected_datasets:
+                datasets = selected_datasets
+            else:
+                # Extract unique dataset names from workspace_columns keys
+                # Keys are in format "org::dataset::column" or just "dataset"
+                dataset_names = set()
+                for key in workspace_columns.keys():
+                    if '::' in key:
+                        parts = key.split('::')
+                        if len(parts) >= 2:
+                            # Extract dataset name from "org::dataset::column" format
+                            dataset_name = parts[1]
+                            dataset_names.add(dataset_name)
+                        else:
+                            # Fallback to first part
+                            dataset_names.add(parts[0])
+                    else:
+                        # Direct dataset name
+                        dataset_names.add(key)
+                datasets = list(dataset_names)
+            
             return MappingInfo(
                 id=mapping.id,
                 name=mapping.name,
@@ -115,7 +137,7 @@ class MappingAdapter:
                 created_at=mapping.created_at,
                 updated_at=mapping.updated_at,
                 version=config.get('version', '1.0'),
-                datasets=selected_datasets,
+                datasets=datasets,
                 total_columns=total_columns,
                 fk_relationships=len(fk_relationships),
                 external_ontologies=len(external_ontologies)
@@ -225,7 +247,18 @@ class MappingAdapter:
             validation_result = self.validate_mapping(mapping_id)
             
             return {
-                'mapping_info': info,
+                'mapping_info': {
+                    'id': info.id,
+                    'name': info.name,
+                    'organization': info.organization,
+                    'created_at': info.created_at,
+                    'updated_at': info.updated_at,
+                    'version': info.version,
+                    'datasets': info.datasets,
+                    'total_columns': info.total_columns,
+                    'fk_relationships': info.fk_relationships,
+                    'external_ontologies': info.external_ontologies
+                },
                 'validation': {
                     'is_valid': validation_result.is_valid,
                     'error_count': len(validation_result.errors),
