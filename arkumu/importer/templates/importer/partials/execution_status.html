@@ -1,41 +1,460 @@
-<!-- Execution Status Content -->
-<div class="space-y-3 mb-6">
-    <div class="flex items-center gap-3 p-3 bg-base-200 rounded-lg">
-        {% if selected_files %}
-            <span class="text-success text-lg">✓</span>
-        {% else %}
-            <span class="text-error text-lg">✗</span>
-        {% endif %}
-        <div class="flex-1">
-            <div class="font-medium">Files selected</div>
-            <div class="text-sm text-base-content/60">{{ selected_files|length|default:0 }} file{{ selected_files|length|default:0|pluralize }} ready</div>
-        </div>
-    </div>
-    <div class="flex items-center gap-3 p-3 bg-base-200 rounded-lg">
-        {% if selected_mapping %}
-            <span class="text-success text-lg">✓</span>
-        {% else %}
-            <span class="text-error text-lg">✗</span>
-        {% endif %}
-        <div class="flex-1">
-            <div class="font-medium">Mapping configured</div>
-            <div class="text-sm text-base-content/60">
-                {% if selected_mapping %}
-                    Using: {{ selected_mapping.name }}
+<!-- Enhanced Execution Status Content -->
+<div class="space-y-4 mb-6">
+    
+    <!-- Files Status -->
+    <div class="card bg-base-200 shadow-sm">
+        <div class="card-body p-4">
+            <div class="flex items-center gap-3">
+                {% if selected_files %}
+                    <span class="text-success text-lg">✓</span>
                 {% else %}
-                    Select mapping from navbar
+                    <span class="text-error text-lg">✗</span>
                 {% endif %}
+                <div class="flex-1">
+                    <div class="font-medium flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        Files selected
+                    </div>
+                    <div class="text-sm text-base-content/60">
+                        {{ selected_files|length|default:0 }} file{{ selected_files|length|default:0|pluralize }} ready
+                    </div>
+                </div>
             </div>
         </div>
     </div>
+    
+    <!-- Mapping Status -->
+    <div class="card bg-base-200 shadow-sm">
+        <div class="card-body p-4">
+            <div class="flex items-center gap-3">
+                {% if selected_mapping %}
+                    <span class="text-success text-lg">✓</span>
+                {% else %}
+                    <span class="text-error text-lg">✗</span>
+                {% endif %}
+                <div class="flex-1">
+                    <div class="font-medium flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>
+                        </svg>
+                        Mapping configured
+                    </div>
+                    <div class="text-sm text-base-content/60">
+                        {% if selected_mapping %}
+                            Using: {{ selected_mapping.name }}
+                        {% else %}
+                            Select mapping from navbar
+                        {% endif %}
+                    </div>
+                </div>
+                <!-- Progressive Disclosure Button -->
+                {% if selected_mapping %}
+                    <button class="btn btn-ghost btn-sm" 
+                            onclick="toggleMappingDetails()"
+                            id="mapping-details-toggle">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </button>
+                {% endif %}
+            </div>
+            
+            <!-- Mapping Details (Progressive Disclosure) -->
+            {% if selected_mapping %}
+                <div id="mapping-details" class="hidden mt-4 space-y-3">
+                    
+                    <!-- Mapping Complexity Indicators -->
+                    <div class="bg-base-100 rounded-lg p-3">
+                        <div class="text-sm font-medium mb-2 flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                            </svg>
+                            Mapping Complexity
+                        </div>
+                        <div class="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <span class="text-base-content/60">Complexity Level:</span>
+                                <div class="badge badge-outline badge-sm ml-2" 
+                                     id="complexity-level">Loading...</div>
+                            </div>
+                            <div>
+                                <span class="text-base-content/60">Dataset Count:</span>
+                                <span class="font-medium ml-2" id="dataset-count">-</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- File-to-Dataset Matching Results -->
+                    <div class="bg-base-100 rounded-lg p-3">
+                        <div class="text-sm font-medium mb-2 flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            File Matching Status
+                        </div>
+                        <div class="space-y-2">
+                            <div class="flex items-center justify-between">
+                                <span class="text-base-content/60">Match Percentage:</span>
+                                <div class="flex items-center gap-2">
+                                    <div class="w-16 h-2 bg-base-300 rounded-full">
+                                        <div class="h-2 bg-success rounded-full" 
+                                             style="width: 0%" 
+                                             id="match-percentage-bar"></div>
+                                    </div>
+                                    <span class="text-sm font-medium" id="match-percentage">-</span>
+                                </div>
+                            </div>
+                            <div id="matching-warnings" class="hidden">
+                                <div class="alert alert-warning alert-sm py-2">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+                                    </svg>
+                                    <span id="matching-warnings-text"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Execution Strategy Display -->
+                    <div class="bg-base-100 rounded-lg p-3">
+                        <div class="text-sm font-medium mb-2 flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                            </svg>
+                            Execution Strategy
+                        </div>
+                        <div class="space-y-2">
+                            <div class="flex items-center justify-between">
+                                <span class="text-base-content/60">Strategy:</span>
+                                <span class="badge badge-outline badge-sm" id="execution-strategy">Loading...</span>
+                            </div>
+                            <div class="text-xs text-base-content/60" id="strategy-reason">-</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Processing Phases -->
+                    <div class="bg-base-100 rounded-lg p-3">
+                        <div class="text-sm font-medium mb-2 flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            Processing Phases
+                        </div>
+                        <div class="text-xs text-base-content/60" id="processing-phases">-</div>
+                    </div>
+                    
+                    <!-- Analyze Mapping Button -->
+                    <div class="pt-2">
+                        <button class="btn btn-sm btn-outline w-full" 
+                                hx-post="{% url 'importer:analyze_mapping' %}"
+                                hx-trigger="click"
+                                hx-swap="none"
+                                hx-on::after-request="updateMappingAnalysis(event)"
+                                id="analyze-mapping-btn">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                            </svg>
+                            Analyze Mapping
+                        </button>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Enhanced Validation Status -->
+    <div class="card bg-base-200 shadow-sm">
+        <div class="card-body p-4">
+            <div class="flex items-center gap-3">
+                <span class="text-warning text-lg" id="validation-status-icon">⚠</span>
+                <div class="flex-1">
+                    <div class="font-medium flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        Readiness Status
+                    </div>
+                    <div class="text-sm text-base-content/60" id="readiness-message">
+                        {% if selected_files and selected_mapping %}
+                            Ready for analysis - click "Analyze Mapping" to verify compatibility
+                        {% else %}
+                            Select files and mapping to begin validation
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Validation Details -->
+            <div id="validation-details" class="hidden mt-4">
+                <div class="space-y-2">
+                    <div id="validation-issues" class="hidden">
+                        <div class="alert alert-error alert-sm py-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <ul id="validation-issues-list" class="text-sm"></ul>
+                        </div>
+                    </div>
+                    
+                    <div id="validation-warnings" class="hidden">
+                        <div class="alert alert-warning alert-sm py-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+                            </svg>
+                            <ul id="validation-warnings-list" class="text-sm"></ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
 </div>
+
+<!-- Execution Preview Panel -->
+{% if selected_files %}
+<div class="mb-6">
+    <div class="divider text-sm">
+        <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+        </svg>
+        Execution Preview
+    </div>
+    
+    <!-- Show advanced preview for mapping-based workflows, simple preview otherwise -->
+    {% if selected_mapping %}
+        {% include 'importer/partials/execution_preview.html' %}
+    {% else %}
+        {% include 'importer/partials/execution_preview_simple.html' %}
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- Mapping Insights Panel -->
+{% if selected_mapping %}
+<div class="mb-6">
+    <div class="divider text-sm">
+        <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+        </svg>
+        Mapping Insights
+    </div>
+    
+    {% include 'importer/partials/mapping_insights.html' %}
+</div>
+{% endif %}
 
 <!-- Execute button -->
 <button class="btn btn-primary btn-lg w-full" 
-        {% if not selected_files or not selected_mapping %}disabled{% endif %}>
+        {% if not selected_files or not selected_mapping %}disabled{% endif %}
+        id="execute-import-btn">
     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
     </svg>
-    Start Import
+    <span id="execute-btn-text">Start Import</span>
 </button>
+
+<!-- JavaScript for Progressive Disclosure and HTMX Integration -->
+<script>
+// Progressive disclosure toggle
+function toggleMappingDetails() {
+    const details = document.getElementById('mapping-details');
+    const toggle = document.getElementById('mapping-details-toggle');
+    
+    if (details.classList.contains('hidden')) {
+        details.classList.remove('hidden');
+        toggle.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/></svg>';
+    } else {
+        details.classList.add('hidden');
+        toggle.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>';
+    }
+}
+
+// Update mapping analysis from HTMX response
+function updateMappingAnalysis(event) {
+    const xhr = event.detail.xhr;
+    
+    if (xhr.status === 200) {
+        try {
+            const response = JSON.parse(xhr.responseText);
+            
+            if (response.success) {
+                // Update complexity indicators
+                if (response.complexity_analysis) {
+                    const complexityEl = document.getElementById('complexity-level');
+                    const datasetCountEl = document.getElementById('dataset-count');
+                    
+                    if (complexityEl) {
+                        complexityEl.textContent = response.complexity_analysis.complexity_level;
+                        complexityEl.className = `badge badge-outline badge-sm ml-2 ${
+                            response.complexity_analysis.complexity_level === 'high' ? 'badge-error' :
+                            response.complexity_analysis.complexity_level === 'medium' ? 'badge-warning' :
+                            'badge-success'
+                        }`;
+                    }
+                    
+                    if (datasetCountEl) {
+                        datasetCountEl.textContent = response.complexity_analysis.dataset_count;
+                    }
+                }
+                
+                // Update file matching status
+                if (response.dataset_matching) {
+                    const matchPercentageEl = document.getElementById('match-percentage');
+                    const matchPercentageBarEl = document.getElementById('match-percentage-bar');
+                    const matchingWarningsEl = document.getElementById('matching-warnings');
+                    const matchingWarningsTextEl = document.getElementById('matching-warnings-text');
+                    
+                    if (matchPercentageEl && matchPercentageBarEl) {
+                        const percentage = Math.round(response.dataset_matching.match_percentage);
+                        matchPercentageEl.textContent = percentage + '%';
+                        matchPercentageBarEl.style.width = percentage + '%';
+                        
+                        if (percentage < 100) {
+                            matchPercentageBarEl.className = 'h-2 bg-warning rounded-full';
+                        } else {
+                            matchPercentageBarEl.className = 'h-2 bg-success rounded-full';
+                        }
+                    }
+                    
+                    // Show warnings if there are missing datasets or extra files
+                    if (response.dataset_matching.missing_datasets && response.dataset_matching.missing_datasets.length > 0) {
+                        matchingWarningsEl.classList.remove('hidden');
+                        matchingWarningsTextEl.textContent = `Missing ${response.dataset_matching.missing_datasets.length} required dataset(s)`;
+                    } else if (response.dataset_matching.extra_files && response.dataset_matching.extra_files.length > 0) {
+                        matchingWarningsEl.classList.remove('hidden');
+                        matchingWarningsTextEl.textContent = `${response.dataset_matching.extra_files.length} extra file(s) detected`;
+                    } else {
+                        matchingWarningsEl.classList.add('hidden');
+                    }
+                }
+                
+                // Update execution strategy
+                if (response.execution_strategy) {
+                    const strategyEl = document.getElementById('execution-strategy');
+                    const strategyReasonEl = document.getElementById('strategy-reason');
+                    
+                    if (strategyEl) {
+                        strategyEl.textContent = response.execution_strategy.recommended_strategy;
+                        strategyEl.className = `badge badge-outline badge-sm ${
+                            response.execution_strategy.should_change_strategy ? 'badge-warning' : 'badge-success'
+                        }`;
+                    }
+                    
+                    if (strategyReasonEl) {
+                        strategyReasonEl.textContent = response.execution_strategy.strategy_reason;
+                    }
+                }
+                
+                // Update processing phases
+                if (response.processing_phases) {
+                    const phasesEl = document.getElementById('processing-phases');
+                    if (phasesEl) {
+                        phasesEl.textContent = `${response.processing_phases.length} phase(s) expected`;
+                    }
+                }
+                
+                // Update readiness status
+                if (response.readiness_status) {
+                    const statusIconEl = document.getElementById('validation-status-icon');
+                    const readinessMessageEl = document.getElementById('readiness-message');
+                    const validationDetailsEl = document.getElementById('validation-details');
+                    const validationIssuesEl = document.getElementById('validation-issues');
+                    const validationWarningsEl = document.getElementById('validation-warnings');
+                    const validationIssuesListEl = document.getElementById('validation-issues-list');
+                    const validationWarningsListEl = document.getElementById('validation-warnings-list');
+                    const executeBtn = document.getElementById('execute-import-btn');
+                    const executeBtnText = document.getElementById('execute-btn-text');
+                    
+                    if (statusIconEl && readinessMessageEl) {
+                        if (response.readiness_status.status === 'ready') {
+                            statusIconEl.textContent = '✓';
+                            statusIconEl.className = 'text-success text-lg';
+                            readinessMessageEl.textContent = response.readiness_status.status_message;
+                            executeBtn.disabled = false;
+                            executeBtnText.textContent = 'Start Import';
+                        } else if (response.readiness_status.status === 'ready_with_warnings') {
+                            statusIconEl.textContent = '⚠';
+                            statusIconEl.className = 'text-warning text-lg';
+                            readinessMessageEl.textContent = response.readiness_status.status_message;
+                            executeBtn.disabled = false;
+                            executeBtnText.textContent = 'Start Import (with warnings)';
+                        } else {
+                            statusIconEl.textContent = '✗';
+                            statusIconEl.className = 'text-error text-lg';
+                            readinessMessageEl.textContent = response.readiness_status.status_message;
+                            executeBtn.disabled = true;
+                            executeBtnText.textContent = 'Cannot Start Import';
+                        }
+                    }
+                    
+                    // Show validation details
+                    if (validationDetailsEl) {
+                        validationDetailsEl.classList.remove('hidden');
+                    }
+                    
+                    // Show issues
+                    if (response.readiness_status.issues && response.readiness_status.issues.length > 0) {
+                        validationIssuesEl.classList.remove('hidden');
+                        validationIssuesListEl.innerHTML = response.readiness_status.issues.map(issue => `<li>${issue}</li>`).join('');
+                    } else {
+                        validationIssuesEl.classList.add('hidden');
+                    }
+                    
+                    // Show warnings
+                    if (response.readiness_status.warnings && response.readiness_status.warnings.length > 0) {
+                        validationWarningsEl.classList.remove('hidden');
+                        validationWarningsListEl.innerHTML = response.readiness_status.warnings.map(warning => `<li>${warning}</li>`).join('');
+                    } else {
+                        validationWarningsEl.classList.add('hidden');
+                    }
+                }
+                
+                // Auto-expand details after analysis
+                const details = document.getElementById('mapping-details');
+                if (details && details.classList.contains('hidden')) {
+                    toggleMappingDetails();
+                }
+                
+                // Update mapping insights if available
+                if (typeof updateMappingInsights === 'function') {
+                    updateMappingInsights(response);
+                }
+            } else {
+                // Handle analysis error
+                console.error('Mapping analysis failed:', response.error);
+                alert('Mapping analysis failed: ' + response.error);
+            }
+        } catch (e) {
+            console.error('Error parsing analysis response:', e);
+            alert('Error analyzing mapping. Please try again.');
+        }
+    } else {
+        console.error('Analysis request failed:', xhr.status, xhr.statusText);
+        alert('Failed to analyze mapping. Please try again.');
+    }
+}
+
+// Auto-trigger mapping analysis when both files and mapping are selected
+document.addEventListener('DOMContentLoaded', function() {
+    // Listen for HTMX events that indicate selection changes
+    document.body.addEventListener('htmx:afterSettle', function(event) {
+        const selectedFiles = {{ selected_files|length|default:0 }};
+        const hasMapping = {{ selected_mapping|yesno:"true,false" }};
+        
+        // Auto-analyze if we have both files and mapping
+        if (selectedFiles > 0 && hasMapping) {
+            const analyzeBtn = document.getElementById('analyze-mapping-btn');
+            if (analyzeBtn && !analyzeBtn.disabled) {
+                setTimeout(() => {
+                    analyzeBtn.click();
+                }, 500); // Small delay to ensure UI is ready
+            }
+        }
+    });
+});
+</script>

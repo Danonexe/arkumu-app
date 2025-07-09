@@ -1,0 +1,761 @@
+<!-- Execution Preview Panel -->
+<!-- This template shows what will happen during import execution before the user starts the process -->
+{% load static %}
+
+<div class="space-y-6 execution-preview-container">
+    
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <h3 class="text-xl font-semibold flex items-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+            </svg>
+            Execution Preview
+        </h3>
+        <div class="badge badge-outline badge-sm">
+            <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span id="preview-status">Analysis Required</span>
+        </div>
+    </div>
+    
+    <!-- Preview Cards -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        
+        <!-- Dataset Processing Overview -->
+        <div class="card bg-base-200 shadow-sm">
+            <div class="card-body p-4">
+                <h4 class="font-medium text-sm mb-3 flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 1.79 4 4 4h8c2.21 0 4-1.79 4-4V7c0-2.21-1.79-4-4-4H8c-2.21 0-4 1.79-4 4z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 9h6v6H9z"/>
+                    </svg>
+                    Dataset Processing
+                </h4>
+                
+                <div id="dataset-preview-content" class="space-y-3">
+                    <!-- Default state -->
+                    <div class="text-center py-4 text-base-content/60">
+                        <svg class="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <p class="text-sm">Click "Analyze Mapping" to preview dataset processing</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Processing Timeline -->
+        <div class="card bg-base-200 shadow-sm">
+            <div class="card-body p-4">
+                <h4 class="font-medium text-sm mb-3 flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    Processing Timeline
+                </h4>
+                
+                <div id="timeline-preview-content" class="space-y-3">
+                    <!-- Default state -->
+                    <div class="text-center py-4 text-base-content/60">
+                        <svg class="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <p class="text-sm">Timeline will appear after analysis</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+    
+    <!-- Execution Strategy and Resource Usage -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        
+        <!-- Strategy and Resources -->
+        <div class="card bg-base-200 shadow-sm">
+            <div class="card-body p-4">
+                <h4 class="font-medium text-sm mb-3 flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                    Execution Strategy
+                </h4>
+                
+                <div id="strategy-preview-content" class="space-y-3">
+                    <!-- Default state -->
+                    <div class="text-center py-4 text-base-content/60">
+                        <svg class="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                        <p class="text-sm">Strategy recommendations will appear here</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Issues and Warnings -->
+        <div class="card bg-base-200 shadow-sm">
+            <div class="card-body p-4">
+                <h4 class="font-medium text-sm mb-3 flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+                    </svg>
+                    Issues & Warnings
+                </h4>
+                
+                <div id="issues-preview-content" class="space-y-3">
+                    <!-- Default state -->
+                    <div class="text-center py-4 text-base-content/60">
+                        <svg class="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <p class="text-sm">No issues detected yet</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+    
+    <!-- File Matching Summary -->
+    <div class="card bg-base-200 shadow-sm">
+        <div class="card-body p-4">
+            <h4 class="font-medium text-sm mb-3 flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                </svg>
+                File Matching Summary
+            </h4>
+            
+            <div id="file-matching-preview-content" class="space-y-3">
+                <!-- Default state -->
+                <div class="text-center py-4 text-base-content/60">
+                    <svg class="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                    <p class="text-sm">File matching results will appear here</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Expandable Details Section -->
+    <div class="card bg-base-200 shadow-sm">
+        <div class="card-body p-4">
+            <div class="flex items-center justify-between mb-3">
+                <h4 class="font-medium text-sm flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
+                    </svg>
+                    Detailed Execution Plan
+                </h4>
+                <button class="btn btn-ghost btn-sm" 
+                        onclick="toggleExecutionDetails()"
+                        id="execution-details-toggle">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+            </div>
+            
+            <div id="execution-details-content" class="hidden space-y-4">
+                <!-- Detailed execution plan will be populated here -->
+                <div class="text-center py-4 text-base-content/60">
+                    <p class="text-sm">Detailed execution plan will appear after analysis</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Quick Actions -->
+    <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+            <button class="btn btn-sm btn-outline"
+                    id="refresh-preview-btn"
+                    onclick="refreshExecutionPreview()">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                Refresh Preview
+            </button>
+            
+            <button class="btn btn-sm btn-outline"
+                    id="export-preview-btn"
+                    onclick="exportExecutionPreview()"
+                    disabled>
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                </svg>
+                Export Plan
+            </button>
+        </div>
+        
+        <div class="flex items-center gap-2">
+            <div class="badge badge-outline badge-sm" id="preview-update-time">
+                Never Updated
+            </div>
+            
+            <div class="tooltip tooltip-left" data-tip="Auto-refresh preview when selection changes">
+                <label class="label cursor-pointer">
+                    <input type="checkbox" class="toggle toggle-sm" 
+                           id="auto-refresh-toggle" 
+                           onchange="toggleAutoRefresh(this.checked)">
+                    <span class="label-text ml-2 text-sm">Auto-refresh</span>
+                </label>
+            </div>
+        </div>
+    </div>
+    
+</div>
+
+<!-- Print styles for execution preview -->
+<style>
+@media print {
+    .execution-preview-container {
+        page-break-inside: avoid;
+        break-inside: avoid;
+    }
+    
+    .execution-preview-container .card {
+        border: 1px solid #e5e7eb;
+        box-shadow: none;
+    }
+    
+    .execution-preview-container .badge {
+        border: 1px solid #6b7280;
+    }
+    
+    .execution-preview-container .btn {
+        display: none;
+    }
+    
+    .execution-preview-container .divider {
+        border-top: 1px solid #e5e7eb;
+    }
+}
+
+.execution-preview-container {
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.execution-preview-container .card {
+    transition: transform 0.2s ease-in-out;
+}
+
+.execution-preview-container .card:hover {
+    transform: translateY(-2px);
+}
+
+.progress-bar-animation {
+    animation: progress-fill 0.5s ease-in-out;
+}
+
+@keyframes progress-fill {
+    from { width: 0%; }
+    to { width: var(--progress-width); }
+}
+</style>
+
+<!-- JavaScript for Execution Preview -->
+<script>
+let previewData = null;
+let autoRefreshEnabled = true;
+
+// Toggle execution details
+function toggleExecutionDetails() {
+    const details = document.getElementById('execution-details-content');
+    const toggle = document.getElementById('execution-details-toggle');
+    
+    if (details.classList.contains('hidden')) {
+        details.classList.remove('hidden');
+        toggle.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/></svg>';
+    } else {
+        details.classList.add('hidden');
+        toggle.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>';
+    }
+}
+
+// Refresh execution preview
+function refreshExecutionPreview() {
+    const analyzeBtn = document.getElementById('analyze-mapping-btn');
+    if (analyzeBtn) {
+        analyzeBtn.click();
+    }
+}
+
+// Toggle auto-refresh
+function toggleAutoRefresh(enabled) {
+    autoRefreshEnabled = enabled;
+    const badge = document.getElementById('preview-status');
+    if (enabled) {
+        badge.textContent = 'Auto-refresh ON';
+        badge.className = 'badge badge-success badge-sm';
+    } else {
+        badge.textContent = 'Auto-refresh OFF';
+        badge.className = 'badge badge-outline badge-sm';
+    }
+}
+
+// Export execution preview
+function exportExecutionPreview() {
+    if (!previewData) {
+        alert('No preview data available. Please analyze mapping first.');
+        return;
+    }
+    
+    const exportData = {
+        timestamp: new Date().toISOString(),
+        preview: previewData,
+        organization: '{{ organization_code }}',
+        mapping: '{{ selected_mapping.name }}',
+        files: {{ selected_files|length|default:0 }}
+    };
+    
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `execution-preview-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+// Update preview from mapping analysis
+function updateExecutionPreview(analysisData) {
+    previewData = analysisData;
+    
+    // Update preview status
+    const statusBadge = document.getElementById('preview-status');
+    const updateTimeBadge = document.getElementById('preview-update-time');
+    const exportBtn = document.getElementById('export-preview-btn');
+    
+    if (analysisData.success) {
+        statusBadge.textContent = 'Preview Ready';
+        statusBadge.className = 'badge badge-success badge-sm';
+        updateTimeBadge.textContent = new Date().toLocaleTimeString();
+        exportBtn.disabled = false;
+    } else {
+        statusBadge.textContent = 'Analysis Failed';
+        statusBadge.className = 'badge badge-error badge-sm';
+        exportBtn.disabled = true;
+    }
+    
+    // Update dataset processing overview
+    updateDatasetProcessingPreview(analysisData);
+    
+    // Update processing timeline
+    updateProcessingTimelinePreview(analysisData);
+    
+    // Update execution strategy
+    updateExecutionStrategyPreview(analysisData);
+    
+    // Update issues and warnings
+    updateIssuesPreview(analysisData);
+    
+    // Update file matching summary
+    updateFileMatchingPreview(analysisData);
+    
+    // Update detailed execution plan
+    updateDetailedExecutionPlan(analysisData);
+}
+
+// Update dataset processing preview
+function updateDatasetProcessingPreview(analysisData) {
+    const content = document.getElementById('dataset-preview-content');
+    
+    if (!analysisData.success) {
+        content.innerHTML = '<div class="text-center py-4 text-error"><p class="text-sm">Analysis failed</p></div>';
+        return;
+    }
+    
+    const datasets = analysisData.mapping_info?.datasets || [];
+    const matchedDatasets = analysisData.dataset_matching?.matched_datasets || [];
+    
+    let html = '<div class="space-y-2">';
+    
+    // Dataset count summary
+    html += `
+        <div class="flex items-center justify-between text-sm">
+            <span class="text-base-content/60">Total Datasets:</span>
+            <span class="font-medium">${datasets.length}</span>
+        </div>
+        <div class="flex items-center justify-between text-sm">
+            <span class="text-base-content/60">Matched Files:</span>
+            <span class="font-medium">${matchedDatasets.length}</span>
+        </div>
+    `;
+    
+    // Dataset list
+    if (datasets.length > 0) {
+        html += '<div class="divider my-2"></div>';
+        html += '<div class="space-y-1">';
+        
+        datasets.slice(0, 5).forEach(dataset => {
+            const isMatched = matchedDatasets.some(md => md.dataset_name === dataset.name);
+            const statusIcon = isMatched ? 
+                '<span class="text-success">✓</span>' : 
+                '<span class="text-warning">⚠</span>';
+            
+            html += `
+                <div class="flex items-center gap-2 text-sm">
+                    ${statusIcon}
+                    <span class="truncate">${dataset.name}</span>
+                </div>
+            `;
+        });
+        
+        if (datasets.length > 5) {
+            html += `<div class="text-xs text-base-content/60 text-center">+${datasets.length - 5} more datasets</div>`;
+        }
+        
+        html += '</div>';
+    }
+    
+    html += '</div>';
+    content.innerHTML = html;
+}
+
+// Update processing timeline preview
+function updateProcessingTimelinePreview(analysisData) {
+    const content = document.getElementById('timeline-preview-content');
+    
+    if (!analysisData.success) {
+        content.innerHTML = '<div class="text-center py-4 text-error"><p class="text-sm">Analysis failed</p></div>';
+        return;
+    }
+    
+    const phases = analysisData.processing_phases || [];
+    const strategy = analysisData.execution_strategy?.recommended_strategy || 'unknown';
+    
+    let html = '<div class="space-y-3">';
+    
+    // Strategy display
+    html += `
+        <div class="flex items-center gap-2 text-sm">
+            <span class="text-base-content/60">Strategy:</span>
+            <span class="badge badge-outline badge-sm">${strategy}</span>
+        </div>
+    `;
+    
+    // Phase timeline
+    if (phases.length > 0) {
+        html += '<div class="divider my-2"></div>';
+        html += '<div class="space-y-2">';
+        
+        phases.forEach((phase, index) => {
+            const isLast = index === phases.length - 1;
+            html += `
+                <div class="flex items-center gap-2 text-sm">
+                    <div class="w-4 h-4 rounded-full bg-primary/20 flex items-center justify-center">
+                        <span class="text-xs font-medium">${index + 1}</span>
+                    </div>
+                    <span class="flex-1">${phase.name || `Phase ${index + 1}`}</span>
+                    ${phase.estimated_duration ? `<span class="text-xs text-base-content/60">${phase.estimated_duration}</span>` : ''}
+                </div>
+                ${!isLast ? '<div class="w-px h-4 bg-base-300 ml-2"></div>' : ''}
+            `;
+        });
+        
+        html += '</div>';
+    } else {
+        html += '<div class="text-center py-2 text-base-content/60 text-sm">No phases defined</div>';
+    }
+    
+    html += '</div>';
+    content.innerHTML = html;
+}
+
+// Update execution strategy preview
+function updateExecutionStrategyPreview(analysisData) {
+    const content = document.getElementById('strategy-preview-content');
+    
+    if (!analysisData.success) {
+        content.innerHTML = '<div class="text-center py-4 text-error"><p class="text-sm">Analysis failed</p></div>';
+        return;
+    }
+    
+    const strategy = analysisData.execution_strategy || {};
+    const complexity = analysisData.complexity_analysis || {};
+    
+    let html = '<div class="space-y-3">';
+    
+    // Strategy recommendation
+    html += `
+        <div class="bg-base-100 rounded-lg p-3 space-y-2">
+            <div class="flex items-center justify-between">
+                <span class="text-sm font-medium">Recommended Strategy:</span>
+                <span class="badge badge-outline badge-sm">${strategy.recommended_strategy || 'Unknown'}</span>
+            </div>
+            ${strategy.strategy_reason ? `<div class="text-xs text-base-content/60">${strategy.strategy_reason}</div>` : ''}
+        </div>
+    `;
+    
+    // Complexity assessment
+    if (complexity.complexity_level) {
+        const complexityColor = complexity.complexity_level === 'high' ? 'badge-error' :
+                               complexity.complexity_level === 'medium' ? 'badge-warning' :
+                               'badge-success';
+        
+        html += `
+            <div class="bg-base-100 rounded-lg p-3 space-y-2">
+                <div class="flex items-center justify-between">
+                    <span class="text-sm font-medium">Complexity Level:</span>
+                    <span class="badge ${complexityColor} badge-sm">${complexity.complexity_level}</span>
+                </div>
+                ${complexity.complexity_factors ? `<div class="text-xs text-base-content/60">${complexity.complexity_factors.join(', ')}</div>` : ''}
+            </div>
+        `;
+    }
+    
+    // Resource estimates
+    if (strategy.estimated_duration || strategy.estimated_memory) {
+        html += `
+            <div class="bg-base-100 rounded-lg p-3 space-y-2">
+                <div class="text-sm font-medium">Resource Estimates:</div>
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    ${strategy.estimated_duration ? `<div><span class="text-base-content/60">Duration:</span> ${strategy.estimated_duration}</div>` : ''}
+                    ${strategy.estimated_memory ? `<div><span class="text-base-content/60">Memory:</span> ${strategy.estimated_memory}</div>` : ''}
+                </div>
+            </div>
+        `;
+    }
+    
+    html += '</div>';
+    content.innerHTML = html;
+}
+
+// Update issues preview
+function updateIssuesPreview(analysisData) {
+    const content = document.getElementById('issues-preview-content');
+    
+    if (!analysisData.success) {
+        content.innerHTML = '<div class="text-center py-4 text-error"><p class="text-sm">Analysis failed</p></div>';
+        return;
+    }
+    
+    const readiness = analysisData.readiness_status || {};
+    const issues = readiness.issues || [];
+    const warnings = readiness.warnings || [];
+    
+    let html = '<div class="space-y-2">';
+    
+    // Issues
+    if (issues.length > 0) {
+        html += '<div class="alert alert-error alert-sm p-2">';
+        html += '<div class="flex items-start gap-2">';
+        html += '<svg class="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>';
+        html += '<div class="flex-1"><div class="text-sm font-medium">Issues Found:</div>';
+        issues.forEach(issue => {
+            html += `<div class="text-xs mt-1">• ${issue}</div>`;
+        });
+        html += '</div></div></div>';
+    }
+    
+    // Warnings
+    if (warnings.length > 0) {
+        html += '<div class="alert alert-warning alert-sm p-2">';
+        html += '<div class="flex items-start gap-2">';
+        html += '<svg class="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>';
+        html += '<div class="flex-1"><div class="text-sm font-medium">Warnings:</div>';
+        warnings.forEach(warning => {
+            html += `<div class="text-xs mt-1">• ${warning}</div>`;
+        });
+        html += '</div></div></div>';
+    }
+    
+    // No issues
+    if (issues.length === 0 && warnings.length === 0) {
+        html += '<div class="text-center py-4 text-success">';
+        html += '<svg class="w-8 h-8 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>';
+        html += '<p class="text-sm">No issues detected</p>';
+        html += '</div>';
+    }
+    
+    html += '</div>';
+    content.innerHTML = html;
+}
+
+// Update file matching preview
+function updateFileMatchingPreview(analysisData) {
+    const content = document.getElementById('file-matching-preview-content');
+    
+    if (!analysisData.success) {
+        content.innerHTML = '<div class="text-center py-4 text-error"><p class="text-sm">Analysis failed</p></div>';
+        return;
+    }
+    
+    const matching = analysisData.dataset_matching || {};
+    const fileAnalysis = analysisData.file_analysis || {};
+    
+    let html = '<div class="space-y-3">';
+    
+    // Match percentage
+    if (matching.match_percentage !== undefined) {
+        const percentage = Math.round(matching.match_percentage);
+        const barColor = percentage < 50 ? 'bg-error' : percentage < 100 ? 'bg-warning' : 'bg-success';
+        
+        html += `
+            <div class="bg-base-100 rounded-lg p-3">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm font-medium">Match Percentage:</span>
+                    <span class="text-sm font-medium">${percentage}%</span>
+                </div>
+                <div class="w-full bg-base-300 rounded-full h-2">
+                    <div class="${barColor} h-2 rounded-full progress-bar-animation" style="width: ${percentage}%; --progress-width: ${percentage}%"></div>
+                </div>
+            </div>
+        `;
+    }
+    
+    // File summary
+    html += `
+        <div class="bg-base-100 rounded-lg p-3">
+            <div class="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                    <span class="text-base-content/60">Total Files:</span>
+                    <span class="font-medium ml-2">${fileAnalysis.total_files || 0}</span>
+                </div>
+                <div>
+                    <span class="text-base-content/60">Unique Datasets:</span>
+                    <span class="font-medium ml-2">${fileAnalysis.unique_datasets?.length || 0}</span>
+                </div>
+                <div>
+                    <span class="text-base-content/60">Matched:</span>
+                    <span class="font-medium ml-2">${matching.matched_datasets?.length || 0}</span>
+                </div>
+                <div>
+                    <span class="text-base-content/60">Missing:</span>
+                    <span class="font-medium ml-2">${matching.missing_datasets?.length || 0}</span>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Missing datasets
+    if (matching.missing_datasets && matching.missing_datasets.length > 0) {
+        html += '<div class="alert alert-warning alert-sm p-2">';
+        html += '<div class="text-sm font-medium">Missing Datasets:</div>';
+        matching.missing_datasets.slice(0, 3).forEach(dataset => {
+            html += `<div class="text-xs mt-1">• ${dataset}</div>`;
+        });
+        if (matching.missing_datasets.length > 3) {
+            html += `<div class="text-xs mt-1">... and ${matching.missing_datasets.length - 3} more</div>`;
+        }
+        html += '</div>';
+    }
+    
+    html += '</div>';
+    content.innerHTML = html;
+}
+
+// Update detailed execution plan
+function updateDetailedExecutionPlan(analysisData) {
+    const content = document.getElementById('execution-details-content');
+    
+    if (!analysisData.success) {
+        content.innerHTML = '<div class="text-center py-4 text-error"><p class="text-sm">Analysis failed</p></div>';
+        return;
+    }
+    
+    const phases = analysisData.processing_phases || [];
+    const recommendations = analysisData.recommendations || [];
+    
+    let html = '<div class="space-y-4">';
+    
+    // Processing phases detail
+    if (phases.length > 0) {
+        html += '<div class="bg-base-100 rounded-lg p-3">';
+        html += '<h5 class="font-medium text-sm mb-3">Processing Phases:</h5>';
+        html += '<div class="space-y-2">';
+        
+        phases.forEach((phase, index) => {
+            html += `
+                <div class="border border-base-300 rounded-lg p-2">
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="text-sm font-medium">Phase ${index + 1}: ${phase.name || 'Processing'}</span>
+                        ${phase.estimated_duration ? `<span class="text-xs text-base-content/60">${phase.estimated_duration}</span>` : ''}
+                    </div>
+                    ${phase.description ? `<div class="text-xs text-base-content/60">${phase.description}</div>` : ''}
+                    ${phase.datasets ? `<div class="text-xs mt-1"><span class="text-base-content/60">Datasets:</span> ${phase.datasets.join(', ')}</div>` : ''}
+                </div>
+            `;
+        });
+        
+        html += '</div></div>';
+    }
+    
+    // Recommendations
+    if (recommendations.length > 0) {
+        html += '<div class="bg-base-100 rounded-lg p-3">';
+        html += '<h5 class="font-medium text-sm mb-3">Recommendations:</h5>';
+        html += '<div class="space-y-2">';
+        
+        recommendations.forEach(rec => {
+            const typeColor = rec.type === 'error' ? 'text-error' : 
+                             rec.type === 'warning' ? 'text-warning' : 
+                             'text-info';
+            
+            html += `
+                <div class="flex items-start gap-2 text-sm">
+                    <span class="${typeColor}">•</span>
+                    <span class="flex-1">${rec.message}</span>
+                </div>
+            `;
+        });
+        
+        html += '</div></div>';
+    }
+    
+    html += '</div>';
+    content.innerHTML = html;
+}
+
+// Listen for mapping analysis updates
+document.addEventListener('DOMContentLoaded', function() {
+    // Listen for mapping analysis completion
+    const originalUpdateFunction = window.updateMappingAnalysis;
+    if (originalUpdateFunction) {
+        window.updateMappingAnalysis = function(event) {
+            // Call original function
+            originalUpdateFunction(event);
+            
+            // Update execution preview if auto-refresh is enabled
+            if (autoRefreshEnabled) {
+                try {
+                    const xhr = event.detail.xhr;
+                    if (xhr.status === 200) {
+                        const response = JSON.parse(xhr.responseText);
+                        updateExecutionPreview(response);
+                        
+                        // Also update mapping insights if available
+                        if (typeof updateMappingInsights === 'function') {
+                            updateMappingInsights(response);
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error updating execution preview:', e);
+                }
+            }
+        };
+    }
+    
+    // Listen for file selection changes
+    document.body.addEventListener('htmx:afterSettle', function(event) {
+        if (autoRefreshEnabled && event.detail.target.id === 'file-browser') {
+            // Small delay to ensure UI is updated
+            setTimeout(() => {
+                refreshExecutionPreview();
+            }, 500);
+        }
+    });
+});
+</script>

@@ -1,0 +1,1006 @@
+<!-- Mapping Insights Visualization Panel -->
+<!-- This template visualizes mapping complexity, relationships, and execution strategy -->
+{% load static %}
+
+<div class="space-y-6 mapping-insights-container">
+    
+    <!-- Header with Status -->
+    <div class="flex items-center justify-between">
+        <h3 class="text-xl font-semibold flex items-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+            </svg>
+            Mapping Insights
+        </h3>
+        <div class="badge badge-outline badge-sm">
+            <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+            </svg>
+            <span id="insights-status">Analysis Required</span>
+        </div>
+    </div>
+    
+    <!-- Complexity Analysis Overview -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        
+        <!-- Complexity Level -->
+        <div class="card bg-base-200 shadow-sm">
+            <div class="card-body p-4">
+                <h4 class="font-medium text-sm mb-3 flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                    Complexity Level
+                </h4>
+                
+                <div id="complexity-level-content" class="space-y-3">
+                    <!-- Default state -->
+                    <div class="text-center py-4 text-base-content/60">
+                        <div class="w-16 h-16 mx-auto mb-2 bg-base-300 rounded-full flex items-center justify-center">
+                            <svg class="w-8 h-8 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                            </svg>
+                        </div>
+                        <p class="text-sm">Complexity analysis pending</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Dataset Overview -->
+        <div class="card bg-base-200 shadow-sm">
+            <div class="card-body p-4">
+                <h4 class="font-medium text-sm mb-3 flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 1.79 4 4 4h8c2.21 0 4-1.79 4-4V7c0-2.21-1.79-4-4-4H8c-2.21 0-4 1.79-4 4z"/>
+                    </svg>
+                    Dataset Overview
+                </h4>
+                
+                <div id="dataset-overview-content" class="space-y-3">
+                    <!-- Default state -->
+                    <div class="text-center py-4 text-base-content/60">
+                        <div class="w-16 h-16 mx-auto mb-2 bg-base-300 rounded-full flex items-center justify-center">
+                            <svg class="w-8 h-8 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 1.79 4 4 4h8c2.21 0 4-1.79 4-4V7c0-2.21-1.79-4-4-4H8c-2.21 0-4 1.79-4 4z"/>
+                            </svg>
+                        </div>
+                        <p class="text-sm">Dataset analysis pending</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Column Statistics -->
+        <div class="card bg-base-200 shadow-sm">
+            <div class="card-body p-4">
+                <h4 class="font-medium text-sm mb-3 flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7"/>
+                    </svg>
+                    Column Statistics
+                </h4>
+                
+                <div id="column-stats-content" class="space-y-3">
+                    <!-- Default state -->
+                    <div class="text-center py-4 text-base-content/60">
+                        <div class="w-16 h-16 mx-auto mb-2 bg-base-300 rounded-full flex items-center justify-center">
+                            <svg class="w-8 h-8 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7"/>
+                            </svg>
+                        </div>
+                        <p class="text-sm">Column analysis pending</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+    
+    <!-- Relationship Analysis -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        
+        <!-- Foreign Key Relationships -->
+        <div class="card bg-base-200 shadow-sm">
+            <div class="card-body p-4">
+                <h4 class="font-medium text-sm mb-3 flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+                    </svg>
+                    Foreign Key Relationships
+                </h4>
+                
+                <div id="fk-relationships-content" class="space-y-3">
+                    <!-- Default state -->
+                    <div class="text-center py-4 text-base-content/60">
+                        <svg class="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+                        </svg>
+                        <p class="text-sm">Relationship analysis pending</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Dataset Dependencies -->
+        <div class="card bg-base-200 shadow-sm">
+            <div class="card-body p-4">
+                <h4 class="font-medium text-sm mb-3 flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5a2 2 0 012-2h2a2 2 0 012 2v2H8V5z"/>
+                    </svg>
+                    Dataset Dependencies
+                </h4>
+                
+                <div id="dataset-dependencies-content" class="space-y-3">
+                    <!-- Default state -->
+                    <div class="text-center py-4 text-base-content/60">
+                        <svg class="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5a2 2 0 012-2h2a2 2 0 012 2v2H8V5z"/>
+                        </svg>
+                        <p class="text-sm">Dependency analysis pending</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+    
+    <!-- Processing Strategy and Performance -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        
+        <!-- Execution Strategy -->
+        <div class="card bg-base-200 shadow-sm">
+            <div class="card-body p-4">
+                <h4 class="font-medium text-sm mb-3 flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    Processing Strategy
+                </h4>
+                
+                <div id="processing-strategy-content" class="space-y-3">
+                    <!-- Default state -->
+                    <div class="text-center py-4 text-base-content/60">
+                        <svg class="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <p class="text-sm">Strategy analysis pending</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Performance Impact -->
+        <div class="card bg-base-200 shadow-sm">
+            <div class="card-body p-4">
+                <h4 class="font-medium text-sm mb-3 flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2-2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                    </svg>
+                    Performance Impact
+                </h4>
+                
+                <div id="performance-impact-content" class="space-y-3">
+                    <!-- Default state -->
+                    <div class="text-center py-4 text-base-content/60">
+                        <svg class="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2-2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                        </svg>
+                        <p class="text-sm">Performance analysis pending</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+    
+    <!-- Detailed Insights (Expandable) -->
+    <div class="card bg-base-200 shadow-sm">
+        <div class="card-body p-4">
+            <div class="flex items-center justify-between mb-3">
+                <h4 class="font-medium text-sm flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                    </svg>
+                    Detailed Insights
+                </h4>
+                <button class="btn btn-ghost btn-sm" 
+                        onclick="toggleInsightsDetails()"
+                        id="insights-details-toggle">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+            </div>
+            
+            <div id="insights-details-content" class="hidden space-y-4">
+                <!-- Detailed insights will be populated here -->
+                <div class="text-center py-4 text-base-content/60">
+                    <p class="text-sm">Detailed insights will appear after analysis</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Quick Actions -->
+    <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+            <button class="btn btn-sm btn-outline"
+                    id="refresh-insights-btn"
+                    onclick="refreshMappingInsights()">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                Refresh Insights
+            </button>
+            
+            <button class="btn btn-sm btn-outline"
+                    id="export-insights-btn"
+                    onclick="exportMappingInsights()"
+                    disabled>
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                </svg>
+                Export Insights
+            </button>
+        </div>
+        
+        <div class="flex items-center gap-2">
+            <div class="badge badge-outline badge-sm" id="insights-update-time">
+                Never Updated
+            </div>
+        </div>
+    </div>
+    
+</div>
+
+<!-- Styles for mapping insights -->
+<style>
+.mapping-insights-container {
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.mapping-insights-container .card {
+    transition: transform 0.2s ease-in-out;
+}
+
+.mapping-insights-container .card:hover {
+    transform: translateY(-2px);
+}
+
+.complexity-indicator {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 0.75rem;
+    margin: 0 auto 0.5rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.complexity-indicator::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.1) 50%, transparent 70%);
+    animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+.complexity-low { background: #10b981; color: white; }
+.complexity-medium { background: #f59e0b; color: white; }
+.complexity-high { background: #ef4444; color: white; }
+
+.relationship-node {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin: 0 auto;
+    position: relative;
+}
+
+.relationship-line {
+    height: 2px;
+    background: #d1d5db;
+    position: relative;
+    margin: 4px 0;
+}
+
+.relationship-line::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 6px;
+    height: 6px;
+    background: #6366f1;
+    border-radius: 50%;
+    transform: translateY(-50%);
+}
+
+.relationship-line::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    right: 0;
+    width: 6px;
+    height: 6px;
+    background: #6366f1;
+    border-radius: 50%;
+    transform: translateY(-50%);
+}
+
+.progress-ring {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    position: relative;
+    margin: 0 auto;
+    background: conic-gradient(#6366f1 0deg, #6366f1 var(--progress, 0deg), #e5e7eb var(--progress, 0deg));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.progress-ring::after {
+    content: '';
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: white;
+    position: absolute;
+}
+
+.progress-ring .progress-text {
+    position: relative;
+    z-index: 1;
+    font-size: 0.75rem;
+    font-weight: bold;
+    color: #374151;
+}
+
+.dependency-graph {
+    position: relative;
+    height: 120px;
+    overflow: hidden;
+}
+
+.dependency-node {
+    position: absolute;
+    width: 80px;
+    height: 32px;
+    background: #f3f4f6;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: medium;
+    color: #374151;
+    transition: all 0.2s ease;
+}
+
+.dependency-node:hover {
+    background: #e5e7eb;
+    transform: scale(1.05);
+}
+
+.dependency-arrow {
+    position: absolute;
+    width: 2px;
+    background: #9ca3af;
+    transform-origin: bottom;
+}
+
+.dependency-arrow::after {
+    content: '';
+    position: absolute;
+    top: -4px;
+    left: -3px;
+    width: 0;
+    height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-bottom: 8px solid #9ca3af;
+}
+
+.strategy-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+}
+
+.strategy-sequential { background: #dbeafe; color: #1e40af; }
+.strategy-parallel { background: #dcfce7; color: #166534; }
+.strategy-hybrid { background: #fef3c7; color: #92400e; }
+.strategy-optimized { background: #f3e8ff; color: #7c3aed; }
+
+.performance-meter {
+    width: 100%;
+    height: 8px;
+    background: #e5e7eb;
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+    margin-bottom: 0.5rem;
+}
+
+.performance-fill {
+    height: 100%;
+    transition: width 0.5s ease;
+    border-radius: 4px;
+}
+
+.performance-low { background: #10b981; }
+.performance-medium { background: #f59e0b; }
+.performance-high { background: #ef4444; }
+
+@media print {
+    .mapping-insights-container {
+        page-break-inside: avoid;
+        break-inside: avoid;
+    }
+    
+    .mapping-insights-container .card {
+        border: 1px solid #e5e7eb;
+        box-shadow: none;
+    }
+    
+    .mapping-insights-container .badge {
+        border: 1px solid #6b7280;
+    }
+    
+    .mapping-insights-container .btn {
+        display: none;
+    }
+}
+</style>
+
+<!-- JavaScript for Mapping Insights -->
+<script>
+let insightsData = null;
+
+// Toggle insights details
+function toggleInsightsDetails() {
+    const details = document.getElementById('insights-details-content');
+    const toggle = document.getElementById('insights-details-toggle');
+    
+    if (details.classList.contains('hidden')) {
+        details.classList.remove('hidden');
+        toggle.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/></svg>';
+    } else {
+        details.classList.add('hidden');
+        toggle.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>';
+    }
+}
+
+// Refresh mapping insights
+function refreshMappingInsights() {
+    const analyzeBtn = document.getElementById('analyze-mapping-btn');
+    if (analyzeBtn) {
+        analyzeBtn.click();
+    }
+}
+
+// Export mapping insights
+function exportMappingInsights() {
+    if (!insightsData) {
+        alert('No insights data available. Please analyze mapping first.');
+        return;
+    }
+    
+    const exportData = {
+        timestamp: new Date().toISOString(),
+        insights: insightsData,
+        organization: '{{ organization_code }}',
+        mapping: insightsData.mapping_info?.name || 'Unknown',
+        complexity: insightsData.complexity_analysis?.complexity_level || 'unknown'
+    };
+    
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `mapping-insights-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+// Update insights from mapping analysis
+function updateMappingInsights(analysisData) {
+    insightsData = analysisData;
+    
+    // Update insights status
+    const statusBadge = document.getElementById('insights-status');
+    const updateTimeBadge = document.getElementById('insights-update-time');
+    const exportBtn = document.getElementById('export-insights-btn');
+    
+    if (analysisData.success) {
+        statusBadge.textContent = 'Insights Ready';
+        statusBadge.className = 'badge badge-success badge-sm';
+        updateTimeBadge.textContent = new Date().toLocaleTimeString();
+        exportBtn.disabled = false;
+    } else {
+        statusBadge.textContent = 'Analysis Failed';
+        statusBadge.className = 'badge badge-error badge-sm';
+        exportBtn.disabled = true;
+    }
+    
+    // Update individual insight sections
+    updateComplexityLevel(analysisData);
+    updateDatasetOverview(analysisData);
+    updateColumnStatistics(analysisData);
+    updateForeignKeyRelationships(analysisData);
+    updateDatasetDependencies(analysisData);
+    updateProcessingStrategy(analysisData);
+    updatePerformanceImpact(analysisData);
+    updateDetailedInsights(analysisData);
+}
+
+// Update complexity level visualization
+function updateComplexityLevel(analysisData) {
+    const content = document.getElementById('complexity-level-content');
+    
+    if (!analysisData.success) {
+        content.innerHTML = '<div class="text-center py-4 text-error"><p class="text-sm">Analysis failed</p></div>';
+        return;
+    }
+    
+    const complexity = analysisData.complexity_analysis || {};
+    const level = complexity.complexity_level || 'unknown';
+    const factors = complexity.complexity_factors || [];
+    const score = complexity.complexity_score || 0;
+    
+    const colorClass = level === 'high' ? 'complexity-high' :
+                      level === 'medium' ? 'complexity-medium' :
+                      'complexity-low';
+    
+    let html = `
+        <div class="text-center">
+            <div class="complexity-indicator ${colorClass}">
+                ${level.toUpperCase()}
+            </div>
+            <div class="text-sm font-medium mb-2">Complexity: ${level}</div>
+            <div class="text-xs text-base-content/60 mb-3">Score: ${Math.round(score * 100)}/100</div>
+        </div>
+    `;
+    
+    if (factors.length > 0) {
+        html += '<div class="space-y-1">';
+        factors.slice(0, 3).forEach(factor => {
+            html += `<div class="text-xs text-base-content/70 flex items-center gap-1">
+                <span class="w-1 h-1 bg-current rounded-full"></span>
+                ${factor}
+            </div>`;
+        });
+        if (factors.length > 3) {
+            html += `<div class="text-xs text-base-content/50">+${factors.length - 3} more factors</div>`;
+        }
+        html += '</div>';
+    }
+    
+    content.innerHTML = html;
+}
+
+// Update dataset overview
+function updateDatasetOverview(analysisData) {
+    const content = document.getElementById('dataset-overview-content');
+    
+    if (!analysisData.success) {
+        content.innerHTML = '<div class="text-center py-4 text-error"><p class="text-sm">Analysis failed</p></div>';
+        return;
+    }
+    
+    const mapping = analysisData.mapping_info || {};
+    const datasets = mapping.datasets || [];
+    const matching = analysisData.dataset_matching || {};
+    const matched = matching.matched_datasets || [];
+    const missing = matching.missing_datasets || [];
+    
+    const matchPercentage = datasets.length > 0 ? Math.round((matched.length / datasets.length) * 100) : 0;
+    
+    let html = `
+        <div class="text-center mb-3">
+            <div class="progress-ring" style="--progress: ${matchPercentage * 3.6}deg;">
+                <div class="progress-text">${matchPercentage}%</div>
+            </div>
+            <div class="text-sm font-medium">Dataset Match Rate</div>
+        </div>
+        
+        <div class="space-y-2">
+            <div class="flex justify-between text-sm">
+                <span class="text-base-content/60">Total Datasets:</span>
+                <span class="font-medium">${datasets.length}</span>
+            </div>
+            <div class="flex justify-between text-sm">
+                <span class="text-base-content/60">Matched:</span>
+                <span class="font-medium text-success">${matched.length}</span>
+            </div>
+            <div class="flex justify-between text-sm">
+                <span class="text-base-content/60">Missing:</span>
+                <span class="font-medium text-error">${missing.length}</span>
+            </div>
+        </div>
+    `;
+    
+    content.innerHTML = html;
+}
+
+// Update column statistics
+function updateColumnStatistics(analysisData) {
+    const content = document.getElementById('column-stats-content');
+    
+    if (!analysisData.success) {
+        content.innerHTML = '<div class="text-center py-4 text-error"><p class="text-sm">Analysis failed</p></div>';
+        return;
+    }
+    
+    const mapping = analysisData.mapping_info || {};
+    const totalColumns = mapping.total_columns || 0;
+    const datasets = mapping.datasets || [];
+    
+    // Calculate column type distribution
+    const columnTypes = {};
+    datasets.forEach(dataset => {
+        if (dataset.columns) {
+            dataset.columns.forEach(column => {
+                const type = column.type || 'unknown';
+                columnTypes[type] = (columnTypes[type] || 0) + 1;
+            });
+        }
+    });
+    
+    const sortedTypes = Object.entries(columnTypes)
+        .sort(([,a], [,b]) => b - a)
+        .slice(0, 4);
+    
+    let html = `
+        <div class="text-center mb-3">
+            <div class="text-2xl font-bold">${totalColumns}</div>
+            <div class="text-sm text-base-content/60">Total Columns</div>
+        </div>
+        
+        <div class="space-y-2">
+    `;
+    
+    sortedTypes.forEach(([type, count]) => {
+        const percentage = totalColumns > 0 ? Math.round((count / totalColumns) * 100) : 0;
+        html += `
+            <div class="flex items-center justify-between text-sm">
+                <span class="capitalize">${type}:</span>
+                <div class="flex items-center gap-2">
+                    <span class="font-medium">${count}</span>
+                    <div class="w-16 h-2 bg-base-300 rounded-full overflow-hidden">
+                        <div class="h-full bg-primary rounded-full" style="width: ${percentage}%"></div>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    
+    html += '</div>';
+    content.innerHTML = html;
+}
+
+// Update foreign key relationships
+function updateForeignKeyRelationships(analysisData) {
+    const content = document.getElementById('fk-relationships-content');
+    
+    if (!analysisData.success) {
+        content.innerHTML = '<div class="text-center py-4 text-error"><p class="text-sm">Analysis failed</p></div>';
+        return;
+    }
+    
+    const mapping = analysisData.mapping_info || {};
+    const relationships = mapping.fk_relationships || [];
+    
+    if (relationships.length === 0) {
+        content.innerHTML = `
+            <div class="text-center py-4 text-base-content/60">
+                <svg class="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+                </svg>
+                <p class="text-sm">No foreign key relationships</p>
+            </div>
+        `;
+        return;
+    }
+    
+    let html = `
+        <div class="text-center mb-3">
+            <div class="text-2xl font-bold">${relationships.length}</div>
+            <div class="text-sm text-base-content/60">FK Relationships</div>
+        </div>
+        
+        <div class="space-y-2">
+    `;
+    
+    relationships.slice(0, 5).forEach(rel => {
+        html += `
+            <div class="flex items-center gap-2 text-sm">
+                <div class="relationship-node bg-primary"></div>
+                <div class="relationship-line flex-1"></div>
+                <div class="relationship-node bg-secondary"></div>
+            </div>
+            <div class="text-xs text-base-content/60 text-center">
+                ${rel.from_dataset} → ${rel.to_dataset}
+            </div>
+        `;
+    });
+    
+    if (relationships.length > 5) {
+        html += `<div class="text-xs text-base-content/50 text-center">+${relationships.length - 5} more relationships</div>`;
+    }
+    
+    html += '</div>';
+    content.innerHTML = html;
+}
+
+// Update dataset dependencies
+function updateDatasetDependencies(analysisData) {
+    const content = document.getElementById('dataset-dependencies-content');
+    
+    if (!analysisData.success) {
+        content.innerHTML = '<div class="text-center py-4 text-error"><p class="text-sm">Analysis failed</p></div>';
+        return;
+    }
+    
+    const phases = analysisData.processing_phases || [];
+    
+    if (phases.length === 0) {
+        content.innerHTML = `
+            <div class="text-center py-4 text-base-content/60">
+                <svg class="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5a2 2 0 012-2h2a2 2 0 012 2v2H8V5z"/>
+                </svg>
+                <p class="text-sm">No dependencies detected</p>
+            </div>
+        `;
+        return;
+    }
+    
+    let html = `
+        <div class="text-center mb-3">
+            <div class="text-2xl font-bold">${phases.length}</div>
+            <div class="text-sm text-base-content/60">Processing Phases</div>
+        </div>
+        
+        <div class="dependency-graph">
+    `;
+    
+    phases.forEach((phase, index) => {
+        const x = (index % 2) * 90 + 10;
+        const y = Math.floor(index / 2) * 40 + 10;
+        
+        html += `
+            <div class="dependency-node" style="left: ${x}px; top: ${y}px;" title="${phase.description || ''}">
+                ${phase.name || `Phase ${index + 1}`}
+            </div>
+        `;
+        
+        if (index < phases.length - 1) {
+            const nextY = Math.floor((index + 1) / 2) * 40 + 26;
+            const height = Math.abs(nextY - (y + 16));
+            html += `
+                <div class="dependency-arrow" style="left: ${x + 40}px; top: ${Math.min(y + 16, nextY)}px; height: ${height}px;"></div>
+            `;
+        }
+    });
+    
+    html += '</div>';
+    content.innerHTML = html;
+}
+
+// Update processing strategy
+function updateProcessingStrategy(analysisData) {
+    const content = document.getElementById('processing-strategy-content');
+    
+    if (!analysisData.success) {
+        content.innerHTML = '<div class="text-center py-4 text-error"><p class="text-sm">Analysis failed</p></div>';
+        return;
+    }
+    
+    const strategy = analysisData.execution_strategy || {};
+    const recommendedStrategy = strategy.recommended_strategy || 'sequential';
+    const reason = strategy.strategy_reason || 'Default strategy selected';
+    const duration = strategy.estimated_duration || 'Unknown';
+    
+    const strategyClass = `strategy-${recommendedStrategy}`;
+    
+    let html = `
+        <div class="text-center mb-3">
+            <div class="strategy-badge ${strategyClass}">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                ${recommendedStrategy.toUpperCase()}
+            </div>
+            <div class="text-sm text-base-content/60">Recommended Strategy</div>
+        </div>
+        
+        <div class="space-y-2">
+            <div class="text-xs text-base-content/70">${reason}</div>
+            ${duration !== 'Unknown' ? `<div class="text-xs text-base-content/60">Estimated Duration: ${duration}</div>` : ''}
+        </div>
+    `;
+    
+    content.innerHTML = html;
+}
+
+// Update performance impact
+function updatePerformanceImpact(analysisData) {
+    const content = document.getElementById('performance-impact-content');
+    
+    if (!analysisData.success) {
+        content.innerHTML = '<div class="text-center py-4 text-error"><p class="text-sm">Analysis failed</p></div>';
+        return;
+    }
+    
+    const complexity = analysisData.complexity_analysis || {};
+    const strategy = analysisData.execution_strategy || {};
+    const level = complexity.complexity_level || 'low';
+    const score = complexity.complexity_score || 0;
+    const memory = strategy.estimated_memory || 'Low';
+    
+    const impactLevel = level === 'high' ? 'high' : level === 'medium' ? 'medium' : 'low';
+    const impactClass = `performance-${impactLevel}`;
+    const impactWidth = Math.round(score * 100);
+    
+    let html = `
+        <div class="text-center mb-3">
+            <div class="text-lg font-bold text-base-content/80">${impactLevel.toUpperCase()}</div>
+            <div class="text-sm text-base-content/60">Performance Impact</div>
+        </div>
+        
+        <div class="space-y-3">
+            <div>
+                <div class="flex justify-between text-sm mb-1">
+                    <span>Resource Usage:</span>
+                    <span class="font-medium">${impactWidth}%</span>
+                </div>
+                <div class="performance-meter">
+                    <div class="performance-fill ${impactClass}" style="width: ${impactWidth}%"></div>
+                </div>
+            </div>
+            
+            <div class="flex justify-between text-sm">
+                <span class="text-base-content/60">Memory Usage:</span>
+                <span class="font-medium">${memory}</span>
+            </div>
+        </div>
+    `;
+    
+    content.innerHTML = html;
+}
+
+// Update detailed insights
+function updateDetailedInsights(analysisData) {
+    const content = document.getElementById('insights-details-content');
+    
+    if (!analysisData.success) {
+        content.innerHTML = '<div class="text-center py-4 text-error"><p class="text-sm">Analysis failed</p></div>';
+        return;
+    }
+    
+    const mapping = analysisData.mapping_info || {};
+    const recommendations = analysisData.recommendations || [];
+    const readiness = analysisData.readiness_status || {};
+    
+    let html = '<div class="space-y-4">';
+    
+    // Mapping details
+    html += `
+        <div class="bg-base-100 rounded-lg p-3">
+            <h5 class="font-medium text-sm mb-3">Mapping Details:</h5>
+            <div class="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                    <span class="text-base-content/60">Name:</span>
+                    <span class="font-medium ml-2">${mapping.name || 'Unknown'}</span>
+                </div>
+                <div>
+                    <span class="text-base-content/60">Version:</span>
+                    <span class="font-medium ml-2">${mapping.version || 'N/A'}</span>
+                </div>
+                <div>
+                    <span class="text-base-content/60">Datasets:</span>
+                    <span class="font-medium ml-2">${mapping.datasets?.length || 0}</span>
+                </div>
+                <div>
+                    <span class="text-base-content/60">Columns:</span>
+                    <span class="font-medium ml-2">${mapping.total_columns || 0}</span>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Recommendations
+    if (recommendations.length > 0) {
+        html += `
+            <div class="bg-base-100 rounded-lg p-3">
+                <h5 class="font-medium text-sm mb-3">Recommendations:</h5>
+                <div class="space-y-2">
+        `;
+        
+        recommendations.forEach(rec => {
+            const typeColor = rec.type === 'error' ? 'text-error' : 
+                             rec.type === 'warning' ? 'text-warning' : 
+                             'text-info';
+            
+            html += `
+                <div class="flex items-start gap-2 text-sm">
+                    <span class="${typeColor}">•</span>
+                    <span class="flex-1">${rec.message}</span>
+                </div>
+            `;
+        });
+        
+        html += '</div></div>';
+    }
+    
+    // Readiness status
+    if (readiness.ready !== undefined) {
+        const statusColor = readiness.ready ? 'text-success' : 'text-error';
+        const statusText = readiness.ready ? 'Ready for execution' : 'Not ready for execution';
+        
+        html += `
+            <div class="bg-base-100 rounded-lg p-3">
+                <h5 class="font-medium text-sm mb-3">Readiness Status:</h5>
+                <div class="flex items-center gap-2 text-sm">
+                    <span class="${statusColor}">●</span>
+                    <span class="font-medium">${statusText}</span>
+                </div>
+                ${readiness.reason ? `<div class="text-xs text-base-content/60 mt-1">${readiness.reason}</div>` : ''}
+            </div>
+        `;
+    }
+    
+    html += '</div>';
+    content.innerHTML = html;
+}
+
+// Listen for mapping analysis updates
+document.addEventListener('DOMContentLoaded', function() {
+    // Listen for mapping analysis completion
+    document.body.addEventListener('htmx:afterRequest', function(event) {
+        if (event.detail.requestConfig.path.includes('analyze-mapping')) {
+            try {
+                const xhr = event.detail.xhr;
+                if (xhr.status === 200) {
+                    const response = JSON.parse(xhr.responseText);
+                    updateMappingInsights(response);
+                }
+            } catch (e) {
+                console.error('Error updating mapping insights:', e);
+            }
+        }
+    });
+});
+</script>
