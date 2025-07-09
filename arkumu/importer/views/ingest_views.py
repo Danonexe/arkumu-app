@@ -700,7 +700,7 @@ def analyze_mapping(request):
                 'analysis': {}
             }, status=400)
         
-        mapping_id = current_mapping['mapping_id']
+        mapping_id = current_mapping['id']
         
         # Get selected files from session
         selected_files = request.session.get(SELECTED_FILES_SESSION_KEY, [])
@@ -1288,7 +1288,7 @@ def run_pre_execution_validation(request):
                 'validation_results': {}
             }, status=400)
         
-        mapping_id = current_mapping['mapping_id']
+        mapping_id = current_mapping['id']
         
         # Get selected files from session
         selected_files = request.session.get(SELECTED_FILES_SESSION_KEY, [])
@@ -1311,7 +1311,7 @@ def run_pre_execution_validation(request):
         bucket_service = BucketService()
         
         # Get mapping configuration
-        mapping_config = mapping_adapter.get_mapping_config(mapping_id)
+        mapping_config = mapping_adapter.load_mapping_config(mapping_id)
         
         # For now, use the file paths as-is for validation
         # In a full implementation, we might download files to temp locations
@@ -1319,10 +1319,10 @@ def run_pre_execution_validation(request):
         bucket_name = bucket_service.get_organization_bucket(organization_code)
         
         # Run pre-execution validation with S3 paths
-        # Note: The validator will need to be enhanced to handle S3 paths
         validation_result = validator.validate_mapping_execution(
             mapping_config=mapping_config,
-            file_paths=selected_files
+            file_paths=selected_files,
+            organization_code=organization_code
         )
         
         # Convert validation result to dict for JSON response

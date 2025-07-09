@@ -10,6 +10,8 @@ import csv
 import json
 import logging
 import time
+import io
+import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple, Union
 from dataclasses import dataclass
@@ -33,6 +35,7 @@ from .validation_result import (
 from arkumu.importer.services.file_matching.file_dataset_matcher import FileDatasetMatcher
 from arkumu.importer.services.mapping_consumer.mapping_adapter import MappingAdapter
 from arkumu.importer.services.validation.validation_utils import ValidationReport
+from arkumu.storage.services.bucket_service import BucketService
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +52,8 @@ class PreExecutionValidator:
     def __init__(self, 
                  mapping_adapter: Optional[MappingAdapter] = None,
                  file_matcher: Optional[FileDatasetMatcher] = None,
-                 validation_mode: ValidationMode = ValidationMode.STRICT):
+                 validation_mode: ValidationMode = ValidationMode.STRICT,
+                 bucket_service: Optional[BucketService] = None):
         """
         Initialize the pre-execution validator.
         
@@ -57,10 +61,12 @@ class PreExecutionValidator:
             mapping_adapter: Optional mapping adapter for loading configurations
             file_matcher: Optional file matcher for file validation
             validation_mode: Validation mode (strict, warning_only, lenient)
+            bucket_service: Optional bucket service for S3 file access
         """
         self.mapping_adapter = mapping_adapter or MappingAdapter()
         self.file_matcher = file_matcher or FileDatasetMatcher()
         self.validation_mode = validation_mode
+        self.bucket_service = bucket_service or BucketService()
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
         
         # Configuration
@@ -81,13 +87,15 @@ class PreExecutionValidator:
     
     def validate_mapping_execution(self, 
                                  mapping_config: Dict[str, Any], 
-                                 file_paths: List[str]) -> PreExecutionValidationResult:
+                                 file_paths: List[str],
+                                 organization_code: Optional[str] = None) -> PreExecutionValidationResult:
         """
         Validate mapping execution against provided files.
         
         Args:
             mapping_config: Mapping configuration dictionary
-            file_paths: List of file paths to validate
+            file_paths: List of file paths to validate (can be S3 paths)
+            organization_code: Optional organization code for S3 bucket access
             
         Returns:
             PreExecutionValidationResult with comprehensive validation results
@@ -110,7 +118,7 @@ class PreExecutionValidator:
             # 2. Validate file structures
             file_validation_results = []
             for file_path in file_paths:
-                file_result = self.validate_file_structure(file_path, mapping_config)
+                file_result = self.validate_file_structure(file_path, mapping_config, organization_code)
                 file_validation_results.append(file_result)
                 result.all_issues.extend(file_result.issues)
             
@@ -119,7 +127,8 @@ class PreExecutionValidator:
             # 3. Validate column mappings
             column_mapping_result = self.validate_column_mapping(
                 [result.file_path for result in file_validation_results if result.is_valid],
-                mapping_config
+                mapping_config,
+                organization_code
             )
             result.column_mapping_result = column_mapping_result
             result.all_issues.extend(column_mapping_result.issues)
@@ -130,7 +139,11 @@ class PreExecutionValidator:
             result.all_issues.extend(relationship_result.issues)
             
             # 5. Estimate resource requirements
-            file_sizes = [os.path.getsize(fp) for fp in file_paths if os.path.exists(fp)]
+            file_sizes = []
+            for fp in file_paths:
+                size = self._get_file_size(fp, organization_code)
+                if size > 0:
+                    file_sizes.append(size)
             resource_estimate = self.estimate_resource_requirements(mapping_config, file_sizes)
             result.resource_estimate = resource_estimate
             
@@ -159,13 +172,15 @@ class PreExecutionValidator:
     
     def validate_file_structure(self, 
                                file_path: str, 
-                               dataset_config: Dict[str, Any]) -> FileValidationResult:
+                               dataset_config: Dict[str, Any],
+                               organization_code: Optional[str] = None) -> FileValidationResult:
         """
         Validate file structure against dataset configuration.
         
         Args:
-            file_path: Path to the file to validate
+            file_path: Path to the file to validate (can be S3 path)
             dataset_config: Dataset configuration dictionary
+            organization_code: Optional organization code for S3 bucket access
             
         Returns:
             FileValidationResult with validation details
@@ -179,32 +194,70 @@ class PreExecutionValidator:
         )
         
         try:
+            # Determine if this is an S3 path or local file
+            is_s3_path = self._is_s3_path(file_path)
+            
             # Basic file checks
-            if not os.path.exists(file_path):
-                result.is_valid = False
-                result.issues.append(ValidationIssue(
-                    code=ValidationErrorCodes.FILE_NOT_FOUND,
-                    severity=ValidationSeverity.ERROR,
-                    category=ValidationCategory.FILE_STRUCTURE,
-                    message=f"File not found: {file_path}",
-                    file_path=file_path
-                ))
-                return result
-            
-            if not os.access(file_path, os.R_OK):
-                result.is_valid = False
-                result.issues.append(ValidationIssue(
-                    code=ValidationErrorCodes.FILE_NOT_READABLE,
-                    severity=ValidationSeverity.ERROR,
-                    category=ValidationCategory.FILE_STRUCTURE,
-                    message=f"File not readable: {file_path}",
-                    file_path=file_path
-                ))
-                return result
-            
-            # File size validation
-            file_size = os.path.getsize(file_path)
-            result.file_size = file_size
+            if is_s3_path:
+                # Validate S3 file
+                if not organization_code:
+                    # Try to extract organization from mapping config
+                    organization_code = dataset_config.get('institution', dataset_config.get('organization'))
+                    
+                if not organization_code:
+                    result.is_valid = False
+                    result.issues.append(ValidationIssue(
+                        code=ValidationErrorCodes.MISSING_CONFIGURATION,
+                        severity=ValidationSeverity.ERROR,
+                        category=ValidationCategory.FILE_STRUCTURE,
+                        message="Organization code required for S3 file validation",
+                        file_path=file_path
+                    ))
+                    return result
+                
+                # Check if file exists in S3
+                bucket_name = self.bucket_service.get_organization_bucket(organization_code)
+                file_exists, file_size = self._check_s3_file_exists(bucket_name, file_path)
+                
+                if not file_exists:
+                    result.is_valid = False
+                    result.issues.append(ValidationIssue(
+                        code=ValidationErrorCodes.FILE_NOT_FOUND,
+                        severity=ValidationSeverity.ERROR,
+                        category=ValidationCategory.FILE_STRUCTURE,
+                        message=f"File not found in S3: {file_path}",
+                        file_path=file_path
+                    ))
+                    return result
+                
+                result.file_size = file_size
+            else:
+                # Local file validation
+                if not os.path.exists(file_path):
+                    result.is_valid = False
+                    result.issues.append(ValidationIssue(
+                        code=ValidationErrorCodes.FILE_NOT_FOUND,
+                        severity=ValidationSeverity.ERROR,
+                        category=ValidationCategory.FILE_STRUCTURE,
+                        message=f"File not found: {file_path}",
+                        file_path=file_path
+                    ))
+                    return result
+                
+                if not os.access(file_path, os.R_OK):
+                    result.is_valid = False
+                    result.issues.append(ValidationIssue(
+                        code=ValidationErrorCodes.FILE_NOT_READABLE,
+                        severity=ValidationSeverity.ERROR,
+                        category=ValidationCategory.FILE_STRUCTURE,
+                        message=f"File not readable: {file_path}",
+                        file_path=file_path
+                    ))
+                    return result
+                
+                # File size validation
+                file_size = os.path.getsize(file_path)
+                result.file_size = file_size
             
             if file_size == 0:
                 result.is_valid = False
@@ -234,9 +287,15 @@ class PreExecutionValidator:
             file_extension = Path(file_path).suffix.lower()
             
             if file_extension in ['.csv', '.tsv', '.txt']:
-                self._validate_csv_file_structure(file_path, dataset_config, result)
+                if is_s3_path:
+                    self._validate_csv_file_structure_s3(file_path, dataset_config, result, organization_code)
+                else:
+                    self._validate_csv_file_structure(file_path, dataset_config, result)
             elif file_extension == '.json':
-                self._validate_json_file_structure(file_path, dataset_config, result)
+                if is_s3_path:
+                    self._validate_json_file_structure_s3(file_path, dataset_config, result, organization_code)
+                else:
+                    self._validate_json_file_structure(file_path, dataset_config, result)
             else:
                 result.issues.append(ValidationIssue(
                     code=ValidationErrorCodes.INVALID_FILE_FORMAT,
@@ -262,7 +321,8 @@ class PreExecutionValidator:
     
     def validate_column_mapping(self, 
                               file_columns: List[str], 
-                              mapping_columns: Dict[str, Any]) -> ColumnMappingValidationResult:
+                              mapping_columns: Dict[str, Any],
+                              organization_code: Optional[str] = None) -> ColumnMappingValidationResult:
         """
         Validate column mapping between files and mapping configuration.
         
@@ -309,10 +369,10 @@ class PreExecutionValidator:
             # For file-based validation, we need to check against actual file columns
             if isinstance(file_columns, list) and len(file_columns) > 0:
                 # If file_columns is a list of file paths, load columns from files
-                if isinstance(file_columns[0], str) and os.path.exists(file_columns[0]):
+                if isinstance(file_columns[0], str) and (os.path.exists(file_columns[0]) or self._is_s3_path(file_columns[0])):
                     actual_columns = set()
                     for file_path in file_columns:
-                        file_cols = self._extract_file_columns(file_path)
+                        file_cols = self._extract_file_columns(file_path, organization_code)
                         actual_columns.update(file_cols)
                 else:
                     # Direct column list
@@ -746,27 +806,60 @@ class PreExecutionValidator:
             ))
             result.is_valid = False
     
-    def _extract_file_columns(self, file_path: str) -> List[str]:
-        """Extract column names from a file"""
+    def _extract_file_columns(self, file_path: str, organization_code: Optional[str] = None) -> List[str]:
+        """Extract column names from a file (local or S3)"""
         try:
             file_extension = Path(file_path).suffix.lower()
+            is_s3_path = self._is_s3_path(file_path)
             
             if file_extension in ['.csv', '.tsv', '.txt']:
-                encoding = self._detect_encoding(file_path)
-                delimiter = self._detect_delimiter(file_path, encoding)
-                
-                with open(file_path, 'r', encoding=encoding) as f:
-                    reader = csv.reader(f, delimiter=delimiter)
-                    return next(reader)
+                if is_s3_path and organization_code:
+                    # Get from S3
+                    bucket_name = self.bucket_service.get_organization_bucket(organization_code)
+                    file_content_response = self.bucket_service.get_file_content(bucket_name, file_path)
+                    
+                    if file_content_response.get('success'):
+                        content_bytes = file_content_response.get('content', b'')
+                        encoding = self._detect_encoding_from_bytes(content_bytes[:10000])
+                        content_str = content_bytes.decode(encoding)
+                        delimiter = self._detect_delimiter_from_string(content_str[:1024])
+                        
+                        csv_file = io.StringIO(content_str)
+                        reader = csv.reader(csv_file, delimiter=delimiter)
+                        return next(reader)
+                else:
+                    # Local file
+                    encoding = self._detect_encoding(file_path)
+                    delimiter = self._detect_delimiter(file_path, encoding)
+                    
+                    with open(file_path, 'r', encoding=encoding) as f:
+                        reader = csv.reader(f, delimiter=delimiter)
+                        return next(reader)
             
             elif file_extension == '.json':
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                
-                if isinstance(data, list) and data:
-                    return list(data[0].keys()) if isinstance(data[0], dict) else []
-                elif isinstance(data, dict):
-                    return list(data.keys())
+                if is_s3_path and organization_code:
+                    # Get from S3
+                    bucket_name = self.bucket_service.get_organization_bucket(organization_code)
+                    file_content_response = self.bucket_service.get_file_content(bucket_name, file_path)
+                    
+                    if file_content_response.get('success'):
+                        content_bytes = file_content_response.get('content', b'')
+                        content_str = content_bytes.decode('utf-8')
+                        data = json.loads(content_str)
+                        
+                        if isinstance(data, list) and data:
+                            return list(data[0].keys()) if isinstance(data[0], dict) else []
+                        elif isinstance(data, dict):
+                            return list(data.keys())
+                else:
+                    # Local file
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                    
+                    if isinstance(data, list) and data:
+                        return list(data[0].keys()) if isinstance(data[0], dict) else []
+                    elif isinstance(data, dict):
+                        return list(data.keys())
             
             return []
         
@@ -882,3 +975,264 @@ class PreExecutionValidator:
                           for issue in result.all_issues)
         else:  # STRICT
             return not result.has_blocking_issues()
+    
+    def _is_s3_path(self, file_path: str) -> bool:
+        """Check if a file path is an S3 path (not a local file path)"""
+        # S3 paths don't start with / and don't have drive letters (C:, etc.)
+        # They typically look like: "metadata/file.csv" or "folder/subfolder/file.csv"
+        # But they should not start with . (like ./file.csv or ../file.csv)
+        return (not os.path.isabs(file_path) and 
+                ':' not in file_path and 
+                not file_path.startswith('.') and
+                not file_path.startswith('~'))
+    
+    def _check_s3_file_exists(self, bucket_name: str, file_path: str) -> Tuple[bool, int]:
+        """Check if a file exists in S3 and return its size"""
+        try:
+            # Use the bucket service's S3 client to check file
+            response = self.bucket_service.base_s3_service.s3_client.head_object(
+                Bucket=bucket_name,
+                Key=file_path
+            )
+            return True, response.get('ContentLength', 0)
+        except Exception as e:
+            self.logger.debug(f"File not found in S3: {bucket_name}/{file_path}")
+            return False, 0
+    
+    def _get_file_size(self, file_path: str, organization_code: Optional[str] = None) -> int:
+        """Get file size for either local or S3 file"""
+        if self._is_s3_path(file_path) and organization_code:
+            bucket_name = self.bucket_service.get_organization_bucket(organization_code)
+            _, size = self._check_s3_file_exists(bucket_name, file_path)
+            return size
+        elif os.path.exists(file_path):
+            return os.path.getsize(file_path)
+        return 0
+    
+    def _validate_csv_file_structure_s3(self, 
+                                       file_path: str, 
+                                       dataset_config: Dict[str, Any], 
+                                       result: FileValidationResult,
+                                       organization_code: str):
+        """Validate CSV file structure from S3"""
+        try:
+            # Get file content from S3
+            bucket_name = self.bucket_service.get_organization_bucket(organization_code)
+            file_content_response = self.bucket_service.get_file_content(bucket_name, file_path)
+            
+            if not file_content_response.get('success'):
+                result.issues.append(ValidationIssue(
+                    code=ValidationErrorCodes.FILE_NOT_READABLE,
+                    severity=ValidationSeverity.ERROR,
+                    category=ValidationCategory.FILE_STRUCTURE,
+                    message=f"Cannot read file from S3: {file_path}",
+                    file_path=file_path
+                ))
+                result.is_valid = False
+                return
+            
+            # Get content as string
+            content_bytes = file_content_response.get('content', b'')
+            
+            # Detect encoding
+            encoding = self._detect_encoding_from_bytes(content_bytes[:10000])
+            result.encoding = encoding
+            
+            # Decode content
+            content_str = content_bytes.decode(encoding)
+            
+            # Detect delimiter
+            delimiter = self._detect_delimiter_from_string(content_str[:1024])
+            result.delimiter = delimiter
+            
+            # Parse CSV
+            csv_file = io.StringIO(content_str)
+            reader = csv.reader(csv_file, delimiter=delimiter)
+            
+            # Read header
+            try:
+                headers = next(reader)
+                result.column_count = len(headers)
+            except StopIteration:
+                result.issues.append(ValidationIssue(
+                    code=ValidationErrorCodes.HEADER_MISSING,
+                    severity=ValidationSeverity.ERROR,
+                    category=ValidationCategory.FILE_STRUCTURE,
+                    message="CSV file has no header row",
+                    file_path=file_path
+                ))
+                result.is_valid = False
+                return
+            
+            # Check for duplicate headers
+            if len(headers) != len(set(headers)):
+                result.issues.append(ValidationIssue(
+                    code=ValidationErrorCodes.DUPLICATE_HEADERS,
+                    severity=ValidationSeverity.ERROR,
+                    category=ValidationCategory.FILE_STRUCTURE,
+                    message="CSV file has duplicate column headers",
+                    file_path=file_path
+                ))
+                result.is_valid = False
+            
+            # Count rows and validate structure
+            row_count = 0
+            for row_num, row in enumerate(reader, start=2):
+                row_count += 1
+                
+                # Check row length consistency
+                if len(row) != len(headers):
+                    result.issues.append(ValidationIssue(
+                        code=ValidationErrorCodes.MALFORMED_CSV,
+                        severity=ValidationSeverity.WARNING,
+                        category=ValidationCategory.FILE_STRUCTURE,
+                        message=f"Row {row_num} has {len(row)} columns, expected {len(headers)}",
+                        file_path=file_path,
+                        line_number=row_num
+                    ))
+                
+                # Stop counting after reasonable limit for performance
+                if row_count > self.max_row_count:
+                    result.issues.append(ValidationIssue(
+                        code=ValidationErrorCodes.FILE_TOO_LARGE,
+                        severity=ValidationSeverity.WARNING,
+                        category=ValidationCategory.FILE_STRUCTURE,
+                        message=f"File has more than {self.max_row_count} rows",
+                        file_path=file_path,
+                        suggested_fix="Consider processing in chunks"
+                    ))
+                    break
+            
+            result.row_count = row_count
+            
+        except UnicodeDecodeError as e:
+            result.issues.append(ValidationIssue(
+                code=ValidationErrorCodes.ENCODING_ERROR,
+                severity=ValidationSeverity.ERROR,
+                category=ValidationCategory.FILE_STRUCTURE,
+                message=f"Encoding error: {str(e)}",
+                file_path=file_path,
+                suggested_fix="Try different encoding or fix file encoding"
+            ))
+            result.is_valid = False
+        
+        except Exception as e:
+            result.issues.append(ValidationIssue(
+                code=ValidationErrorCodes.MALFORMED_CSV,
+                severity=ValidationSeverity.ERROR,
+                category=ValidationCategory.FILE_STRUCTURE,
+                message=f"CSV parsing error: {str(e)}",
+                file_path=file_path
+            ))
+            result.is_valid = False
+    
+    def _validate_json_file_structure_s3(self, 
+                                        file_path: str, 
+                                        dataset_config: Dict[str, Any], 
+                                        result: FileValidationResult,
+                                        organization_code: str):
+        """Validate JSON file structure from S3"""
+        try:
+            # Get file content from S3
+            bucket_name = self.bucket_service.get_organization_bucket(organization_code)
+            file_content_response = self.bucket_service.get_file_content(bucket_name, file_path)
+            
+            if not file_content_response.get('success'):
+                result.issues.append(ValidationIssue(
+                    code=ValidationErrorCodes.FILE_NOT_READABLE,
+                    severity=ValidationSeverity.ERROR,
+                    category=ValidationCategory.FILE_STRUCTURE,
+                    message=f"Cannot read file from S3: {file_path}",
+                    file_path=file_path
+                ))
+                result.is_valid = False
+                return
+            
+            # Parse JSON from content
+            content_bytes = file_content_response.get('content', b'')
+            content_str = content_bytes.decode('utf-8')
+            data = json.loads(content_str)
+            
+            if isinstance(data, list):
+                result.row_count = len(data)
+                if data:
+                    first_item = data[0]
+                    if isinstance(first_item, dict):
+                        result.column_count = len(first_item.keys())
+                    else:
+                        result.issues.append(ValidationIssue(
+                            code=ValidationErrorCodes.INVALID_FILE_FORMAT,
+                            severity=ValidationSeverity.ERROR,
+                            category=ValidationCategory.FILE_STRUCTURE,
+                            message="JSON array should contain objects",
+                            file_path=file_path
+                        ))
+                        result.is_valid = False
+                else:
+                    result.issues.append(ValidationIssue(
+                        code=ValidationErrorCodes.FILE_EMPTY,
+                        severity=ValidationSeverity.ERROR,
+                        category=ValidationCategory.FILE_STRUCTURE,
+                        message="JSON array is empty",
+                        file_path=file_path
+                    ))
+                    result.is_valid = False
+            
+            elif isinstance(data, dict):
+                result.row_count = 1
+                result.column_count = len(data.keys())
+            
+            else:
+                result.issues.append(ValidationIssue(
+                    code=ValidationErrorCodes.INVALID_FILE_FORMAT,
+                    severity=ValidationSeverity.ERROR,
+                    category=ValidationCategory.FILE_STRUCTURE,
+                    message="JSON should be object or array of objects",
+                    file_path=file_path
+                ))
+                result.is_valid = False
+        
+        except json.JSONDecodeError as e:
+            result.issues.append(ValidationIssue(
+                code=ValidationErrorCodes.INVALID_FILE_FORMAT,
+                severity=ValidationSeverity.ERROR,
+                category=ValidationCategory.FILE_STRUCTURE,
+                message=f"Invalid JSON format: {str(e)}",
+                file_path=file_path
+            ))
+            result.is_valid = False
+        
+        except Exception as e:
+            result.issues.append(ValidationIssue(
+                code=ValidationErrorCodes.VALIDATION_FAILED,
+                severity=ValidationSeverity.ERROR,
+                category=ValidationCategory.FILE_STRUCTURE,
+                message=f"JSON validation failed: {str(e)}",
+                file_path=file_path
+            ))
+            result.is_valid = False
+    
+    def _detect_encoding_from_bytes(self, content_bytes: bytes) -> str:
+        """Detect encoding from byte content"""
+        try:
+            import chardet
+            result = chardet.detect(content_bytes)
+            return result['encoding'] or 'utf-8'
+        except ImportError:
+            # Fallback without chardet
+            for encoding in self.supported_encodings:
+                try:
+                    content_bytes.decode(encoding)
+                    return encoding
+                except UnicodeDecodeError:
+                    continue
+            return 'utf-8'  # Default fallback
+    
+    def _detect_delimiter_from_string(self, content_str: str) -> str:
+        """Detect CSV delimiter from string content"""
+        try:
+            sniffer = csv.Sniffer()
+            dialect = sniffer.sniff(content_str, delimiters=',;\t|')
+            return dialect.delimiter
+        except:
+            return ','  # Default fallback
