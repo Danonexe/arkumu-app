@@ -1,3 +1,23 @@
+"""
+Enhanced Import Metadata Tasks
+
+This module provides Huey tasks for CSV import with enhanced mapping integration support.
+The tasks now support:
+
+1. Mapping-driven imports with MappingAdapter integration
+2. Automatic execution strategy selection
+3. File-to-dataset validation and matching
+4. Enhanced error handling and progress tracking
+5. Backward compatibility with existing API
+
+Key Features:
+- run_csv_import_workflow_with_mapping: Enhanced task with mapping support
+- run_csv_import_workflow: Legacy wrapper for backward compatibility
+- Execution strategies: auto, mapping_driven, entity_centric
+- File validation against mapping requirements
+- Enhanced progress tracking with mapping-aware status updates
+"""
+
 import logging
 from typing import List, Dict, Optional, Tuple, Set, Any
 from uuid import UUID
@@ -33,10 +53,13 @@ from django.core.cache import cache
 from arkumu.importer.models import IngestSession # Import IngestSession instead of UploadSession
 from django.utils import timezone # To set completion time
 
+# Import progress estimation
+from arkumu.importer.services.progress import progress_estimator, ExecutionStrategy
+
 logger = logging.getLogger(__name__)
 
 @db_task(retries=1, retry_delay=60)
-def run_csv_import_workflow(
+def run_csv_import_workflow_with_mapping(
     # csv_path: str, # Removed: task will download its own file
     s3_bucket_name: str, # Added
     s3_object_key: str,  # Added
@@ -50,13 +73,16 @@ def run_csv_import_workflow(
     update_strategy: UpdateStrategy = UpdateStrategy.SKIP_EXISTING,
     task_id_for_cache: Optional[str] = None,
     upload_session_id: Optional[UUID] = None, # Added ingest_session_id (keeping param name for compatibility)
-    # New mapping parameters
+    # Enhanced mapping parameters
     mapping_id: Optional[str] = None,
+    execution_strategy: str = "auto",
+    validation_mode: bool = True,
+    file_dataset_mapping: Optional[Dict[str, str]] = None,
     use_mapping: bool = False,
     use_table_services: bool = False
 ) -> Dict[str, Any]:
     """
-    Huey task to import a CSV file using the ImportWorkflowService.
+    Enhanced Huey task to import a CSV file with mapping integration support.
     The task now downloads the CSV from S3 to a local temporary file before processing.
     It updates its status in Django's cache, updates the corresponding IngestSession,
     and cleans up the temporary file.
@@ -74,6 +100,12 @@ def run_csv_import_workflow(
         update_strategy: The strategy to use for handling existing data (e.g., SKIP_EXISTING, UPDATE_VALUES).
         task_id_for_cache: Explicit task ID for caching.
         upload_session_id: ID of the IngestSession to update (keeping param name for compatibility).
+        mapping_id: Optional ID of the mapping configuration to use.
+        execution_strategy: Strategy for execution ("auto", "entity_centric", "mapping_driven").
+        validation_mode: Whether to validate files against mapping requirements.
+        file_dataset_mapping: Optional manual mapping of files to datasets.
+        use_mapping: Whether to use mapping-based processing.
+        use_table_services: Whether to use table-based services.
 
     Returns:
         A dictionary containing the status of the import and key statistics.
@@ -81,8 +113,8 @@ def run_csv_import_workflow(
     actual_task_id = task_id_for_cache  # Prioritize the custom task ID for consistent polling
     
     # Only use Huey's task ID if no custom ID was provided
-    if not actual_task_id and hasattr(run_csv_import_workflow, 'request') and run_csv_import_workflow.request.id:
-        actual_task_id = run_csv_import_workflow.request.id
+    if not actual_task_id and hasattr(run_csv_import_workflow_with_mapping, 'request') and run_csv_import_workflow_with_mapping.request.id:
+        actual_task_id = run_csv_import_workflow_with_mapping.request.id
     
     if not actual_task_id:
         logger.warning(f"Task ID for caching not available for CSV import: {dataset_name}, S3 key: {s3_object_key}. Status polling may not work.")
@@ -98,6 +130,57 @@ def run_csv_import_workflow(
                 payload["error_type"] = error_type
             cache.set(cache_key, payload, timeout=3600)
             logger.info(f"Task {actual_task_id or 'UnknownID'}: Cache updated - Key: {cache_key}, Status: {status}, Message: {message[:50]}...")
+        else:
+            logger.warning(f"Task {actual_task_id or 'UnknownID'}: Cannot update cache - cache_key is None")
+    
+    def update_cache_with_phase_info(status: str, message: str, progress: int, 
+                                   phase_info: Optional[Dict] = None, 
+                                   details: Optional[Dict] = None, 
+                                   error_type: Optional[str] = None):
+        """
+        Enhanced cache update function with phase information support.
+        
+        Args:
+            status: Task status (pending, processing, completed, failed)
+            message: Progress message
+            progress: Overall progress percentage (0-100)
+            phase_info: Dict containing phase information:
+                - current_phase: Name of current phase
+                - current_phase_index: Index of current phase (0-based)
+                - total_phases: Total number of phases
+                - phase_progress: Progress within current phase (0-100)
+                - phase_description: Description of current phase
+                - execution_strategy: Strategy being used (mapping_driven, entity_centric, etc.)
+            details: Additional details about the task
+            error_type: Error type if status is failed
+        """
+        if cache_key:
+            payload = {
+                "status": status,
+                "message": message,
+                "progress": progress,
+                "timestamp": timezone.now().isoformat()
+            }
+            
+            if phase_info:
+                payload["phase_info"] = {
+                    "current_phase": phase_info.get("current_phase", "unknown"),
+                    "current_phase_index": phase_info.get("current_phase_index", 0),
+                    "total_phases": phase_info.get("total_phases", 1),
+                    "phase_progress": phase_info.get("phase_progress", 0),
+                    "phase_description": phase_info.get("phase_description", ""),
+                    "execution_strategy": phase_info.get("execution_strategy", "standard")
+                }
+            
+            if details:
+                payload["details"] = details
+            if error_type:
+                payload["error_type"] = error_type
+                
+            cache.set(cache_key, payload, timeout=3600)
+            
+            phase_msg = f" (Phase {phase_info.get('current_phase_index', 0) + 1}/{phase_info.get('total_phases', 1)}: {phase_info.get('current_phase', 'unknown')})" if phase_info else ""
+            logger.info(f"Task {actual_task_id or 'UnknownID'}: Cache updated - Key: {cache_key}, Status: {status}, Message: {message[:50]}...{phase_msg}")
         else:
             logger.warning(f"Task {actual_task_id or 'UnknownID'}: Cannot update cache - cache_key is None")
 
@@ -121,7 +204,73 @@ def run_csv_import_workflow(
             except Exception as e_us:
                 logger.error(f"Task {actual_task_id or 'UnknownID'}: Error updating IngestSession {upload_session_id}: {e_us}", exc_info=True)
 
-    update_cache("processing", f"Starting import for {dataset_name} from S3: {s3_bucket_name}/{s3_object_key}...", 5)
+    # Initialize phase tracking
+    execution_phases = [
+        "initialization",
+        "file_download", 
+        "mapping_validation",
+        "file_validation",
+        "strategy_selection",
+        "data_import",
+        "finalization"
+    ]
+    
+    def get_phase_info(phase_name: str, phase_progress: int = 0) -> Dict:
+        """Get phase information for progress tracking with complexity estimation."""
+        try:
+            phase_index = execution_phases.index(phase_name)
+        except ValueError:
+            phase_index = 0
+        
+        # Basic phase info
+        phase_info = {
+            "current_phase": phase_name,
+            "current_phase_index": phase_index,
+            "total_phases": len(execution_phases),
+            "phase_progress": phase_progress,
+            "phase_description": get_phase_description(phase_name),
+            "execution_strategy": chosen_strategy if 'chosen_strategy' in locals() else "auto"
+        }
+        
+        # Enhance with complexity-aware progress estimation if mapping is available
+        if 'execution_config' in locals() and execution_config:
+            try:
+                strategy = ExecutionStrategy.MAPPING_DRIVEN if chosen_strategy == "mapping_driven" else ExecutionStrategy.ENTITY_CENTRIC
+                enhanced_info = progress_estimator.get_enhanced_progress_info(
+                    current_phase=phase_name,
+                    phase_progress=phase_progress,
+                    strategy=strategy,
+                    mapping_config=execution_config.dict() if hasattr(execution_config, 'dict') else None
+                )
+                
+                # Add enhanced information
+                phase_info.update({
+                    "enhanced_progress": enhanced_info["overall_progress"],
+                    "complexity_score": enhanced_info["complexity_score"],
+                    "estimated_duration": enhanced_info["current_phase_estimate"]["estimated_duration"] if enhanced_info["current_phase_estimate"] else None,
+                    "complexity_factor": enhanced_info["current_phase_estimate"]["complexity_factor"] if enhanced_info["current_phase_estimate"] else None
+                })
+            except Exception as e:
+                logger.warning(f"Failed to get enhanced progress info: {e}")
+        
+        return phase_info
+    
+    def get_phase_description(phase_name: str) -> str:
+        """Get user-friendly description for each phase."""
+        descriptions = {
+            "initialization": "Preparing import task",
+            "file_download": "Downloading file from S3",
+            "mapping_validation": "Validating mapping configuration",
+            "file_validation": "Validating file structure",
+            "strategy_selection": "Selecting execution strategy",
+            "data_import": "Importing data",
+            "finalization": "Finalizing import"
+        }
+        return descriptions.get(phase_name, "Processing")
+    
+    # Phase 1: Initialization
+    phase_info = get_phase_info("initialization", 50)
+    update_cache_with_phase_info("processing", f"Starting import for {dataset_name} from S3: {s3_bucket_name}/{s3_object_key}...", 5, phase_info)
 
     logger.info(
         f"Task {actual_task_id or 'UnknownID'}: Starting CSV import workflow for dataset '{dataset_name}' "
@@ -141,7 +290,10 @@ def run_csv_import_workflow(
             temp_local_path = temp_file_obj.name
         
         logger.info(f"Task {actual_task_id or 'UnknownID'}: Downloading S3 object {s3_bucket_name}/{s3_object_key} to temporary file {temp_local_path}")
-        update_cache("processing", f"Downloading file {os.path.basename(s3_object_key)}...", 10)
+        
+        # Phase 2: File Download
+        phase_info = get_phase_info("file_download", 25)
+        update_cache_with_phase_info("processing", f"Downloading file {os.path.basename(s3_object_key)}...", 10, phase_info)
 
         bucket_service.base_s3_service.s3_client.download_file(
             s3_bucket_name, 
@@ -149,36 +301,188 @@ def run_csv_import_workflow(
             temp_local_path
         )
         logger.info(f"Task {actual_task_id or 'UnknownID'}: Successfully downloaded to {temp_local_path}")
-
-        update_cache("processing", f"Processing downloaded file {os.path.basename(temp_local_path)} for {dataset_name}...", 20)
         
-        # Handle mapping configuration if provided
+        # Update file download phase completion
+        phase_info = get_phase_info("file_download", 100)
+        update_cache_with_phase_info("processing", f"File download completed", 15, phase_info)
+        
+        # Transition to next phase
+        phase_info = get_phase_info("mapping_validation", 0)
+        update_cache_with_phase_info("processing", f"Processing downloaded file {os.path.basename(temp_local_path)} for {dataset_name}...", 20, phase_info)
+        
+        # Enhanced mapping configuration handling
         mapping_config = None
+        execution_config = None
+        file_matcher = None
+        
+        # Phase 1: Load and validate mapping configuration
         if use_mapping and mapping_id:
             try:
                 from arkumu.metadata.models import Mapping
-                from arkumu.metadata.services.mapping_consumer.mapping_adapter import MappingAdapter
+                from arkumu.importer.services.mapping_consumer.mapping_adapter import MappingAdapter
+                from arkumu.importer.services.file_matching.file_dataset_matcher import FileDatasetMatcher
                 
-                update_cache("processing", f"Loading mapping configuration...", 25)
+                # Phase 3: Mapping Validation - Loading
+                phase_info = get_phase_info("mapping_validation", 20)
+                update_cache_with_phase_info("processing", f"Loading mapping configuration...", 25, phase_info)
                 
                 # Load the mapping
                 mapping = Mapping.objects.get(id=mapping_id)
                 adapter = MappingAdapter()
-                mapping_config = adapter.translate_to_execution_config(mapping_id)
+                
+                # Validate mapping if validation mode is enabled
+                if validation_mode:
+                    # Phase 3: Mapping Validation - Validating
+                    phase_info = get_phase_info("mapping_validation", 50)
+                    update_cache_with_phase_info("processing", f"Validating mapping configuration...", 27, phase_info)
+                    validation_result = adapter.validate_mapping(mapping_id)
+                    
+                    if not validation_result.is_valid:
+                        error_msg = f"Mapping validation failed: {'; '.join(validation_result.errors)}"
+                        logger.error(f"Task {actual_task_id or 'UnknownID'}: {error_msg}")
+                        phase_info = get_phase_info("mapping_validation", 100)
+                        update_cache_with_phase_info("failed", error_msg, 0, phase_info, error_type="MappingValidationError")
+                        update_upload_session_status('failed', error_msg)
+                        return {
+                            "status": "error",
+                            "dataset_name": dataset_name,
+                            "s3_object_key": s3_object_key,
+                            "error_message": error_msg,
+                            "error_type": "MappingValidationError"
+                        }
+                
+                # Translate mapping to execution config
+                execution_config = adapter.translate_to_execution_config(mapping_id)
+                
+                # Initialize file matcher for dataset matching
+                file_matcher = FileDatasetMatcher()
                 
                 logger.info(f"Task {actual_task_id or 'UnknownID'}: Using mapping '{mapping.name}' (ID: {mapping_id})")
+                logger.info(f"Task {actual_task_id or 'UnknownID'}: Execution config loaded with {len(execution_config.datasets)} datasets")
                 
             except Exception as e:
-                logger.warning(f"Task {actual_task_id or 'UnknownID'}: Failed to load mapping {mapping_id}: {e}")
-                update_cache("processing", f"Warning: Failed to load mapping, using entity-based import", 30)
+                error_msg = f"Failed to load mapping {mapping_id}: {str(e)}"
+                logger.warning(f"Task {actual_task_id or 'UnknownID'}: {error_msg}")
+                
+                if validation_mode:
+                    # In validation mode, mapping errors are fatal
+                    phase_info = get_phase_info("mapping_validation", 100)
+                    update_cache_with_phase_info("failed", error_msg, 0, phase_info, error_type="MappingLoadError")
+                    update_upload_session_status('failed', error_msg)
+                    return {
+                        "status": "error",
+                        "dataset_name": dataset_name,
+                        "s3_object_key": s3_object_key,
+                        "error_message": error_msg,
+                        "error_type": "MappingLoadError"
+                    }
+                else:
+                    # In non-validation mode, fall back to entity-based import
+                    phase_info = get_phase_info("mapping_validation", 100)
+                    update_cache_with_phase_info("processing", f"Warning: Failed to load mapping, using entity-based import", 30, phase_info)
         
-        # Choose import method based on configuration
-        if use_table_services or (use_mapping and mapping_config):
-            logger.info(f"Task {actual_task_id or 'UnknownID'}: Using table-based services with mapping")
-            # Get organization (this is a simplified version - in production you'd get it from the session)
-            from arkumu.metadata.models import Organization
-            organization = Organization.objects.get(code=institution)
+        # Phase 4: File validation and dataset matching
+        if execution_config and file_matcher:
+            try:
+                # Phase 4: File Validation
+                phase_info = get_phase_info("file_validation", 30)
+                update_cache_with_phase_info("processing", f"Validating file structure against mapping...", 35, phase_info)
+                
+                # Validate file against mapping requirements
+                selected_files = [temp_local_path]
+                match_result = file_matcher.match_files_to_datasets(
+                    selected_files=selected_files,
+                    execution_config=execution_config,
+                    base_directory=None
+                )
+                
+                if not match_result.successful_matches:
+                    if validation_mode:
+                        error_msg = f"File {os.path.basename(temp_local_path)} does not match any dataset in mapping"
+                        logger.error(f"Task {actual_task_id or 'UnknownID'}: {error_msg}")
+                        phase_info = get_phase_info("file_validation", 100)
+                        update_cache_with_phase_info("failed", error_msg, 0, phase_info, error_type="FileValidationError")
+                        update_upload_session_status('failed', error_msg)
+                        return {
+                            "status": "error",
+                            "dataset_name": dataset_name,
+                            "s3_object_key": s3_object_key,
+                            "error_message": error_msg,
+                            "error_type": "FileValidationError"
+                        }
+                    else:
+                        logger.warning(f"Task {actual_task_id or 'UnknownID'}: File validation failed, proceeding with entity-based import")
+                else:
+                    # Log successful matches
+                    for match in match_result.successful_matches:
+                        logger.info(f"Task {actual_task_id or 'UnknownID'}: File matched to dataset '{match.dataset_name}' with confidence {match.confidence:.2f}")
+                        
+                        # Update file_dataset_mapping if not provided
+                        if not file_dataset_mapping:
+                            file_dataset_mapping = {temp_local_path: match.dataset_name}
+                
+            except Exception as e:
+                error_msg = f"File validation failed: {str(e)}"
+                logger.error(f"Task {actual_task_id or 'UnknownID'}: {error_msg}")
+                
+                if validation_mode:
+                    phase_info = get_phase_info("file_validation", 100)
+                    update_cache_with_phase_info("failed", error_msg, 0, phase_info, error_type="FileValidationError")
+                    update_upload_session_status('failed', error_msg)
+                    return {
+                        "status": "error",
+                        "dataset_name": dataset_name,
+                        "s3_object_key": s3_object_key,
+                        "error_message": error_msg,
+                        "error_type": "FileValidationError"
+                    }
+                else:
+                    logger.warning(f"Task {actual_task_id or 'UnknownID'}: File validation failed, proceeding with entity-based import")
+        
+        # Phase 5: Determine execution strategy
+        chosen_strategy = execution_strategy
+        
+        # Phase 5: Strategy Selection
+        phase_info = get_phase_info("strategy_selection", 50)
+        update_cache_with_phase_info("processing", f"Determining execution strategy...", 38, phase_info)
+        
+        if execution_strategy == "auto":
+            if execution_config and file_matcher:
+                # Use mapping-driven strategy if mapping is available and valid
+                chosen_strategy = "mapping_driven"
+                logger.info(f"Task {actual_task_id or 'UnknownID'}: Auto-selected mapping_driven strategy")
+            else:
+                # Fall back to entity-centric strategy
+                chosen_strategy = "entity_centric"
+                logger.info(f"Task {actual_task_id or 'UnknownID'}: Auto-selected entity_centric strategy")
+        
+        # Update strategy selection completion
+        phase_info = get_phase_info("strategy_selection", 100)
+        phase_info["execution_strategy"] = chosen_strategy
+        update_cache_with_phase_info("processing", f"Using {chosen_strategy} execution strategy...", 40, phase_info)
+        
+        # Phase 6: Execute import based on chosen strategy
+        # Get organization (this is a simplified version - in production you'd get it from the session)
+        from arkumu.metadata.models import Organization
+        organization = Organization.objects.get(code=institution)
+        
+        # Prepare session dictionary for advanced features
+        session_dict = {}
+        if execution_config:
+            session_dict['execution_config'] = execution_config
+        if file_dataset_mapping:
+            session_dict['file_dataset_mapping'] = file_dataset_mapping
+        
+        # Execute import based on strategy
+        if chosen_strategy == "mapping_driven" and execution_config:
+            logger.info(f"Task {actual_task_id or 'UnknownID'}: Executing mapping-driven import with enhanced configuration")
             
+            # Phase 6: Data Import - Mapping-driven
+            phase_info = get_phase_info("data_import", 10)
+            phase_info["execution_strategy"] = chosen_strategy
+            update_cache_with_phase_info("processing", f"Executing mapping-driven import...", 45, phase_info)
+            
+            # Use table services with mapping configuration
             stats: BulkUpdateStats = bridge_service.import_csv_with_table_services(
                 file_path=temp_local_path,
                 organization=organization,
@@ -186,14 +490,37 @@ def run_csv_import_workflow(
                 delimiter=delimiter,
                 has_quoted_fields=has_quoted_fields,
                 auto_mapping=True,
-                session_dict={'mapping_config': mapping_config} if mapping_config else None
+                session_dict=session_dict
             )
+            
+        elif chosen_strategy == "entity_centric" or (use_table_services and not execution_config):
+            logger.info(f"Task {actual_task_id or 'UnknownID'}: Executing entity-centric import with table services")
+            
+            # Phase 6: Data Import - Entity-centric
+            phase_info = get_phase_info("data_import", 10)
+            phase_info["execution_strategy"] = chosen_strategy
+            update_cache_with_phase_info("processing", f"Executing entity-centric import...", 45, phase_info)
+            
+            # Use table services without mapping configuration
+            stats: BulkUpdateStats = bridge_service.import_csv_with_table_services(
+                file_path=temp_local_path,
+                organization=organization,
+                user=None,  # TODO: Get user from session
+                delimiter=delimiter,
+                has_quoted_fields=has_quoted_fields,
+                auto_mapping=False,
+                session_dict=session_dict if session_dict else None
+            )
+            
         else:
             logger.info(f"Task {actual_task_id or 'UnknownID'}: Using standard import workflow")
-            # Get organization (this is a simplified version - in production you'd get it from the session)
-            from arkumu.metadata.models import Organization
-            organization = Organization.objects.get(code=institution)
             
+            # Phase 6: Data Import - Standard
+            phase_info = get_phase_info("data_import", 10)
+            phase_info["execution_strategy"] = "standard"
+            update_cache_with_phase_info("processing", f"Executing standard import...", 45, phase_info)
+            
+            # Use standard import workflow
             stats: BulkUpdateStats = bridge_service.import_csv(
                 file_path=temp_local_path,
                 organization=organization,
@@ -208,7 +535,15 @@ def run_csv_import_workflow(
                 use_table_services=use_table_services
             )
         
-        update_cache("processing", f"Finalizing import for {dataset_name}...", 80)
+        # Phase 6: Data Import - Completion
+        phase_info = get_phase_info("data_import", 100)
+        phase_info["execution_strategy"] = chosen_strategy
+        update_cache_with_phase_info("processing", f"Data import completed, processing results...", 70, phase_info)
+        
+        # Phase 7: Finalization
+        phase_info = get_phase_info("finalization", 30)
+        phase_info["execution_strategy"] = chosen_strategy
+        update_cache_with_phase_info("processing", f"Finalizing import for {dataset_name}...", 80, phase_info)
 
         # The 'stats' variable here is the dictionary returned by ImportWorkflowService,
         # and the actual BulkUpdateStats fields are in a nested dictionary under the key "stats".
@@ -226,15 +561,32 @@ def run_csv_import_workflow(
             # "row_links_created": actual_stats_data.get("row_links_created", 0), # This might not be in smart_updater stats, check SmartBulkUpdater return
             "errors": actual_stats_data.get("errors", 0),
             # "truncated_values": actual_stats_data.get("truncated_values", 0) # This might not be in smart_updater stats
+            # Enhanced mapping-aware statistics
+            "execution_strategy": chosen_strategy,
+            "mapping_used": mapping_id is not None,
+            "mapping_id": mapping_id,
+            "file_dataset_mapping": file_dataset_mapping,
+            "validation_mode": validation_mode
         }
         
+        # Enhanced success message with mapping information
         success_message = (
-            f"Dataset '{dataset_name}' (from S3 object {s3_object_key}) imported successfully. "
+            f"Dataset '{dataset_name}' (from S3 object {s3_object_key}) imported successfully using {chosen_strategy} strategy. "
             f"Processed: {actual_stats_data.get('rows_processed', 0)} rows. "
-            f"Created: {actual_stats_data.get('resources_created', 0)} resources, {actual_stats_data.get('triples_created', 0)} triples."
-            f" Errors: {actual_stats_data.get('errors', 0)}."
+            f"Created: {actual_stats_data.get('resources_created', 0)} resources, {actual_stats_data.get('triples_created', 0)} triples. "
+            f"Errors: {actual_stats_data.get('errors', 0)}."
         )
-        update_cache("completed", success_message, 100, details=final_stats_dict)
+        
+        if mapping_id:
+            success_message += f" Mapping ID: {mapping_id}."
+        
+        if file_dataset_mapping:
+            matched_dataset = file_dataset_mapping.get(temp_local_path, "unknown")
+            success_message += f" Matched to dataset: {matched_dataset}."
+        # Phase 7: Finalization - Complete
+        phase_info = get_phase_info("finalization", 100)
+        phase_info["execution_strategy"] = chosen_strategy
+        update_cache_with_phase_info("completed", success_message, 100, phase_info, details=final_stats_dict)
         logger.info(f"Task {actual_task_id or 'UnknownID'}: Updated cache with 'completed' status. Cache key: {cache_key}")
         update_upload_session_status('completed', success_message, 1, final_stats_dict['errors']) # 1 file processed
         
@@ -257,7 +609,9 @@ def run_csv_import_workflow(
             f"Task {actual_task_id or 'UnknownID'}: Error during CSV import workflow for dataset '{dataset_name}' from S3 object '{s3_bucket_name}/{s3_object_key}': {e}",
             exc_info=True
         )
-        update_cache("failed", error_message, 0, error_type=type(e).__name__)
+        # Use generic error phase info if no specific phase is available
+        phase_info = get_phase_info("initialization", 0)
+        update_cache_with_phase_info("failed", error_message, 0, phase_info, error_type=type(e).__name__)
         update_upload_session_status('failed', error_message)
         return {
             "status": "error",
@@ -276,6 +630,56 @@ def run_csv_import_workflow(
                 logger.error(f"Task {actual_task_id or 'UnknownID'}: Error deleting temporary file {temp_local_path} created by task: {e_unlink}")
         elif temp_local_path: # If path was set but file doesn't exist (e.g. download failed before file fully written)
              logger.warning(f"Task {actual_task_id or 'UnknownID'}: Temporary file {temp_local_path} (intended for task use) not found for deletion.")
+
+
+@db_task(retries=1, retry_delay=60)
+def run_csv_import_workflow(
+    s3_bucket_name: str,
+    s3_object_key: str,
+    dataset_name: str,
+    institution: str,
+    base_uri: str = "http://arkumu.org/data",
+    delimiter: str = ';',
+    has_quoted_fields: bool = True,
+    link_row_cells: bool = True,
+    link_to_first_column: bool = False,
+    update_strategy: UpdateStrategy = UpdateStrategy.SKIP_EXISTING,
+    task_id_for_cache: Optional[str] = None,
+    upload_session_id: Optional[UUID] = None,
+    # Legacy mapping parameters for backward compatibility
+    mapping_id: Optional[str] = None,
+    use_mapping: bool = False,
+    use_table_services: bool = False
+) -> Dict[str, Any]:
+    """
+    Legacy wrapper function for backward compatibility.
+    
+    This function maintains the existing API while delegating to the enhanced
+    run_csv_import_workflow_with_mapping function with default parameters.
+    """
+    logger.info(f"Legacy function called, delegating to enhanced function with default parameters")
+    
+    return run_csv_import_workflow_with_mapping(
+        s3_bucket_name=s3_bucket_name,
+        s3_object_key=s3_object_key,
+        dataset_name=dataset_name,
+        institution=institution,
+        base_uri=base_uri,
+        delimiter=delimiter,
+        has_quoted_fields=has_quoted_fields,
+        link_row_cells=link_row_cells,
+        link_to_first_column=link_to_first_column,
+        update_strategy=update_strategy,
+        task_id_for_cache=task_id_for_cache,
+        upload_session_id=upload_session_id,
+        mapping_id=mapping_id,
+        execution_strategy="auto",
+        validation_mode=False,
+        file_dataset_mapping=None,
+        use_mapping=use_mapping,
+        use_table_services=use_table_services
+    )
+
 
 @db_task(retries=1, retry_delay=60)
 def run_csv_directory_import_workflow(
@@ -347,6 +751,41 @@ def run_csv_directory_import_workflow(
             logger.info(f"Task {actual_task_id or 'UnknownID'}: Cache updated - Key: {cache_key}, Status: {status}, Message: {message[:50]}...")
         else:
             logger.warning(f"Task {actual_task_id or 'UnknownID'}: Cannot update cache - cache_key is None")
+    
+    def update_cache_with_phase_info(status: str, message: str, progress: int, 
+                                   phase_info: Optional[Dict] = None, 
+                                   details: Optional[Dict] = None, 
+                                   error_type: Optional[str] = None):
+        """Enhanced cache update function with phase information support for directory imports."""
+        if cache_key:
+            payload = {
+                "status": status,
+                "message": message,
+                "progress": progress,
+                "timestamp": timezone.now().isoformat()
+            }
+            
+            if phase_info:
+                payload["phase_info"] = {
+                    "current_phase": phase_info.get("current_phase", "unknown"),
+                    "current_phase_index": phase_info.get("current_phase_index", 0),
+                    "total_phases": phase_info.get("total_phases", 1),
+                    "phase_progress": phase_info.get("phase_progress", 0),
+                    "phase_description": phase_info.get("phase_description", ""),
+                    "execution_strategy": phase_info.get("execution_strategy", "directory")
+                }
+            
+            if details:
+                payload["details"] = details
+            if error_type:
+                payload["error_type"] = error_type
+                
+            cache.set(cache_key, payload, timeout=3600)
+            
+            phase_msg = f" (Phase {phase_info.get('current_phase_index', 0) + 1}/{phase_info.get('total_phases', 1)}: {phase_info.get('current_phase', 'unknown')})" if phase_info else ""
+            logger.info(f"Task {actual_task_id or 'UnknownID'}: Cache updated - Key: {cache_key}, Status: {status}, Message: {message[:50]}...{phase_msg}")
+        else:
+            logger.warning(f"Task {actual_task_id or 'UnknownID'}: Cannot update cache - cache_key is None")
 
     # Update IngestSession helper
     def update_upload_session_status(status: str, message: Optional[str] = None, files_processed: int = 0, errors_count: int = 0):
@@ -368,7 +807,45 @@ def run_csv_directory_import_workflow(
             except Exception as e_us:
                 logger.error(f"Task {actual_task_id or 'UnknownID'}: Error updating IngestSession {upload_session_id}: {e_us}", exc_info=True)
 
-    update_cache("processing", f"Starting directory import for {dataset_name} from S3 folder: {s3_bucket_name}/{s3_folder_prefix}...", 5)
+    # Initialize phase tracking for directory import
+    directory_phases = [
+        "initialization",
+        "discovery",
+        "download",
+        "processing",
+        "finalization"
+    ]
+    
+    def get_directory_phase_info(phase_name: str, phase_progress: int = 0) -> Dict:
+        """Get phase information for directory import progress tracking."""
+        try:
+            phase_index = directory_phases.index(phase_name)
+        except ValueError:
+            phase_index = 0
+        
+        return {
+            "current_phase": phase_name,
+            "current_phase_index": phase_index,
+            "total_phases": len(directory_phases),
+            "phase_progress": phase_progress,
+            "phase_description": get_directory_phase_description(phase_name),
+            "execution_strategy": "directory"
+        }
+    
+    def get_directory_phase_description(phase_name: str) -> str:
+        """Get user-friendly description for each directory import phase."""
+        descriptions = {
+            "initialization": "Initializing directory import",
+            "discovery": "Discovering CSV files",
+            "download": "Downloading files",
+            "processing": "Processing CSV files",
+            "finalization": "Finalizing directory import"
+        }
+        return descriptions.get(phase_name, "Processing")
+    
+    # Phase 1: Initialization
+    phase_info = get_directory_phase_info("initialization", 100)
+    update_cache_with_phase_info("processing", f"Starting directory import for {dataset_name} from S3 folder: {s3_bucket_name}/{s3_folder_prefix}...", 5, phase_info)
 
     logger.info(
         f"Task {actual_task_id or 'UnknownID'}: Starting CSV directory import workflow for dataset '{dataset_name}' "
@@ -387,7 +864,9 @@ def run_csv_directory_import_workflow(
         temp_directory_path = tempfile.mkdtemp(prefix='arkumu_csv_directory_import_')
         logger.info(f"Task {actual_task_id or 'UnknownID'}: Created temporary directory: {temp_directory_path}")
 
-        update_cache("processing", "Discovering CSV files in S3 folder...", 10)
+        # Phase 2: Discovery
+        phase_info = get_directory_phase_info("discovery", 25)
+        update_cache_with_phase_info("processing", "Discovering CSV files in S3 folder...", 10, phase_info)
 
         # List all objects in the S3 folder with CSV extension
         s3_client = bucket_service.base_s3_service.s3_client
@@ -418,7 +897,13 @@ def run_csv_directory_import_workflow(
         for obj in csv_objects:
             logger.info(f"  - {obj['Key']} ({obj['Size']} bytes)")
 
-        update_cache("processing", f"Downloading {len(csv_objects)} CSV files from S3...", 20)
+        # Phase 2: Discovery - Complete
+        phase_info = get_directory_phase_info("discovery", 100)
+        update_cache_with_phase_info("processing", f"Found {len(csv_objects)} CSV files", 15, phase_info)
+
+        # Phase 3: Download
+        phase_info = get_directory_phase_info("download", 0)
+        update_cache_with_phase_info("processing", f"Downloading {len(csv_objects)} CSV files from S3...", 20, phase_info)
 
         # Download all CSV files to the temporary directory
         downloaded_files = []
@@ -438,12 +923,20 @@ def run_csv_directory_import_workflow(
                 raise download_error
             
             # Update progress during download
-            download_progress = 20 + (30 * (i + 1) / len(csv_objects))
-            update_cache("processing", f"Downloaded {i+1}/{len(csv_objects)} files...", int(download_progress))
+            file_progress = int(100 * (i + 1) / len(csv_objects))
+            overall_progress = 20 + (30 * (i + 1) / len(csv_objects))
+            phase_info = get_directory_phase_info("download", file_progress)
+            update_cache_with_phase_info("processing", f"Downloaded {i+1}/{len(csv_objects)} files...", int(overall_progress), phase_info)
 
         logger.info(f"Task {actual_task_id or 'UnknownID'}: Successfully downloaded all {len(downloaded_files)} CSV files to {temp_directory_path}")
 
-        update_cache("processing", f"Processing {len(downloaded_files)} CSV files...", 50)
+        # Phase 3: Download - Complete
+        phase_info = get_directory_phase_info("download", 100)
+        update_cache_with_phase_info("processing", f"Download completed", 45, phase_info)
+
+        # Phase 4: Processing
+        phase_info = get_directory_phase_info("processing", 0)
+        update_cache_with_phase_info("processing", f"Processing {len(downloaded_files)} CSV files...", 50, phase_info)
 
         # Save relationship config to a temporary file if provided
         relationship_config_path = None
@@ -479,10 +972,13 @@ def run_csv_directory_import_workflow(
                     time_progress = min(elapsed_time / estimated_total_time, 0.9)  # Cap at 90%
                     current_progress = int(progress_start + (progress_end - progress_start) * time_progress)
                     
-                    update_cache(
+                    # Update with phase information
+                    phase_info = get_directory_phase_info("processing", int(time_progress * 100))
+                    update_cache_with_phase_info(
                         "processing", 
                         f"Processing {len(downloaded_files)} CSV files... ({elapsed_time//60}m {elapsed_time%60}s elapsed)",
                         current_progress,
+                        phase_info,
                         details={"csv_files_found": len(csv_objects), "csv_files_downloaded": len(downloaded_files)}
                     )
         
@@ -516,7 +1012,13 @@ def run_csv_directory_import_workflow(
             # Stop the progress thread
             processing_complete = True
         
-        update_cache("processing", f"Finalizing directory import for {dataset_name}...", 90)
+        # Phase 4: Processing - Complete
+        phase_info = get_directory_phase_info("processing", 100)
+        update_cache_with_phase_info("processing", f"Processing completed", 85, phase_info)
+
+        # Phase 5: Finalization
+        phase_info = get_directory_phase_info("finalization", 50)
+        update_cache_with_phase_info("processing", f"Finalizing directory import for {dataset_name}...", 90, phase_info)
 
         # Prepare final statistics
         final_aggregate_stats = {
@@ -538,7 +1040,9 @@ def run_csv_directory_import_workflow(
             f"Errors: {final_aggregate_stats['errors']}."
         )
         
-        update_cache("completed", success_message, 100, details=final_aggregate_stats)
+        # Phase 5: Finalization - Complete
+        phase_info = get_directory_phase_info("finalization", 100)
+        update_cache_with_phase_info("completed", success_message, 100, phase_info, details=final_aggregate_stats)
         logger.info(f"Task {actual_task_id or 'UnknownID'}: Updated cache with 'completed' status. Cache key: {cache_key}")
         
         update_upload_session_status(
@@ -571,7 +1075,9 @@ def run_csv_directory_import_workflow(
             f"from S3 folder '{s3_bucket_name}/{s3_folder_prefix}': {e}",
             exc_info=True
         )
-        update_cache("failed", error_message, 0, error_type=type(e).__name__)
+        # Use generic error phase info if no specific phase is available
+        phase_info = get_directory_phase_info("initialization", 0)
+        update_cache_with_phase_info("failed", error_message, 0, phase_info, error_type=type(e).__name__)
         update_upload_session_status('failed', error_message)
         return {
             "status": "error",

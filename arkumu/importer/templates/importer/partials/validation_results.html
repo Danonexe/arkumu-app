@@ -1,0 +1,829 @@
+<!-- Validation Results Display Component -->
+<div class="validation-results-container space-y-6">
+    
+    <!-- Validation Status Overview -->
+    <div class="card bg-base-200 shadow-sm">
+        <div class="card-body p-4">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    Validation Results
+                </h3>
+                <div class="flex items-center gap-2">
+                    <span class="text-sm text-base-content/60">Status:</span>
+                    <div class="badge badge-outline" id="validation-overall-status">
+                        <span class="loading loading-spinner loading-xs mr-1"></span>
+                        Validating...
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Overall Validation Summary -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                <div class="stat bg-base-100 rounded-lg p-3">
+                    <div class="stat-title text-xs">Overall Confidence</div>
+                    <div class="stat-value text-lg" id="validation-confidence">-</div>
+                    <div class="stat-desc text-xs">
+                        <div class="w-full bg-base-300 rounded-full h-2 mt-1">
+                            <div class="bg-primary h-2 rounded-full transition-all duration-300" 
+                                 id="confidence-bar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="stat bg-base-100 rounded-lg p-3">
+                    <div class="stat-title text-xs">Total Issues</div>
+                    <div class="stat-value text-lg" id="validation-total-issues">-</div>
+                    <div class="stat-desc text-xs">
+                        <span class="text-error" id="validation-errors-count">0 errors</span> •
+                        <span class="text-warning" id="validation-warnings-count">0 warnings</span>
+                    </div>
+                </div>
+                
+                <div class="stat bg-base-100 rounded-lg p-3">
+                    <div class="stat-title text-xs">Files Validated</div>
+                    <div class="stat-value text-lg" id="validation-files-count">-</div>
+                    <div class="stat-desc text-xs">
+                        <span id="validation-files-status">Ready for validation</span>
+                    </div>
+                </div>
+                
+                <div class="stat bg-base-100 rounded-lg p-3">
+                    <div class="stat-title text-xs">Execution Ready</div>
+                    <div class="stat-value text-lg" id="validation-execution-ready">-</div>
+                    <div class="stat-desc text-xs">
+                        <span id="validation-ready-status">Checking...</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Validation Duration -->
+            <div class="text-sm text-base-content/60 mb-4">
+                <span class="flex items-center gap-1">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    Validation completed in <span id="validation-duration">-</span> seconds
+                </span>
+            </div>
+            
+            <!-- Quick Actions -->
+            <div class="flex gap-2">
+                <button class="btn btn-sm btn-primary" 
+                        hx-post="{% url 'importer:run_validation' %}"
+                        hx-trigger="click"
+                        hx-target="#validation-results-container"
+                        hx-swap="outerHTML"
+                        id="run-validation-btn">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                    Re-validate
+                </button>
+                
+                <button class="btn btn-sm btn-outline" 
+                        onclick="exportValidationReport()"
+                        id="export-validation-btn">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                    Export Report
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- File Validation Results -->
+    <div class="card bg-base-200 shadow-sm">
+        <div class="card-body p-4">
+            <div class="flex items-center justify-between mb-4">
+                <h4 class="text-lg font-medium flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                    File Compatibility Validation
+                </h4>
+                <button class="btn btn-ghost btn-sm" onclick="toggleValidationSection('file-validation')">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+            </div>
+            
+            <div id="file-validation-content" class="space-y-4">
+                <!-- File Status Summary -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    <div class="stat bg-base-100 rounded-lg p-3">
+                        <div class="stat-title text-xs">Valid Files</div>
+                        <div class="stat-value text-lg text-success" id="valid-files-count">-</div>
+                    </div>
+                    <div class="stat bg-base-100 rounded-lg p-3">
+                        <div class="stat-title text-xs">Total File Size</div>
+                        <div class="stat-value text-lg" id="total-file-size">-</div>
+                    </div>
+                    <div class="stat bg-base-100 rounded-lg p-3">
+                        <div class="stat-title text-xs">Encoding Issues</div>
+                        <div class="stat-value text-lg text-warning" id="encoding-issues-count">-</div>
+                    </div>
+                </div>
+                
+                <!-- File Details Table -->
+                <div class="overflow-x-auto">
+                    <table class="table table-sm w-full">
+                        <thead>
+                            <tr>
+                                <th class="w-8">Status</th>
+                                <th>File</th>
+                                <th>Size</th>
+                                <th>Rows</th>
+                                <th>Columns</th>
+                                <th>Encoding</th>
+                                <th>Issues</th>
+                            </tr>
+                        </thead>
+                        <tbody id="file-validation-table-body">
+                            <!-- Dynamic content populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- File Issues Details -->
+                <div id="file-issues-details" class="hidden space-y-3">
+                    <!-- Will be populated dynamically -->
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Column Mapping Validation -->
+    <div class="card bg-base-200 shadow-sm">
+        <div class="card-body p-4">
+            <div class="flex items-center justify-between mb-4">
+                <h4 class="text-lg font-medium flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/>
+                    </svg>
+                    Column Mapping Validation
+                </h4>
+                <button class="btn btn-ghost btn-sm" onclick="toggleValidationSection('column-mapping')">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+            </div>
+            
+            <div id="column-mapping-content" class="space-y-4">
+                <!-- Mapping Coverage -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                    <div class="stat bg-base-100 rounded-lg p-3">
+                        <div class="stat-title text-xs">Coverage</div>
+                        <div class="stat-value text-lg" id="mapping-coverage">-</div>
+                        <div class="stat-desc">
+                            <div class="w-full bg-base-300 rounded-full h-2 mt-1">
+                                <div class="bg-success h-2 rounded-full transition-all duration-300" 
+                                     id="coverage-bar" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="stat bg-base-100 rounded-lg p-3">
+                        <div class="stat-title text-xs">Mapped Columns</div>
+                        <div class="stat-value text-lg text-success" id="mapped-columns-count">-</div>
+                    </div>
+                    <div class="stat bg-base-100 rounded-lg p-3">
+                        <div class="stat-title text-xs">Unmapped Columns</div>
+                        <div class="stat-value text-lg text-warning" id="unmapped-columns-count">-</div>
+                    </div>
+                    <div class="stat bg-base-100 rounded-lg p-3">
+                        <div class="stat-title text-xs">Missing Required</div>
+                        <div class="stat-value text-lg text-error" id="missing-required-count">-</div>
+                    </div>
+                </div>
+                
+                <!-- Column Mapping Details -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Mapped Columns -->
+                    <div class="bg-base-100 rounded-lg p-3">
+                        <h5 class="text-sm font-medium mb-2 text-success">✓ Mapped Columns</h5>
+                        <div class="space-y-2 max-h-48 overflow-y-auto" id="mapped-columns-list">
+                            <!-- Dynamic content -->
+                        </div>
+                    </div>
+                    
+                    <!-- Issues -->
+                    <div class="space-y-3">
+                        <!-- Missing Required Columns -->
+                        <div class="bg-base-100 rounded-lg p-3" id="missing-columns-section">
+                            <h5 class="text-sm font-medium mb-2 text-error">✗ Missing Required Columns</h5>
+                            <div class="space-y-1 max-h-32 overflow-y-auto" id="missing-columns-list">
+                                <!-- Dynamic content -->
+                            </div>
+                        </div>
+                        
+                        <!-- Unmapped Columns -->
+                        <div class="bg-base-100 rounded-lg p-3" id="unmapped-columns-section">
+                            <h5 class="text-sm font-medium mb-2 text-warning">⚠ Unmapped Columns</h5>
+                            <div class="space-y-1 max-h-32 overflow-y-auto" id="unmapped-columns-list">
+                                <!-- Dynamic content -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Type Mismatches -->
+                <div id="type-mismatches-section" class="hidden">
+                    <div class="bg-base-100 rounded-lg p-3">
+                        <h5 class="text-sm font-medium mb-2 text-error">Type Mismatches</h5>
+                        <div class="overflow-x-auto">
+                            <table class="table table-xs w-full">
+                                <thead>
+                                    <tr>
+                                        <th>Column</th>
+                                        <th>Source Type</th>
+                                        <th>Target Type</th>
+                                        <th>Severity</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="type-mismatches-table">
+                                    <!-- Dynamic content -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Relationship Validation -->
+    <div class="card bg-base-200 shadow-sm">
+        <div class="card-body p-4">
+            <div class="flex items-center justify-between mb-4">
+                <h4 class="text-lg font-medium flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+                    </svg>
+                    Relationship Validation
+                </h4>
+                <button class="btn btn-ghost btn-sm" onclick="toggleValidationSection('relationship-validation')">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+            </div>
+            
+            <div id="relationship-validation-content" class="space-y-4">
+                <!-- Relationship Summary -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                    <div class="stat bg-base-100 rounded-lg p-3">
+                        <div class="stat-title text-xs">Valid Relationships</div>
+                        <div class="stat-value text-lg text-success" id="valid-relationships-count">-</div>
+                    </div>
+                    <div class="stat bg-base-100 rounded-lg p-3">
+                        <div class="stat-title text-xs">Invalid Relationships</div>
+                        <div class="stat-value text-lg text-error" id="invalid-relationships-count">-</div>
+                    </div>
+                    <div class="stat bg-base-100 rounded-lg p-3">
+                        <div class="stat-title text-xs">Missing Dependencies</div>
+                        <div class="stat-value text-lg text-warning" id="missing-dependencies-count">-</div>
+                    </div>
+                    <div class="stat bg-base-100 rounded-lg p-3">
+                        <div class="stat-title text-xs">Circular Dependencies</div>
+                        <div class="stat-value text-lg text-error" id="circular-dependencies-count">-</div>
+                    </div>
+                </div>
+                
+                <!-- Relationship Details -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Valid Relationships -->
+                    <div class="bg-base-100 rounded-lg p-3">
+                        <h5 class="text-sm font-medium mb-2 text-success">✓ Valid Relationships</h5>
+                        <div class="space-y-1 max-h-32 overflow-y-auto" id="valid-relationships-list">
+                            <!-- Dynamic content -->
+                        </div>
+                    </div>
+                    
+                    <!-- Invalid Relationships -->
+                    <div class="bg-base-100 rounded-lg p-3">
+                        <h5 class="text-sm font-medium mb-2 text-error">✗ Invalid Relationships</h5>
+                        <div class="space-y-1 max-h-32 overflow-y-auto" id="invalid-relationships-list">
+                            <!-- Dynamic content -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Dependency Issues -->
+                <div id="dependency-issues-section" class="hidden space-y-3">
+                    <div class="bg-base-100 rounded-lg p-3">
+                        <h5 class="text-sm font-medium mb-2 text-warning">Missing Dependencies</h5>
+                        <div class="space-y-1" id="missing-dependencies-list">
+                            <!-- Dynamic content -->
+                        </div>
+                    </div>
+                    
+                    <div class="bg-base-100 rounded-lg p-3">
+                        <h5 class="text-sm font-medium mb-2 text-error">Circular Dependencies</h5>
+                        <div class="space-y-1" id="circular-dependencies-list">
+                            <!-- Dynamic content -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Resource Estimation -->
+    <div class="card bg-base-200 shadow-sm">
+        <div class="card-body p-4">
+            <div class="flex items-center justify-between mb-4">
+                <h4 class="text-lg font-medium flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                    </svg>
+                    Resource Estimation
+                </h4>
+                <button class="btn btn-ghost btn-sm" onclick="toggleValidationSection('resource-estimation')">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+            </div>
+            
+            <div id="resource-estimation-content" class="space-y-4">
+                <!-- Resource Metrics -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                    <div class="stat bg-base-100 rounded-lg p-3">
+                        <div class="stat-title text-xs">Execution Time</div>
+                        <div class="stat-value text-lg" id="estimated-execution-time">-</div>
+                        <div class="stat-desc text-xs">minutes</div>
+                    </div>
+                    <div class="stat bg-base-100 rounded-lg p-3">
+                        <div class="stat-title text-xs">Memory Usage</div>
+                        <div class="stat-value text-lg" id="estimated-memory">-</div>
+                        <div class="stat-desc text-xs">MB</div>
+                    </div>
+                    <div class="stat bg-base-100 rounded-lg p-3">
+                        <div class="stat-title text-xs">Disk Usage</div>
+                        <div class="stat-value text-lg" id="estimated-disk">-</div>
+                        <div class="stat-desc text-xs">MB</div>
+                    </div>
+                    <div class="stat bg-base-100 rounded-lg p-3">
+                        <div class="stat-title text-xs">Complexity</div>
+                        <div class="stat-value text-lg" id="complexity-score">-</div>
+                        <div class="stat-desc text-xs">/ 10</div>
+                    </div>
+                </div>
+                
+                <!-- Performance Recommendations -->
+                <div class="bg-base-100 rounded-lg p-3">
+                    <h5 class="text-sm font-medium mb-2">Performance Recommendations</h5>
+                    <div class="space-y-2" id="performance-recommendations">
+                        <!-- Dynamic content -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Actionable Recommendations -->
+    <div class="card bg-base-200 shadow-sm">
+        <div class="card-body p-4">
+            <div class="flex items-center justify-between mb-4">
+                <h4 class="text-lg font-medium flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+                    </svg>
+                    Recommendations & Actions
+                </h4>
+            </div>
+            
+            <!-- Required Actions -->
+            <div id="required-actions-section" class="mb-4">
+                <div class="alert alert-error">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <div>
+                        <h5 class="font-medium">Required Actions</h5>
+                        <ul class="mt-2 space-y-1" id="required-actions-list">
+                            <!-- Dynamic content -->
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Execution Recommendations -->
+            <div id="execution-recommendations-section" class="mb-4">
+                <div class="alert alert-info">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <div>
+                        <h5 class="font-medium">Execution Recommendations</h5>
+                        <ul class="mt-2 space-y-1" id="execution-recommendations-list">
+                            <!-- Dynamic content -->
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Issue Resolution Guide -->
+            <div class="bg-base-100 rounded-lg p-3">
+                <h5 class="text-sm font-medium mb-2">Issue Resolution Guide</h5>
+                <div class="space-y-2" id="issue-resolution-guide">
+                    <!-- Dynamic content with step-by-step fixes -->
+                </div>
+            </div>
+        </div>
+    </div>
+    
+</div>
+
+<!-- JavaScript for Validation Results Management -->
+<script>
+// Global validation result data
+let validationResults = null;
+
+// Toggle validation section visibility
+function toggleValidationSection(sectionId) {
+    const content = document.getElementById(sectionId + '-content');
+    if (content) {
+        content.classList.toggle('hidden');
+    }
+}
+
+// Export validation report
+function exportValidationReport() {
+    if (!validationResults) {
+        alert('No validation results available to export');
+        return;
+    }
+    
+    const report = {
+        timestamp: new Date().toISOString(),
+        validation_results: validationResults,
+        summary: {
+            total_issues: validationResults.all_issues?.length || 0,
+            errors: validationResults.errors?.length || 0,
+            warnings: validationResults.warnings?.length || 0,
+            is_valid: validationResults.is_valid,
+            confidence: validationResults.overall_confidence
+        }
+    };
+    
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `validation-report-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+// Update validation results display
+function updateValidationResults(results) {
+    validationResults = results;
+    
+    // Update overall status
+    updateOverallStatus(results);
+    
+    // Update file validation
+    updateFileValidation(results.file_validation_results || []);
+    
+    // Update column mapping validation
+    updateColumnMappingValidation(results.column_mapping_result);
+    
+    // Update relationship validation
+    updateRelationshipValidation(results.relationship_validation_result);
+    
+    // Update resource estimation
+    updateResourceEstimation(results.resource_estimate);
+    
+    // Update recommendations
+    updateRecommendations(results);
+}
+
+// Update overall validation status
+function updateOverallStatus(results) {
+    const statusEl = document.getElementById('validation-overall-status');
+    const confidenceEl = document.getElementById('validation-confidence');
+    const confidenceBarEl = document.getElementById('confidence-bar');
+    const totalIssuesEl = document.getElementById('validation-total-issues');
+    const errorsCountEl = document.getElementById('validation-errors-count');
+    const warningsCountEl = document.getElementById('validation-warnings-count');
+    const filesCountEl = document.getElementById('validation-files-count');
+    const executionReadyEl = document.getElementById('validation-execution-ready');
+    const readyStatusEl = document.getElementById('validation-ready-status');
+    const durationEl = document.getElementById('validation-duration');
+    
+    // Status badge
+    if (results.is_valid) {
+        statusEl.innerHTML = '<span class="text-success">✓</span> Valid';
+        statusEl.className = 'badge badge-success';
+    } else {
+        statusEl.innerHTML = '<span class="text-error">✗</span> Invalid';
+        statusEl.className = 'badge badge-error';
+    }
+    
+    // Confidence score
+    const confidence = Math.round((results.overall_confidence || 0) * 100);
+    confidenceEl.textContent = confidence + '%';
+    confidenceBarEl.style.width = confidence + '%';
+    
+    // Confidence bar color
+    if (confidence >= 80) {
+        confidenceBarEl.className = 'bg-success h-2 rounded-full transition-all duration-300';
+    } else if (confidence >= 60) {
+        confidenceBarEl.className = 'bg-warning h-2 rounded-full transition-all duration-300';
+    } else {
+        confidenceBarEl.className = 'bg-error h-2 rounded-full transition-all duration-300';
+    }
+    
+    // Issue counts
+    const totalIssues = results.all_issues?.length || 0;
+    const errors = results.errors?.length || 0;
+    const warnings = results.warnings?.length || 0;
+    
+    totalIssuesEl.textContent = totalIssues;
+    errorsCountEl.textContent = errors + ' errors';
+    warningsCountEl.textContent = warnings + ' warnings';
+    
+    // Files validated
+    const filesValidated = results.file_validation_results?.length || 0;
+    filesCountEl.textContent = filesValidated;
+    
+    // Execution ready
+    const hasBlockingIssues = results.has_blocking_issues || false;
+    if (results.is_valid && !hasBlockingIssues) {
+        executionReadyEl.innerHTML = '<span class="text-success">✓</span> Yes';
+        readyStatusEl.textContent = 'Ready to execute';
+    } else {
+        executionReadyEl.innerHTML = '<span class="text-error">✗</span> No';
+        readyStatusEl.textContent = 'Issues must be resolved';
+    }
+    
+    // Duration
+    if (results.validation_duration) {
+        durationEl.textContent = results.validation_duration.toFixed(2);
+    }
+}
+
+// Update file validation section
+function updateFileValidation(fileResults) {
+    const validFilesEl = document.getElementById('valid-files-count');
+    const totalSizeEl = document.getElementById('total-file-size');
+    const encodingIssuesEl = document.getElementById('encoding-issues-count');
+    const tableBodyEl = document.getElementById('file-validation-table-body');
+    
+    // Summary stats
+    const validFiles = fileResults.filter(f => f.is_valid).length;
+    const totalSize = fileResults.reduce((sum, f) => sum + f.file_size, 0);
+    const encodingIssues = fileResults.filter(f => 
+        f.issues.some(i => i.code === 'ENCODING_ERROR')
+    ).length;
+    
+    validFilesEl.textContent = validFiles;
+    totalSizeEl.textContent = formatFileSize(totalSize);
+    encodingIssuesEl.textContent = encodingIssues;
+    
+    // File table
+    tableBodyEl.innerHTML = fileResults.map(file => `
+        <tr>
+            <td>
+                ${file.is_valid ? 
+                    '<span class="text-success">✓</span>' : 
+                    '<span class="text-error">✗</span>'
+                }
+            </td>
+            <td>
+                <div class="font-mono text-xs">${file.file_path.split('/').pop()}</div>
+                <div class="text-xs text-base-content/60">${file.file_path}</div>
+            </td>
+            <td>${formatFileSize(file.file_size)}</td>
+            <td>${file.row_count.toLocaleString()}</td>
+            <td>${file.column_count}</td>
+            <td>
+                <span class="badge badge-outline badge-xs">${file.encoding || 'unknown'}</span>
+            </td>
+            <td>
+                ${file.issues.length > 0 ? 
+                    `<span class="badge badge-error badge-xs">${file.issues.length}</span>` : 
+                    '<span class="text-success">-</span>'
+                }
+            </td>
+        </tr>
+    `).join('');
+}
+
+// Update column mapping validation
+function updateColumnMappingValidation(columnResult) {
+    if (!columnResult) return;
+    
+    const coverageEl = document.getElementById('mapping-coverage');
+    const coverageBarEl = document.getElementById('coverage-bar');
+    const mappedCountEl = document.getElementById('mapped-columns-count');
+    const unmappedCountEl = document.getElementById('unmapped-columns-count');
+    const missingCountEl = document.getElementById('missing-required-count');
+    
+    // Coverage
+    const coverage = Math.round(columnResult.coverage_percentage || 0);
+    coverageEl.textContent = coverage + '%';
+    coverageBarEl.style.width = coverage + '%';
+    
+    // Counts
+    mappedCountEl.textContent = Object.keys(columnResult.mapped_columns || {}).length;
+    unmappedCountEl.textContent = (columnResult.unmapped_columns || []).length;
+    missingCountEl.textContent = (columnResult.missing_required_columns || []).length;
+    
+    // Lists
+    updateColumnLists(columnResult);
+}
+
+// Update column lists
+function updateColumnLists(columnResult) {
+    const mappedListEl = document.getElementById('mapped-columns-list');
+    const missingListEl = document.getElementById('missing-columns-list');
+    const unmappedListEl = document.getElementById('unmapped-columns-list');
+    
+    // Mapped columns
+    const mappedColumns = Object.entries(columnResult.mapped_columns || {});
+    mappedListEl.innerHTML = mappedColumns.map(([source, target]) => `
+        <div class="flex items-center justify-between text-sm">
+            <span class="font-mono">${source}</span>
+            <span class="text-base-content/60">→</span>
+            <span class="text-primary">${target}</span>
+        </div>
+    `).join('');
+    
+    // Missing columns
+    const missingColumns = columnResult.missing_required_columns || [];
+    missingListEl.innerHTML = missingColumns.map(col => `
+        <div class="flex items-center gap-2 text-sm">
+            <span class="text-error">✗</span>
+            <span class="font-mono">${col}</span>
+        </div>
+    `).join('');
+    
+    // Unmapped columns
+    const unmappedColumns = columnResult.unmapped_columns || [];
+    unmappedListEl.innerHTML = unmappedColumns.map(col => `
+        <div class="flex items-center gap-2 text-sm">
+            <span class="text-warning">⚠</span>
+            <span class="font-mono">${col}</span>
+        </div>
+    `).join('');
+}
+
+// Update relationship validation
+function updateRelationshipValidation(relationshipResult) {
+    if (!relationshipResult) return;
+    
+    const validCountEl = document.getElementById('valid-relationships-count');
+    const invalidCountEl = document.getElementById('invalid-relationships-count');
+    const missingDepsEl = document.getElementById('missing-dependencies-count');
+    const circularDepsEl = document.getElementById('circular-dependencies-count');
+    
+    // Counts
+    validCountEl.textContent = (relationshipResult.valid_relationships || []).length;
+    invalidCountEl.textContent = (relationshipResult.invalid_relationships || []).length;
+    missingDepsEl.textContent = (relationshipResult.missing_dependencies || []).length;
+    circularDepsEl.textContent = (relationshipResult.circular_dependencies || []).length;
+    
+    // Lists
+    updateRelationshipLists(relationshipResult);
+}
+
+// Update relationship lists
+function updateRelationshipLists(relationshipResult) {
+    const validListEl = document.getElementById('valid-relationships-list');
+    const invalidListEl = document.getElementById('invalid-relationships-list');
+    
+    // Valid relationships
+    const validRels = relationshipResult.valid_relationships || [];
+    validListEl.innerHTML = validRels.map(rel => `
+        <div class="flex items-center gap-2 text-sm">
+            <span class="text-success">✓</span>
+            <span class="font-mono">${rel}</span>
+        </div>
+    `).join('');
+    
+    // Invalid relationships
+    const invalidRels = relationshipResult.invalid_relationships || [];
+    invalidListEl.innerHTML = invalidRels.map(rel => `
+        <div class="flex items-center gap-2 text-sm">
+            <span class="text-error">✗</span>
+            <span class="font-mono">${rel}</span>
+        </div>
+    `).join('');
+}
+
+// Update resource estimation
+function updateResourceEstimation(resourceEstimate) {
+    if (!resourceEstimate) return;
+    
+    const timeEl = document.getElementById('estimated-execution-time');
+    const memoryEl = document.getElementById('estimated-memory');
+    const diskEl = document.getElementById('estimated-disk');
+    const complexityEl = document.getElementById('complexity-score');
+    
+    // Update values
+    timeEl.textContent = Math.round(resourceEstimate.estimated_execution_time / 60);
+    memoryEl.textContent = resourceEstimate.estimated_memory_usage;
+    diskEl.textContent = resourceEstimate.estimated_disk_usage;
+    complexityEl.textContent = resourceEstimate.complexity_score;
+    
+    // Performance recommendations
+    const recommendationsEl = document.getElementById('performance-recommendations');
+    let recommendations = [];
+    
+    if (resourceEstimate.parallel_processing_recommendation) {
+        recommendations.push('Parallel processing recommended for better performance');
+    }
+    
+    if (resourceEstimate.chunking_recommendation?.recommended) {
+        recommendations.push(`Consider chunking large files (${resourceEstimate.chunking_recommendation.reason})`);
+    }
+    
+    if (resourceEstimate.estimated_memory_usage > 1024) {
+        recommendations.push('High memory usage expected - ensure adequate system resources');
+    }
+    
+    recommendationsEl.innerHTML = recommendations.map(rec => `
+        <div class="flex items-center gap-2 text-sm">
+            <span class="text-info">ℹ</span>
+            <span>${rec}</span>
+        </div>
+    `).join('');
+}
+
+// Update recommendations
+function updateRecommendations(results) {
+    const requiredActionsEl = document.getElementById('required-actions-list');
+    const executionRecsEl = document.getElementById('execution-recommendations-list');
+    
+    // Required actions
+    const requiredActions = results.required_actions || [];
+    requiredActionsEl.innerHTML = requiredActions.map(action => `
+        <li class="text-sm">${action}</li>
+    `).join('');
+    
+    // Execution recommendations
+    const executionRecs = results.execution_recommendations || [];
+    executionRecsEl.innerHTML = executionRecs.map(rec => `
+        <li class="text-sm">${rec}</li>
+    `).join('');
+    
+    // Show/hide sections based on content
+    const requiredSection = document.getElementById('required-actions-section');
+    const executionSection = document.getElementById('execution-recommendations-section');
+    
+    if (requiredActions.length === 0) {
+        requiredSection.classList.add('hidden');
+    } else {
+        requiredSection.classList.remove('hidden');
+    }
+    
+    if (executionRecs.length === 0) {
+        executionSection.classList.add('hidden');
+    } else {
+        executionSection.classList.remove('hidden');
+    }
+}
+
+// Utility function to format file sizes
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+// Initialize validation results when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    // Listen for validation result updates from HTMX
+    document.body.addEventListener('htmx:afterRequest', function(event) {
+        if (event.detail.xhr.responseURL.includes('validation')) {
+            try {
+                const response = JSON.parse(event.detail.xhr.responseText);
+                if (response.validation_results) {
+                    updateValidationResults(response.validation_results);
+                }
+            } catch (e) {
+                console.error('Error parsing validation response:', e);
+            }
+        }
+    });
+    
+    // Auto-collapse sections initially
+    ['file-validation', 'column-mapping', 'relationship-validation', 'resource-estimation'].forEach(section => {
+        const content = document.getElementById(section + '-content');
+        if (content) {
+            content.classList.add('hidden');
+        }
+    });
+});
+</script>

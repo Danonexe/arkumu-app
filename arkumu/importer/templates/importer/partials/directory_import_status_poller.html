@@ -14,14 +14,35 @@
                     <div class="font-semibold">Directory Import in Progress</div>
                     <div class="text-sm">{{ task_info.message|default:"Processing CSV files..." }}</div>
                     
+                    <!-- Phase Information -->
+                    {% if task_info.phase_info %}
+                        <div class="text-xs text-base-content/70 mt-1">
+                            Phase {{ task_info.phase_info.current_phase_index|add:1 }}/{{ task_info.phase_info.total_phases }}: {{ task_info.phase_info.phase_description }}
+                            {% if task_info.phase_info.execution_strategy %}
+                                ({{ task_info.phase_info.execution_strategy }})
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                    
                     <!-- Progress Bar -->
                     {% if task_info.progress %}
                         <div class="mt-2">
                             <div class="flex justify-between text-xs mb-1">
-                                <span>Progress</span>
+                                <span>Overall Progress</span>
                                 <span>{{ task_info.progress }}%</span>
                             </div>
                             <progress class="progress progress-primary w-full" value="{{ task_info.progress }}" max="100"></progress>
+                        </div>
+                    {% endif %}
+                    
+                    <!-- Phase Progress Bar -->
+                    {% if task_info.phase_info and task_info.phase_info.phase_progress %}
+                        <div class="mt-1">
+                            <div class="flex justify-between text-xs mb-1">
+                                <span>{{ task_info.phase_info.phase_description }} Progress</span>
+                                <span>{{ task_info.phase_info.phase_progress }}%</span>
+                            </div>
+                            <progress class="progress progress-secondary w-full" value="{{ task_info.phase_info.phase_progress }}" max="100"></progress>
                         </div>
                     {% endif %}
                     

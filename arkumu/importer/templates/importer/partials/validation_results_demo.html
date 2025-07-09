@@ -1,0 +1,189 @@
+<!-- Demo/Test Version of Validation Results -->
+{% load static %}
+
+<div class="validation-results-container space-y-6">
+    
+    <!-- Demo Data for Testing -->
+    <div class="alert alert-info mb-4">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <div>
+            <p class="font-medium">Demo Validation Results</p>
+            <p class="text-sm">This is a demonstration of the validation results display with sample data.</p>
+        </div>
+    </div>
+    
+    <!-- Load the actual validation results template -->
+    {% include 'importer/partials/validation_results.html' %}
+    
+</div>
+
+<!-- Demo Data Script -->
+<script>
+// Demo validation results data
+const demoValidationResults = {
+    "is_valid": false,
+    "validation_mode": "strict",
+    "overall_confidence": 0.72,
+    "validation_duration": 2.34,
+    "all_issues": [
+        {
+            "code": "REQUIRED_COLUMN_MISSING",
+            "severity": "error",
+            "category": "column_mapping",
+            "message": "Required column missing: participant_id",
+            "column_name": "participant_id"
+        },
+        {
+            "code": "UNMAPPED_REQUIRED_COLUMN",
+            "severity": "warning",
+            "category": "column_mapping",
+            "message": "Column not mapped: extra_field",
+            "column_name": "extra_field"
+        },
+        {
+            "code": "FILE_TOO_LARGE",
+            "severity": "warning",
+            "category": "file_structure",
+            "message": "File is too large: 250.5MB",
+            "file_path": "metadata/dataset1.csv"
+        }
+    ],
+    "errors": [
+        {
+            "code": "REQUIRED_COLUMN_MISSING",
+            "severity": "error",
+            "category": "column_mapping",
+            "message": "Required column missing: participant_id",
+            "column_name": "participant_id"
+        }
+    ],
+    "warnings": [
+        {
+            "code": "UNMAPPED_REQUIRED_COLUMN",
+            "severity": "warning",
+            "category": "column_mapping",
+            "message": "Column not mapped: extra_field",
+            "column_name": "extra_field"
+        },
+        {
+            "code": "FILE_TOO_LARGE",
+            "severity": "warning",
+            "category": "file_structure",
+            "message": "File is too large: 250.5MB",
+            "file_path": "metadata/dataset1.csv"
+        }
+    ],
+    "file_validation_results": [
+        {
+            "file_path": "metadata/dataset1.csv",
+            "is_valid": true,
+            "file_size": 262144000,
+            "column_count": 15,
+            "row_count": 50000,
+            "encoding": "utf-8",
+            "delimiter": ",",
+            "issues": [
+                {
+                    "code": "FILE_TOO_LARGE",
+                    "severity": "warning",
+                    "category": "file_structure",
+                    "message": "File is too large: 250.5MB",
+                    "file_path": "metadata/dataset1.csv"
+                }
+            ]
+        },
+        {
+            "file_path": "metadata/dataset2.csv",
+            "is_valid": true,
+            "file_size": 1048576,
+            "column_count": 8,
+            "row_count": 1200,
+            "encoding": "utf-8",
+            "delimiter": ",",
+            "issues": []
+        }
+    ],
+    "column_mapping_result": {
+        "mapped_columns": {
+            "subject_id": "participant_id",
+            "visit_date": "visit_date",
+            "assessment_score": "score",
+            "notes": "comments"
+        },
+        "unmapped_columns": ["extra_field", "legacy_column"],
+        "missing_required_columns": ["participant_id"],
+        "coverage_percentage": 66.7,
+        "type_mismatches": [
+            {
+                "column": "assessment_score",
+                "source_type": "string",
+                "target_type": "number",
+                "severity": "warning"
+            }
+        ],
+        "issues": [
+            {
+                "code": "REQUIRED_COLUMN_MISSING",
+                "severity": "error",
+                "category": "column_mapping",
+                "message": "Required column missing: participant_id",
+                "column_name": "participant_id"
+            }
+        ]
+    },
+    "relationship_validation_result": {
+        "valid_relationships": ["dataset1.participant_id -> participants.id"],
+        "invalid_relationships": ["dataset2.invalid_ref -> missing_table.id"],
+        "missing_dependencies": ["missing_table"],
+        "circular_dependencies": [],
+        "foreign_key_issues": [
+            {
+                "relationship": "dataset2.invalid_ref -> missing_table.id",
+                "issue": "Target table not found"
+            }
+        ],
+        "issues": [
+            {
+                "code": "REFERENCE_TABLE_MISSING",
+                "severity": "warning",
+                "category": "relationship_validation",
+                "message": "Reference table not found: missing_table"
+            }
+        ]
+    },
+    "resource_estimate": {
+        "estimated_execution_time": 180,
+        "estimated_memory_usage": 512,
+        "estimated_disk_usage": 1024,
+        "estimated_cpu_usage": 65.0,
+        "complexity_score": 6,
+        "parallel_processing_recommendation": true,
+        "chunking_recommendation": {
+            "recommended": true,
+            "chunk_size": 10000,
+            "reason": "Large file size detected"
+        }
+    },
+    "execution_recommendations": [
+        "Consider chunked processing for large files",
+        "Parallel processing recommended for better performance",
+        "Review unmapped columns for potential data loss"
+    ],
+    "required_actions": [
+        "Resolve missing required column: participant_id",
+        "Fix invalid relationship reference to missing_table"
+    ],
+    "has_blocking_issues": true
+};
+
+// Initialize demo data when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    // Wait a moment for the page to fully load
+    setTimeout(function() {
+        console.log('Loading demo validation results...');
+        updateValidationResults(demoValidationResults);
+    }, 1000);
+});
+</script>

@@ -5,7 +5,14 @@
      class="inline-block"> {# Make it inline-block to sit nicely next to other elements #}
 
     {% if task_info.status == 'processing' or task_info.status == 'pending' %}
-        <span class="loading loading-spinner loading-sm" aria-label="Processing..." title="Ingesting CSV..."></span>
+        <span class="loading loading-spinner loading-sm" aria-label="Processing..." 
+              title="{% if task_info.phase_info %}{{ task_info.phase_info.phase_description }} ({{ task_info.phase_info.current_phase_index|add:1 }}/{{ task_info.phase_info.total_phases }}){% else %}Ingesting CSV...{% endif %}"></span>
+        
+        {% if task_info.phase_info %}
+            <div class="text-xs text-base-content/70 mt-1">
+                Phase {{ task_info.phase_info.current_phase_index|add:1 }}/{{ task_info.phase_info.total_phases }}: {{ task_info.phase_info.phase_description }}
+            </div>
+        {% endif %}
     {% elif task_info.status == 'completed' %}
         <span class="tooltip tooltip-success" data-tip="Ingestion successful! {{ task_info.message|truncatewords:10 }}">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-success" viewBox="0 0 20 20" fill="currentColor">

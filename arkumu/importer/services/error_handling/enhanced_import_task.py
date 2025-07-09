@@ -119,6 +119,36 @@ def run_csv_import_with_structured_error_handling(
                 payload["error_info"] = error_info
             cache.set(cache_key, payload, timeout=3600)
     
+    def update_cache_with_phase_info(status: str, message: str, progress: int, 
+                                   phase_info: Optional[Dict] = None, 
+                                   details: Optional[Dict] = None, 
+                                   error_info: Optional[Dict] = None):
+        """Enhanced cache update function with phase information support for structured error handling."""
+        if cache_key:
+            payload = {
+                "status": status,
+                "message": message,
+                "progress": progress,
+                "timestamp": timezone.now().isoformat()
+            }
+            
+            if phase_info:
+                payload["phase_info"] = {
+                    "current_phase": phase_info.get("current_phase", "unknown"),
+                    "current_phase_index": phase_info.get("current_phase_index", 0),
+                    "total_phases": phase_info.get("total_phases", 1),
+                    "phase_progress": phase_info.get("phase_progress", 0),
+                    "phase_description": phase_info.get("phase_description", ""),
+                    "execution_strategy": phase_info.get("execution_strategy", "structured")
+                }
+            
+            if details:
+                payload["details"] = details
+            if error_info:
+                payload["error_info"] = error_info
+                
+            cache.set(cache_key, payload, timeout=3600)
+    
     # Initialize result structure
     result = {
         "status": "processing",
@@ -134,9 +164,44 @@ def run_csv_import_with_structured_error_handling(
     
     temp_local_path = None
     
+    # Initialize phase tracking for structured error handling
+    structured_phases = [
+        "file_download",
+        "mapping_validation", 
+        "data_import",
+        "finalization"
+    ]
+    
+    def get_structured_phase_info(phase_name: str, phase_progress: int = 0) -> Dict:
+        """Get phase information for structured error handling progress tracking."""
+        try:
+            phase_index = structured_phases.index(phase_name)
+        except ValueError:
+            phase_index = 0
+        
+        return {
+            "current_phase": phase_name,
+            "current_phase_index": phase_index,
+            "total_phases": len(structured_phases),
+            "phase_progress": phase_progress,
+            "phase_description": get_structured_phase_description(phase_name),
+            "execution_strategy": "structured"
+        }
+    
+    def get_structured_phase_description(phase_name: str) -> str:
+        """Get user-friendly description for each structured error handling phase."""
+        descriptions = {
+            "file_download": "Downloading and preparing file",
+            "mapping_validation": "Validating mapping configuration",
+            "data_import": "Importing data with error tracking",
+            "finalization": "Finalizing and reporting results"
+        }
+        return descriptions.get(phase_name, "Processing")
+    
     try:
         # Phase 1: File Download
-        update_cache("processing", "Starting file download from S3...", 5)
+        phase_info = get_structured_phase_info("file_download", 0)
+        update_cache_with_phase_info("processing", "Starting file download from S3...", 5, phase_info)
         
         with error_handler.error_context("file_download", "storage") as ctx:
             bucket_service = BucketService()
@@ -156,14 +221,18 @@ def run_csv_import_with_structured_error_handling(
                 error_handler.handle_file_error(s3_object_key, e)
                 raise
         
-        update_cache("processing", "File downloaded successfully", 15)
+        # Update file download phase completion
+        phase_info = get_structured_phase_info("file_download", 100)
+        update_cache_with_phase_info("processing", "File downloaded successfully", 15, phase_info)
         
         # Phase 2: Mapping Validation (if using mapping)
         mapping_config = None
         validation_result = None
         
         if use_mapping and mapping_id and validation_mode:
-            update_cache("processing", "Validating mapping configuration...", 20)
+            # Phase 2: Mapping Validation
+            phase_info = get_structured_phase_info("mapping_validation", 25)
+            update_cache_with_phase_info("processing", "Validating mapping configuration...", 20, phase_info)
             
             with error_handler.error_context("mapping_validation", "validation") as ctx:
                 try:
@@ -199,7 +268,8 @@ def run_csv_import_with_structured_error_handling(
                             if ingest_session:
                                 ingest_session.mark_failed(error_msg)
                             
-                            update_cache("failed", error_msg, 0, error_info={
+                            phase_info = get_structured_phase_info("mapping_validation", 100)
+                            update_cache_with_phase_info("failed", error_msg, 0, phase_info, error_info={
                                 "phase": "mapping_validation",
                                 "validation_errors": validation_result.errors[:5]  # First 5 errors
                             })
@@ -221,10 +291,13 @@ def run_csv_import_with_structured_error_handling(
                     )
                     raise
         
-        update_cache("processing", "Mapping validation completed", 30)
+        # Update mapping validation phase completion
+        phase_info = get_structured_phase_info("mapping_validation", 100)
+        update_cache_with_phase_info("processing", "Mapping validation completed", 30, phase_info)
         
         # Phase 3: Data Import Execution
-        update_cache("processing", "Starting data import execution...", 35)
+        phase_info = get_structured_phase_info("data_import", 10)
+        update_cache_with_phase_info("processing", "Starting data import execution...", 35, phase_info)
         
         with error_handler.error_context("data_import", "execution") as ctx:
             try:
@@ -293,10 +366,13 @@ def run_csv_import_with_structured_error_handling(
                 )
                 raise
         
-        update_cache("processing", "Data import completed", 80)
+        # Update data import phase completion
+        phase_info = get_structured_phase_info("data_import", 100)
+        update_cache_with_phase_info("processing", "Data import completed", 80, phase_info)
         
         # Phase 4: Finalization
-        update_cache("processing", "Finalizing import results...", 90)
+        phase_info = get_structured_phase_info("finalization", 50)
+        update_cache_with_phase_info("processing", "Finalizing import results...", 90, phase_info)
         
         with error_handler.error_context("finalization", "system") as ctx:
             # Update ingest session
@@ -317,7 +393,9 @@ def run_csv_import_with_structured_error_handling(
             result["error_summary"] = error_summary
             
             # Update cache with success
-            update_cache("completed", success_message, 100, 
+            phase_info = get_structured_phase_info("finalization", 100)
+            update_cache_with_phase_info("completed", success_message, 100, 
+                        phase_info,
                         details=result["final_stats"],
                         error_info=error_summary)
             
@@ -348,7 +426,9 @@ def run_csv_import_with_structured_error_handling(
         
         error_summary = error_handler.error_manager.get_error_summary()
         
-        update_cache("failed", error_message, 0, error_info=error_summary)
+        # Use generic error phase info if no specific phase is available
+        phase_info = get_structured_phase_info("file_download", 0)
+        update_cache_with_phase_info("failed", error_message, 0, phase_info, error_info=error_summary)
         
         # Send notifications if enabled
         if notify_on_error and admin_emails:

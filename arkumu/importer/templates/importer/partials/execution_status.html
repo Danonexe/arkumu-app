@@ -164,48 +164,68 @@
         </div>
     </div>
     
-    <!-- Enhanced Validation Status -->
+    <!-- Enhanced Validation Status with Comprehensive Results -->
     <div class="card bg-base-200 shadow-sm">
         <div class="card-body p-4">
-            <div class="flex items-center gap-3">
-                <span class="text-warning text-lg" id="validation-status-icon">⚠</span>
-                <div class="flex-1">
-                    <div class="font-medium flex items-center gap-2">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-3">
+                    <span class="text-warning text-lg" id="validation-status-icon">⚠</span>
+                    <div class="flex-1">
+                        <div class="font-medium flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            Validation Status
+                        </div>
+                        <div class="text-sm text-base-content/60" id="readiness-message">
+                            {% if selected_files and selected_mapping %}
+                                Ready for validation - click "Run Validation" to verify compatibility
+                            {% else %}
+                                Select files and mapping to begin validation
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Validation Actions -->
+                <div class="flex gap-2">
+                    <button class="btn btn-sm btn-primary" 
+                            hx-post="{% url 'importer:run_validation' %}"
+                            hx-trigger="click"
+                            hx-target="#validation-results-container"
+                            hx-swap="outerHTML"
+                            hx-on::after-request="handleValidationResponse(event)"
+                            id="run-validation-btn"
+                            {% if not selected_files or not selected_mapping %}disabled{% endif %}>
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                         </svg>
-                        Readiness Status
-                    </div>
-                    <div class="text-sm text-base-content/60" id="readiness-message">
-                        {% if selected_files and selected_mapping %}
-                            Ready for analysis - click "Analyze Mapping" to verify compatibility
-                        {% else %}
-                            Select files and mapping to begin validation
-                        {% endif %}
-                    </div>
+                        Run Validation
+                    </button>
+                    
+                    <button class="btn btn-sm btn-ghost" 
+                            hx-get="{% url 'importer:validation_results' %}"
+                            hx-trigger="click"
+                            hx-target="#validation-results-container"
+                            hx-swap="outerHTML"
+                            id="show-validation-results-btn">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/>
+                        </svg>
+                        View Results
+                    </button>
                 </div>
             </div>
             
-            <!-- Validation Details -->
-            <div id="validation-details" class="hidden mt-4">
-                <div class="space-y-2">
-                    <div id="validation-issues" class="hidden">
-                        <div class="alert alert-error alert-sm py-2">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                            </svg>
-                            <ul id="validation-issues-list" class="text-sm"></ul>
-                        </div>
-                    </div>
-                    
-                    <div id="validation-warnings" class="hidden">
-                        <div class="alert alert-warning alert-sm py-2">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"/>
-                            </svg>
-                            <ul id="validation-warnings-list" class="text-sm"></ul>
-                        </div>
-                    </div>
+            <!-- Validation Results Container -->
+            <div id="validation-results-container" class="mt-4">
+                <!-- This will be populated by HTMX from validation_results.html -->
+                <div class="text-center text-base-content/60 py-8">
+                    <svg class="w-12 h-12 mx-auto mb-4 text-base-content/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <p class="text-lg mb-2">No validation results available</p>
+                    <p class="text-sm">Click "Run Validation" to analyze your mapping and files</p>
                 </div>
             </div>
         </div>
@@ -436,6 +456,52 @@ function updateMappingAnalysis(event) {
     } else {
         console.error('Analysis request failed:', xhr.status, xhr.statusText);
         alert('Failed to analyze mapping. Please try again.');
+    }
+}
+
+// Handle validation response
+function handleValidationResponse(event) {
+    const xhr = event.detail.xhr;
+    
+    if (xhr.status === 200) {
+        try {
+            const response = JSON.parse(xhr.responseText);
+            
+            if (response.success) {
+                // Update validation status icon
+                const statusIcon = document.getElementById('validation-status-icon');
+                const readinessMessage = document.getElementById('readiness-message');
+                
+                if (response.validation_results.is_valid) {
+                    statusIcon.innerHTML = '✓';
+                    statusIcon.className = 'text-success text-lg';
+                    readinessMessage.textContent = 'Validation passed - ready for execution';
+                } else {
+                    statusIcon.innerHTML = '✗';
+                    statusIcon.className = 'text-error text-lg';
+                    readinessMessage.textContent = 'Validation failed - issues must be resolved';
+                }
+                
+                // Store validation results in session for later retrieval
+                // This would typically be done server-side, but we can trigger a session update
+                console.log('Validation completed:', response.validation_results);
+                
+                // Enable/disable execute button based on validation results
+                const executeBtn = document.getElementById('execute-import-btn');
+                if (executeBtn) {
+                    executeBtn.disabled = !response.validation_results.is_valid;
+                }
+            } else {
+                console.error('Validation failed:', response.error);
+                alert('Validation failed: ' + response.error);
+            }
+        } catch (e) {
+            console.error('Error parsing validation response:', e);
+            alert('Error processing validation results. Please try again.');
+        }
+    } else {
+        console.error('Validation request failed:', xhr.status, xhr.statusText);
+        alert('Validation request failed. Please try again.');
     }
 }
 
