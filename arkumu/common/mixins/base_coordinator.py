@@ -106,6 +106,9 @@ class BaseCoordinatorMixin:
             dict: Organization data that was set
             None: If organization not found
         """
+        # Get current organization before changing
+        old_org = self.get_current_organization(request)
+        
         try:
             # Try to parse as numeric ID first
             if str(organization_identifier).isdigit():
@@ -119,6 +122,20 @@ class BaseCoordinatorMixin:
                 'code': organization.code,
                 'name': organization.name
             }
+            
+            # Check if organization is actually changing
+            if old_org and old_org['id'] != org_data['id']:
+                logger.info(f"BASE_COORDINATOR: Organization changing from {old_org['name']} to {org_data['name']}")
+                
+                # Clear current mapping if it exists (it belongs to the old organization)
+                current_mapping = self.get_current_mapping(request)
+                if current_mapping:
+                    logger.info(f"BASE_COORDINATOR: Clearing current mapping '{current_mapping.get('name')}' due to organization change")
+                    self.clear_current_mapping(request)
+                
+                # Clear organization-specific state
+                logger.info(f"BASE_COORDINATOR: Clearing organization-specific state for old org {old_org['code']} (ID: {old_org['id']})")
+                self.clear_organization_specific_state(request, old_org['id'])
             
             session_key = self._get_shared_session_key(self.SHARED_CURRENT_ORGANIZATION_KEY)
             request.session[session_key] = org_data

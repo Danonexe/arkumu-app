@@ -213,10 +213,16 @@ class CSVMappingEditorView(GeneralLoginRequiredMixin,
                 'current_mapping_description': current_mapping_description,
                 'current_mapping_updated': current_mapping_updated,
                 'current_mapping_status': current_mapping_status,
+                'error': None,  # Clear any error state on successful load
+                'success': True,  # Indicate successful load
             }
             
             # Handle HTMX requests - return just the partial content
             if request.headers.get('HX-Request'):
+                logger.info(f"🔍 CORE_EDITOR: HTMX request detected")
+                logger.info(f"🔍 CORE_EDITOR: HX-Target: {request.headers.get('HX-Target')}")
+                logger.info(f"🔍 CORE_EDITOR: HX-Trigger: {request.headers.get('HX-Trigger')}")
+                
                 # Check if this is a tab request
                 tab = request.GET.get('tab')
                 if tab == 'workspace':
@@ -228,12 +234,14 @@ class CSVMappingEditorView(GeneralLoginRequiredMixin,
                     from django.http import HttpResponse
                     return HttpResponse(wrapped_content)
                 else:
+                    logger.info(f"🔍 CORE_EDITOR: Handling main content HTMX request")
                     # Return main content for other HTMX requests + inject navbar controls
                     from django.template.loader import render_to_string
                     from django.http import HttpResponse
                     
                     # Render main content
                     main_content = render(request, 'csv_mapping/partials/main_content.html', context).content.decode()
+                    logger.info(f"🔍 CORE_EDITOR: Main content length: {len(main_content)} chars")
                     
                     # Render navbar controls
                     navbar_context = {
@@ -250,8 +258,11 @@ class CSVMappingEditorView(GeneralLoginRequiredMixin,
                         request=request
                     )
                     
-                    # Build OOB response to inject controls into navbar
-                    response_html = f'{main_content}<div id="navbar-end" hx-swap-oob="innerHTML">{navbar_controls}</div><div id="save-feedback" class="absolute top-12 right-0 z-50 w-80"></div><div id="mapping-status" class="absolute top-12 right-0 z-50 w-80"></div>'
+                    # Use template helper to build proper OOB response
+                    oob_updates = {
+                        'navbar-mapping-controls': navbar_controls
+                    }
+                    response_html = self.build_oob_response(main_content, oob_updates)
                     
                     return HttpResponse(response_html)
             else:
@@ -260,13 +271,54 @@ class CSVMappingEditorView(GeneralLoginRequiredMixin,
         except Exception as e:
             logger.error(f"CSV_MAPPING_EDITOR: Error loading editor: {e}", exc_info=True)
             context = {
+                **self.get_base_template_context(request),
                 'organization_id': None,
                 'organization_code': None,
                 'organization_name': None,
+                'organization_numeric_id': None,
                 'organizations': [],
+                'datasets': [],
+                'csv_datasets': [],
+                'selected_datasets': [],
+                'selected_datasets_with_details': [],
+                'selected_columns': [],
+                'import_strategy': {},
+                'import_strategy_summary': {},
+                'workspace_summary': {},
+                'current_mapping_id': None,
+                'current_mapping_name': None,
+                'current_mapping_description': None,
+                'current_mapping_updated': None,
+                'current_mapping_status': None,
                 'error': f'Error loading CSV mapping editor: {str(e)}'
             }
-            return render(request, self.template_name, context)
+            
+            # Handle HTMX requests differently to avoid template duplication
+            if request.headers.get('HX-Request'):
+                logger.error(f"🔍 CORE_EDITOR: Handling error for HTMX request")
+                # Return just the main content partial for HTMX requests
+                from django.template.loader import render_to_string
+                from django.http import HttpResponse
+                
+                # Render error state in main content
+                main_content = render(request, 'csv_mapping/partials/main_content.html', context).content.decode()
+                
+                # Clear navbar controls for error state
+                navbar_controls = render_to_string(
+                    'csv_mapping/partials/navbar_mapping_controls.html',
+                    {'organization_id': None, 'csrf_token': context['csrf_token']},
+                    request=request
+                )
+                
+                # Use template helper to build proper OOB response
+                oob_updates = {
+                    'navbar-mapping-controls': navbar_controls
+                }
+                response_html = self.build_oob_response(main_content, oob_updates)
+                
+                return HttpResponse(response_html)
+            else:
+                return render(request, self.template_name, context)
 
 
 # ==============================================================================
