@@ -1,6 +1,6 @@
 # Pre-Execution Validation Service
 
-This service provides comprehensive validation of mapping configurations and files before execution to ensure successful import operations.
+This service provides comprehensive validation of mapping configurations and files before execution to ensure successful import operations. It supports both local files (for development/testing) and S3 files (for production).
 
 ## Overview
 
@@ -9,6 +9,7 @@ The Pre-Execution Validation Service validates:
 - **Column Mapping**: Ensures all required columns are present and properly mapped
 - **Relationship Requirements**: Validates foreign key relationships and dependencies
 - **Resource Estimation**: Estimates execution time, memory usage, and system resources
+- **Storage Compatibility**: Works with both local and S3 file storage
 
 ## Key Features
 
@@ -77,6 +78,75 @@ else:
     print("❌ Validation failed:")
     for error in result.errors:
         print(f"  - {error}")
+```
+
+### S3 File Validation
+
+The validator seamlessly handles files stored in S3:
+
+```python
+from arkumu.storage.services.bucket_service import BucketService
+
+# Initialize with bucket service
+bucket_service = BucketService()
+validator = PreExecutionValidator(bucket_service=bucket_service)
+
+# S3 file paths (as they appear in the GUI)
+s3_file_paths = [
+    "metadata/AkteurIn.csv",
+    "metadata/Ereignis.csv",
+    "metadata/Projekt.csv"
+]
+
+# Get organization bucket
+organization_code = "fuk"
+bucket_name = bucket_service.get_organization_bucket(organization_code)
+
+# Validate files from S3
+result = validator.validate_mapping_execution(
+    mapping_config=mapping_config,
+    file_paths=s3_file_paths,
+    bucket_name=bucket_name  # Optional: specify bucket for S3 files
+)
+```
+
+### GUI Integration Example
+
+This example shows how the validator is used in the actual ingest workflow:
+
+```python
+# From ingest_views.py
+def run_pre_execution_validation(request):
+    # Get selected files from session (S3 paths)
+    selected_files = request.session.get('ingest_selected_files', [])
+    
+    # Get current mapping
+    current_mapping = get_current_mapping(request)
+    mapping_id = current_mapping['id']
+    
+    # Initialize services
+    mapping_adapter = MappingAdapter()
+    validator = PreExecutionValidator(mapping_adapter=mapping_adapter)
+    bucket_service = BucketService()
+    
+    # Load mapping configuration
+    mapping_config = mapping_adapter.load_mapping_config(mapping_id)
+    
+    # Get organization bucket
+    bucket_name = bucket_service.get_organization_bucket(organization_code)
+    
+    # Run validation with S3 files
+    validation_result = validator.validate_mapping_execution(
+        mapping_config=mapping_config,
+        file_paths=selected_files,
+        bucket_name=bucket_name
+    )
+    
+    return JsonResponse({
+        'success': True,
+        'validation_results': validation_result.to_dict(),
+        'files_validated': len(selected_files)
+    })
 ```
 
 ### Individual Validation Methods
@@ -233,11 +303,119 @@ The service includes comprehensive test coverage:
 - Integration tests with existing services
 - Performance tests for large files
 - Error condition tests
+- S3 file handling tests with mocked AWS services
 
-Run tests with:
+### Running Tests
+
+Run all validation tests:
 ```bash
 docker compose -f docker-compose.local.yml run --rm django pytest arkumu/importer/tests/services/pre_execution_validation/
 ```
+
+### Testing with S3 Files
+
+The test suite uses `moto` to mock AWS S3 services:
+
+```python
+import pytest
+from moto import mock_aws
+import boto3
+from django.test import override_settings
+
+@pytest.fixture
+def s3_bucket():
+    with mock_aws():
+        s3 = boto3.client("s3", region_name="us-east-1")
+        s3.create_bucket(Bucket="test-bucket")
+        yield s3
+
+@override_settings(
+    DEFAULT_FILE_STORAGE='storages.backends.s3boto3.S3Boto3Storage',
+    AWS_STORAGE_BUCKET_NAME='test-bucket'
+)
+def test_validate_s3_file(s3_bucket):
+    # Upload test file to mocked S3
+    s3_bucket.put_object(
+        Bucket="test-bucket",
+        Key="metadata/test.csv",
+        Body="col1,col2\nval1,val2"
+    )
+    
+    # Run validation
+    validator = PreExecutionValidator()
+    result = validator.validate_file_from_s3(
+        bucket_name="test-bucket",
+        file_key="metadata/test.csv"
+    )
+    assert result.is_valid
+```
+
+### GUI Simulation Tests
+
+Test the complete user workflow:
+
+```python
+def test_user_validation_workflow():
+    """Simulates user selecting files and running validation"""
+    # 1. User selects organization
+    # 2. System lists files from S3
+    # 3. User selects multiple files
+    # 4. User chooses mapping
+    # 5. User clicks validate
+    # 6. Validation runs against S3 files
+    # 7. Results are displayed
+```
+
+## Troubleshooting
+
+### Common Issues
+
+#### FILE_NOT_FOUND errors with S3 files
+
+**Problem**: Validation fails with "File not found" errors even though files exist in S3.
+
+**Solution**: Ensure the validator is initialized with proper S3 support:
+```python
+# Wrong - tries to access files locally
+validator = PreExecutionValidator()
+result = validator.validate_mapping_execution(mapping_config, ["metadata/file.csv"])
+
+# Correct - uses S3 storage backend
+validator = PreExecutionValidator(bucket_service=BucketService())
+result = validator.validate_mapping_execution(
+    mapping_config, 
+    ["metadata/file.csv"],
+    bucket_name="organization-bucket"
+)
+```
+
+#### Validation passes locally but fails in production
+
+**Problem**: Tests pass but validation fails when deployed.
+
+**Solution**: Check Django storage settings:
+```python
+# settings/production.py
+STORAGES = {
+    "default": {
+        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+        "OPTIONS": {
+            "bucket_name": os.environ.get("AWS_STORAGE_BUCKET_NAME"),
+            "region_name": os.environ.get("AWS_S3_REGION_NAME"),
+        }
+    }
+}
+```
+
+#### Slow validation performance with S3
+
+**Problem**: Validation takes too long when reading from S3.
+
+**Solution**: 
+1. Use batch operations when validating multiple files
+2. Enable S3 transfer acceleration if available
+3. Consider caching file metadata locally
+4. Use the resource estimation feature to set user expectations
 
 ## Future Enhancements
 

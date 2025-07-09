@@ -36,6 +36,8 @@ from arkumu.importer.services.file_matching.file_dataset_matcher import FileData
 from arkumu.importer.services.mapping_consumer.mapping_adapter import MappingAdapter
 from arkumu.importer.services.validation.validation_utils import ValidationReport
 from arkumu.storage.services.bucket_service import BucketService
+from arkumu.metadata.services.mapping.mapping_coordinator import MappingCoordinator
+from arkumu.metadata.views.csv_mapping.mixins.coordinator import CSVMappingCoordinatorMixin
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +71,9 @@ class PreExecutionValidator:
         self.bucket_service = bucket_service or BucketService()
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
         
+        # Initialize the mapping coordinator mixin for validation
+        self.mapping_coordinator = CSVMappingCoordinatorMixin()
+        
         # Configuration
         self.max_file_size = 500 * 1024 * 1024  # 500MB
         self.max_row_count = 1_000_000  # 1M rows
@@ -88,7 +93,9 @@ class PreExecutionValidator:
     def validate_mapping_execution(self, 
                                  mapping_config: Dict[str, Any], 
                                  file_paths: List[str],
-                                 organization_code: Optional[str] = None) -> PreExecutionValidationResult:
+                                 organization_code: Optional[str] = None,
+                                 request = None,
+                                 organization_id: Optional[int] = None) -> PreExecutionValidationResult:
         """
         Validate mapping execution against provided files.
         
@@ -124,12 +131,18 @@ class PreExecutionValidator:
             
             result.file_validation_results = file_validation_results
             
-            # 3. Validate column mappings
-            column_mapping_result = self.validate_column_mapping(
-                [result.file_path for result in file_validation_results if result.is_valid],
+            # 3. Validate column mappings at dataset level using mixin
+            column_mapping_result = self.validate_dataset_column_mappings_with_mixin(
+                file_validation_results,
                 mapping_config,
-                organization_code
+                organization_code,
+                request,
+                organization_id
             )
+            
+            self.logger.info(f"Column mapping result: missing_required={column_mapping_result.missing_required_columns}, "
+                           f"unmapped={column_mapping_result.unmapped_columns}, "
+                           f"mapped={len(column_mapping_result.mapped_columns)}")
             result.column_mapping_result = column_mapping_result
             result.all_issues.extend(column_mapping_result.issues)
             
@@ -287,10 +300,10 @@ class PreExecutionValidator:
             file_extension = Path(file_path).suffix.lower()
             
             if file_extension in ['.csv', '.tsv', '.txt']:
-                if is_s3_path:
-                    self._validate_csv_file_structure_s3(file_path, dataset_config, result, organization_code)
-                else:
-                    self._validate_csv_file_structure(file_path, dataset_config, result)
+                # Use unified Polars-based validation for both S3 and local files
+                dataset_config_with_org = dict(dataset_config)
+                dataset_config_with_org['organization_code'] = organization_code
+                self._validate_csv_file_structure_with_polars(file_path, dataset_config_with_org, result)
             elif file_extension == '.json':
                 if is_s3_path:
                     self._validate_json_file_structure_s3(file_path, dataset_config, result, organization_code)
@@ -314,6 +327,320 @@ class PreExecutionValidator:
                 category=ValidationCategory.FILE_STRUCTURE,
                 message=f"Validation failed: {str(e)}",
                 file_path=file_path,
+                details={"exception": str(e)}
+            ))
+        
+        return result
+    
+    def validate_dataset_column_mappings_with_mixin(self, 
+                                                  file_validation_results: List[FileValidationResult],
+                                                  mapping_config: Dict[str, Any],
+                                                  organization_code: Optional[str] = None,
+                                                  request = None,
+                                                  organization_id: Optional[int] = None) -> ColumnMappingValidationResult:
+        """
+        Validate column mappings using the CSVMappingCoordinatorMixin validation method.
+        
+        This is the preferred method as it reuses the mixin's validation logic.
+        """
+        result = ColumnMappingValidationResult(
+            mapped_columns={},
+            unmapped_columns=[],
+            missing_required_columns=[],
+            type_mismatches=[],
+            transformation_warnings=[],
+            coverage_percentage=0.0
+        )
+        
+        if not request or not organization_id:
+            self.logger.warning("Cannot use mixin validation without request and organization_id, falling back to config-based validation")
+            return self.validate_dataset_column_mappings(file_validation_results, mapping_config, organization_code, request, organization_id)
+        
+        try:
+            # Extract all file columns from validation results
+            all_file_columns = set()
+            for file_result in file_validation_results:
+                if file_result.is_valid:
+                    try:
+                        file_columns = self._extract_file_columns(file_result.file_path, organization_code)
+                        all_file_columns.update(file_columns)
+                    except Exception as e:
+                        self.logger.warning(f"Could not extract columns from {file_result.file_path}: {e}")
+            
+            # Use the mixin's validation method
+            validation_result = self.mapping_coordinator.validate_mapping_structure(
+                request, organization_id, list(all_file_columns)
+            )
+            
+            # Convert to our result format
+            result.mapped_columns = validation_result['mapped_columns']
+            result.unmapped_columns = validation_result['unmapped_columns']
+            result.missing_required_columns = validation_result['missing_required_columns']
+            result.coverage_percentage = validation_result['coverage_percentage']
+            
+            # Convert issues to ValidationIssue objects
+            for issue in validation_result['issues']:
+                result.issues.append(ValidationIssue(
+                    code=issue['code'],
+                    severity=ValidationSeverity.ERROR if issue['severity'] == 'ERROR' else ValidationSeverity.WARNING,
+                    category=ValidationCategory.COLUMN_MAPPING,
+                    message=issue['message'],
+                    column_name=issue.get('column_name'),
+                    suggested_fix=issue.get('suggested_fix')
+                ))
+            
+            self.logger.info(f"Mixin validation: {len(result.mapped_columns)} mapped, {len(result.unmapped_columns)} unmapped, {len(result.missing_required_columns)} missing")
+            
+        except Exception as e:
+            self.logger.error(f"Mixin validation failed: {str(e)}")
+            # Fall back to the original method
+            return self.validate_dataset_column_mappings(file_validation_results, mapping_config, organization_code, request, organization_id)
+        
+        return result
+
+    def validate_dataset_column_mappings(self, 
+                                       file_validation_results: List[FileValidationResult],
+                                       mapping_config: Dict[str, Any],
+                                       organization_code: Optional[str] = None,
+                                       request = None,
+                                       organization_id: Optional[int] = None) -> ColumnMappingValidationResult:
+        """
+        Validate column mappings at the dataset level - matching files to datasets
+        and validating columns within each dataset context.
+        """
+        result = ColumnMappingValidationResult(
+            mapped_columns={},
+            unmapped_columns=[],
+            missing_required_columns=[],
+            type_mismatches=[],
+            transformation_warnings=[],
+            coverage_percentage=0.0
+        )
+        
+        try:
+            # Use the mixin's method to get workspace_columns if request and organization_id are provided
+            if request and organization_id:
+                workspace_columns = self.get_workspace_columns(request, organization_id)
+                self.logger.info(f"Retrieved workspace_columns using mixin: {len(workspace_columns)} columns")
+            else:
+                # Fallback to extracting from mapping config
+                workspace_columns = mapping_config.get('workspace_columns', {})
+                self.logger.info(f"Using workspace_columns from mapping config: {len(workspace_columns)} columns")
+            
+            selected_datasets = mapping_config.get('selected_datasets', [])
+            self.logger.info(f"Selected datasets: {selected_datasets}")
+            
+            # If selected_datasets is empty, extract from workspace_columns
+            if not selected_datasets:
+                dataset_names = set()
+                for key in workspace_columns.keys():
+                    if '::' in key:
+                        parts = key.split('::')
+                        if len(parts) >= 2:
+                            dataset_names.add(parts[1])
+                selected_datasets = list(dataset_names)
+                self.logger.info(f"Extracted {len(selected_datasets)} datasets from workspace_columns: {selected_datasets}")
+            
+            # Group files by dataset
+            dataset_files = {}
+            for file_result in file_validation_results:
+                if file_result.is_valid:
+                    dataset_name = self._extract_dataset_name_from_file_path(file_result.file_path)
+                    if dataset_name:
+                        if dataset_name not in dataset_files:
+                            dataset_files[dataset_name] = []
+                        dataset_files[dataset_name].append(file_result.file_path)
+            
+            self.logger.info(f"Grouped files into {len(dataset_files)} datasets: {list(dataset_files.keys())}")
+            
+            # Validate each dataset
+            all_mapped_columns = {}
+            all_unmapped_columns = []
+            all_missing_required = []
+            
+            for dataset_name in selected_datasets:
+                dataset_result = self._validate_dataset_columns(
+                    dataset_name, 
+                    dataset_files.get(dataset_name, []),
+                    workspace_columns,
+                    organization_code
+                )
+                
+                # Aggregate results
+                all_mapped_columns.update(dataset_result.mapped_columns)
+                all_unmapped_columns.extend(dataset_result.unmapped_columns)
+                all_missing_required.extend(dataset_result.missing_required_columns)
+                result.issues.extend(dataset_result.issues)
+            
+            # Set final results
+            result.mapped_columns = all_mapped_columns
+            result.unmapped_columns = all_unmapped_columns
+            result.missing_required_columns = all_missing_required
+            
+            # Calculate coverage
+            total_columns = len(all_mapped_columns) + len(all_unmapped_columns)
+            if total_columns > 0:
+                result.coverage_percentage = (len(all_mapped_columns) / total_columns) * 100
+            
+        except Exception as e:
+            self.logger.error(f"Dataset column mapping validation failed: {str(e)}")
+            result.issues.append(ValidationIssue(
+                code=ValidationErrorCodes.VALIDATION_FAILED,
+                severity=ValidationSeverity.ERROR,
+                category=ValidationCategory.COLUMN_MAPPING,
+                message=f"Dataset column mapping validation failed: {str(e)}",
+                details={"exception": str(e)}
+            ))
+        
+        return result
+    
+    def _extract_dataset_name_from_file_path(self, file_path: str) -> Optional[str]:
+        """Extract dataset name from file path (e.g., 'AkteurIn.csv' -> 'AkteurIn')"""
+        from pathlib import Path
+        
+        # Get filename without extension
+        filename = Path(file_path).stem
+        
+        # Handle common dataset naming patterns
+        if filename.startswith('Dataset_'):
+            # Remove 'Dataset_' prefix
+            return filename[8:]  # 'Dataset_123' -> '123'
+        
+        # For S3 paths like 'metadata/AkteurIn.csv'
+        if '/' in filename:
+            filename = filename.split('/')[-1]
+        
+        return filename
+    
+    def _validate_dataset_columns(self, 
+                                dataset_name: str,
+                                dataset_files: List[str],
+                                workspace_columns: Dict[str, Any],
+                                organization_code: Optional[str] = None) -> ColumnMappingValidationResult:
+        """Validate column mappings for a specific dataset"""
+        result = ColumnMappingValidationResult(
+            mapped_columns={},
+            unmapped_columns=[],
+            missing_required_columns=[],
+            type_mismatches=[],
+            transformation_warnings=[],
+            coverage_percentage=0.0
+        )
+        
+        try:
+            # Extract columns from dataset files
+            dataset_columns = set()
+            for file_path in dataset_files:
+                try:
+                    file_columns = self._extract_file_columns(file_path, organization_code)
+                    dataset_columns.update(file_columns)
+                except Exception as e:
+                    self.logger.warning(f"Could not extract columns from {file_path}: {e}")
+            
+            # Find mapped columns for this dataset
+            required_columns = set()
+            mapped_columns = {}
+            
+            self.logger.info(f"Looking for columns for dataset {dataset_name}")
+            self.logger.info(f"Sample workspace_columns keys: {list(workspace_columns.keys())[:10]}")
+            
+            for key, value in workspace_columns.items():
+                # Check if this column belongs to the current dataset
+                if '::' in key:
+                    parts = key.split('::')
+                    if len(parts) >= 3:
+                        # Extract dataset name from parts[1], handling both "dataset.csv" and "dataset" formats
+                        workspace_dataset_name = parts[1]
+                        if workspace_dataset_name.endswith('.csv'):
+                            workspace_dataset_name = workspace_dataset_name[:-4]
+                        
+                        if workspace_dataset_name == dataset_name:
+                            column_name = parts[2]
+                            if isinstance(value, dict):
+                                arkumu_type = value.get('arkumu_type', '')
+                                if arkumu_type:
+                                    required_columns.add(column_name)
+                                    mapped_columns[column_name] = arkumu_type
+                                    self.logger.debug(f"Found mapped column: {column_name} -> {arkumu_type}")
+                            elif isinstance(value, str) and value:
+                                required_columns.add(column_name)
+                                mapped_columns[column_name] = value
+                                self.logger.debug(f"Found mapped column: {column_name} -> {value}")
+                elif key == dataset_name or key.startswith(dataset_name):
+                    # Direct dataset column mapping
+                    if isinstance(value, dict):
+                        arkumu_type = value.get('arkumu_type', '')
+                        if arkumu_type:
+                            required_columns.add(key)
+                            mapped_columns[key] = arkumu_type
+                            self.logger.debug(f"Found mapped column: {key} -> {arkumu_type}")
+                    elif isinstance(value, str) and value:
+                        required_columns.add(key)
+                        mapped_columns[key] = value
+                        self.logger.debug(f"Found mapped column: {key} -> {value}")
+                elif key in dataset_columns:
+                    # Direct column name match (for GUI format)
+                    if isinstance(value, dict):
+                        arkumu_type = value.get('arkumu_type', '')
+                        if arkumu_type:
+                            required_columns.add(key)
+                            mapped_columns[key] = arkumu_type
+                            self.logger.debug(f"Found mapped column: {key} -> {arkumu_type}")
+                    elif isinstance(value, str) and value:
+                        required_columns.add(key)
+                        mapped_columns[key] = value
+                        self.logger.debug(f"Found mapped column: {key} -> {value}")
+            
+            self.logger.info(f"Dataset {dataset_name}: found {len(required_columns)} required columns, {len(mapped_columns)} mapped columns")
+            self.logger.info(f"Required columns: {list(required_columns)[:10]}")
+            self.logger.info(f"File columns: {list(dataset_columns)[:10]}")
+            
+            # Check for missing required columns
+            missing_required = required_columns - dataset_columns
+            result.missing_required_columns = list(missing_required)
+            
+            # Check for unmapped columns
+            unmapped = dataset_columns - required_columns
+            result.unmapped_columns = list(unmapped)
+            
+            # Set mapped columns (only those that exist in files)
+            result.mapped_columns = {col: mapped_columns.get(col, '') 
+                                   for col in dataset_columns if col in mapped_columns}
+            
+            # Calculate coverage
+            if dataset_columns:
+                result.coverage_percentage = (len(result.mapped_columns) / len(dataset_columns)) * 100
+            
+            # Generate issues
+            for missing_col in missing_required:
+                result.issues.append(ValidationIssue(
+                    code=ValidationErrorCodes.REQUIRED_COLUMN_MISSING,
+                    severity=ValidationSeverity.ERROR,
+                    category=ValidationCategory.COLUMN_MAPPING,
+                    message=f"Required column missing in dataset {dataset_name}: {missing_col}",
+                    column_name=missing_col,
+                    suggested_fix="Add the missing column to the data files or update the mapping"
+                ))
+            
+            for unmapped_col in unmapped:
+                result.issues.append(ValidationIssue(
+                    code=ValidationErrorCodes.UNMAPPED_REQUIRED_COLUMN,
+                    severity=ValidationSeverity.WARNING,
+                    category=ValidationCategory.COLUMN_MAPPING,
+                    message=f"Column not mapped in dataset {dataset_name}: {unmapped_col}",
+                    column_name=unmapped_col,
+                    suggested_fix="Consider mapping this column if it contains useful data"
+                ))
+            
+            self.logger.info(f"Dataset {dataset_name}: {len(result.mapped_columns)} mapped, {len(result.unmapped_columns)} unmapped, {len(result.missing_required_columns)} missing")
+            
+        except Exception as e:
+            self.logger.error(f"Dataset column validation failed for {dataset_name}: {str(e)}")
+            result.issues.append(ValidationIssue(
+                code=ValidationErrorCodes.VALIDATION_FAILED,
+                severity=ValidationSeverity.ERROR,
+                category=ValidationCategory.COLUMN_MAPPING,
+                message=f"Dataset column validation failed for {dataset_name}: {str(e)}",
                 details={"exception": str(e)}
             ))
         
@@ -343,33 +670,110 @@ class PreExecutionValidator:
         )
         
         try:
-            # Extract column mappings from configuration
-            mappings = mapping_columns.get('mappings', [])
+            # Extract column mappings from configuration - check different possible locations
+            self.logger.info(f"Mapping config keys: {list(mapping_columns.keys())}")
+            
+            # Extract column mappings from workspace_columns structure
+            workspace_columns = mapping_columns.get('workspace_columns', {})
+            selected_datasets = mapping_columns.get('selected_datasets', [])
+            
+            self.logger.info(f"Found workspace_columns for {len(workspace_columns)} columns")
+            self.logger.info(f"Selected datasets: {selected_datasets}")
+            
+            # If selected_datasets is empty, use all datasets from workspace_columns
+            if not selected_datasets:
+                # Extract unique dataset names from workspace_columns keys
+                dataset_names = set()
+                if isinstance(workspace_columns, dict):
+                    for key in workspace_columns.keys():
+                        if '::' in key:
+                            parts = key.split('::')
+                            if len(parts) >= 2:
+                                dataset_names.add(parts[1])  # Extract dataset name from "org::dataset::column"
+                selected_datasets = list(dataset_names)
+                self.logger.info(f"No selected datasets specified, extracted {len(selected_datasets)} datasets from workspace_columns")
+            
             required_columns = set()
             mapped_columns = {}
             
-            # Process each mapping rule
-            for mapping_rule in mappings:
-                source_column = mapping_rule.get('source_column')
-                target_property = mapping_rule.get('property')
-                
-                if source_column:
-                    required_columns.add(source_column)
-                    mapped_columns[source_column] = target_property
+            # Process workspace columns structure - handles multiple formats
+            if isinstance(workspace_columns, dict):
+                for key, value in workspace_columns.items():
+                    # Handle different key formats and value types
+                    if '::' in key:
+                        # Format: "org::dataset::column" (MappingCoordinator format)
+                        parts = key.split('::')
+                        if len(parts) >= 3:
+                            dataset_name = parts[1]
+                            column_name = parts[2]
+                        else:
+                            self.logger.warning(f"Invalid column_id format: {key}")
+                            continue
+                            
+                        # Only process if dataset is selected
+                        if dataset_name not in selected_datasets:
+                            self.logger.debug(f"Skipping column {column_name} - dataset {dataset_name} not in selected datasets")
+                            continue
+                            
+                        # Extract mapping from column config
+                        if isinstance(value, dict):
+                            arkumu_type = value.get('arkumu_type', '')
+                            if arkumu_type:
+                                required_columns.add(column_name)
+                                mapped_columns[column_name] = arkumu_type
+                                self.logger.debug(f"Mapped column: {column_name} -> {arkumu_type}")
+                        elif isinstance(value, str) and value:
+                            required_columns.add(column_name)
+                            mapped_columns[column_name] = value
+                            self.logger.debug(f"Mapped column: {column_name} -> {value}")
+                            
+                    elif key.startswith('Dataset_'):
+                        # Format: "Dataset_123" -> "arkumu_type_123" (test/internal format)
+                        # This represents a dataset, not a column name
+                        # Skip unless it's also a real column name in the files
+                        continue
+                        
+                    else:
+                        # Assume key is an actual column name (GUI format)
+                        column_name = key
+                        
+                        # Extract mapping from column config
+                        if isinstance(value, dict):
+                            arkumu_type = value.get('arkumu_type', '')
+                            if arkumu_type:
+                                required_columns.add(column_name)
+                                mapped_columns[column_name] = arkumu_type
+                                self.logger.debug(f"Mapped column: {column_name} -> {arkumu_type}")
+                        elif isinstance(value, str) and value:
+                            required_columns.add(column_name)
+                            mapped_columns[column_name] = value
+                            self.logger.debug(f"Mapped column: {column_name} -> {value}")
+            
+            # Also check legacy mappings format for backward compatibility
+            if 'mappings' in mapping_columns:
+                self.logger.info("Found legacy 'mappings' format, processing as fallback")
+                for mapping_rule in mapping_columns['mappings']:
+                    source_column = mapping_rule.get('source_column')
+                    target_property = mapping_rule.get('property')
                     
-                    # Check for object_properties (sub-mappings)
-                    if 'object_properties' in mapping_rule:
-                        for sub_rule in mapping_rule['object_properties']:
-                            sub_source = sub_rule.get('source_column')
-                            sub_target = sub_rule.get('property')
-                            if sub_source:
-                                required_columns.add(sub_source)
-                                mapped_columns[sub_source] = sub_target
+                    if source_column:
+                        required_columns.add(source_column)
+                        mapped_columns[source_column] = target_property
+                        
+                        # Check for object_properties (sub-mappings)
+                        if 'object_properties' in mapping_rule:
+                            for sub_rule in mapping_rule['object_properties']:
+                                sub_source = sub_rule.get('source_column')
+                                sub_target = sub_rule.get('property')
+                                if sub_source:
+                                    required_columns.add(sub_source)
+                                    mapped_columns[sub_source] = sub_target
             
             # For file-based validation, we need to check against actual file columns
             if isinstance(file_columns, list) and len(file_columns) > 0:
                 # If file_columns is a list of file paths, load columns from files
-                if isinstance(file_columns[0], str) and (os.path.exists(file_columns[0]) or self._is_s3_path(file_columns[0])):
+                is_file_path = isinstance(file_columns[0], str) and (os.path.exists(file_columns[0]) or self._is_s3_path(file_columns[0]))
+                if is_file_path:
                     actual_columns = set()
                     for file_path in file_columns:
                         file_cols = self._extract_file_columns(file_path, organization_code)
@@ -451,26 +855,74 @@ class PreExecutionValidator:
         
         try:
             # Extract relationship information from mapping
-            mappings = mapping_config.get('mappings', [])
             relationships = []
             dependencies = {}
             
-            for mapping_rule in mappings:
-                source_column = mapping_rule.get('source_column')
-                object_column = mapping_rule.get('object_column')
+            # Check workspace_columns structure for FK relationships
+            workspace_columns = mapping_config.get('workspace_columns', {})
+            selected_datasets = mapping_config.get('selected_datasets', [])
+            
+            # If selected_datasets is empty, use all datasets from workspace_columns
+            if not selected_datasets:
+                selected_datasets = list(workspace_columns.keys())
+            
+            for dataset_name, dataset_columns in workspace_columns.items():
+                if dataset_name not in selected_datasets:
+                    continue
                 
-                if object_column:
-                    # This is a relationship mapping
+                # Handle different types of dataset_columns values
+                if isinstance(dataset_columns, dict):
+                    for column_name, column_config in dataset_columns.items():
+                        # Check if this column has external ontology or FK relationships
+                        if isinstance(column_config, dict) and column_config.get('is_external_ontology', False):
+                            external_ontology = column_config.get('external_ontology', {})
+                            if external_ontology:
+                                relationships.append({
+                                    'source_column': column_name,
+                                    'target_table': external_ontology.get('ontology_type', 'external'),
+                                    'rule': column_config,
+                                    'type': 'external_ontology'
+                                })
+                # If dataset_columns is a string, skip relationship extraction
+            
+            # Also check fk_relationships structure
+            fk_relationships = mapping_config.get('fk_relationships', {})
+            for fk_id, fk_config in fk_relationships.items():
+                source_column = fk_config.get('source_column')
+                target_dataset = fk_config.get('target_dataset')
+                
+                if source_column and target_dataset:
                     relationships.append({
                         'source_column': source_column,
-                        'target_table': object_column,
-                        'rule': mapping_rule
+                        'target_table': target_dataset,
+                        'rule': fk_config,
+                        'type': 'foreign_key'
                     })
                     
                     # Track dependencies
                     if source_column not in dependencies:
                         dependencies[source_column] = []
-                    dependencies[source_column].append(object_column)
+                    dependencies[source_column].append(target_dataset)
+            
+            # Fallback to legacy mappings format
+            if 'mappings' in mapping_config:
+                for mapping_rule in mapping_config['mappings']:
+                    source_column = mapping_rule.get('source_column')
+                    object_column = mapping_rule.get('object_column')
+                    
+                    if object_column:
+                        # This is a relationship mapping
+                        relationships.append({
+                            'source_column': source_column,
+                            'target_table': object_column,
+                            'rule': mapping_rule,
+                            'type': 'legacy_mapping'
+                        })
+                        
+                        # Track dependencies
+                        if source_column not in dependencies:
+                            dependencies[source_column] = []
+                        dependencies[source_column].append(object_column)
             
             # Validate each relationship
             for relationship in relationships:
@@ -643,6 +1095,101 @@ class PreExecutionValidator:
                 details={"mappings_type": type(mappings).__name__}
             ))
     
+    def _validate_csv_file_structure_with_polars(self, 
+                                                file_path: str, 
+                                                dataset_config: Dict[str, Any], 
+                                                result: FileValidationResult):
+        """Validate CSV file structure using exact same method as S3DirectDataAnalyzer"""
+        import polars as pl
+        import tempfile
+        
+        try:
+            if self._is_s3_path(file_path):
+                # S3 file - use exact same approach as S3DirectDataAnalyzer._read_s3_source_eager_sample
+                organization_code = dataset_config.get('organization_code')
+                if not organization_code:
+                    result.add_issue(ValidationIssue(
+                        code=ValidationErrorCodes.MISSING_CONFIGURATION,
+                        severity=ValidationSeverity.ERROR,
+                        category=ValidationCategory.CONFIGURATION,
+                        message="Organization code required for S3 file validation",
+                        file_path=file_path
+                    ))
+                    return
+                
+                bucket_name = self.bucket_service.get_organization_bucket(organization_code)
+                
+                # Use exact same temp file approach as S3DirectDataAnalyzer
+                with tempfile.NamedTemporaryFile(suffix='.csv', delete=False) as temp_file:
+                    temp_file_path = temp_file.name
+                
+                try:
+                    # Download file using S3 client (same as S3DirectDataAnalyzer)
+                    self.bucket_service.base_s3_service.s3_client.download_file(
+                        bucket_name, 
+                        file_path, 
+                        temp_file_path
+                    )
+                    
+                    # Use exact same Polars call as S3DirectDataAnalyzer._read_s3_source_eager_sample
+                    df = pl.read_csv(
+                        temp_file_path, 
+                        separator=';',  # Use semicolon as default like import_metadata.py
+                        n_rows=1000,  # Sample for validation
+                        ignore_errors=True  # Handle malformed rows gracefully
+                    )
+                    
+                    # Set file info
+                    result.file_size = os.path.getsize(temp_file_path)
+                    result.encoding = 'utf-8'  # Polars handles encoding automatically
+                    result.delimiter = ';'
+                    result.column_count = len(df.columns)
+                    result.row_count = len(df)
+                    result.is_valid = True
+                    
+                finally:
+                    # Clean up temp file (same as S3DirectDataAnalyzer)
+                    try:
+                        os.unlink(temp_file_path)
+                    except:
+                        pass
+            else:
+                # Local file - use exact same Polars call as S3DirectDataAnalyzer
+                try:
+                    df = pl.read_csv(
+                        file_path, 
+                        separator=';',  # Use semicolon as default like import_metadata.py
+                        n_rows=1000,  # Sample for validation
+                        ignore_errors=True  # Handle malformed rows gracefully
+                    )
+                    
+                    # Set file info
+                    result.file_size = os.path.getsize(file_path)
+                    result.encoding = 'utf-8'  # Polars handles encoding automatically
+                    result.delimiter = ';'
+                    result.column_count = len(df.columns)
+                    result.row_count = len(df)
+                    result.is_valid = True
+                    
+                except Exception as e:
+                    result.add_issue(ValidationIssue(
+                        code=ValidationErrorCodes.ENCODING_ERROR,
+                        severity=ValidationSeverity.ERROR,
+                        category=ValidationCategory.FILE_STRUCTURE,
+                        message=f"Cannot read file with Polars: {str(e)}",
+                        file_path=file_path
+                    ))
+                    return
+                    
+        except Exception as e:
+            result.add_issue(ValidationIssue(
+                code=ValidationErrorCodes.ENCODING_ERROR,
+                severity=ValidationSeverity.ERROR,
+                category=ValidationCategory.FILE_STRUCTURE,
+                message=f"File validation failed: {str(e)}",
+                file_path=file_path
+            ))
+    
     def _validate_csv_file_structure(self, 
                                    file_path: str, 
                                    dataset_config: Dict[str, Any], 
@@ -807,34 +1354,56 @@ class PreExecutionValidator:
             result.is_valid = False
     
     def _extract_file_columns(self, file_path: str, organization_code: Optional[str] = None) -> List[str]:
-        """Extract column names from a file (local or S3)"""
+        """Extract column names from a file (local or S3) using Polars (same as S3DirectDataAnalyzer)"""
+        import polars as pl
+        import tempfile
+        
         try:
             file_extension = Path(file_path).suffix.lower()
             is_s3_path = self._is_s3_path(file_path)
             
             if file_extension in ['.csv', '.tsv', '.txt']:
                 if is_s3_path and organization_code:
-                    # Get from S3
+                    # Use same approach as S3DirectDataAnalyzer
                     bucket_name = self.bucket_service.get_organization_bucket(organization_code)
-                    file_content_response = self.bucket_service.get_file_content(bucket_name, file_path)
                     
-                    if file_content_response.get('success'):
-                        content_bytes = file_content_response.get('content', b'')
-                        encoding = self._detect_encoding_from_bytes(content_bytes[:10000])
-                        content_str = content_bytes.decode(encoding)
-                        delimiter = self._detect_delimiter_from_string(content_str[:1024])
+                    with tempfile.NamedTemporaryFile(suffix='.csv', delete=False) as temp_file:
+                        temp_file_path = temp_file.name
+                    
+                    try:
+                        # Download file using S3 client (same as S3DirectDataAnalyzer)
+                        self.bucket_service.base_s3_service.s3_client.download_file(
+                            bucket_name, 
+                            file_path, 
+                            temp_file_path
+                        )
                         
-                        csv_file = io.StringIO(content_str)
-                        reader = csv.reader(csv_file, delimiter=delimiter)
-                        return next(reader)
+                        # Use exact same Polars call as S3DirectDataAnalyzer
+                        df = pl.read_csv(
+                            temp_file_path, 
+                            separator=';',  # Use semicolon as default like import_metadata.py
+                            n_rows=1,  # Only need first row for column names
+                            ignore_errors=True  # Handle malformed rows gracefully
+                        )
+                        
+                        return list(df.columns)
+                        
+                    finally:
+                        # Clean up temp file
+                        try:
+                            os.unlink(temp_file_path)
+                        except:
+                            pass
                 else:
-                    # Local file
-                    encoding = self._detect_encoding(file_path)
-                    delimiter = self._detect_delimiter(file_path, encoding)
+                    # Local file - use same Polars approach
+                    df = pl.read_csv(
+                        file_path, 
+                        separator=';',  # Use semicolon as default like import_metadata.py
+                        n_rows=1,  # Only need first row for column names
+                        ignore_errors=True  # Handle malformed rows gracefully
+                    )
                     
-                    with open(file_path, 'r', encoding=encoding) as f:
-                        reader = csv.reader(f, delimiter=delimiter)
-                        return next(reader)
+                    return list(df.columns)
             
             elif file_extension == '.json':
                 if is_s3_path and organization_code:
@@ -895,7 +1464,7 @@ class PreExecutionValidator:
                 dialect = sniffer.sniff(sample, delimiters=',;\t|')
                 return dialect.delimiter
         except:
-            return ','  # Default fallback
+            return ';'  # Default fallback - consistent with execution system
     
     def _is_valid_reference_table(self, table_name: str) -> bool:
         """Check if a reference table is valid (placeholder implementation)"""
@@ -981,6 +1550,17 @@ class PreExecutionValidator:
         # S3 paths don't start with / and don't have drive letters (C:, etc.)
         # They typically look like: "metadata/file.csv" or "folder/subfolder/file.csv"
         # But they should not start with . (like ./file.csv or ../file.csv)
+        # Also check that it looks like a file path (has a file extension or contains /)
+        if not file_path or len(file_path) < 3:
+            return False
+        
+        # Must look like a file path (has extension or contains path separators)
+        has_extension = '.' in file_path and file_path.rfind('.') > 0
+        has_path_separator = '/' in file_path
+        
+        if not (has_extension or has_path_separator):
+            return False
+            
         return (not os.path.isabs(file_path) and 
                 ':' not in file_path and 
                 not file_path.startswith('.') and
@@ -1235,4 +1815,4 @@ class PreExecutionValidator:
             dialect = sniffer.sniff(content_str, delimiters=',;\t|')
             return dialect.delimiter
         except:
-            return ','  # Default fallback
+            return ';'  # Default fallback - consistent with execution system

@@ -122,6 +122,10 @@ class FileValidationResult:
     delimiter: str = ","
     issues: List[ValidationIssue] = field(default_factory=list)
     
+    def add_issue(self, issue: ValidationIssue):
+        """Add a validation issue to this result"""
+        self.issues.append(issue)
+    
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization"""
         return {
@@ -226,21 +230,12 @@ class PreExecutionValidationResult:
         self.infos = [issue for issue in self.all_issues if issue.severity == ValidationSeverity.INFO]
     
     def _calculate_overall_confidence(self):
-        """Calculate overall confidence score"""
-        if not self.all_issues:
+        """Calculate overall confidence score - simplified deterministic approach"""
+        # Deterministic confidence: 1.0 if no blocking issues, 0.0 if blocking issues exist
+        if self.has_blocking_issues():
+            self.overall_confidence = 0.0
+        else:
             self.overall_confidence = 1.0
-            return
-        
-        # Weight issues by severity
-        severity_weights = {
-            ValidationSeverity.CRITICAL: -0.5,
-            ValidationSeverity.ERROR: -0.3,
-            ValidationSeverity.WARNING: -0.1,
-            ValidationSeverity.INFO: 0.0
-        }
-        
-        total_impact = sum(severity_weights.get(issue.severity, 0) for issue in self.all_issues)
-        self.overall_confidence = max(0.0, min(1.0, 1.0 + total_impact))
     
     def get_issues_by_category(self, category: ValidationCategory) -> List[ValidationIssue]:
         """Get issues filtered by category"""
@@ -288,6 +283,9 @@ class PreExecutionValidationResult:
             "relationship_validation_result": self.relationship_validation_result.to_dict() if self.relationship_validation_result else None,
             "resource_estimate": self.resource_estimate.to_dict() if self.resource_estimate else None,
             "all_issues": [issue.to_dict() for issue in self.all_issues],
+            "errors": [issue.to_dict() for issue in self.errors],
+            "warnings": [issue.to_dict() for issue in self.warnings],
+            "infos": [issue.to_dict() for issue in self.infos],
             "execution_recommendations": self.execution_recommendations,
             "required_actions": self.required_actions,
             "validation_timestamp": self.validation_timestamp.isoformat(),

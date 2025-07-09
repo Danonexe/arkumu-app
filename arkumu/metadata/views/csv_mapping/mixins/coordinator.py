@@ -1595,3 +1595,109 @@ class CSVMappingCoordinatorMixin(BaseCoordinatorMixin, CSVDataMixin, MappingWork
         
         # Call parent implementation
         super().clear_organization_specific_state(request, organization_id)
+    
+    def validate_mapping_structure(self, request, organization_id, file_columns=None):
+        """
+        Validate the current mapping structure against file columns.
+        
+        This method can be reused across different components that need to validate
+        mappings (pre-execution validation, GUI validation, etc.).
+        
+        Args:
+            request: Django request object
+            organization_id (int): Organization numeric ID
+            file_columns (list, optional): List of file column names to validate against
+            
+        Returns:
+            dict: Validation result containing:
+                - mapped_columns: Dict of mapped column names to their arkumu types
+                - unmapped_columns: List of columns that exist in files but aren't mapped
+                - missing_required_columns: List of required columns missing from files
+                - coverage_percentage: Percentage of file columns that are mapped
+                - issues: List of validation issues found
+        """
+        # Get workspace columns dictionary from session directly
+        session_key = f'csv_mapping_workspace_columns_{organization_id}'
+        workspace_columns = request.session.get(session_key, {})
+        
+        # Initialize result structure
+        mapped_columns = {}
+        unmapped_columns = []
+        missing_required_columns = []
+        issues = []
+        
+        # If no file columns provided, we can only validate the mapping structure itself
+        if file_columns is None:
+            file_columns = []
+        
+        # Convert file_columns to set for efficient lookup
+        file_columns_set = set(file_columns)
+        
+        # Process workspace columns to extract mappings
+        required_columns = set()
+        
+        if isinstance(workspace_columns, dict):
+            for key, value in workspace_columns.items():
+                # Handle different key formats
+                if '::' in key:
+                    # Format: "org::dataset::column"
+                    parts = key.split('::')
+                    if len(parts) >= 3:
+                        column_name = parts[2]
+                    else:
+                        continue
+                else:
+                    # Direct column name
+                    column_name = key
+                
+                # Extract mapping from column config
+                if isinstance(value, dict):
+                    arkumu_type = value.get('arkumu_type', '')
+                    if arkumu_type:
+                        required_columns.add(column_name)
+                        if column_name in file_columns_set:
+                            mapped_columns[column_name] = arkumu_type
+                elif isinstance(value, str) and value:
+                    required_columns.add(column_name)
+                    if column_name in file_columns_set:
+                        mapped_columns[column_name] = value
+        
+        # Find missing required columns
+        missing_required_columns = list(required_columns - file_columns_set)
+        
+        # Find unmapped columns
+        unmapped_columns = list(file_columns_set - required_columns)
+        
+        # Calculate coverage percentage
+        coverage_percentage = 0.0
+        if file_columns:
+            coverage_percentage = (len(mapped_columns) / len(file_columns)) * 100
+        
+        # Generate validation issues
+        for missing_col in missing_required_columns:
+            issues.append({
+                'code': 'REQUIRED_COLUMN_MISSING',
+                'severity': 'ERROR',
+                'category': 'COLUMN_MAPPING',
+                'message': f'Required column missing: {missing_col}',
+                'column_name': missing_col,
+                'suggested_fix': 'Add the missing column to the data files or update the mapping'
+            })
+        
+        for unmapped_col in unmapped_columns:
+            issues.append({
+                'code': 'UNMAPPED_COLUMN',
+                'severity': 'WARNING',
+                'category': 'COLUMN_MAPPING',
+                'message': f'Column not mapped: {unmapped_col}',
+                'column_name': unmapped_col,
+                'suggested_fix': 'Consider mapping this column if it contains useful data'
+            })
+        
+        return {
+            'mapped_columns': mapped_columns,
+            'unmapped_columns': unmapped_columns,
+            'missing_required_columns': missing_required_columns,
+            'coverage_percentage': coverage_percentage,
+            'issues': issues
+        }
