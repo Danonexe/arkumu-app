@@ -1,10 +1,15 @@
 """
-Validation Service
+DEPRECATED Validation Service
 
-Validates mapping configurations for execution readiness.
+⚠️  WARNING: This module is DEPRECATED!
+Use arkumu.importer.services.mapping_validation.validator.MappingValidator instead.
+
+This legacy validator is too strict and expects deprecated 'selected_datasets' format.
+The new MappingValidator handles modern mapping structures correctly.
 """
 
 import logging
+import warnings
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
 
@@ -35,11 +40,21 @@ class ValidationResult:
 
 class ValidationService:
     """
-    Validates mapping configurations for execution readiness.
+    DEPRECATED: Validates mapping configurations for execution readiness.
+    
+    ⚠️  Use arkumu.importer.services.mapping_validation.validator.MappingValidator instead.
     
     Performs comprehensive validation to ensure mappings can be executed
     successfully by the execution engine.
     """
+    
+    def __init__(self):
+        warnings.warn(
+            "ValidationService is deprecated. Use MappingValidator from "
+            "arkumu.importer.services.mapping_validation.validator instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
     
     def validate_mapping_config(self, mapping_config: Dict[str, Any]) -> ValidationResult:
         """

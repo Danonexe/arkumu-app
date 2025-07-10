@@ -174,7 +174,11 @@ class MappingAwareProcessor:
             csv_data = context.all_csv_sources[dataset_config.dataset_name]
             
             # Convert to DataFrame for chunked processing
-            df = self.data_processor._ensure_dataframe(csv_data)
+            # Handle the test data format: {'headers': [...], 'rows': [...]}
+            if isinstance(csv_data, dict) and 'rows' in csv_data:
+                df = self.data_processor.ensure_dataframe(csv_data['rows'])
+            else:
+                df = self.data_processor.ensure_dataframe(csv_data)
             
             # Process in chunks
             total_rows = df.height

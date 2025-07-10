@@ -15,8 +15,7 @@ from typing import Dict, List, Any, Optional
 
 from arkumu.importer.services.execution.execution_engine import MappingExecutionEngine
 from arkumu.metadata.services.data_analysis.s3_direct_data_analyzer import S3DirectDataAnalyzer
-from arkumu.importer.services.validation.validation import MappingValidator
-from arkumu.importer.services.mapping_consumer.validation import ValidationService
+from arkumu.importer.services.mapping_validation.validator import MappingValidator
 
 logger = logging.getLogger(__name__)
 

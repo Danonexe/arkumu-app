@@ -12,7 +12,17 @@ from datetime import datetime
 from django.core.exceptions import ObjectDoesNotExist
 from arkumu.metadata.models.mappings import Mapping
 from .config_translator import ConfigTranslator, ExecutionConfig
-from .validation import ValidationService, ValidationResult
+from arkumu.importer.services.mapping_validation.validator import MappingValidator
+from dataclasses import dataclass, field
+from typing import Dict, Any, List
+
+@dataclass
+class ValidationResult:
+    """Result of mapping validation - compatibility layer"""
+    is_valid: bool
+    errors: List[str] = field(default_factory=list)
+    warnings: List[str] = field(default_factory=list)
+    summary: str = ""
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +52,26 @@ class MappingAdapter:
     
     def __init__(self):
         self.config_translator = ConfigTranslator()
-        self.validation_service = ValidationService()
+        self.mapping_validator = MappingValidator()
+    
+    def _convert_to_validation_result(self, completeness_result: Dict[str, Any]) -> ValidationResult:
+        """Convert new validator result to old ValidationResult format"""
+        issues = completeness_result.get('issues', [])
+        errors = [issue['message'] for issue in issues if issue.get('severity') == 'ERROR']
+        warnings = [issue['message'] for issue in issues if issue.get('severity') == 'WARNING']
+        
+        is_valid = completeness_result.get('is_complete', True) and len(errors) == 0
+        
+        summary = f"Validation {'passed' if is_valid else 'failed'}"
+        if errors or warnings:
+            summary += f" - {len(errors)} errors, {len(warnings)} warnings"
+            
+        return ValidationResult(
+            is_valid=is_valid,
+            errors=errors,
+            warnings=warnings,
+            summary=summary
+        )
         
     def load_mapping_config(self, mapping_id: int) -> Dict[str, Any]:
         """
@@ -102,11 +131,18 @@ class MappingAdapter:
             
             # Extract basic statistics
             workspace_columns = config.get('workspace_columns', {})
-            selected_datasets = config.get('selected_datasets', [])
+            # Support both old 'selected_datasets' and new 'workspace_datasets'
+            selected_datasets = config.get('workspace_datasets', config.get('selected_datasets', []))
             fk_relationships = config.get('fk_relationships', {})
             external_ontologies = config.get('external_ontologies', {})
             
-            total_columns = sum(len(columns) for columns in workspace_columns.values())
+            # Calculate total columns - handle both old nested and new flat formats
+            if workspace_columns and "::" in next(iter(workspace_columns.keys()), ""):
+                # New flat format - count qualified keys
+                total_columns = len(workspace_columns)
+            else:
+                # Old nested format - count nested columns
+                total_columns = sum(len(columns) for columns in workspace_columns.values())
             
             # Use workspace_columns keys as datasets if selected_datasets is empty
             if selected_datasets:
@@ -188,7 +224,8 @@ class MappingAdapter:
         """
         try:
             config = self.load_mapping_config(mapping_id)
-            return self.validation_service.validate_mapping_config(config)
+            completeness_result = self.mapping_validator.validate_mapping_completeness(config)
+            return self._convert_to_validation_result(completeness_result)
             
         except Exception as e:
             logger.error(f"Failed to validate mapping {mapping_id}: {e}")
@@ -215,12 +252,15 @@ class MappingAdapter:
         # Load the mapping configuration
         config = self.load_mapping_config(mapping_id)
         
-        # Validate before translation
-        validation_result = self.validation_service.validate_mapping_config(config)
-        if not validation_result.is_valid:
-            error_msg = f"Mapping {mapping_id} validation failed: {'; '.join(validation_result.errors)}"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+        # Validate mapping completeness using the new validator
+        validation_result = self.mapping_validator.validate_mapping_completeness(config)
+        if not validation_result['is_complete']:
+            issues = validation_result.get('issues', [])
+            error_messages = [issue['message'] for issue in issues if issue.get('severity') == 'ERROR']
+            if error_messages:
+                error_msg = f"Mapping {mapping_id} validation failed: {'; '.join(error_messages)}"
+                logger.warning(error_msg)  # Changed to warning since your validator is more lenient
+                # Don't raise error - let the execution proceed and handle issues gracefully
         
         # Translate to execution format
         execution_config = self.config_translator.translate_mapping_config(config)

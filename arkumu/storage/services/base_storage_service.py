@@ -297,9 +297,9 @@ class BaseStorageService:
 
     def ensure_cors_enabled(self, bucket_name: str = None) -> Dict[str, Any]:
         if bucket_name is None: bucket_name = self.ingest_bucket
-        if self.is_minio:
-            logger.info("⚠️ CORS: Skipping for MinIO.")
-            return {"success": True, "message": "CORS skipped for MinIO", "updated": False}
+        if self.is_minio or self.endpoint_url:
+            logger.info("⚠️ CORS: Skipping for MinIO/non-AWS S3.")
+            return {"success": True, "message": "CORS skipped for MinIO/non-AWS S3", "updated": False}
         logger.info(f"CORS: Checking for bucket: {bucket_name}")
         required_rule = {
             'AllowedHeaders': ['*'], 'AllowedMethods': ['POST'],

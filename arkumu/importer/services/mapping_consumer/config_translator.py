@@ -176,7 +176,8 @@ class ConfigTranslator:
         
         # Translate workspace columns
         workspace_columns = mapping_config.get('workspace_columns', {})
-        selected_datasets = mapping_config.get('selected_datasets', [])
+        # Support both old 'selected_datasets' and new 'workspace_datasets'
+        selected_datasets = mapping_config.get('workspace_datasets', mapping_config.get('selected_datasets', []))
         
         self._translate_workspace_columns(workspace_columns, selected_datasets, execution_config)
         
@@ -205,12 +206,41 @@ class ConfigTranslator:
         
         return execution_config
     
+    def _normalize_workspace_columns(self, workspace_columns: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+        """
+        Normalize workspace columns to old nested format for compatibility.
+        Handles both old nested format and new flat qualified-key format.
+        
+        Returns: {dataset_name: {column_name: config}}
+        """
+        # Check if this is the new flat format (qualified keys like "org::dataset::column")
+        sample_key = next(iter(workspace_columns.keys()), "")
+        if "::" in sample_key:
+            # New flat format - convert to nested
+            normalized = {}
+            for qualified_key, config in workspace_columns.items():
+                parts = qualified_key.split("::")
+                if len(parts) >= 3:
+                    org, dataset, column = parts[0], parts[1], "::".join(parts[2:])
+                    if dataset not in normalized:
+                        normalized[dataset] = {}
+                    normalized[dataset][column] = config
+                else:
+                    logger.warning(f"Invalid qualified key format: {qualified_key}")
+            return normalized
+        else:
+            # Old nested format - return as-is
+            return workspace_columns
+
     def _translate_workspace_columns(self, workspace_columns: Dict[str, Any], 
                                    selected_datasets: List[str],
                                    execution_config: ExecutionConfig):
         """Translate workspace columns to column configurations"""
         
-        for dataset_name, columns in workspace_columns.items():
+        # Normalize to nested format for compatibility
+        normalized_columns = self._normalize_workspace_columns(workspace_columns)
+        
+        for dataset_name, columns in normalized_columns.items():
             if dataset_name not in selected_datasets:
                 logger.debug(f"Skipping dataset {dataset_name} - not in selected datasets")
                 continue
