@@ -192,6 +192,28 @@ def file_stem(file_path):
     return Path(file_path).stem
 
 
+@register.filter
+def replace(value, args):
+    """
+    Replace substring in value.
+    
+    Args:
+        value: String to modify
+        args: String in format "old,new" where old is replaced with new
+        
+    Returns:
+        String with replacements made
+    """
+    if not value or not args:
+        return value
+    
+    try:
+        old, new = args.split(',', 1)
+        return str(value).replace(old, new)
+    except ValueError:
+        return value
+
+
 @register.simple_tag
 def coverage_percentage(matched, total):
     """

@@ -644,24 +644,48 @@ class S3DirectDataAnalyzer:
             Complete S3DatasetAnalysis
         """
         try:
-            # Get basic statistics efficiently
-            lazy_df = self._read_s3_source_lazy(source_info, dataset_name)
-            total_rows = lazy_df.select(pl.count()).collect().item()
-            schema = lazy_df.schema
-            column_count = len(schema)
-            column_types = {col: str(dtype) for col, dtype in schema.items()}
-            
-            # Get preview data
-            preview = self.get_s3_table_preview(source_info, dataset_name)
-            
-            # Get sample for detailed analysis
+            # Get basic statistics using eager reading (like CSV mapping editor)
             sample_df = self._read_s3_source_eager_sample(
                 source_info, dataset_name, n_rows=self.sample_size_for_analysis
             )
+            
+            # For large files, get accurate total count safely
+            if len(sample_df) >= self.sample_size_for_analysis:
+                total_rows = self._get_total_row_count_safe(source_info, dataset_name)
+            else:
+                total_rows = len(sample_df)
+            
+            schema = sample_df.schema
+            column_count = len(schema)
+            column_types = {col: str(dtype) for col, dtype in schema.items()}
+            
+            # Get preview data using the sample we already have
+            column_headers = list(sample_df.columns)
+            preview_rows = min(self.default_preview_rows, len(sample_df))
+            preview_df = sample_df.head(preview_rows)
+            data_rows = [list(row) for row in preview_df.fill_null("").rows()]
+            
+            # Create preview object
+            preview = S3TablePreview(
+                column_headers=column_headers,
+                data_rows=data_rows,
+                total_rows=total_rows,
+                showing_rows=len(data_rows),
+                offset=0,
+                has_more=preview_rows < total_rows,
+                column_types=column_types,
+                sample_size=len(sample_df),
+                multi_value_columns={}  # Will be filled below
+            )
+            
+            # Use the sample we already have for detailed analysis
             sample_data = sample_df.to_dicts()
             
             # Multi-value analysis
-            multi_value_analysis = self.bulk_updater.analyze_dataset_multi_values(sample_data)
+            multi_value_analysis = self._analyze_multi_values_simple(sample_df)
+            
+            # Update preview with multi-value analysis
+            preview.multi_value_columns = multi_value_analysis
             
             # Data quality metrics
             quality_metrics = self._calculate_data_quality_metrics(sample_df)

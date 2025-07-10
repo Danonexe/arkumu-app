@@ -198,12 +198,6 @@ class MappingFileCorrelationService:
         
         for file_path in file_paths:
             try:
-                # REUSE: File structure validation
-                file_issues = self.mapping_validator.validate_file_structure(file_path, self.organization_code)
-                if file_issues:
-                    self.logger.warning(f"File validation issues for {file_path}: {[i['message'] for i in file_issues]}")
-                    continue  # Skip invalid files
-                
                 # Create S3DataSourceInfo for the file
                 from arkumu.metadata.services.data_analysis.s3_direct_data_analyzer import S3DataSourceInfo
                 from arkumu.storage.services.bucket_service import BucketService
