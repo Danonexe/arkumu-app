@@ -1,6 +1,40 @@
 # Arkumu Import Execution System
 
-This directory contains the modular execution engine for the Arkumu data import system. It provides a sophisticated, phased approach to importing CSV data with complex mappings including foreign keys, multi-value columns, and external ontologies.
+This directory contains the modular execution engine for the Arkumu data import system. It transforms CSV data into RDF triples through a structured pipeline, providing sophisticated mapping capabilities including foreign keys, multi-value columns, and external ontologies.
+
+## System Overview
+
+The execution service transforms CSV data into RDF triples through a structured pipeline that converts each CSV cell into semantic statements. For example, a cell containing "John Doe" in the "author" column at row 5 generates triples stating:
+- The dataset "My Publications" `hasPart` a column "author"
+- There is a cell resource representing "author" at row 5
+- This cell resource `hasValue` "John Doe"
+
+### Core Data Flow
+```
+ChunkedProcessor → MappingAwareProcessor → MappingExecutionEngine → (DataProcessor & ResourceManager)
+```
+
+### How Triples are Generated
+
+**1. Structural Triples** - Define dataset architecture:
+```python
+# Dataset → hasPart → Column relationships
+Triple(subject=dataset_resource, predicate=has_part_prop, object=column_resource)
+```
+
+**2. Value Triples** - Link cells to their data:
+```python  
+# Cell → rdf:value → Literal relationships
+Triple(subject=cell_resource, predicate=rdf_value_prop, object=value_resource)
+```
+
+### How Resources are Created
+
+Each entity becomes a `Resource` with unique URIs:
+- **Dataset Resource**: `{base_uri}/dataset/{dataset_name}`
+- **Column Resources**: `{base_uri}/dataset/{dataset_name}/column/{column_name}`
+- **Cell Resources**: `{base_uri}/dataset/{dataset_name}/column/{column_name}/row/{row_id}`
+- **Value Resources**: `{base_uri}/value/{hash(literal_value)}`
 
 ## Architecture Overview
 
@@ -41,24 +75,24 @@ The low-level execution engine responsible for:
 
 ### 2. **MappingAwareProcessor** (`mapping_aware_processor.py`)
 Enhanced processor that:
-- Consumes mapping configurations from the GUI
+- Interprets complex user-defined mapping configurations (`ExecutionConfig`)
 - Handles complex column types (FK, multi-value, external ontologies)
+- Manages Foreign Key relationship logic across chunks/datasets
 - Supports multiple processing strategies (entity-centric, streaming, multi-phase)
-- Integrates with SmartBulkUpdaterPolars for optimized execution
 
 ### 3. **DataProcessor** (`data_processor.py`)
-Handles data preparation:
-- Unicode normalization
-- Multi-value column detection
-- Data validation
+Handles data preparation using Polars:
+- High-performance data cleaning and preparation
+- Vectorized Unicode normalization
+- Data validation and empty row removal
 - Row identifier assignment
 
 ### 4. **ResourceManager** (`resource_manager.py`)
 Manages database resource creation:
-- URI generation for datasets, rows, cells
-- Bulk creation operations
-- Anchor column handling
-- Foreign key relationship management
+- Abstracts all direct database interactions for `Resource` and `Triple` objects
+- Generates consistent, unique URIs for all entities
+- Uses Django's ORM with `bulk_create` for efficient database operations
+- Caches standard properties (like `rdf:value`) to avoid repeated lookups
 
 ### 5. **UpdateAnalyzer** (`update_analyzer.py`)
 Provides change detection and analysis:
@@ -68,9 +102,9 @@ Provides change detection and analysis:
 
 ### 6. **ChunkedProcessor** (`chunked_processor.py`)
 Handles large dataset processing:
+- Memory-efficient CSV reading in chunks using Polars
 - Streaming data in configurable chunks
-- Memory-efficient processing
-- Progress tracking
+- Progress tracking and garbage collection between chunks
 
 ### 7. **ExecutionStatistics** (`statistics.py`)
 Tracks detailed metrics:

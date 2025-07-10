@@ -295,17 +295,33 @@ class ConfigTranslator:
                                      execution_config: ExecutionConfig):
         """Translate external ontology configurations"""
         
-        for ontology_id, ontology_config in external_ontologies.items():
-            ext_ontology = ExternalOntology(
-                column_name=ontology_config.get('column_name', ''),
-                dataset_name=ontology_config.get('dataset_name', ''),
-                ontology_type=ontology_config.get('ontology_type', ''),
-                uri_template=ontology_config.get('uri_template', ''),
-                identifier_column=ontology_config.get('identifier_column'),
-                validation_enabled=ontology_config.get('validation_enabled', True)
-            )
-            
-            execution_config.external_ontologies.append(ext_ontology)
+        for ontology_id, ontology_configs in external_ontologies.items():
+            # Handle case where ontology_configs is a list (multiple configs for same column)
+            if isinstance(ontology_configs, list):
+                for ontology_config in ontology_configs:
+                    self._create_external_ontology(ontology_id, ontology_config, execution_config)
+            else:
+                # Handle case where it's a single config object
+                self._create_external_ontology(ontology_id, ontology_configs, execution_config)
+    
+    def _create_external_ontology(self, ontology_id: str, ontology_config: Dict[str, Any], 
+                                execution_config: ExecutionConfig):
+        """Create a single external ontology configuration"""
+        # Parse dataset and column from ontology_id format: "org::dataset::column"
+        parts = ontology_id.split('::')
+        dataset_name = parts[1] if len(parts) >= 2 else ''
+        column_name = parts[2] if len(parts) >= 3 else ''
+        
+        ext_ontology = ExternalOntology(
+            column_name=column_name,
+            dataset_name=dataset_name,
+            ontology_type=ontology_config.get('ontology_type', ''),
+            uri_template=ontology_config.get('uri_template', ''),
+            identifier_column=ontology_config.get('identifier_column'),
+            validation_enabled=ontology_config.get('validation_enabled', True)
+        )
+        
+        execution_config.external_ontologies.append(ext_ontology)
     
     def _translate_import_strategy(self, import_strategy: Dict[str, Any],
                                  execution_config: ExecutionConfig):
