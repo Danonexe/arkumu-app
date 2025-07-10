@@ -1512,3 +1512,49 @@ def correlation_analysis(request):
             'correlation_result': None,
             'error': str(e)
         })
+
+
+@general_login_required
+def start_import(request):
+    """
+    HTMX endpoint to start the import process.
+    """
+    if request.method != 'POST':
+        return HttpResponse('Method not allowed', status=405)
+    
+    try:
+        # Get current organization and context
+        view_instance = IngestDataView()
+        current_org = view_instance.get_current_organization(request)
+        current_mapping = view_instance.get_current_mapping(request)
+        
+        if not current_org or not current_mapping:
+            return HttpResponse('<div class="alert alert-error">Organization or mapping not selected</div>', status=400)
+        
+        # Get selected files
+        selected_files = request.session.get(SELECTED_FILES_SESSION_KEY, [])
+        
+        if not selected_files:
+            return HttpResponse('<div class="alert alert-error">No files selected</div>', status=400)
+        
+        # For now, return a placeholder response
+        # TODO: Implement actual import logic
+        return HttpResponse(f'''
+            <div class="alert alert-success">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"/>
+                </svg>
+                <div>
+                    <h3 class="font-bold">Import Started!</h3>
+                    <div class="text-sm">Processing {len(selected_files)} files with mapping "{current_mapping['name']}"</div>
+                </div>
+            </div>
+            <div class="mt-4">
+                <progress class="progress progress-primary w-full" value="100" max="100"></progress>
+                <p class="text-center text-sm mt-2">Import process initiated...</p>
+            </div>
+        ''')
+        
+    except Exception as e:
+        logger.error(f"Error starting import: {e}", exc_info=True)
+        return HttpResponse(f'<div class="alert alert-error">Error starting import: {str(e)}</div>', status=500)

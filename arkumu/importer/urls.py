@@ -16,6 +16,7 @@ urlpatterns = [
     path("ingest/execution-status/", ingest_views.execution_status, name="execution_status"),
     path("ingest/analyze-mapping/", ingest_views.analyze_mapping, name="analyze_mapping"),
     path("ingest/correlation-analysis/", ingest_views.correlation_analysis, name="correlation_analysis"),
+    path("ingest/start-import/", ingest_views.start_import, name="start_import"),
     path("ingest/run-validation/", ingest_views.run_pre_execution_validation, name="run_validation"),
     path("ingest/validation-results/", ingest_views.validation_results_display, name="validation_results"),
     # Organization changes now handled in main ingest_data view
