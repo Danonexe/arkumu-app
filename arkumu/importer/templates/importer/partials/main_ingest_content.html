@@ -32,67 +32,42 @@
                     Execute Import
                 </h2>
                 
-                <!-- Simple Status Checks -->
-                <div class="space-y-4">
-                    <!-- Status checks -->
-                    <div class="space-y-3">
-                        <div class="flex items-center gap-3 p-3 bg-base-200 rounded-lg">
-                            <span class="text-base-content/60">📁</span>
-                            <div class="flex-1">
-                                <div class="font-medium">Files Selected</div>
-                                <div class="text-sm text-base-content/60" id="file-count">
-                                    Select files from the browser
-                                </div>
-                            </div>
-                        </div>
-                        <div class="flex items-center gap-3 p-3 bg-base-200 rounded-lg">
-                            <span class="text-base-content/60">🗂️</span>
-                            <div class="flex-1">
-                                <div class="font-medium">Mapping Selected</div>
-                                <div class="text-sm text-base-content/60" id="mapping-name">
-                                    Select mapping from navbar
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Manual Correlation Check Button -->
-                    <button class="btn btn-secondary btn-lg w-full" 
-                            id="check-correlation-btn"
-                            hx-get="{% url 'importer:correlation_analysis' %}"
-                            hx-target="#correlation-results"
-                            hx-vals='{"organization": "{{ organization_id }}"}'
-                            hx-indicator="#correlation-spinner"
-                            disabled>
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                        </svg>
-                        Check Mapping with Selected Files
-                    </button>
-                    
-                    <!-- Loading indicator -->
-                    <div id="correlation-spinner" class="htmx-indicator">
-                        <div class="flex items-center justify-center gap-2">
+                <!-- HTMX-Driven Status Display -->
+                <div id="execution-status-container"
+                     hx-get="{% url 'importer:execution_status' %}"
+                     hx-trigger="load, fileSelectionChanged from:body, mappingSelected from:body"
+                     hx-vals='{"organization": "{{ organization_id }}"}'
+                     hx-swap="innerHTML">
+                    <!-- Loading state -->
+                    <div class="space-y-4">
+                        <div class="flex items-center gap-2 text-base-content/60">
                             <span class="loading loading-spinner loading-sm"></span>
-                            <span>Analyzing correlation...</span>
+                            <span>Loading status...</span>
                         </div>
+                        
+                        <!-- Placeholder status -->
+                        <div class="space-y-3">
+                            <div class="flex items-center gap-3 p-3 bg-base-200 rounded-lg opacity-50">
+                                <span class="text-base-content/40">📁</span>
+                                <div class="flex-1">
+                                    <div class="font-medium text-base-content/60">Files Selected</div>
+                                    <div class="text-sm text-base-content/40">Loading...</div>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-3 p-3 bg-base-200 rounded-lg opacity-50">
+                                <span class="text-base-content/40">🗂️</span>
+                                <div class="flex-1">
+                                    <div class="font-medium text-base-content/60">Mapping Selected</div>
+                                    <div class="text-sm text-base-content/40">Loading...</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <button class="btn btn-lg w-full" disabled>
+                            <span class="loading loading-spinner loading-sm"></span>
+                            Initializing...
+                        </button>
                     </div>
-                    
-                    <!-- Correlation Results Container -->
-                    <div id="correlation-results"></div>
-                    
-                    <!-- Execute Import Button (initially hidden) -->
-                    <button class="btn btn-primary btn-lg w-full hidden" 
-                            id="execute-import-btn"
-                            hx-post="{% url 'importer:start_import' %}"
-                            hx-confirm="Are you sure you want to start the import process?"
-                            hx-target="#import-progress">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                        </svg>
-                        Start Import
-                    </button>
                 </div>
                 
                 <!-- Progress will be shown here -->
@@ -102,83 +77,6 @@
     </div>
 </div>
 
-<!-- JavaScript for Simple UI Updates -->
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    let selectedFiles = [];
-    let selectedMapping = null;
-    
-    function updateUI() {
-        const fileCountEl = document.getElementById('file-count');
-        const mappingNameEl = document.getElementById('mapping-name');
-        const checkBtn = document.getElementById('check-correlation-btn');
-        
-        // Update file count display
-        if (selectedFiles.length > 0) {
-            fileCountEl.textContent = `${selectedFiles.length} file${selectedFiles.length > 1 ? 's' : ''} selected`;
-            fileCountEl.classList.add('text-success');
-        } else {
-            fileCountEl.textContent = 'Select files from the browser';
-            fileCountEl.classList.remove('text-success');
-        }
-        
-        // Update mapping display
-        if (selectedMapping) {
-            mappingNameEl.textContent = `Using: ${selectedMapping}`;
-            mappingNameEl.classList.add('text-success');
-        } else {
-            mappingNameEl.textContent = 'Select mapping from navbar';
-            mappingNameEl.classList.remove('text-success');
-        }
-        
-        // Enable/disable correlation check button
-        if (selectedFiles.length > 0 && selectedMapping) {
-            checkBtn.disabled = false;
-            checkBtn.classList.remove('btn-disabled');
-        } else {
-            checkBtn.disabled = true;
-            checkBtn.classList.add('btn-disabled');
-        }
-    }
-    
-    // Listen for file selection changes from the file browser
-    document.body.addEventListener('fileSelectionChanged', function(event) {
-        console.log('File selection changed:', event.detail);
-        if (event.detail && event.detail.files) {
-            selectedFiles = event.detail.files;
-        }
-        updateUI();
-        // Clear previous correlation results when files change
-        document.getElementById('correlation-results').innerHTML = '';
-        document.getElementById('execute-import-btn').classList.add('hidden');
-    });
-    
-    // Listen for mapping selection changes from navbar
-    document.body.addEventListener('mappingSelected', function(event) {
-        console.log('Mapping selection changed:', event.detail);
-        if (event.detail && event.detail.mapping) {
-            selectedMapping = event.detail.mapping.name || event.detail.mapping;
-        }
-        updateUI();
-        // Clear previous correlation results when mapping changes
-        document.getElementById('correlation-results').innerHTML = '';
-        document.getElementById('execute-import-btn').classList.add('hidden');
-    });
-    
-    // Listen for correlation analysis completion
-    document.body.addEventListener('htmx:afterRequest', function(event) {
-        if (event.detail.target && event.detail.target.id === 'correlation-results') {
-            // Show the execute import button after correlation analysis is complete
-            if (event.detail.xhr.status === 200) {
-                document.getElementById('execute-import-btn').classList.remove('hidden');
-            }
-        }
-    });
-    
-    // Initial UI update
-    updateUI();
-});
-</script>
 
 {% else %}
 <!-- No organization selected state -->
