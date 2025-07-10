@@ -38,6 +38,8 @@ class MappingAnalysis:
     required_columns: Dict[str, List[str]]
     column_types: Dict[str, Dict[str, str]]
     relationships: List[Dict] = field(default_factory=list)
+    fk_relationships: List[Dict] = field(default_factory=list)
+    relationship_contexts: List[Dict] = field(default_factory=list)
 
 
 @dataclass

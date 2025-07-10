@@ -144,6 +144,74 @@ class MappingExtractor:
         return relationships
     
     @staticmethod
+    def extract_all_relationships(mapping_config: Dict) -> Dict[str, Any]:
+        """Extract all types of relationships from mapping configuration"""
+        return {
+            'fk_relationships': MappingExtractor.extract_fk_relationships(mapping_config),
+            'relationship_contexts': MappingExtractor.extract_relationship_contexts(mapping_config),
+            'relationships': mapping_config.get('relationships', [])  # P2P relationships
+        }
+    
+    @staticmethod
+    def extract_fk_relationships(mapping_config: Dict) -> List[Dict]:
+        """Extract FK relationships from both old and new formats"""
+        fk_rels = []
+        
+        # Check new format (fk_relationships)
+        if 'fk_relationships' in mapping_config:
+            fk_relationships = mapping_config['fk_relationships']
+            if isinstance(fk_relationships, dict):
+                for fk_id, fk_config in fk_relationships.items():
+                    if isinstance(fk_config, dict):
+                        fk_rels.append({
+                            'id': fk_id,
+                            'source_dataset': fk_config.get('source_dataset'),
+                            'source_column': fk_config.get('source_column'),
+                            'target_dataset': fk_config.get('target_dataset'),
+                            'target_column': fk_config.get('target_column'),
+                            'relationship_type': fk_config.get('relationship_type', 'references')
+                        })
+        
+        # Check workspace columns for FK flags
+        workspace_columns = mapping_config.get('workspace_columns', {})
+        for col_id, col_data in MappingValidator.iterate_workspace_columns(workspace_columns):
+            if col_data.get('is_fk'):
+                fk_config = col_data.get('fk_config', {})
+                if fk_config and fk_config.get('target_dataset') and fk_config.get('target_column'):
+                    fk_rels.append({
+                        'id': f"workspace_fk_{col_id}",
+                        'source_dataset': col_data.get('dataset'),
+                        'source_column': col_data.get('name'),
+                        'target_dataset': fk_config.get('target_dataset'),
+                        'target_column': fk_config.get('target_column'),
+                        'relationship_type': 'references'
+                    })
+        
+        logger.debug(f"Extracted {len(fk_rels)} FK relationships from mapping")
+        return fk_rels
+    
+    @staticmethod
+    def extract_relationship_contexts(mapping_config: Dict) -> List[Dict]:
+        """Extract junction table configurations with attributes"""
+        contexts = []
+        relationship_contexts = mapping_config.get('relationship_contexts', {})
+        
+        if isinstance(relationship_contexts, dict):
+            for ctx_id, ctx_config in relationship_contexts.items():
+                if isinstance(ctx_config, dict):
+                    contexts.append({
+                        'context_id': ctx_id,
+                        'dataset': ctx_config.get('dataset'),
+                        'primary_fk': ctx_config.get('primary_fk'),
+                        'secondary_fk': ctx_config.get('secondary_fk'),
+                        'context_columns': ctx_config.get('context_columns', []),
+                        'context_type': ctx_config.get('context_type', 'junction')
+                    })
+        
+        logger.debug(f"Extracted {len(contexts)} relationship contexts from mapping")
+        return contexts
+    
+    @staticmethod
     def validate_mapping_structure(mapping_config: Dict) -> Dict[str, Any]:
         """
         Validate the basic structure of a mapping configuration.

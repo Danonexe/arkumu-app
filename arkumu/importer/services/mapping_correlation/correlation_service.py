@@ -21,6 +21,7 @@ from .data_models import (
 )
 from .mapping_extractor import MappingExtractor
 from .exact_matcher import ExactMatcher
+from .relationship_validator import RelationshipValidator
 
 logger = logging.getLogger(__name__)
 
@@ -102,13 +103,15 @@ class MappingFileCorrelationService:
             # Step 3: Extract mapping requirements
             mapping_analysis = self._extract_mapping_requirements(mapping_config)
             
-            # Step 4: Perform exact correlation using MappingValidator methods
-            correlations = self._perform_exact_correlation_with_validator(
+            # Step 4: Perform relationship-aware correlation
+            correlation_data = self._perform_relationship_aware_correlation(
                 file_analyses, mapping_analysis, mapping_config
             )
             
-            # Step 5: Generate binary result
-            result = self._build_exact_correlation_result(file_analyses, mapping_analysis, correlations)
+            # Step 5: Generate enhanced result with relationship validation
+            result = self._build_enhanced_correlation_result(
+                file_analyses, mapping_analysis, correlation_data
+            )
             
             self.logger.info(f"Correlation analysis complete: {len(result.exactly_matched_datasets)} matched datasets, "
                            f"{len(result.missing_datasets)} missing, {len(result.unmatched_files)} unmatched files")
@@ -255,7 +258,9 @@ class MappingFileCorrelationService:
         expected_datasets = MappingExtractor.extract_expected_datasets(mapping_config)
         dataset_columns = MappingExtractor.extract_columns_per_dataset(mapping_config)
         column_types = MappingExtractor.extract_column_types_per_dataset(mapping_config)
-        relationships = MappingExtractor.extract_relationships(mapping_config)
+        
+        # Extract all relationship types
+        all_relationships = MappingExtractor.extract_all_relationships(mapping_config)
         
         return MappingAnalysis(
             mapping_id=str(mapping_id),
@@ -264,7 +269,9 @@ class MappingFileCorrelationService:
             dataset_columns=dataset_columns,
             required_columns=dataset_columns,  # Same as dataset_columns for required columns
             column_types=column_types,
-            relationships=relationships
+            relationships=all_relationships.get('relationships', []),
+            fk_relationships=all_relationships.get('fk_relationships', []),
+            relationship_contexts=all_relationships.get('relationship_contexts', [])
         )
     
     def _perform_exact_correlation_with_validator(self, file_analyses: List[FileAnalysis],
@@ -327,6 +334,48 @@ class MappingFileCorrelationService:
             correlations.append(correlation)
         
         return correlations
+    
+    def _perform_relationship_aware_correlation(self, 
+                                              file_analyses: List[FileAnalysis],
+                                              mapping_analysis: MappingAnalysis, 
+                                              mapping_config: Dict) -> Dict:
+        """Enhanced correlation with full relationship validation"""
+        
+        # 1. Basic column correlation (existing)
+        correlations = self._perform_exact_correlation_with_validator(
+            file_analyses, mapping_analysis, mapping_config
+        )
+        
+        # 2. Initialize relationship validator
+        rel_validator = RelationshipValidator()
+        
+        # 3. FK validation
+        fk_validation = rel_validator.validate_fk_relationships(
+            mapping_analysis.fk_relationships, file_analyses
+        )
+        
+        # 4. Relationship context validation
+        context_validation = rel_validator.validate_relationship_contexts(
+            mapping_analysis.relationship_contexts, file_analyses
+        )
+        
+        # 5. Join validation
+        join_validation = rel_validator.validate_join_requirements(
+            mapping_analysis.relationships, file_analyses
+        )
+        
+        # 6. Dependency order validation
+        dependency_validation = rel_validator.validate_dependency_order(
+            file_analyses, mapping_analysis.fk_relationships
+        )
+        
+        return {
+            'correlations': correlations,
+            'fk_validation': fk_validation,
+            'context_validation': context_validation,
+            'join_validation': join_validation,
+            'dependency_validation': dependency_validation
+        }
     
     def _build_exact_correlation_result(self, file_analyses: List[FileAnalysis],
                                       mapping_analysis: MappingAnalysis,
@@ -405,5 +454,94 @@ class MappingFileCorrelationService:
                     recommendations.append(
                         f"Type mismatch in {file_name}: column '{column_name}' expected {expected_type}"
                     )
+        
+        return recommendations
+    
+    def _build_enhanced_correlation_result(self, file_analyses: List[FileAnalysis],
+                                         mapping_analysis: MappingAnalysis,
+                                         correlation_data: Dict) -> CorrelationResult:
+        """Generate enhanced correlation result with relationship validation"""
+        correlations = correlation_data['correlations']
+        
+        # Build basic result first
+        result = self._build_exact_correlation_result(file_analyses, mapping_analysis, correlations)
+        
+        # Add relationship-aware recommendations
+        relationship_recommendations = self._generate_relationship_aware_recommendations(
+            correlation_data
+        )
+        
+        # Combine all recommendations
+        result.recommendations.extend(relationship_recommendations)
+        
+        # Store validation results for potential future use
+        # Note: These are not part of the CorrelationResult dataclass, 
+        # but could be added as a new field if needed
+        self._last_validation_results = {
+            'fk_validation': correlation_data['fk_validation'],
+            'context_validation': correlation_data['context_validation'],
+            'join_validation': correlation_data['join_validation'],
+            'dependency_validation': correlation_data['dependency_validation']
+        }
+        
+        return result
+    
+    def _generate_relationship_aware_recommendations(self, 
+                                                   validation_results: Dict) -> List[str]:
+        """Generate recommendations including relationship issues"""
+        recommendations = []
+        
+        # FK issues
+        for issue in validation_results['fk_validation']['issues']:
+            if issue['type'] == 'missing_fk_column':
+                recommendations.append(
+                    f"FK Error in {issue['dataset']}: Column '{issue['column']}' "
+                    f"needed to reference '{issue['target']}' is missing"
+                )
+            elif issue['type'] == 'missing_target_dataset':
+                recommendations.append(
+                    f"FK Target Missing: Dataset '{issue['dataset']}' referenced by "
+                    f"'{issue['referenced_by']}' not found"
+                )
+            elif issue['type'] == 'missing_source_dataset':
+                recommendations.append(
+                    f"FK Source Missing: Dataset '{issue['dataset']}' with FK relationship not found"
+                )
+            elif issue['type'] == 'missing_target_column':
+                recommendations.append(
+                    f"FK Target Column Missing: '{issue['dataset']}.{issue['column']}' "
+                    f"referenced by '{issue['referenced_by']}' not found"
+                )
+        
+        # Junction table issues  
+        for issue in validation_results['context_validation']['issues']:
+            if issue['type'] == 'missing_junction_table':
+                recommendations.append(
+                    f"Junction Table Missing: '{issue['dataset']}' needed for relationship context"
+                )
+            elif issue['type'] == 'missing_junction_fks':
+                recommendations.append(
+                    f"Junction Table Error: '{issue['dataset']}' missing FK columns: "
+                    f"{', '.join(issue['missing_fks'])}"
+                )
+            elif issue['type'] == 'missing_context_attributes':
+                recommendations.append(
+                    f"Junction Table Warning: '{issue['dataset']}' missing attributes: "
+                    f"{', '.join(issue['missing_attrs'])}"
+                )
+        
+        # Processing order issues
+        dep_val = validation_results['dependency_validation']
+        if dep_val.get('has_cycles'):
+            recommendations.append(
+                f"Circular Dependency: {' -> '.join(dep_val['cycle'])}"
+            )
+        
+        # Join issues
+        for issue in validation_results['join_validation']['issues']:
+            recommendations.append(
+                f"Join Error: Column '{issue['dataset']}.{issue['column']}' "
+                f"needed for {issue['relationship']} relationship not found"
+            )
         
         return recommendations
