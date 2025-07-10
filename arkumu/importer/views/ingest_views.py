@@ -1440,3 +1440,75 @@ def validation_results_display(request):
             'has_validation': False,
             'error': str(e)
         })
+
+
+@general_login_required
+def correlation_analysis(request):
+    """
+    HTMX endpoint for real-time file-mapping correlation analysis.
+    
+    Uses the new MappingFileCorrelationService to provide deterministic 
+    binary matching between selected CSV files and mapping configurations.
+    """
+    if request.method != 'GET':
+        return HttpResponse('Method not allowed', status=405)
+    
+    try:
+        # Get current organization and context
+        view_instance = IngestDataView()
+        current_org = view_instance.get_current_organization(request)
+        current_mapping = view_instance.get_current_mapping(request)
+        
+        if not current_org or not current_mapping:
+            return render(request, 'importer/partials/correlation_analysis.html', {
+                'correlation_result': None
+            })
+        
+        # Get selected files
+        selected_files = request.session.get(SELECTED_FILES_SESSION_KEY, [])
+        
+        if not selected_files:
+            return render(request, 'importer/partials/correlation_analysis.html', {
+                'correlation_result': None
+            })
+        
+        # Initialize correlation service (reuses existing MappingValidator)
+        from arkumu.importer.services.mapping_correlation import MappingFileCorrelationService
+        from arkumu.importer.services.mapping_correlation.visualization_helpers import CorrelationVisualizationHelper
+        from arkumu.importer.services.mapping_consumer.mapping_adapter import MappingAdapter
+        
+        correlation_service = MappingFileCorrelationService(current_org['code'])
+        mapping_adapter = MappingAdapter()
+        
+        # Load mapping configuration
+        mapping_config = mapping_adapter.load_mapping_config(current_mapping['id'])
+        
+        # Perform exact correlation analysis using MappingValidator methods
+        correlation_result = correlation_service.analyze_file_dataset_correlation(
+            file_paths=selected_files,
+            mapping_config=mapping_config
+        )
+        
+        # Format correlation result for template display using visualization helper
+        formatted_result = CorrelationVisualizationHelper.format_correlation_for_template(correlation_result)
+        
+        # correlation_result contains binary exact matching results:
+        # - has_all_required_datasets: True/False
+        # - has_no_extra_files: True/False
+        # - exactly_matched_datasets: List of matched dataset names
+        # - missing_datasets: List of required datasets without files
+        # - unmatched_files: List of files not matching any dataset
+        
+        # Return rendered template with both raw and formatted data
+        return render(request, 'importer/partials/correlation_analysis.html', {
+            'correlation_result': correlation_result,
+            'formatted_result': formatted_result,
+            'organization_code': current_org['code']
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in correlation analysis: {e}", exc_info=True)
+        return render(request, 'importer/partials/correlation_analysis.html', {
+            'correlation_result': None,
+            'error': str(e)
+        })

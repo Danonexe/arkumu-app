@@ -67,6 +67,26 @@ class MappingValidator:
         self.supported_delimiters = [',', ';', '\t', '|']
     
     @staticmethod
+    def iterate_workspace_columns(workspace_columns):
+        """
+        Utility method to safely iterate through workspace_columns in either dict or list format.
+        
+        Args:
+            workspace_columns: Can be dict or list format
+            
+        Yields:
+            Tuple of (col_id, col_config) for each column
+        """
+        if isinstance(workspace_columns, dict):
+            for col_id, col_config in workspace_columns.items():
+                if isinstance(col_config, dict):
+                    yield col_id, col_config
+        elif isinstance(workspace_columns, list):
+            for i, col_config in enumerate(workspace_columns):
+                if isinstance(col_config, dict):
+                    yield str(i), col_config
+
+    @staticmethod
     def validate_column_mappings(workspace_columns: Dict[str, Any], 
                                file_columns: List[str]) -> Dict[str, Any]:
         """
@@ -99,49 +119,25 @@ class MappingValidator:
         file_columns_set = set(file_columns)
         workspace_column_names = set()
         
-        # Process workspace columns
-        if isinstance(workspace_columns, dict):
-            for col_id, col_config in workspace_columns.items():
-                # Extract column name from workspace column
-                if isinstance(col_config, dict):
-                    col_name = col_config.get('name', '')
-                    if col_name:
-                        workspace_column_names.add(col_name)
-                        
-                        # Check if column exists in files
-                        if col_name in file_columns_set:
-                            result['mapped_columns'][col_name] = col_config
-                        else:
-                            result['missing_required_columns'].append(col_name)
-                            result['issues'].append({
-                                'code': 'REQUIRED_COLUMN_MISSING',
-                                'severity': 'ERROR',
-                                'category': 'COLUMN_MAPPING',
-                                'message': f'Required column missing from files: {col_name}',
-                                'column_name': col_name,
-                                'suggested_fix': 'Add the missing column to the data files or remove it from the mapping'
-                            })
-        elif isinstance(workspace_columns, list):
-            # Handle workspace_columns as list format
-            for col_config in workspace_columns:
-                if isinstance(col_config, dict):
-                    col_name = col_config.get('name', '')
-                    if col_name:
-                        workspace_column_names.add(col_name)
-                        
-                        # Check if column exists in files
-                        if col_name in file_columns_set:
-                            result['mapped_columns'][col_name] = col_config
-                        else:
-                            result['missing_required_columns'].append(col_name)
-                            result['issues'].append({
-                                'code': 'REQUIRED_COLUMN_MISSING',
-                                'severity': 'ERROR',
-                                'category': 'COLUMN_MAPPING',
-                                'message': f'Required column missing from files: {col_name}',
-                                'column_name': col_name,
-                                'suggested_fix': 'Add the missing column to the data files or remove it from the mapping'
-                            })
+        # Process workspace columns using the utility method
+        for col_id, col_config in MappingValidator.iterate_workspace_columns(workspace_columns):
+            col_name = col_config.get('name', '')
+            if col_name:
+                workspace_column_names.add(col_name)
+                
+                # Check if column exists in files
+                if col_name in file_columns_set:
+                    result['mapped_columns'][col_name] = col_config
+                else:
+                    result['missing_required_columns'].append(col_name)
+                    result['issues'].append({
+                        'code': 'REQUIRED_COLUMN_MISSING',
+                        'severity': 'ERROR',
+                        'category': 'COLUMN_MAPPING',
+                        'message': f'Required column missing from files: {col_name}',
+                        'column_name': col_name,
+                        'suggested_fix': 'Add the missing column to the data files or remove it from the mapping'
+                    })
         
         # Find unmapped columns
         result['unmapped_columns'] = list(file_columns_set - workspace_column_names)
