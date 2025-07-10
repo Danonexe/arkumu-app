@@ -713,6 +713,8 @@ class CSVMappingCoordinatorMixin(BaseCoordinatorMixin, CSVDataMixin, MappingWork
         Validate that all workspace columns have unique IDs.
         
         UNIFIED TRACKING: Ensures no duplicate column IDs exist in the workspace.
+        This validation is specific to workspace state management and remains here
+        rather than in MappingValidator.
         
         Args:
             request: Django request object
@@ -1600,8 +1602,8 @@ class CSVMappingCoordinatorMixin(BaseCoordinatorMixin, CSVDataMixin, MappingWork
         """
         Validate the current mapping structure against file columns.
         
-        This method can be reused across different components that need to validate
-        mappings (pre-execution validation, GUI validation, etc.).
+        This method now delegates to the centralized MappingValidator while
+        maintaining backward compatibility with the original interface.
         
         Args:
             request: Django request object
@@ -1616,88 +1618,22 @@ class CSVMappingCoordinatorMixin(BaseCoordinatorMixin, CSVDataMixin, MappingWork
                 - coverage_percentage: Percentage of file columns that are mapped
                 - issues: List of validation issues found
         """
-        # Get workspace columns dictionary from session directly
-        session_key = f'csv_mapping_workspace_columns_{organization_id}'
-        workspace_columns = request.session.get(session_key, {})
+        from arkumu.importer.services.mapping_validation import MappingValidator
         
-        # Initialize result structure
-        mapped_columns = {}
-        unmapped_columns = []
-        missing_required_columns = []
-        issues = []
+        # Get workspace columns from session
+        workspace_columns = self.get_workspace_columns(request, organization_id)
+        
+        # Convert list format to dict format for validator
+        workspace_columns_dict = {}
+        for col in workspace_columns:
+            if isinstance(col, dict):
+                col_id = col.get('id')
+                if col_id:
+                    workspace_columns_dict[col_id] = col
         
         # If no file columns provided, we can only validate the mapping structure itself
         if file_columns is None:
             file_columns = []
         
-        # Convert file_columns to set for efficient lookup
-        file_columns_set = set(file_columns)
-        
-        # Process workspace columns to extract mappings
-        required_columns = set()
-        
-        if isinstance(workspace_columns, dict):
-            for key, value in workspace_columns.items():
-                # Handle different key formats
-                if '::' in key:
-                    # Format: "org::dataset::column"
-                    parts = key.split('::')
-                    if len(parts) >= 3:
-                        column_name = parts[2]
-                    else:
-                        continue
-                else:
-                    # Direct column name
-                    column_name = key
-                
-                # Extract mapping from column config
-                if isinstance(value, dict):
-                    arkumu_type = value.get('arkumu_type', '')
-                    if arkumu_type:
-                        required_columns.add(column_name)
-                        if column_name in file_columns_set:
-                            mapped_columns[column_name] = arkumu_type
-                elif isinstance(value, str) and value:
-                    required_columns.add(column_name)
-                    if column_name in file_columns_set:
-                        mapped_columns[column_name] = value
-        
-        # Find missing required columns
-        missing_required_columns = list(required_columns - file_columns_set)
-        
-        # Find unmapped columns
-        unmapped_columns = list(file_columns_set - required_columns)
-        
-        # Calculate coverage percentage
-        coverage_percentage = 0.0
-        if file_columns:
-            coverage_percentage = (len(mapped_columns) / len(file_columns)) * 100
-        
-        # Generate validation issues
-        for missing_col in missing_required_columns:
-            issues.append({
-                'code': 'REQUIRED_COLUMN_MISSING',
-                'severity': 'ERROR',
-                'category': 'COLUMN_MAPPING',
-                'message': f'Required column missing: {missing_col}',
-                'column_name': missing_col,
-                'suggested_fix': 'Add the missing column to the data files or update the mapping'
-            })
-        
-        for unmapped_col in unmapped_columns:
-            issues.append({
-                'code': 'UNMAPPED_COLUMN',
-                'severity': 'WARNING',
-                'category': 'COLUMN_MAPPING',
-                'message': f'Column not mapped: {unmapped_col}',
-                'column_name': unmapped_col,
-                'suggested_fix': 'Consider mapping this column if it contains useful data'
-            })
-        
-        return {
-            'mapped_columns': mapped_columns,
-            'unmapped_columns': unmapped_columns,
-            'missing_required_columns': missing_required_columns,
-            'coverage_percentage': coverage_percentage,
-            'issues': issues
-        }
+        # Delegate to centralized validator
+        return MappingValidator.validate_column_mappings(workspace_columns_dict, file_columns)

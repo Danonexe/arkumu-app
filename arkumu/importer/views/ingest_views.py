@@ -1301,32 +1301,76 @@ def run_pre_execution_validation(request):
             }, status=400)
         
         # Import validation services
-        from arkumu.importer.services.pre_execution_validation.pre_execution_validator import PreExecutionValidator
+        from arkumu.importer.services.mapping_validation.validator import MappingValidator
         from arkumu.importer.services.mapping_consumer.mapping_adapter import MappingAdapter
         from arkumu.storage.services.bucket_service import BucketService
         
         # Initialize services
         mapping_adapter = MappingAdapter()
-        validator = PreExecutionValidator(mapping_adapter=mapping_adapter)
         bucket_service = BucketService()
         
         # Get mapping configuration
         mapping_config = mapping_adapter.load_mapping_config(mapping_id)
         
-        # For now, use the file paths as-is for validation
-        # In a full implementation, we might download files to temp locations
-        # or modify the validator to work with S3 paths directly
+        # Get bucket for file access
         bucket_name = bucket_service.get_organization_bucket(organization_code)
         
-        # Run pre-execution validation with S3 paths
-        validation_result = validator.validate_mapping_execution(
-            mapping_config=mapping_config,
-            file_paths=selected_files,
-            organization_code=organization_code
-        )
+        # Run validation using new MappingValidator
+        # Validate file structure
+        file_validation_results = []
+        for file_path in selected_files:
+            try:
+                file_result = MappingValidator.validate_file_structure(file_path, bucket_service, bucket_name)
+                file_validation_results.append({
+                    'file_path': file_path,
+                    'is_valid': file_result.get('is_valid', False),
+                    'errors': file_result.get('errors', []),
+                    'warnings': file_result.get('warnings', [])
+                })
+            except Exception as e:
+                file_validation_results.append({
+                    'file_path': file_path,
+                    'is_valid': False,
+                    'errors': [f"File validation error: {str(e)}"],
+                    'warnings': []
+                })
         
-        # Convert validation result to dict for JSON response
-        validation_dict = validation_result.to_dict()
+        # Validate column mappings
+        column_validation = MappingValidator.validate_column_mappings(mapping_config)
+        
+        # Validate mapping completeness
+        completeness_validation = MappingValidator.validate_mapping_completeness(mapping_config)
+        
+        # Create validation result summary
+        all_files_valid = all(result['is_valid'] for result in file_validation_results)
+        total_errors = sum(len(result['errors']) for result in file_validation_results)
+        total_warnings = sum(len(result['warnings']) for result in file_validation_results)
+        
+        if not column_validation.get('is_valid', True):
+            total_errors += len(column_validation.get('errors', []))
+            total_warnings += len(column_validation.get('warnings', []))
+        
+        if not completeness_validation.get('is_valid', True):
+            total_errors += len(completeness_validation.get('errors', []))
+            total_warnings += len(completeness_validation.get('warnings', []))
+        
+        validation_result = {
+            'is_valid': all_files_valid and column_validation.get('is_valid', True) and completeness_validation.get('is_valid', True),
+            'total_errors': total_errors,
+            'total_warnings': total_warnings,
+            'file_validations': file_validation_results,
+            'column_validation': column_validation,
+            'completeness_validation': completeness_validation,
+            'summary': {
+                'files_validated': len(selected_files),
+                'files_passed': sum(1 for result in file_validation_results if result['is_valid']),
+                'mapping_id': mapping_id,
+                'organization_code': organization_code
+            }
+        }
+        
+        # Validation result is already a dict
+        validation_dict = validation_result
         
         # Store validation results in session for later retrieval
         validation_session_key = f'validation_results_{organization_code}'

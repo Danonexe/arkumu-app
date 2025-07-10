@@ -132,21 +132,23 @@ def run_csv_import_workflow_with_mapping(
 ```
 
 #### 2.2 Add Validation Step
-**New Service**: `arkumu/importer/services/pre_execution_validation/`
+**Updated Service**: `arkumu/importer/services/mapping_validation/`
 
 ```python
-class PreExecutionValidator:
+class MappingValidator:
     """
+    Centralized validation service for all mapping-related validation.
     Validates mapping against selected files before execution
     Provides detailed validation reports
     """
     
-    def validate_mapping_execution(self, mapping_config, file_paths):
+    @staticmethod
+    def validate_file_structure(file_path, bucket_service, bucket_name):
         """
-        Comprehensive validation of mapping against files
+        Validate file structure and format
         """
         # File structure validation
-        # Column mapping validation
+        # Column header validation
         # Relationship validation
         # Resource requirements estimation
 ```
