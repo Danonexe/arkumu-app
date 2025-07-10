@@ -163,12 +163,22 @@ class MappingExtractor:
             if isinstance(fk_relationships, dict):
                 for fk_id, fk_config in fk_relationships.items():
                     if isinstance(fk_config, dict):
+                        source_dataset = fk_config.get('source_dataset')
+                        source_column = fk_config.get('source_column')
+                        target_dataset = fk_config.get('target_dataset')
+                        target_column = fk_config.get('target_column')
+                        
+                        # Skip FK relationships with missing required fields
+                        if not source_dataset or not source_column or not target_dataset or not target_column:
+                            logger.warning(f"Skipping FK relationship {fk_id}: missing required fields")
+                            continue
+                            
                         fk_rels.append({
                             'id': fk_id,
-                            'source_dataset': fk_config.get('source_dataset'),
-                            'source_column': fk_config.get('source_column'),
-                            'target_dataset': fk_config.get('target_dataset'),
-                            'target_column': fk_config.get('target_column'),
+                            'source_dataset': source_dataset,
+                            'source_column': source_column,
+                            'target_dataset': target_dataset,
+                            'target_column': target_column,
                             'relationship_type': fk_config.get('relationship_type', 'references')
                         })
         
@@ -177,11 +187,19 @@ class MappingExtractor:
         for col_id, col_data in MappingValidator.iterate_workspace_columns(workspace_columns):
             if col_data.get('is_fk'):
                 fk_config = col_data.get('fk_config', {})
+                source_dataset = col_data.get('dataset')
+                source_column = col_data.get('name')
+                
+                # Skip FK relationships with missing source dataset or column
+                if not source_dataset or not source_column:
+                    logger.warning(f"Skipping FK relationship for column {col_id}: missing source dataset or column")
+                    continue
+                    
                 if fk_config and fk_config.get('target_dataset') and fk_config.get('target_column'):
                     fk_rels.append({
                         'id': f"workspace_fk_{col_id}",
-                        'source_dataset': col_data.get('dataset'),
-                        'source_column': col_data.get('name'),
+                        'source_dataset': source_dataset,
+                        'source_column': source_column,
                         'target_dataset': fk_config.get('target_dataset'),
                         'target_column': fk_config.get('target_column'),
                         'relationship_type': 'references'
@@ -199,11 +217,20 @@ class MappingExtractor:
         if isinstance(relationship_contexts, dict):
             for ctx_id, ctx_config in relationship_contexts.items():
                 if isinstance(ctx_config, dict):
+                    dataset = ctx_config.get('dataset')
+                    primary_fk = ctx_config.get('primary_fk')
+                    secondary_fk = ctx_config.get('secondary_fk')
+                    
+                    # Skip relationship contexts with missing required fields
+                    if not dataset or not primary_fk or not secondary_fk:
+                        logger.warning(f"Skipping relationship context {ctx_id}: missing required fields (dataset, primary_fk, secondary_fk)")
+                        continue
+                    
                     contexts.append({
                         'context_id': ctx_id,
-                        'dataset': ctx_config.get('dataset'),
-                        'primary_fk': ctx_config.get('primary_fk'),
-                        'secondary_fk': ctx_config.get('secondary_fk'),
+                        'dataset': dataset,
+                        'primary_fk': primary_fk,
+                        'secondary_fk': secondary_fk,
                         'context_columns': ctx_config.get('context_columns', []),
                         'context_type': ctx_config.get('context_type', 'junction')
                     })

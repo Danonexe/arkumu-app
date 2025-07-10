@@ -96,6 +96,10 @@ class RelationshipValidator:
         issues = []
         
         for ctx in contexts:
+            # Skip contexts with missing dataset information
+            if not ctx.get('dataset'):
+                continue
+                
             junction_file = self._find_file_for_dataset(
                 ctx['dataset'], file_analyses
             )
@@ -207,6 +211,10 @@ class RelationshipValidator:
     def _find_file_for_dataset(self, dataset_name: str, 
                               file_analyses: List[FileAnalysis]) -> Optional[FileAnalysis]:
         """Find file analysis matching the dataset name"""
+        # Skip if dataset_name is None or empty
+        if not dataset_name:
+            return None
+            
         for file_analysis in file_analyses:
             if file_analysis.matched_dataset_name == dataset_name:
                 return file_analysis

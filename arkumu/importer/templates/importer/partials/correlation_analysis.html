@@ -112,34 +112,73 @@
         
         <!-- Missing/Extra Information -->
         {% if correlation_result.missing_datasets or correlation_result.unmatched_files %}
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+        <div class="space-y-4 mt-4">
             {% if correlation_result.missing_datasets %}
-            <div class="alert alert-error py-3">
-                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"/>
-                </svg>
-                <div>
-                    <h4 class="font-medium text-sm">Missing Dataset Files</h4>
-                    <div class="text-xs mt-1">
-                        {% for dataset in correlation_result.missing_datasets %}
-                            <span class="badge badge-error badge-xs mr-1">{{ dataset }}.csv</span>
-                        {% endfor %}
+            <div class="card bg-error/5 border border-error/20">
+                <div class="card-body p-4">
+                    <div class="flex items-center gap-3 mb-3">
+                        <div class="w-8 h-8 rounded-full bg-error flex items-center justify-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-error-content" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h4 class="font-medium text-error">
+                                Missing Dataset Files
+                            </h4>
+                            <p class="text-sm text-base-content/70 mt-1">These datasets are required but no files were selected</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Simple scrollable list -->
+                    <div class="max-h-40 overflow-y-auto border border-error/20 rounded-lg bg-base-100/30 p-3">
+                        <div class="space-y-1 text-sm">
+                            {% for dataset in correlation_result.missing_datasets %}
+                                <div class="font-mono text-error hover:bg-error/10 p-1 rounded transition-colors">
+                                    📄 {{ dataset }}.csv
+                                </div>
+                            {% endfor %}
+                        </div>
                     </div>
                 </div>
             </div>
             {% endif %}
             
             {% if correlation_result.unmatched_files %}
-            <div class="alert alert-warning py-3">
-                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"/>
-                </svg>
-                <div>
-                    <h4 class="font-medium text-sm">Extra Files (No Dataset Match)</h4>
-                    <div class="text-xs mt-1">
-                        {% for file in correlation_result.unmatched_files %}
-                            <span class="badge badge-warning badge-xs mr-1">{{ file|basename }}</span>
-                        {% endfor %}
+            <div class="card bg-warning/5 border border-warning/20">
+                <div class="card-body p-4">
+                    <div class="flex items-center gap-3 mb-3">
+                        <div class="w-8 h-8 rounded-full bg-warning flex items-center justify-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-warning-content" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h4 class="font-medium text-warning flex items-center gap-2">
+                                Extra Files Found
+                                <span class="badge badge-warning badge-sm">{{ correlation_result.unmatched_files|length }}</span>
+                            </h4>
+                            <p class="text-sm text-base-content/70 mt-1">These files don't match any expected dataset names</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Scrollable list for extra files -->
+                    <div class="max-h-32 overflow-y-auto border border-warning/20 rounded-lg bg-base-100/30 p-2">
+                        <div class="space-y-2">
+                            {% for file in correlation_result.unmatched_files %}
+                                <div class="flex items-center gap-2 p-2 bg-base-100 rounded hover:bg-warning/10 transition-colors">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-warning flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                    </svg>
+                                    <span class="font-mono text-sm flex-1 min-w-0 truncate">{{ file|basename }}</span>
+                                    <div class="tooltip tooltip-top flex-shrink-0" data-tip="This file doesn't match any dataset name in your mapping">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-base-content/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                        </svg>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -150,20 +189,164 @@
         <!-- Required Actions -->
         {% if correlation_result.recommendations %}
         <div class="mt-4">
-            <div class="alert alert-info">
-                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"/>
-                </svg>
-                <div>
-                    <h4 class="font-medium text-sm">Required Actions ({{ correlation_result.recommendations|length }})</h4>
-                    <div class="mt-2">
-                        <ul class="text-sm space-y-1 list-disc list-inside">
-                            {% for recommendation in correlation_result.recommendations %}
-                            <li>{{ recommendation }}</li>
-                            {% endfor %}
-                        </ul>
-                    </div>
-                </div>
+            <h4 class="font-medium text-base mb-4 flex items-center gap-2">
+                <span class="badge badge-warning">{{ correlation_result.recommendations|length }}</span>
+                Issues Found - Action Required
+            </h4>
+            
+            <div class="max-h-96 overflow-y-auto space-y-3 pr-2">
+                {% for recommendation in correlation_result.recommendations %}
+                    <!-- FK Issues -->
+                    {% if 'FK' in recommendation %}
+                        <div role="alert" class="alert alert-error alert-outline">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+                            </svg>
+                            <div class="flex-1">
+                                <div class="font-medium flex items-center gap-2 mb-1">
+                                    <span class="badge badge-error badge-sm">RELATIONSHIP</span>
+                                    Foreign Key Configuration Problem
+                                    <div class="tooltip tooltip-top" data-tip="Foreign keys define relationships between datasets. This error means a relationship is incorrectly configured in your mapping.">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-base-content/60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                        </svg>
+                                    </div>
+                                </div>
+                                <div class="text-sm">
+                                    {% if 'missing_fk_column' in recommendation %}
+                                        A required relationship column is missing from your dataset.
+                                    {% elif 'missing_target_dataset' in recommendation %}
+                                        A dataset referenced by a relationship doesn't exist.
+                                    {% elif 'missing_source_dataset' in recommendation %}
+                                        A dataset that should have a relationship connection is missing.
+                                    {% elif 'missing_target_column' in recommendation %}
+                                        A column that should be referenced by a relationship doesn't exist.
+                                    {% else %}
+                                        There's an issue with how relationships are configured in your mapping.
+                                    {% endif %}
+                                </div>
+                                <div class="mt-2 p-2 bg-base-100 rounded text-xs font-mono">
+                                    {{ recommendation }}
+                                </div>
+                                <div class="mt-2">
+                                    <div class="badge badge-outline badge-sm">💡 Fix: Check relationship configuration in your mapping</div>
+                                </div>
+                            </div>
+                        </div>
+                    
+                    <!-- Junction Table Issues -->
+                    {% elif 'Junction' in recommendation %}
+                        <div role="alert" class="alert alert-warning alert-outline">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7c0 2.21-3.582 4-8 4s-8-1.79-8-4z"/>
+                            </svg>
+                            <div class="flex-1">
+                                <div class="font-medium flex items-center gap-2 mb-1">
+                                    <span class="badge badge-warning badge-sm">JUNCTION</span>
+                                    Junction Table Configuration Issue
+                                    <div class="tooltip tooltip-top" data-tip="Junction tables connect multiple datasets in many-to-many relationships (like users-to-roles or products-to-categories).">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-base-content/60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                        </svg>
+                                    </div>
+                                </div>
+                                <div class="text-sm">
+                                    {% if 'missing_junction_table' in recommendation %}
+                                        A junction table needed to connect datasets is missing.
+                                    {% elif 'missing_junction_fks' in recommendation %}
+                                        A junction table exists but is missing required connection columns.
+                                    {% elif 'missing_context_attributes' in recommendation %}
+                                        A junction table is missing optional context columns.
+                                    {% else %}
+                                        There's an issue with junction table configuration in your mapping.
+                                    {% endif %}
+                                </div>
+                                <div class="mt-2 p-2 bg-base-100 rounded text-xs font-mono">
+                                    {{ recommendation }}
+                                </div>
+                                <div class="mt-2">
+                                    <div class="badge badge-outline badge-sm">💡 Fix: Configure junction table in your mapping</div>
+                                </div>
+                            </div>
+                        </div>
+                    
+                    <!-- Dependency Issues -->
+                    {% elif 'Circular' in recommendation %}
+                        <div role="alert" class="alert alert-info alert-outline">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                            </svg>
+                            <div class="flex-1">
+                                <div class="font-medium flex items-center gap-2 mb-1">
+                                    <span class="badge badge-info badge-sm">DEPENDENCY</span>
+                                    Circular Dependency Detected
+                                    <div class="tooltip tooltip-top" data-tip="Circular dependencies occur when datasets depend on each other in a loop, making it impossible to determine import order.">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-base-content/60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                        </svg>
+                                    </div>
+                                </div>
+                                <div class="text-sm">
+                                    Your datasets have relationships that create a circular dependency, making it impossible to determine the correct import order.
+                                </div>
+                                <div class="mt-2 p-2 bg-base-100 rounded text-xs font-mono">
+                                    {{ recommendation }}
+                                </div>
+                                <div class="mt-2">
+                                    <div class="badge badge-outline badge-sm">💡 Fix: Remove circular dependencies in mapping</div>
+                                </div>
+                            </div>
+                        </div>
+                    
+                    <!-- Join Issues -->
+                    {% elif 'Join' in recommendation %}
+                        <div role="alert" class="alert alert-secondary alert-outline">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                            </svg>
+                            <div class="flex-1">
+                                <div class="font-medium flex items-center gap-2 mb-1">
+                                    <span class="badge badge-secondary badge-sm">JOIN</span>
+                                    Join Column Missing
+                                    <div class="tooltip tooltip-top" data-tip="Join columns are needed to connect datasets during data processing and analysis.">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-base-content/60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                        </svg>
+                                    </div>
+                                </div>
+                                <div class="text-sm">
+                                    A column needed to join datasets together is missing from your data.
+                                </div>
+                                <div class="mt-2 p-2 bg-base-100 rounded text-xs font-mono">
+                                    {{ recommendation }}
+                                </div>
+                                <div class="mt-2">
+                                    <div class="badge badge-outline badge-sm">💡 Fix: Add missing column or update join configuration</div>
+                                </div>
+                            </div>
+                        </div>
+                    
+                    <!-- Other Issues -->
+                    {% else %}
+                        <div role="alert" class="alert alert-info alert-outline">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <div class="flex-1">
+                                <div class="font-medium flex items-center gap-2 mb-1">
+                                    <span class="badge badge-info badge-sm">CONFIG</span>
+                                    Configuration Issue
+                                </div>
+                                <div class="text-sm">
+                                    There's a configuration issue that needs to be resolved.
+                                </div>
+                                <div class="mt-2 p-2 bg-base-100 rounded text-xs font-mono">
+                                    {{ recommendation }}
+                                </div>
+                            </div>
+                        </div>
+                    {% endif %}
+                {% endfor %}
             </div>
         </div>
         {% endif %}
