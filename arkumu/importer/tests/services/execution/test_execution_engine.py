@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from arkumu.common.enums import UpdateStrategy
 from arkumu.metadata.models.resource import ResourceType
 from arkumu.metadata.models import Resource
-from arkumu.importer.services.execution.execution_engine import MappingExecutionEngine
+from arkumu.importer.services.execution.execution_engine import MappingExecutionEngine, ValidationError
 from arkumu.importer.services.execution.statistics import ExecutionMetrics
 
 
@@ -531,3 +531,492 @@ class TestExecutionEngineEdgeCases:
         
         # Should handle mixed types gracefully
         assert isinstance(metrics, ExecutionMetrics)
+
+
+@pytest.mark.django_db
+class TestMappingValidationIntegration:
+    """Test suite for MappingValidator integration in execution engine"""
+    
+    def test_validator_initialization(self, execution_engine):
+        """Test that MappingValidator is properly initialized"""
+        assert execution_engine.validator is not None
+        assert hasattr(execution_engine.validator, 'validate_file_structure')
+        assert hasattr(execution_engine.validator, 'validate_column_mappings')
+    
+    def test_validate_before_execution_basic(self, execution_engine):
+        """Test basic validation before execution"""
+        csv_data = [{"name": "John", "age": "30"}]
+        workspace_columns = [
+            {
+                "dataset_name": "test_dataset",
+                "column_name": "name",
+                "data_type": "string",
+                "is_required": True
+            },
+            {
+                "dataset_name": "test_dataset", 
+                "column_name": "age",
+                "data_type": "integer",
+                "is_required": False
+            }
+        ]
+        
+        validation_result = execution_engine._validate_before_execution(
+            csv_data, workspace_columns, "test_dataset"
+        )
+        
+        assert isinstance(validation_result, dict)
+        assert 'critical_errors' in validation_result
+        assert 'warnings' in validation_result
+        assert 'all_issues' in validation_result
+    
+    def test_validation_with_missing_columns(self, execution_engine):
+        """Test validation when file is missing required columns"""
+        csv_data = [{"name": "John"}]  # Missing 'age' column
+        workspace_columns = [
+            {
+                "dataset_name": "test_dataset",
+                "column_name": "name",
+                "data_type": "string",
+                "is_required": True
+            },
+            {
+                "dataset_name": "test_dataset",
+                "column_name": "age",
+                "data_type": "integer", 
+                "is_required": True
+            }
+        ]
+        
+        validation_result = execution_engine._validate_before_execution(
+            csv_data, workspace_columns, "test_dataset"
+        )
+        
+        # Should have critical errors due to missing required column
+        assert len(validation_result['critical_errors']) > 0
+        assert any('missing' in error['message'].lower() for error in validation_result['critical_errors'])
+    
+    def test_validation_with_unmapped_columns(self, execution_engine):
+        """Test validation with columns in file that aren't mapped"""
+        csv_data = [{"name": "John", "age": "30", "extra_column": "value"}]
+        workspace_columns = [
+            {
+                "dataset_name": "test_dataset",
+                "column_name": "name",
+                "data_type": "string",
+                "is_required": True
+            },
+            {
+                "dataset_name": "test_dataset",
+                "column_name": "age", 
+                "data_type": "integer",
+                "is_required": False
+            }
+        ]
+        
+        validation_result = execution_engine._validate_before_execution(
+            csv_data, workspace_columns, "test_dataset"
+        )
+        
+        # Should have warnings about unmapped columns
+        assert len(validation_result['warnings']) > 0
+        assert any('not mapped' in warning['message'].lower() for warning in validation_result['warnings'])
+    
+    def test_validation_with_foreign_keys(self, execution_engine):
+        """Test validation with foreign key relationships"""
+        csv_data = [{"person_id": "P001", "department_id": "D001"}]
+        workspace_columns = [
+            {
+                "dataset_name": "test_dataset",
+                "column_name": "person_id",
+                "data_type": "string",
+                "is_required": True,
+                "is_anchor": True
+            },
+            {
+                "dataset_name": "test_dataset",
+                "column_name": "department_id",
+                "data_type": "string",
+                "is_fk": True,
+                "target_dataset": "departments",
+                "target_column": "id"
+            }
+        ]
+        
+        validation_result = execution_engine._validate_before_execution(
+            csv_data, workspace_columns, "test_dataset"
+        )
+        
+        # Should process FK relationships without errors
+        assert isinstance(validation_result, dict)
+        assert 'critical_errors' in validation_result
+        assert 'warnings' in validation_result
+    
+    def test_validation_with_invalid_fk_configuration(self, execution_engine):
+        """Test validation with invalid FK configuration"""
+        csv_data = [{"person_id": "P001", "department_id": "D001"}]
+        workspace_columns = [
+            {
+                "dataset_name": "test_dataset",
+                "column_name": "person_id",
+                "data_type": "string",
+                "is_required": True,
+                "is_anchor": True
+            },
+            {
+                "dataset_name": "test_dataset",
+                "column_name": "department_id",
+                "data_type": "string",
+                "is_fk": True,
+                # Missing target_dataset and target_column
+            }
+        ]
+        
+        validation_result = execution_engine._validate_before_execution(
+            csv_data, workspace_columns, "test_dataset"
+        )
+        
+        # Should have errors due to invalid FK configuration
+        assert len(validation_result['critical_errors']) > 0
+        assert any('target' in error['message'].lower() for error in validation_result['critical_errors'])
+    
+    def test_validation_with_data_type_mismatches(self, execution_engine):
+        """Test validation with data type mismatches"""
+        csv_data = [{"name": "John", "age": "not_a_number"}]
+        workspace_columns = [
+            {
+                "dataset_name": "test_dataset",
+                "column_name": "name",
+                "data_type": "string",
+                "is_required": True
+            },
+            {
+                "dataset_name": "test_dataset",
+                "column_name": "age",
+                "data_type": "integer",
+                "is_required": False
+            }
+        ]
+        
+        validation_result = execution_engine._validate_before_execution(
+            csv_data, workspace_columns, "test_dataset"
+        )
+        
+        # Should have warnings about type mismatches
+        assert len(validation_result['warnings']) > 0
+        assert any('expected' in warning['message'].lower() for warning in validation_result['warnings'])
+    
+    @patch('arkumu.metadata.models.Resource.objects')
+    @patch('arkumu.metadata.models.triples.Triple.objects') 
+    def test_execute_with_processing_plan_validation_success(self, mock_triple_objects, mock_resource_objects, execution_engine):
+        """Test execute_with_processing_plan with successful validation"""
+        # Mock database operations
+        mock_resource = create_mock_resource()
+        mock_resource_objects.get_or_create.return_value = (mock_resource, True)
+        mock_resource_objects.bulk_create.return_value = []
+        mock_resource_objects.filter.return_value.select_related.return_value = []
+        mock_triple_objects.bulk_create.return_value = []
+        
+        csv_data = [{"name": "John", "age": "30"}]
+        workspace_columns = [
+            {
+                "dataset_name": "test_dataset",
+                "column_name": "name",
+                "data_type": "string",
+                "is_required": True
+            },
+            {
+                "dataset_name": "test_dataset",
+                "column_name": "age",
+                "data_type": "integer",
+                "is_required": False
+            }
+        ]
+        
+        mock_processing_plan = Mock()
+        
+        # Should execute successfully with valid data
+        metrics = execution_engine.execute_with_processing_plan(
+            csv_data=csv_data,
+            processing_plan=mock_processing_plan,
+            dataset_name="test_dataset",
+            workspace_columns=workspace_columns
+        )
+        
+        assert isinstance(metrics, ExecutionMetrics)
+    
+    def test_execute_with_processing_plan_validation_failure(self, execution_engine):
+        """Test execute_with_processing_plan with validation failure"""
+        csv_data = [{"name": "John"}]  # Missing required column
+        workspace_columns = [
+            {
+                "dataset_name": "test_dataset",
+                "column_name": "name",
+                "data_type": "string",
+                "is_required": True
+            },
+            {
+                "dataset_name": "test_dataset",
+                "column_name": "required_missing",
+                "data_type": "string",
+                "is_required": True
+            }
+        ]
+        
+        mock_processing_plan = Mock()
+        
+        # Should raise ValidationError due to missing required column
+        with pytest.raises(ValidationError) as exc_info:
+            execution_engine.execute_with_processing_plan(
+                csv_data=csv_data,
+                processing_plan=mock_processing_plan,
+                dataset_name="test_dataset",
+                workspace_columns=workspace_columns
+            )
+        
+        assert "Critical validation errors" in str(exc_info.value)
+    
+    @patch('arkumu.metadata.models.Resource.objects')
+    @patch('arkumu.metadata.models.triples.Triple.objects')
+    def test_execute_simple_import_with_validation_success(self, mock_triple_objects, mock_resource_objects, execution_engine):
+        """Test execute_simple_import with successful validation"""
+        # Mock database operations
+        mock_resource = create_mock_resource()
+        mock_resource_objects.get_or_create.return_value = (mock_resource, True)
+        mock_resource_objects.bulk_create.return_value = []
+        mock_resource_objects.filter.return_value.select_related.return_value = []
+        mock_triple_objects.bulk_create.return_value = []
+        
+        csv_data = [{"name": "John", "age": "30"}]
+        workspace_columns = [
+            {
+                "dataset_name": "test_dataset",
+                "column_name": "name",
+                "data_type": "string",
+                "is_required": True
+            },
+            {
+                "dataset_name": "test_dataset",
+                "column_name": "age",
+                "data_type": "integer",
+                "is_required": False
+            }
+        ]
+        
+        # Should execute successfully with valid data
+        metrics = execution_engine.execute_simple_import(
+            csv_data=csv_data,
+            dataset_name="test_dataset",
+            workspace_columns=workspace_columns
+        )
+        
+        assert isinstance(metrics, ExecutionMetrics)
+    
+    def test_execute_simple_import_with_validation_failure(self, execution_engine):
+        """Test execute_simple_import with validation failure"""
+        csv_data = [{"name": "John"}]  # Missing required column
+        workspace_columns = [
+            {
+                "dataset_name": "test_dataset",
+                "column_name": "name",
+                "data_type": "string",
+                "is_required": True
+            },
+            {
+                "dataset_name": "test_dataset",
+                "column_name": "required_missing",
+                "data_type": "string",
+                "is_required": True
+            }
+        ]
+        
+        # Should raise ValidationError due to missing required column
+        with pytest.raises(ValidationError) as exc_info:
+            execution_engine.execute_simple_import(
+                csv_data=csv_data,
+                dataset_name="test_dataset",
+                workspace_columns=workspace_columns
+            )
+        
+        assert "Critical validation errors" in str(exc_info.value)
+    
+    @patch('arkumu.metadata.models.Resource.objects')
+    @patch('arkumu.metadata.models.triples.Triple.objects')
+    def test_execute_simple_import_without_validation(self, mock_triple_objects, mock_resource_objects, execution_engine):
+        """Test execute_simple_import without workspace_columns (no validation)"""
+        # Mock database operations
+        mock_resource = create_mock_resource()
+        mock_resource_objects.get_or_create.return_value = (mock_resource, True)
+        mock_resource_objects.bulk_create.return_value = []
+        mock_resource_objects.filter.return_value.select_related.return_value = []
+        mock_triple_objects.bulk_create.return_value = []
+        
+        csv_data = [{"name": "John", "age": "30"}]
+        
+        # Should execute successfully without validation when workspace_columns is None
+        metrics = execution_engine.execute_simple_import(
+            csv_data=csv_data,
+            dataset_name="test_dataset"
+            # No workspace_columns provided
+        )
+        
+        assert isinstance(metrics, ExecutionMetrics)
+    
+    def test_validation_statistics_tracking(self, execution_engine):
+        """Test that validation issues are properly tracked in statistics"""
+        csv_data = [{"name": "John", "age": "not_a_number"}]
+        workspace_columns = [
+            {
+                "dataset_name": "test_dataset",
+                "column_name": "name",
+                "data_type": "string",
+                "is_required": True
+            },
+            {
+                "dataset_name": "test_dataset",
+                "column_name": "age",
+                "data_type": "integer",
+                "is_required": False
+            },
+            {
+                "dataset_name": "test_dataset",
+                "column_name": "missing_column",
+                "data_type": "string",
+                "is_required": True
+            }
+        ]
+        
+        initial_errors = execution_engine.statistics.current_metrics.errors
+        initial_warnings = execution_engine.statistics.current_metrics.warnings
+        
+        validation_result = execution_engine._validate_before_execution(
+            csv_data, workspace_columns, "test_dataset"
+        )
+        
+        # Statistics should reflect validation issues
+        assert execution_engine.statistics.current_metrics.errors > initial_errors
+        assert execution_engine.statistics.current_metrics.warnings > initial_warnings
+        
+        # Should have both errors and warnings
+        assert len(validation_result['critical_errors']) > 0
+        assert len(validation_result['warnings']) > 0
+    
+    def test_helper_methods_functionality(self, execution_engine):
+        """Test functionality of validation helper methods"""
+        workspace_columns = [
+            {
+                "dataset_name": "test_dataset",
+                "column_name": "person_id",
+                "data_type": "string",
+                "is_required": True,
+                "is_anchor": True
+            },
+            {
+                "dataset_name": "test_dataset",
+                "column_name": "department_id",
+                "data_type": "string",
+                "is_fk": True,
+                "target_dataset": "departments",
+                "target_column": "id"
+            },
+            {
+                "dataset_name": "other_dataset",
+                "column_name": "other_col",
+                "data_type": "string"
+            }
+        ]
+        
+        # Test _build_mapping_config_for_validation
+        mapping_config = execution_engine._build_mapping_config_for_validation(
+            "test_dataset", workspace_columns
+        )
+        assert 'workspace_columns' in mapping_config
+        assert 'organization_id' in mapping_config
+        assert len(mapping_config['workspace_columns']) == 2  # Only test_dataset columns
+        
+        # Test _convert_workspace_columns_to_dict
+        cols_dict = execution_engine._convert_workspace_columns_to_dict(
+            workspace_columns, "test_dataset"
+        )
+        assert 'person_id' in cols_dict
+        assert 'department_id' in cols_dict
+        assert 'other_col' not in cols_dict  # Different dataset
+        
+        # Test _extract_fk_relationships
+        fk_relationships = execution_engine._extract_fk_relationships(
+            workspace_columns, "test_dataset"
+        )
+        assert 'department_id' in fk_relationships
+        assert fk_relationships['department_id']['target_dataset'] == "departments"
+        assert fk_relationships['department_id']['target_column'] == "id"
+        
+        # Test _get_sample_data_for_validation
+        df = pl.DataFrame([
+            {"name": "John", "age": "30"},
+            {"name": "Jane", "age": "25"}
+        ])
+        sample_data = execution_engine._get_sample_data_for_validation(df)
+        assert isinstance(sample_data, list)
+        assert len(sample_data) == 2
+        assert sample_data[0]['name'] == "John"
+    
+    def test_validation_with_empty_data(self, execution_engine):
+        """Test validation with empty data"""
+        csv_data = []
+        workspace_columns = [
+            {
+                "dataset_name": "test_dataset",
+                "column_name": "name",
+                "data_type": "string",
+                "is_required": True
+            }
+        ]
+        
+        validation_result = execution_engine._validate_before_execution(
+            csv_data, workspace_columns, "test_dataset"
+        )
+        
+        # Should handle empty data gracefully
+        assert isinstance(validation_result, dict)
+        assert 'critical_errors' in validation_result
+        assert 'warnings' in validation_result
+    
+    def test_validation_exception_handling(self, execution_engine):
+        """Test validation exception handling"""
+        # Test with invalid data that might cause validation to fail
+        csv_data = [{"name": "John"}]
+        workspace_columns = None  # Invalid workspace_columns
+        
+        validation_result = execution_engine._validate_before_execution(
+            csv_data, workspace_columns, "test_dataset"
+        )
+        
+        # Should handle exceptions gracefully and return error result
+        assert isinstance(validation_result, dict)
+        assert len(validation_result['critical_errors']) > 0
+        assert any('failed' in error['message'].lower() for error in validation_result['critical_errors'])
+    
+    def test_file_validation_integration(self, execution_engine):
+        """Test file validation integration"""
+        file_paths = ["/path/to/test.csv", "/path/to/test2.csv"]
+        organization_code = "test_org"
+        
+        # Test _validate_files_if_needed
+        file_issues = execution_engine._validate_files_if_needed(file_paths, organization_code)
+        
+        # Should return list of issues (files won't exist, so should have issues)
+        assert isinstance(file_issues, list)
+        # Files don't exist, so should have file not found issues
+        assert len(file_issues) > 0
+    
+    def test_file_validation_with_empty_paths(self, execution_engine):
+        """Test file validation with empty file paths"""
+        file_paths = []
+        organization_code = "test_org"
+        
+        # Test _validate_files_if_needed with empty paths
+        file_issues = execution_engine._validate_files_if_needed(file_paths, organization_code)
+        
+        # Should return empty list when no files to validate
+        assert isinstance(file_issues, list)
+        assert len(file_issues) == 0
