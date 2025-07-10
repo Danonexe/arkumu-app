@@ -1,105 +1,147 @@
 <!-- File-Mapping Correlation Analysis -->
 {% load correlation_filters %}
 {% if correlation_result %}
-<div class="card bg-base-100 border shadow-sm">
-    <div class="card-body p-4">
-        <h3 class="card-title text-base flex items-center gap-2">
-            {% if correlation_result.is_ready_for_execution %}
-                <span class="text-success">✓</span>
-            {% else %}
-                <span class="text-warning">⚠</span>
-            {% endif %}
-            File-Mapping Correlation
-            <span class="badge badge-outline">
-                {% if correlation_result.has_all_required_datasets %}Complete{% else %}Incomplete{% endif %}
-            </span>
-        </h3>
+<div class="card bg-base-100 border shadow-sm h-full flex flex-col">
+    <div class="card-body p-4 flex-1 overflow-hidden">
+        <!-- Scrollable content container -->
+        <div class="h-full overflow-y-auto pr-2 space-y-4">
+            <h3 class="card-title text-base flex items-center gap-2 flex-shrink-0">
+                {% if correlation_result.is_ready_for_execution %}
+                    <span class="text-success">✓</span>
+                {% else %}
+                    <span class="text-warning">⚠</span>
+                {% endif %}
+                File-Mapping Correlation Analysis
+                <span class="badge {% if correlation_result.has_all_required_datasets %}badge-success{% else %}badge-warning{% endif %}">
+                    {% if correlation_result.has_all_required_datasets %}Complete{% else %}Incomplete{% endif %}
+                </span>
+            </h3>
         
         <!-- Overall Status Summary -->
-        <div class="grid grid-cols-2 gap-4 mt-3 mb-4">
+        <div class="grid grid-cols-3 gap-4 mt-3 mb-4">
             <div class="stat bg-base-200 rounded-lg p-3">
                 <div class="stat-title text-xs">Files Matched</div>
-                <div class="stat-value text-lg">{{ correlation_result.exactly_matched_datasets|length }}</div>
+                <div class="stat-value text-lg text-success">{{ correlation_result.exactly_matched_datasets|length }}</div>
                 <div class="stat-desc text-xs">of {{ correlation_result.mapping_analysis.expected_datasets|length }} required</div>
             </div>
             <div class="stat bg-base-200 rounded-lg p-3">
-                <div class="stat-title text-xs">Coverage</div>
-                <div class="stat-value text-lg">{{ correlation_result.overall_coverage_percentage|floatformat:0 }}%</div>
-                <div class="stat-desc text-xs">column mapping</div>
+                <div class="stat-title text-xs">Missing Files</div>
+                <div class="stat-value text-lg text-error">{{ correlation_result.missing_datasets|length }}</div>
+                <div class="stat-desc text-xs">datasets without files</div>
+            </div>
+            <div class="stat bg-base-200 rounded-lg p-3">
+                <div class="stat-title text-xs">Extra Files</div>
+                <div class="stat-value text-lg text-warning">{{ correlation_result.unmatched_files|length }}</div>
+                <div class="stat-desc text-xs">files without datasets</div>
             </div>
         </div>
         
-        <!-- Dataset Correlation Matrix -->
-        <div class="space-y-2 mt-3">
-            <h4 class="text-sm font-medium">Dataset-File Matching</h4>
-            {% for correlation in correlation_result.dataset_correlations %}
-            <div class="flex items-center justify-between p-2 rounded bg-base-200">
-                <div class="flex-1">
-                    <div class="font-medium text-sm">{{ correlation.file_path|basename }}</div>
-                    <div class="text-xs text-base-content/60">
-                        {% if correlation.is_exact_match %}
-                            → {{ correlation.dataset_name }} dataset
-                        {% else %}
-                            → No matching dataset
-                        {% endif %}
-                    </div>
-                </div>
-                
-                <div class="flex items-center gap-2">
-                    <!-- Exact match indicator -->
-                    {% if correlation.is_exact_match %}
-                        <span class="text-success text-lg">✓</span>
-                    {% else %}
-                        <span class="text-error text-lg">✗</span>
-                    {% endif %}
-                    
-                    <!-- Status badge -->
-                    <span class="badge badge-sm {{ correlation.status|status_badge }}">
-                        {{ correlation.status|replace:'_',' '|title }}
-                    </span>
-                    
-                    <!-- Issues indicator -->
-                    {% if correlation.has_issues %}
-                        <div class="dropdown dropdown-end">
-                            <label tabindex="0" class="btn btn-ghost btn-xs">
-                                <span class="text-warning">⚠</span>
-                            </label>
-                            <div tabindex="0" class="dropdown-content z-[1] card card-compact w-64 p-2 shadow bg-base-100">
-                                <div class="card-body">
-                                    <h5 class="font-bold text-xs">Issues Found</h5>
-                                    {% if correlation.missing_columns %}
-                                        <p class="text-xs text-error">Missing columns: {{ correlation.missing_columns|join:", " }}</p>
-                                    {% endif %}
-                                    {% if correlation.type_mismatches %}
-                                        <p class="text-xs text-warning">{{ correlation.type_mismatches|length }} type mismatch(es)</p>
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </div>
-                    {% endif %}
+            <!-- Dataset Correlation Table -->
+            <div class="mt-4">
+                <h4 class="text-sm font-medium mb-3 flex-shrink-0">File-Dataset Correlation Details</h4>
+                <div class="overflow-x-auto max-h-96">
+                    <table class="table table-xs table-zebra table-pin-rows">
+                    <thead>
+                        <tr>
+                            <th>Status</th>
+                            <th>File Name</th>
+                            <th>Dataset Match</th>
+                            <th>Columns</th>
+                            <th>Issues</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for correlation in correlation_result.dataset_correlations %}
+                        <tr class="{% if correlation.is_exact_match %}bg-success/5{% else %}bg-error/5{% endif %}">
+                            <td>
+                                {% if correlation.is_exact_match %}
+                                    <span class="text-success">✓</span>
+                                {% else %}
+                                    <span class="text-error">✗</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="font-mono text-xs font-medium">{{ correlation.file_path|basename }}</div>
+                            </td>
+                            <td>
+                                {% if correlation.is_exact_match %}
+                                    <div class="font-medium text-sm">{{ correlation.dataset_name }}</div>
+                                    <div class="text-xs text-base-content/60">{{ correlation.matched_columns|length }} columns</div>
+                                {% else %}
+                                    <span class="text-base-content/50 text-xs">No matching dataset</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if correlation.is_exact_match %}
+                                    <div class="flex gap-1 text-xs">
+                                        {% if correlation.matched_columns %}
+                                            <span class="text-success">{{ correlation.matched_columns|length }}</span>
+                                        {% endif %}
+                                        {% if correlation.missing_columns %}
+                                            <span class="text-error">{{ correlation.missing_columns|length }} missing</span>
+                                        {% endif %}
+                                        {% if correlation.extra_columns %}
+                                            <span class="text-warning">{{ correlation.extra_columns|length }} extra</span>
+                                        {% endif %}
+                                    </div>
+                                {% else %}
+                                    <span class="text-xs text-base-content/50">—</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if correlation.type_mismatches %}
+                                    <div class="tooltip" data-tip="{{ correlation.type_mismatches|length }} type mismatch(es)">
+                                        <span class="text-warning text-xs">{{ correlation.type_mismatches|length }} types</span>
+                                    </div>
+                                {% elif correlation.missing_columns %}
+                                    <div class="tooltip" data-tip="Missing: {{ correlation.missing_columns|join:', ' }}">
+                                        <span class="text-error text-xs">{{ correlation.missing_columns|length }} missing</span>
+                                    </div>
+                                {% elif correlation.is_exact_match %}
+                                    <span class="text-success text-xs">✓</span>
+                                {% else %}
+                                    <span class="text-error text-xs">No match</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
             </div>
-            {% endfor %}
-        </div>
         
         <!-- Missing/Extra Information -->
         {% if correlation_result.missing_datasets or correlation_result.unmatched_files %}
-        <div class="space-y-2 mt-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
             {% if correlation_result.missing_datasets %}
-            <div class="alert alert-warning py-2">
-                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <div class="alert alert-error py-3">
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                     <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"/>
                 </svg>
-                <span class="text-sm">Missing datasets: {{ correlation_result.missing_datasets|join:", " }}</span>
+                <div>
+                    <h4 class="font-medium text-sm">Missing Dataset Files</h4>
+                    <div class="text-xs mt-1">
+                        {% for dataset in correlation_result.missing_datasets %}
+                            <span class="badge badge-error badge-xs mr-1">{{ dataset }}.csv</span>
+                        {% endfor %}
+                    </div>
+                </div>
             </div>
             {% endif %}
             
             {% if correlation_result.unmatched_files %}
-            <div class="alert alert-info py-2">
-                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <div class="alert alert-warning py-3">
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                     <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"/>
                 </svg>
-                <span class="text-sm">Unmatched files: {{ correlation_result.unmatched_files|length }} file{{ correlation_result.unmatched_files|length|pluralize }}</span>
+                <div>
+                    <h4 class="font-medium text-sm">Extra Files (No Dataset Match)</h4>
+                    <div class="text-xs mt-1">
+                        {% for file in correlation_result.unmatched_files %}
+                            <span class="badge badge-warning badge-xs mr-1">{{ file|basename }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
             </div>
             {% endif %}
         </div>
@@ -107,159 +149,127 @@
         
         <!-- Required Actions -->
         {% if correlation_result.recommendations %}
-        <details class="collapse collapse-arrow mt-3">
-            <summary class="collapse-title text-sm font-medium">
-                Required Actions ({{ correlation_result.recommendations|length }})
-            </summary>
-            <div class="collapse-content">
-                <ul class="text-sm space-y-1">
-                    {% for recommendation in correlation_result.recommendations %}
-                    <li class="flex items-start gap-2">
-                        <span class="text-warning">!</span>
-                        <span>{{ recommendation }}</span>
-                    </li>
-                    {% endfor %}
-                </ul>
+        <div class="mt-4">
+            <div class="alert alert-info">
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"/>
+                </svg>
+                <div>
+                    <h4 class="font-medium text-sm">Required Actions ({{ correlation_result.recommendations|length }})</h4>
+                    <div class="mt-2">
+                        <ul class="text-sm space-y-1 list-disc list-inside">
+                            {% for recommendation in correlation_result.recommendations %}
+                            <li>{{ recommendation }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
             </div>
-        </details>
+        </div>
         {% endif %}
         
-        <!-- Enhanced Column Analysis (Expandable) -->
-        {% if correlation_result.dataset_correlations %}
-        <details class="collapse collapse-arrow mt-3">
-            <summary class="collapse-title text-sm font-medium">
-                Column Analysis Details
-                <span class="badge badge-sm badge-outline">{{ correlation_result.dataset_correlations|length }} file{{ correlation_result.dataset_correlations|length|pluralize }}</span>
-            </summary>
-            <div class="collapse-content">
-                {% for correlation in correlation_result.dataset_correlations %}
-                <div class="border rounded p-3 mt-2 {% if correlation.is_exact_match %}border-success/20{% else %}border-error/20{% endif %}">
-                    <div class="flex items-center justify-between mb-3">
-                        <h5 class="font-medium text-sm">
-                            {{ correlation.file_path|basename }}
-                            {% if correlation.is_exact_match %}
-                                → {{ correlation.dataset_name }} Dataset
-                            {% else %}
-                                → No Dataset Match
-                            {% endif %}
-                        </h5>
-                        <div class="flex items-center gap-2">
-                            {% if correlation.is_exact_match %}
-                                <span class="badge badge-success badge-xs">Matched</span>
-                            {% else %}
-                                <span class="badge badge-error badge-xs">Unmatched</span>
-                            {% endif %}
-                        </div>
-                    </div>
-                    
-                    {% if correlation.is_exact_match %}
-                    <!-- Column mapping details table -->
-                    <div class="overflow-x-auto">
-                        <table class="table table-xs">
-                            <thead>
-                                <tr>
-                                    <th>File Column</th>
-                                    <th>Mapping Column</th>
-                                    <th>Type Match</th>
-                                    <th>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <!-- Matched columns -->
-                                {% for column in correlation.matched_columns %}
-                                <tr class="hover:bg-success/5">
-                                    <td class="font-mono text-xs">{{ column }}</td>
-                                    <td class="font-mono text-xs">{{ column }}</td>
-                                    <td><span class="text-success">✓</span></td>
-                                    <td><span class="badge badge-success badge-xs">Mapped</span></td>
-                                </tr>
-                                {% endfor %}
-                                
-                                <!-- Missing columns (required by mapping) -->
-                                {% for column in correlation.missing_columns %}
-                                <tr class="hover:bg-error/5">
-                                    <td class="font-mono text-xs text-base-content/40">—</td>
-                                    <td class="font-mono text-xs">{{ column }}</td>
-                                    <td><span class="text-error">✗</span></td>
-                                    <td><span class="badge badge-error badge-xs">Missing</span></td>
-                                </tr>
-                                {% endfor %}
-                                
-                                <!-- Extra columns (in file but not mapped) -->
-                                {% for column in correlation.extra_columns %}
-                                <tr class="hover:bg-warning/5">
-                                    <td class="font-mono text-xs">{{ column }}</td>
-                                    <td class="font-mono text-xs text-base-content/40">—</td>
-                                    <td><span class="text-base-content/40">—</span></td>
-                                    <td><span class="badge badge-warning badge-xs">Extra</span></td>
-                                </tr>
-                                {% endfor %}
-                                
-                                <!-- Type mismatches -->
-                                {% for mismatch in correlation.type_mismatches %}
-                                <tr class="hover:bg-error/5">
-                                    <td class="font-mono text-xs">{{ mismatch.column_name }}</td>
-                                    <td class="font-mono text-xs">{{ mismatch.column_name }}</td>
-                                    <td><span class="text-error">⚠</span></td>
-                                    <td>
-                                        <span class="badge badge-error badge-xs">Type Mismatch</span>
-                                        <div class="text-xs text-error/60 mt-1">
-                                            Found: {{ mismatch.file_type }}, Expected: {{ mismatch.expected_type }}
-                                        </div>
-                                    </td>
-                                </tr>
-                                {% endfor %}
+            <!-- Column Analysis Details (Collapsible) -->
+            {% if correlation_result.dataset_correlations %}
+            {% for correlation in correlation_result.dataset_correlations %}
+            {% if correlation.is_exact_match %}
+            <div id="details-{{ correlation.file_path|slugify }}" class="collapse collapse-arrow mt-4" style="display: none;">
+                <input type="checkbox" />
+                <div class="collapse-title text-sm font-medium bg-base-200">
+                    Column Details: {{ correlation.file_path|basename }} → {{ correlation.dataset_name }}
+                </div>
+                <div class="collapse-content bg-base-100">
+                    <div class="overflow-x-auto max-h-64">
+                        <table class="table table-xs table-zebra table-pin-rows">
+                        <thead>
+                            <tr>
+                                <th>File Column</th>
+                                <th>Mapping Column</th>
+                                <th>Status</th>
+                                <th>Type Info</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Matched columns -->
+                            {% for column in correlation.matched_columns %}
+                            <tr>
+                                <td class="font-mono text-xs">{{ column }}</td>
+                                <td class="font-mono text-xs">{{ column }}</td>
+                                <td><span class="badge badge-success badge-xs">✓ Mapped</span></td>
+                                <td class="text-xs text-success">OK</td>
+                            </tr>
+                            {% endfor %}
+                            
+                            <!-- Missing columns -->
+                            {% for column in correlation.missing_columns %}
+                            <tr>
+                                <td class="text-base-content/40 text-xs">—</td>
+                                <td class="font-mono text-xs">{{ column }}</td>
+                                <td><span class="badge badge-error badge-xs">✗ Missing</span></td>
+                                <td class="text-xs text-error">Required column not found in file</td>
+                            </tr>
+                            {% endfor %}
+                            
+                            <!-- Extra columns -->
+                            {% for column in correlation.extra_columns %}
+                            <tr>
+                                <td class="font-mono text-xs">{{ column }}</td>
+                                <td class="text-base-content/40 text-xs">—</td>
+                                <td><span class="badge badge-warning badge-xs">? Extra</span></td>
+                                <td class="text-xs text-warning">Not mapped to any dataset field</td>
+                            </tr>
+                            {% endfor %}
+                            
+                            <!-- Type mismatches -->
+                            {% for mismatch in correlation.type_mismatches %}
+                            <tr>
+                                <td class="font-mono text-xs">{{ mismatch.column_name }}</td>
+                                <td class="font-mono text-xs">{{ mismatch.column_name }}</td>
+                                <td><span class="badge badge-error badge-xs">⚠ Type Issue</span></td>
+                                <td class="text-xs text-error">Found: {{ mismatch.file_type }}, Expected: {{ mismatch.expected_type }}</td>
+                            </tr>
+                            {% endfor %}
                             </tbody>
                         </table>
                     </div>
-                    
-                    <!-- Column statistics -->
-                    <div class="flex items-center justify-between text-xs text-base-content/60 mt-3 pt-3 border-t">
-                        <div class="flex items-center gap-4">
-                            <span>Mapped: <strong class="text-success">{{ correlation.matched_columns|length }}</strong></span>
-                            <span>Missing: <strong class="text-error">{{ correlation.missing_columns|length }}</strong></span>
-                            <span>Extra: <strong class="text-warning">{{ correlation.extra_columns|length }}</strong></span>
-                            {% if correlation.type_mismatches %}
-                            <span>Type Issues: <strong class="text-error">{{ correlation.type_mismatches|length }}</strong></span>
-                            {% endif %}
-                        </div>
-                        <div>
-                            Coverage: <strong>{{ correlation.matched_columns|length|div:correlation.matched_columns|length|add:correlation.missing_columns|length|mul:100|floatformat:1 }}%</strong>
-                        </div>
-                    </div>
-                    
-                    {% else %}
-                    <!-- No match information -->
-                    <div class="text-center py-4 text-base-content/60">
-                        <div class="text-error text-2xl mb-2">⚠</div>
-                        <div class="text-sm">File name doesn't match any expected dataset</div>
-                        <div class="text-xs mt-1">Expected datasets: {{ correlation_result.mapping_analysis.expected_datasets|join:", " }}</div>
-                    </div>
-                    {% endif %}
                 </div>
-                {% endfor %}
             </div>
-        </details>
-        {% endif %}
+            {% endif %}
+            {% endfor %}
+            {% endif %}
         
         <!-- Execution Readiness Summary -->
-        <div class="mt-4 p-3 rounded-lg {% if correlation_result.is_ready_for_execution %}bg-success/10 border border-success/20{% else %}bg-warning/10 border border-warning/20{% endif %}">
-            <div class="flex items-center gap-2">
+        <div class="mt-4 p-4 rounded-lg {% if correlation_result.is_ready_for_execution %}bg-success/10 border border-success/30{% else %}bg-warning/10 border border-warning/30{% endif %}">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    {% if correlation_result.is_ready_for_execution %}
+                        <div class="w-8 h-8 rounded-full bg-success flex items-center justify-center">
+                            <span class="text-success-content font-bold">✓</span>
+                        </div>
+                        <div>
+                            <div class="font-medium text-success">Ready for Import</div>
+                            <div class="text-xs text-base-content/70">All {{ correlation_result.exactly_matched_datasets|length }} datasets matched successfully</div>
+                        </div>
+                    {% else %}
+                        <div class="w-8 h-8 rounded-full bg-warning flex items-center justify-center">
+                            <span class="text-warning-content font-bold">⚠</span>
+                        </div>
+                        <div>
+                            <div class="font-medium text-warning">Issues Must Be Resolved</div>
+                            <div class="text-xs text-base-content/70">{{ correlation_result.missing_datasets|length }} missing files, {{ correlation_result.unmatched_files|length }} unmatched files</div>
+                        </div>
+                    {% endif %}
+                </div>
                 {% if correlation_result.is_ready_for_execution %}
-                    <span class="text-success">✓</span>
-                    <span class="text-sm font-medium">Ready for Execution</span>
+                    <div class="badge badge-success gap-1">
+                        <span>{{ correlation_result.exactly_matched_datasets|length }}</span>/{{ correlation_result.mapping_analysis.expected_datasets|length }} Complete
+                    </div>
                 {% else %}
-                    <span class="text-warning">⚠</span>
-                    <span class="text-sm font-medium">Issues Must Be Resolved</span>
+                    <div class="badge badge-warning gap-1">
+                        <span>{{ correlation_result.exactly_matched_datasets|length }}</span>/{{ correlation_result.mapping_analysis.expected_datasets|length }} Matched
+                    </div>
                 {% endif %}
             </div>
-            <div class="text-xs text-base-content/60 mt-1">
-                {% if correlation_result.is_ready_for_execution %}
-                    All required datasets matched with exact filenames. Proceed with import.
-                {% else %}
-                    {{ correlation_result.total_issues_count }} issue(s) found. Review recommendations above.
-                {% endif %}
-            </div>
+        </div>
         </div>
     </div>
 </div>
@@ -288,14 +298,16 @@
 </div>
 {% endif %}
 
-<!-- Template Filters for Status Badges -->
+<!-- JavaScript for Enhanced Interactions -->
 <script>
-// Helper function for status badge classes
-function getStatusBadgeClass(status) {
-    switch(status) {
-        case 'exact_match': return 'badge-success';
-        case 'no_match': return 'badge-error';
-        default: return 'badge-outline';
+function toggleDetails(fileSlug) {
+    const detailsElement = document.getElementById('details-' + fileSlug);
+    if (detailsElement) {
+        if (detailsElement.style.display === 'none' || detailsElement.style.display === '') {
+            detailsElement.style.display = 'block';
+        } else {
+            detailsElement.style.display = 'none';
+        }
     }
 }
 </script>
