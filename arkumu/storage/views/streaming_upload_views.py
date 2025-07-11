@@ -58,9 +58,16 @@ def streaming_upload_form(request):
     if request.method == 'GET':
         # Get optional organization parameter
         organization = request.GET.get('organization', '')
-        # Get organizations from database for dropdown
+        # Get organizations from database for dropdown, auto-create if none exist
         from arkumu.users.models import Organization
+        from arkumu.users.utils import ensure_predefined_organizations
+        
         organizations = Organization.objects.filter(is_active=True)
+        
+        # Auto-populate organizations if none exist
+        if not organizations.exists():
+            ensure_predefined_organizations()
+            organizations = Organization.objects.filter(is_active=True)
         return render(request, "upload/streaming_upload_form.html", {
             "organization": organization,
             "organizations": organizations

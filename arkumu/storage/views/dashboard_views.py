@@ -48,9 +48,18 @@ class ArchivistDashboardView(GeneralLoginRequiredMixin, BaseCoordinatorMixin, Vi
             selected_org_slug = current_org['code'] if current_org else None
             
             logger.info("Attempting to get available organizations...")
-            # Get organizations from database instead of hardcoded bucket service
+            # Get organizations from database, auto-create if none exist
             from arkumu.users.models import Organization
+            from arkumu.users.utils import ensure_predefined_organizations
+            
             organizations = list(Organization.objects.filter(is_active=True))
+            
+            # Auto-populate organizations if none exist
+            if not organizations:
+                logger.info("No organizations found, creating predefined ones...")
+                ensure_predefined_organizations()
+                organizations = list(Organization.objects.filter(is_active=True))
+            
             logger.info(f"Got {len(organizations)} available organizations from database.")
             
             organization_count = len(organizations)
