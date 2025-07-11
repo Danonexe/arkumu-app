@@ -154,24 +154,26 @@ def ensure_predefined_organizations():
     
     This should be called during deployment or setup to create Organization
     objects for all existing org_id strings used in the system.
+    
+    Now uses OrganizationType TextChoices for standardized organization data.
     """
     # Import here to avoid circular imports  
     from arkumu.storage.services.bucket_service import PREDEFINED_ORGANIZATIONS
     
-    org_names = {
-        "rsh": "RSH (Robert Schumann)",
-        "khm": "KHM (Köln)", 
-        "fuk": "FUK (Folkwang)",
-        "hmt": "HMT (Hochschule für Musik und Theater)",
-        "det": "DET (Digital Education Technologies)",
-    }
+    # Use OrganizationType for consistent organization data
+    from .models import Organization, OrganizationType
+    type_choices_map = {choice[0]: choice[1] for choice in OrganizationType.choices}
     
     created_count = 0
     for org_code in PREDEFINED_ORGANIZATIONS:
+        # Try to match with OrganizationType or create custom name
+        org_name = type_choices_map.get(org_code, f"Organization {org_code.upper()}")
+        
         org, created = Organization.objects.get_or_create(
             code=org_code,
             defaults={
-                'name': org_names.get(org_code, f"Organization {org_code.upper()}"),
+                'name': org_name,
+                'organization_type': org_code if org_code in type_choices_map else OrganizationType.OTHER,
                 'is_active': True
             }
         )

@@ -58,8 +58,12 @@ def streaming_upload_form(request):
     if request.method == 'GET':
         # Get optional organization parameter
         organization = request.GET.get('organization', '')
+        # Get organizations from database for dropdown
+        from arkumu.users.models import Organization
+        organizations = Organization.objects.filter(is_active=True)
         return render(request, "upload/streaming_upload_form.html", {
-            "organization": organization
+            "organization": organization,
+            "organizations": organizations
         })
     
     # Handle POST request with file uploads

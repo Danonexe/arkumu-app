@@ -32,11 +32,10 @@
                         <span class="label-text">Select Organization</span> 
                     </label>
                     <select id="organization" name="organization" class="select select-bordered w-full">
-                        <option value="rsh">Robert Schumann Hochschule Düsseldorf</option>
-                        <option value="khm">Kunsthochschule für Medien Köln</option>
-                        <option value="fuk">Folkwang Universität der Künste</option>
-                        <option value="hmt">Hochschule für Musik und Tanz Köln</option>
-                        <option value="det">Hochschule für Musik Detmold</option>
+                        <option value="">Choose organization...</option>
+                        {% for org in organizations %}
+                            <option value="{{ org.code }}">{{ org.name }}</option>
+                        {% endfor %}
                     </select>
                     <div class="label">
                         <span class="label-text-alt">Choose the organization bucket</span>

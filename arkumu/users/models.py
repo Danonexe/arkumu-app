@@ -2,27 +2,125 @@ from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
+from django.core.validators import RegexValidator
+from django.utils import timezone
+
+
+class OrganizationType(models.TextChoices):
+    """Predefined organization types based on German arts and music institutions."""
+    RSH = 'rsh', _('Robert Schumann Hochschule Düsseldorf')
+    KHM = 'khm', _('Kunsthochschule für Medien Köln')
+    FUK = 'fuk', _('Folkwang Universität der Künste')
+    HMT = 'hmt', _('Hochschule für Musik und Tanz Köln')
+    DET = 'det', _('Hochschule für Musik Detmold')
+    # Can be easily expanded with additional institutions
+    OTHER = 'other', _('Other Institution')
 
 
 class Organization(models.Model):
     """Organization model for multi-tenant support"""
     name = models.CharField(max_length=255)
-    code = models.CharField(max_length=50, unique=True)  # For Shibboleth mapping
-    domain = models.CharField(max_length=255, blank=True)  # Email domain
-    shibboleth_entity_id = models.CharField(max_length=255, blank=True)
-    is_active = models.BooleanField(default=True)
+    code = models.CharField(
+        max_length=50, 
+        unique=True,
+        validators=[
+            RegexValidator(
+                regex='^[a-zA-Z0-9_-]+$',
+                message='Code can only contain letters, numbers, hyphens and underscores.',
+            )
+        ],
+        help_text='Unique identifier for the organization (used in URLs and Shibboleth mapping)'
+    )
+    domain = models.CharField(
+        max_length=255, 
+        blank=True,
+        help_text='Email domain for automatic user assignment (e.g., "example.edu")'
+    )
+    shibboleth_entity_id = models.CharField(
+        max_length=255, 
+        blank=True,
+        help_text='Shibboleth Identity Provider entity ID'
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text='Inactive organizations cannot be accessed by users'
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    
+    # Additional fields for better organization management
+    organization_type = models.CharField(
+        max_length=20,
+        choices=OrganizationType.choices,
+        blank=True,
+        help_text='Select from predefined institution types or choose "Other"'
+    )
+    description = models.TextField(
+        blank=True,
+        help_text='Internal notes about this organization'
+    )
+    contact_email = models.EmailField(
+        blank=True,
+        help_text='Primary contact email for this organization'
+    )
+    contact_name = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text='Primary contact person for this organization'
+    )
     
     class Meta:
         ordering = ['name']
         indexes = [
             models.Index(fields=['code']),
             models.Index(fields=['domain']),
+            models.Index(fields=['is_active', 'created_at']),
         ]
+        verbose_name = _('Organization')
+        verbose_name_plural = _('Organizations')
     
     def __str__(self):
         return self.name
+    
+    @property
+    def user_count(self):
+        """Get the total number of users in this organization."""
+        return self.users.count()
+    
+    @property
+    def active_user_count(self):
+        """Get the number of active users in this organization."""
+        return self.users.filter(is_active=True).count()
+    
+    def get_user_statistics(self):
+        """Get detailed statistics about users in this organization."""
+        from django.db.models import Count, Q
+        return self.users.aggregate(
+            total=Count('id'),
+            active=Count('id', filter=Q(is_active=True)),
+            researchers=Count('id', filter=Q(role='researcher')),
+            archivists=Count('id', filter=Q(role='archivist')),
+            managers=Count('id', filter=Q(role='manager')),
+            super_managers=Count('id', filter=Q(role='super_manager')),
+            system_admins=Count('id', filter=Q(role='system_admin')),
+            shibboleth=Count('id', filter=Q(auth_source='shibboleth')),
+            local=Count('id', filter=Q(auth_source='local')),
+        )
+    
+    def get_organization_type_display_name(self):
+        """Get the full display name from organization type."""
+        if self.organization_type:
+            return OrganizationType(self.organization_type).label
+        return None
+    
+    def populate_from_type(self):
+        """Auto-populate name and code from organization_type if not set."""
+        if self.organization_type and self.organization_type != OrganizationType.OTHER:
+            type_choice = OrganizationType(self.organization_type)
+            if not self.name:
+                self.name = type_choice.label
+            if not self.code:
+                self.code = type_choice.value
 
 
 class User(AbstractUser):

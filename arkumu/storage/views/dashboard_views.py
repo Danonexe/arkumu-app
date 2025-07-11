@@ -48,10 +48,12 @@ class ArchivistDashboardView(GeneralLoginRequiredMixin, BaseCoordinatorMixin, Vi
             selected_org_slug = current_org['code'] if current_org else None
             
             logger.info("Attempting to get available organizations...")
-            organizations = bucket_service.get_available_organizations()
-            logger.info(f"Got {len(organizations)} available organizations.")
+            # Get organizations from database instead of hardcoded bucket service
+            from arkumu.users.models import Organization
+            organizations = list(Organization.objects.filter(is_active=True))
+            logger.info(f"Got {len(organizations)} available organizations from database.")
             
-            organization_count = len([org for org in organizations if org.get('exists', False)])
+            organization_count = len(organizations)
             
             total_files_display = "N/A"
             storage_used_display = "N/A"
@@ -62,15 +64,13 @@ class ArchivistDashboardView(GeneralLoginRequiredMixin, BaseCoordinatorMixin, Vi
             if selected_org_slug:
                 logger.info(f"Selected organization slug: {selected_org_slug}")
                 try:
-                    selected_org_data = next((org for org in organizations if org.get('slug') == selected_org_slug), None)
+                    selected_org_data = next((org for org in organizations if org.code == selected_org_slug), None)
 
-                    if selected_org_data and selected_org_data.get('exists'):
+                    if selected_org_data:
                         logger.info(f"Fetching structure for existing org: {selected_org_slug}")
                         bucket_name = bucket_service.get_organization_bucket(selected_org_slug)
                         organization_structure = bucket_service.get_root_level_items(bucket_name)
                         logger.info(f"Structure fetched for {selected_org_slug}")
-                    elif selected_org_data:
-                        logger.info(f"Organization {selected_org_slug} is predefined but its bucket does not exist yet.")
                     else:
                         logger.warning(f"Requested organization '{selected_org_slug}' not found in available organizations.")
 
