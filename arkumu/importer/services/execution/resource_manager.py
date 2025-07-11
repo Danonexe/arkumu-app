@@ -440,13 +440,13 @@ class ResourceManager:
                                    slugify_uri_part(object_value[:50]))  # Truncate for URI
                 
                 value_resource, _ = Resource.objects.get_or_create(
-                    value=object_value,
-                    datatype=datatype,
-                    source=self.institution,
+                    uri=value_uri,
                     defaults={
                         "resource_type": ResourceType.LITERAL,
                         "name": object_value[:100],  # Truncate for name
-                        "uri": value_uri,
+                        "value": object_value,
+                        "datatype": datatype,
+                        "source": self.institution,
                         "is_placeholder": False
                     }
                 )
