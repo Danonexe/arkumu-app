@@ -173,7 +173,6 @@ def ensure_predefined_organizations():
             code=org_code,
             defaults={
                 'name': org_name,
-                'organization_type': org_code if org_code in type_choices_map else OrganizationType.OTHER,
                 'is_active': True
             }
         )

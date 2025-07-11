@@ -49,12 +49,6 @@ class Organization(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     # Additional fields for better organization management
-    organization_type = models.CharField(
-        max_length=20,
-        choices=OrganizationType.choices,
-        blank=True,
-        help_text='Select from predefined institution types or choose "Other"'
-    )
     description = models.TextField(
         blank=True,
         help_text='Internal notes about this organization'
@@ -108,19 +102,18 @@ class Organization(models.Model):
         )
     
     def get_organization_type_display_name(self):
-        """Get the full display name from organization type."""
-        if self.organization_type:
-            return OrganizationType(self.organization_type).label
+        """Get the full display name from organization code if it matches a known type."""
+        if self.code and self.code in [choice[0] for choice in OrganizationType.choices]:
+            return OrganizationType(self.code).label
         return None
     
     def populate_from_type(self):
-        """Auto-populate name and code from organization_type if not set."""
-        if self.organization_type and self.organization_type != OrganizationType.OTHER:
-            type_choice = OrganizationType(self.organization_type)
-            if not self.name:
-                self.name = type_choice.label
-            if not self.code:
-                self.code = type_choice.value
+        """Auto-populate name from code if it matches a known OrganizationType."""
+        if self.code and self.code in [choice[0] for choice in OrganizationType.choices]:
+            if self.code != OrganizationType.OTHER:
+                type_choice = OrganizationType(self.code)
+                if not self.name:
+                    self.name = type_choice.label
 
 
 class User(AbstractUser):

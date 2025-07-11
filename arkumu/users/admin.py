@@ -89,7 +89,6 @@ class OrganizationAdmin(admin.ModelAdmin):
     ]
     list_filter = [
         'is_active',
-        'organization_type',
         HasUsersFilter,
         'created_at',
         ('users', admin.EmptyFieldListFilter),
@@ -101,7 +100,7 @@ class OrganizationAdmin(admin.ModelAdmin):
     
     fieldsets = (
         (None, {
-            'fields': ('organization_type', 'name', 'code', 'is_active')
+            'fields': ('name', 'code', 'is_active')
         }),
         (_('Contact Information'), {
             'fields': ('contact_name', 'contact_email', 'description'),
@@ -147,8 +146,8 @@ class OrganizationAdmin(admin.ModelAdmin):
     active_user_count.admin_order_field = 'active_users'
     
     def organization_type_badge(self, obj):
-        """Display organization type as a badge."""
-        if not obj.organization_type:
+        """Display organization type as a badge based on code."""
+        if not obj.code:
             return format_html('<span style="color: #6c757d;">-</span>')
         
         # Color coding for different institution types
@@ -161,18 +160,18 @@ class OrganizationAdmin(admin.ModelAdmin):
             'other': '#6c757d',  # gray
         }
         
-        color = colors.get(obj.organization_type, '#6c757d')
-        display_name = obj.get_organization_type_display()
+        color = colors.get(obj.code, '#6c757d')
+        display_name = obj.get_organization_type_display_name() or obj.code
         
         return format_html(
             '<span style="background-color: {}; color: white; padding: 2px 6px; '
             'border-radius: 3px; font-size: 11px; font-weight: bold;" title="{}">{}</span>',
             color,
             display_name,
-            obj.organization_type.upper()
+            obj.code.upper()
         )
     organization_type_badge.short_description = _('Type')
-    organization_type_badge.admin_order_field = 'organization_type'
+    organization_type_badge.admin_order_field = 'code'
     
     def user_statistics(self, obj):
         """Display detailed user statistics."""
@@ -257,33 +256,32 @@ class OrganizationAdmin(admin.ModelAdmin):
     deactivate_organizations.short_description = _("Deactivate selected organizations")
     
     def populate_from_type(self, request, queryset):
-        """Auto-populate name and code from organization type."""
+        """Auto-populate name from code if it matches a known OrganizationType."""
         updated_count = 0
         
         for org in queryset:
-            if org.organization_type and org.organization_type != 'other':
+            if org.code and org.code != 'other':
                 old_name = org.name
-                old_code = org.code
                 
                 org.populate_from_type()
                 
-                if org.name != old_name or org.code != old_code:
+                if org.name != old_name:
                     org.save()
                     updated_count += 1
         
         if updated_count > 0:
             self.message_user(
                 request,
-                f"Updated {updated_count} organization(s) from their type.",
+                f"Updated {updated_count} organization(s) names from their codes.",
                 messages.SUCCESS
             )
         else:
             self.message_user(
                 request,
-                "No organizations were updated. They either have no type set or already have matching names/codes.",
+                "No organizations were updated. They either have unknown codes or already have matching names.",
                 messages.INFO
             )
-    populate_from_type.short_description = _("Populate name/code from organization type")
+    populate_from_type.short_description = _("Populate name from organization code")
 
 
 @admin.register(User)
