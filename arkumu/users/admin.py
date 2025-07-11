@@ -79,7 +79,7 @@ class UserInline(admin.TabularInline):
 class OrganizationAdmin(admin.ModelAdmin):
     list_display = [
         'name', 
-        'organization_type_badge',
+        'code_badge',
         'domain', 
         'user_count',
         'active_user_count',
@@ -144,12 +144,12 @@ class OrganizationAdmin(admin.ModelAdmin):
     active_user_count.short_description = _('Active Users')
     active_user_count.admin_order_field = 'active_users'
     
-    def organization_type_badge(self, obj):
-        """Display organization type as a badge based on code."""
+    def code_badge(self, obj):
+        """Display organization code as a colored badge."""
         if not obj.code:
             return format_html('<span style="color: #6c757d;">-</span>')
         
-        # Color coding for different institution types
+        # Color coding for different institution codes
         colors = {
             'rsh': '#dc3545',    # red
             'khm': '#6610f2',    # indigo  
@@ -169,8 +169,8 @@ class OrganizationAdmin(admin.ModelAdmin):
             display_name,
             obj.code.upper()
         )
-    organization_type_badge.short_description = _('Type')
-    organization_type_badge.admin_order_field = 'code'
+    code_badge.short_description = _('Code')
+    code_badge.admin_order_field = 'code'
     
     def user_statistics(self, obj):
         """Display detailed user statistics."""
