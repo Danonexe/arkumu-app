@@ -79,7 +79,6 @@ class UserInline(admin.TabularInline):
 class OrganizationAdmin(admin.ModelAdmin):
     list_display = [
         'name', 
-        'code',
         'organization_type_badge',
         'domain', 
         'user_count',
