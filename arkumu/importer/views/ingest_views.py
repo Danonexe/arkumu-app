@@ -10,6 +10,7 @@ from django.views import View
 from arkumu.users.mixins import GeneralLoginRequiredMixin, general_login_required
 from arkumu.users.models import Organization
 from arkumu.importer.mixins.ingest_coordinator import IngestCoordinatorMixin
+from arkumu.importer.tasks.import_metadata import run_mapping_aware_import_workflow
 
 logger = logging.getLogger(__name__)
 
@@ -1602,7 +1603,6 @@ def start_import(request):
             return HttpResponse('<div class="alert alert-error">No files selected</div>', status=400)
         
         # Use mapping-aware processing for the import
-        from arkumu.importer.tasks.import_metadata import run_mapping_aware_import_workflow
         from arkumu.storage.services.bucket_service import BucketService
         import uuid
         
