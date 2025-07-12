@@ -316,7 +316,7 @@ class SaveMappingHTMXView(GeneralLoginRequiredMixin, CSVMappingCoordinatorMixin,
             error_details += f'<div class="mt-2"><strong>Warnings:</strong><ul class="ml-4 list-disc text-warning">{warning_list}</ul></div>'
         
         return HttpResponse(f'''
-        <div class="alert alert-error alert-sm">
+        <div class="alert alert-error alert-sm relative">
             <div class="flex items-center gap-2">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
@@ -324,25 +324,15 @@ class SaveMappingHTMXView(GeneralLoginRequiredMixin, CSVMappingCoordinatorMixin,
                 <span>{error_msg}</span>
             </div>
             {error_details}
+            <button class="btn btn-sm btn-circle btn-ghost absolute top-2 right-2" onclick="this.parentElement.remove()">✕</button>
         </div>
-        <script>
-            document.getElementById('save-feedback').style.display = 'block';
-            setTimeout(() => {{
-                document.getElementById('save-feedback').style.display = 'none';
-            }}, 6000);
-        </script>
         ''')
     
     def _render_error_response(self, message):
         """Render generic error response"""
         return HttpResponse(f'''
-        <div class="alert alert-error alert-sm">
+        <div class="alert alert-error alert-sm relative">
             <span>{message}</span>
+            <button class="btn btn-sm btn-circle btn-ghost absolute top-2 right-2" onclick="this.parentElement.remove()">✕</button>
         </div>
-        <script>
-            document.getElementById('save-feedback').style.display = 'block';
-            setTimeout(() => {{
-                document.getElementById('save-feedback').style.display = 'none';
-            }}, 5000);
-        </script>
         ''') 

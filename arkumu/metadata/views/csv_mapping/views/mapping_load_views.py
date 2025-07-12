@@ -238,7 +238,7 @@ class LoadMappingHTMXView(GeneralLoginRequiredMixin, CSVMappingCoordinatorMixin,
                 summary_html = f'<div class="text-sm text-success mt-1">Restored: {", ".join(summary_items)}</div>'
         
         return f'''
-        <div class="alert alert-success alert-sm">
+        <div class="alert alert-success alert-sm relative">
             <div class="flex items-center gap-2">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
@@ -247,6 +247,7 @@ class LoadMappingHTMXView(GeneralLoginRequiredMixin, CSVMappingCoordinatorMixin,
             </div>
             {summary_html}
             {warnings_html}
+            <button class="btn btn-sm btn-circle btn-ghost absolute top-2 right-2" onclick="this.parentElement.remove()">✕</button>
         </div>
         '''
     
@@ -276,20 +277,22 @@ class LoadMappingHTMXView(GeneralLoginRequiredMixin, CSVMappingCoordinatorMixin,
         """Render load error response"""
         error_msg = data.get('error', 'Unknown error occurred during load')
         return HttpResponse(f'''
-        <div class="alert alert-error alert-sm">
+        <div class="alert alert-error alert-sm relative">
             <div class="flex items-center gap-2">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                 </svg>
                 <span>{error_msg}</span>
             </div>
+            <button class="btn btn-sm btn-circle btn-ghost absolute top-2 right-2" onclick="this.parentElement.remove()">✕</button>
         </div>
         ''')
     
     def _render_error_response(self, message):
         """Render generic error response"""
         return HttpResponse(f'''
-        <div class="alert alert-error alert-sm">
+        <div class="alert alert-error alert-sm relative">
             <span>{message}</span>
+            <button class="btn btn-sm btn-circle btn-ghost absolute top-2 right-2" onclick="this.parentElement.remove()">✕</button>
         </div>
         ''') 

@@ -473,22 +473,39 @@ class LoadMappingView(GeneralLoginRequiredMixin, CSVMappingCoordinatorMixin, Vie
                     'error': f'Mapping with ID {mapping_id} not found for organization {organization_id}'
                 }, status=404)
             
-            logger.info(f"🟡 LOAD_MAPPING_API: Validating mapping compatibility...")
+            logger.info(f"🟡 LOAD_MAPPING_API: Validating mapping using execution engine validator...")
             
-            # Validate compatibility before loading
-            validation_result = self.validate_mapping_compatibility(
-                request, organization_id, mapping.mapping_config
-            )
+            # Use the same validation that the execution engine uses
+            from arkumu.importer.services.mapping_validation.validator import MappingValidator
             
-            logger.info(f"🟡 LOAD_MAPPING_API: Validation result - valid={validation_result['is_valid']}, warnings={len(validation_result.get('warnings', []))}, errors={len(validation_result.get('errors', []))}")
-            
-            if not validation_result['is_valid']:
-                logger.error(f"🔴 LOAD_MAPPING_API: Mapping validation failed")
-                return JsonResponse({
-                    'error': 'Mapping is not compatible with current datasets',
-                    'validation_errors': validation_result['errors'],
-                    'missing_datasets': validation_result['missing_datasets']
-                }, status=400)
+            try:
+                # Add organization_id to mapping config for validation (it's not stored in the config itself)
+                mapping_config_for_validation = mapping.mapping_config.copy()
+                mapping_config_for_validation['organization_id'] = organization_id
+                
+                # Validate mapping completeness (basic structure)
+                completeness_result = MappingValidator.validate_mapping_completeness(mapping_config_for_validation)
+                
+                if not completeness_result['is_complete']:
+                    logger.error(f"🔴 LOAD_MAPPING_API: Mapping structure validation failed")
+                    return JsonResponse({
+                        'error': 'Mapping structure is invalid',
+                        'validation_errors': [issue['message'] for issue in completeness_result['issues'] 
+                                            if issue.get('severity') in ['ERROR', 'CRITICAL']],
+                        'missing_components': completeness_result['missing_components']
+                    }, status=400)
+                
+                # Log any structure warnings but continue
+                structure_warnings = [issue['message'] for issue in completeness_result['issues'] 
+                                    if issue.get('severity') in ['WARNING', 'INFO']]
+                if structure_warnings:
+                    logger.warning(f"🟡 LOAD_MAPPING_API: Structure warnings: {structure_warnings}")
+                
+                logger.info(f"🟡 LOAD_MAPPING_API: Mapping structure validation passed - proceeding with load")
+                
+            except Exception as e:
+                logger.warning(f"🟡 LOAD_MAPPING_API: Structure validation failed, but proceeding with load: {str(e)}")
+                # Don't fail the load for validation errors - just warn and continue
             
             logger.info(f"🟡 LOAD_MAPPING_API: Deserializing mapping state...")
             
@@ -541,10 +558,10 @@ class LoadMappingView(GeneralLoginRequiredMixin, CSVMappingCoordinatorMixin, Vie
                 'message': f'Mapping "{mapping.name}" loaded successfully'
             }
             
-            # Add validation warnings if any
-            if validation_result['warnings']:
-                response_data['warnings'] = validation_result['warnings']
-                logger.info(f"🟡 LOAD_MAPPING_API: Added {len(validation_result['warnings'])} warnings to response")
+            # Add structure warnings if any
+            if 'structure_warnings' in locals() and structure_warnings:
+                response_data['warnings'] = structure_warnings
+                logger.info(f"🟡 LOAD_MAPPING_API: Added {len(structure_warnings)} structure warnings to response")
             
             logger.info(f"🟢 LOAD_MAPPING_API: Returning success response")
             return JsonResponse(response_data)

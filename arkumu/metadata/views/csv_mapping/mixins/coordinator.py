@@ -1486,7 +1486,8 @@ class CSVMappingCoordinatorMixin(BaseCoordinatorMixin, CSVDataMixin, MappingWork
             if dataset_name not in available_dataset_names:
                 logger.warning(f"🟡 VALIDATE_MAPPING: Missing dataset '{dataset_name}' not found in available datasets")
                 validation_result['missing_datasets'].append(dataset_name)
-                validation_result['is_valid'] = False
+                # Convert missing datasets to warnings instead of errors to allow mapping load
+                validation_result['warnings'].append(f"Dataset '{dataset_name}' is not currently available")
             else:
                 logger.info(f"✅ VALIDATE_MAPPING: Dataset '{dataset_name}' is available")
         
@@ -1501,6 +1502,8 @@ class CSVMappingCoordinatorMixin(BaseCoordinatorMixin, CSVDataMixin, MappingWork
                     validation_result['missing_columns'].append(column_id)
                     if dataset_name not in validation_result['missing_datasets']:
                         validation_result['missing_datasets'].append(dataset_name)
+                        # Add warning for missing dataset (not error)
+                        validation_result['warnings'].append(f"Dataset '{dataset_name}' is not currently available")
         
         # Check relationship context consistency
         relationship_contexts = mapping_config.get('relationship_contexts', {})
@@ -1517,9 +1520,9 @@ class CSVMappingCoordinatorMixin(BaseCoordinatorMixin, CSVDataMixin, MappingWork
         
         # Generate warnings/errors
         if validation_result['missing_datasets']:
-            validation_result['errors'].append(f"Missing datasets: {', '.join(validation_result['missing_datasets'])}")
-            validation_result['is_valid'] = False
-            logger.error(f"🔴 VALIDATE_MAPPING: Validation FAILED - Missing datasets: {validation_result['missing_datasets']}")
+            # Treat missing datasets as warnings, not fatal errors
+            validation_result['warnings'].append(f"Some datasets may not be available: {', '.join(validation_result['missing_datasets'])}")
+            logger.warning(f"🟡 VALIDATE_MAPPING: Warning - Missing datasets: {validation_result['missing_datasets']}")
         
         if validation_result['missing_columns']:
             validation_result['warnings'].append(f"Some columns may not be available: {len(validation_result['missing_columns'])} columns")
