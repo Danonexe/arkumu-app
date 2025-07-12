@@ -1368,8 +1368,14 @@ class CSVMappingCoordinatorMixin(BaseCoordinatorMixin, CSVDataMixin, MappingWork
         logger.info(f"🟡 DESERIALIZE_MAPPING: Mapping config keys: {list(mapping_config.keys()) if mapping_config else 'None'}")
         
         # Validate mapping config
-        if not mapping_config or mapping_config.get('organization_id') != organization_id:
-            logger.error(f"🔴 DESERIALIZE_MAPPING: Invalid mapping config - org mismatch or no config")
+        if not mapping_config:
+            logger.error(f"🔴 DESERIALIZE_MAPPING: Invalid mapping config - no config")
+            raise ValueError(f"Invalid mapping config for organization {organization_id}")
+        
+        # Check organization_id if present in config (legacy mappings may not have it)
+        config_org_id = mapping_config.get('organization_id')
+        if config_org_id and config_org_id != organization_id:
+            logger.error(f"🔴 DESERIALIZE_MAPPING: Organization mismatch - config: {config_org_id}, expected: {organization_id}")
             raise ValueError(f"Invalid mapping config for organization {organization_id}")
         
         logger.info(f"🟡 DESERIALIZE_MAPPING: Clearing current state...")
