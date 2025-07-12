@@ -262,7 +262,7 @@ class UpdateImportStrategyView(GeneralLoginRequiredMixin,
             
             # Get strategy updates from POST data
             strategy_updates = {}
-            for key in ['update_strategy', 'link_topology', 'multi_value_threshold', 'bulk_size']:
+            for key in ['update_strategy', 'multi_value_threshold', 'bulk_size']:
                 if key in request.POST:
                     value = request.POST.get(key)
                     # Convert boolean strings

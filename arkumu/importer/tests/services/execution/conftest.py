@@ -1,6 +1,8 @@
 """
 Pytest configuration for execution layer tests.
 Provides fixtures specific to execution engine components.
+
+Also imports shared fixtures from staged_tests for the legacy integration test.
 """
 import pytest
 import polars as pl
@@ -463,3 +465,18 @@ def reset_execution_stats():
     # This ensures each test starts with fresh statistics
     yield
     # Cleanup after test if needed
+
+
+# Import shared fixtures from staged_tests for legacy integration test
+try:
+    from .staged_tests.conftest import (
+        fuk_mapping_from_s3,
+        production_test_mapping,
+        real_csv_data,
+        bucket_service,
+        mapping_adapter,
+        EXPECTED_FUK_CSV_FILES
+    )
+except ImportError:
+    # Fixtures not available if staged_tests directory doesn't exist
+    pass

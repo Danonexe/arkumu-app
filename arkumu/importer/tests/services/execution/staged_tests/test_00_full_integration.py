@@ -1,9 +1,9 @@
 """
-Real Integration Test for Production Mapping
+Full Production Integration Test - Complete Pipeline Validation
 
-This test suite validates the complete data import pipeline using real production data
-while maintaining proper test isolation. It demonstrates the automated mapping system
-architecture working end-to-end.
+This is the complete end-to-end integration test that validates the entire data import 
+pipeline using real production data while maintaining proper test isolation. It serves
+as the comprehensive validation that all individual staged tests work together seamlessly.
 
 ## How It Works
 
@@ -11,10 +11,11 @@ architecture working end-to-end.
 - **Mapping Configuration**: Loads `fuk_mapping.json` from S3 bucket `fuk/metadata/`
 - **CSV Data**: Streams all CSV files from S3 bucket `fuk/metadata/*.csv`
 - **Test Database**: Uses isolated test database, never touches production data
+- **Shared Fixtures**: Uses all fixtures from conftest.py for consistency with staged tests
 
 ### 2. Component Architecture
 
-The test demonstrates the following automated component workflow:
+The test validates the complete automated component workflow:
 
 **BucketService** (`arkumu.storage.services.bucket_service`)
 ├── Loads mapping JSON from S3: `fuk/metadata/fuk_mapping.json`
@@ -61,11 +62,12 @@ The test demonstrates the following automated component workflow:
 
 ### 4. Key Benefits
 
-- **No Manual Parsing**: System automatically handles mapping JSON structure
-- **Real Data**: Tests actual production mapping and CSV files
+- **Complete Pipeline Validation**: Tests entire pipeline end-to-end with real data
+- **Real Production Data**: Uses actual FUK mapping and CSV files from S3
 - **Test Isolation**: Uses test database with test-specific URIs
-- **Component Integration**: Validates entire mapping-aware architecture
+- **Component Integration**: Validates all components work together seamlessly
 - **Performance Testing**: Measures processing time and resource usage
+- **Shared Fixtures**: Uses identical data as individual staged tests
 
 ### 5. Expected Results
 
@@ -75,8 +77,9 @@ The test demonstrates the following automated component workflow:
 - Complete correlation between mapping datasets and CSV files
 - Processing time < 300 seconds for full pipeline
 
-The test validates that the automated mapping system works correctly with real
-production data while maintaining complete test isolation.
+This test validates that the complete automated mapping system works correctly with real
+production data while maintaining complete test isolation and serves as the definitive
+validation that all staged components integrate properly.
 """
 import pytest
 import logging
@@ -94,15 +97,8 @@ from arkumu.metadata.models.triples import Triple
 logger = logging.getLogger(__name__)
 
 
-
-
-
-# NOTE: Fixtures are now imported from staged_tests/conftest.py
-# This test file serves as a legacy integration test that uses the shared fixtures.
-
-
-class TestRealProductionIntegration:
-    """Legacy integration test - use staged_tests/ for better organization"""
+class TestFullProductionIntegration:
+    """Complete end-to-end integration test using actual production data and mapping"""
     
     def setup_method(self):
         """Setup test environment"""
@@ -140,8 +136,6 @@ class TestRealProductionIntegration:
         except Exception as e:
             logger.error(f"Failed to load/translate test mapping: {e}")
             raise AssertionError(f"Could not load test mapping: {e}")
-    
-    # NOTE: Helper methods moved to individual staged tests for better organization
     
     @pytest.mark.django_db(transaction=True)
     def test_full_production_pipeline_integration(self, production_test_mapping, real_csv_data, execution_statistics):
@@ -325,8 +319,10 @@ class TestRealProductionIntegration:
         """Clean up after each test"""
         if self.processor:
             # Reset processor state
-            self.processor.entity_cache = {}
-            self.processor.pending_relationships = []
+            if hasattr(self.processor, 'entity_cache'):
+                self.processor.entity_cache = {}
+            if hasattr(self.processor, 'pending_relationships'):
+                self.processor.pending_relationships = []
         
         # Reset cached data
         self.execution_config = None

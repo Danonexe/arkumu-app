@@ -80,7 +80,6 @@ def sample_mapping_configuration():
         'external_ontologies': {},
         'import_strategy': {
             'update_strategy': 'SKIP_EXISTING',
-            'link_topology': 'row',
             'bulk_size': 1000,
             'multi_value_threshold': 0.2,
             'enable_progress_tracking': True,
@@ -242,7 +241,6 @@ def complex_mapping_configuration():
         },
         'import_strategy': {
             'update_strategy': 'UPDATE_VALUES',
-            'link_topology': 'mesh',
             'bulk_size': 2000,
             'multi_value_threshold': 0.3,
             'enable_progress_tracking': True,

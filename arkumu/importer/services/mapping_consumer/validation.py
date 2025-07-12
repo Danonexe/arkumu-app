@@ -343,13 +343,6 @@ class ValidationService:
             if update_strategy not in valid_strategies:
                 result.add_warning(f"Unknown update strategy: {update_strategy}")
         
-        # Validate link topology
-        link_topology = import_strategy.get('link_topology')
-        if link_topology:
-            valid_topologies = ['row', 'first_column', 'mesh', 'none']
-            if link_topology not in valid_topologies:
-                result.add_warning(f"Unknown link topology: {link_topology}")
-        
         # Validate bulk size
         bulk_size = import_strategy.get('bulk_size')
         if bulk_size is not None:

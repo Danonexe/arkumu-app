@@ -145,6 +145,11 @@ class ExecutionConfig:
         """Get all FK relationships for a dataset"""
         return [fk for fk in self.fk_relationships 
                 if fk.source_dataset == dataset_name or fk.target_dataset == dataset_name]
+    
+    @property
+    def organization_id(self) -> str:
+        """Backward compatibility property for organization_id"""
+        return self.organization
 
 
 class ConfigTranslator:
@@ -359,7 +364,6 @@ class ConfigTranslator:
         
         execution_config.import_strategy = {
             'update_strategy': import_strategy.get('update_strategy', 'SKIP_EXISTING'),
-            'link_topology': import_strategy.get('link_topology', 'row'),
             'bulk_size': import_strategy.get('bulk_size', 1000),
             'multi_value_threshold': import_strategy.get('multi_value_threshold', 0.2),
             'enable_progress_tracking': import_strategy.get('enable_progress_tracking', True),

@@ -185,7 +185,6 @@ class TestValidationService:
             },
             'import_strategy': {
                 'update_strategy': 'SKIP_EXISTING',
-                'link_topology': 'row',
                 'bulk_size': 1000,
                 'multi_value_threshold': 0.2,
                 'enable_progress_tracking': True,

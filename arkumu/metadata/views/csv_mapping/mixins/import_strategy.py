@@ -18,7 +18,6 @@ class ImportStrategyMixin:
     
     DEFAULT_IMPORT_STRATEGY = {
         'update_strategy': 'SKIP_EXISTING',
-        'link_topology': 'row',
         'link_row_cells': True,
         'multi_value_threshold': 0.2,
         'create_resources_for_unmapped': True,
@@ -86,11 +85,6 @@ class ImportStrategyMixin:
         if strategy.get('update_strategy') not in valid_update_strategies:
             errors.append(f"Invalid update_strategy. Must be one of: {valid_update_strategies}")
         
-        # Validate link topology
-        valid_topologies = ['row', 'cell', 'dataset']
-        if strategy.get('link_topology') not in valid_topologies:
-            errors.append(f"Invalid link_topology. Must be one of: {valid_topologies}")
-        
         # Validate multi-value threshold
         threshold = strategy.get('multi_value_threshold')
         if threshold is not None:
@@ -132,20 +126,10 @@ class ImportStrategyMixin:
             'REPLACE_ALL': 'Replace all existing data'
         }
         
-        topology_descriptions = {
-            'row': 'Link entire rows as units',
-            'cell': 'Link individual cells independently',
-            'dataset': 'Link at dataset level'
-        }
-        
         return {
             'update_strategy': {
                 'value': strategy.get('update_strategy'),
                 'description': update_strategy_descriptions.get(strategy.get('update_strategy'), 'Unknown')
-            },
-            'link_topology': {
-                'value': strategy.get('link_topology'),
-                'description': topology_descriptions.get(strategy.get('link_topology'), 'Unknown')
             },
             'link_row_cells': {
                 'value': strategy.get('link_row_cells'),
@@ -208,7 +192,6 @@ class ImportStrategyMixin:
         # Build SmartBulkUpdater configuration
         config = {
             'update_strategy': strategy['update_strategy'],
-            'link_topology': strategy['link_topology'],
             'link_row_cells': strategy['link_row_cells'],
             'multi_value_threshold': strategy['multi_value_threshold'],
             'create_resources_for_unmapped': strategy['create_resources_for_unmapped'],

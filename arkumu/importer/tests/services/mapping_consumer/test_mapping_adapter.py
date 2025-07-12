@@ -71,7 +71,6 @@ def sample_mapping_config():
         },
         'import_strategy': {
             'update_strategy': 'SKIP_EXISTING',
-            'link_topology': 'row',
             'bulk_size': 1000,
             'processing_strategy': 'entity_centric'
         }

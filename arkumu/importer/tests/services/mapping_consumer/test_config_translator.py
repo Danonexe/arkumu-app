@@ -135,7 +135,6 @@ class TestConfigTranslator:
             },
             'import_strategy': {
                 'update_strategy': 'UPDATE_VALUES',
-                'link_topology': 'mesh',
                 'bulk_size': 2000,
                 'multi_value_threshold': 0.3,
                 'enable_progress_tracking': True,
@@ -239,7 +238,6 @@ class TestConfigTranslator:
         
         strategy = execution_config.import_strategy
         assert strategy['update_strategy'] == 'UPDATE_VALUES'
-        assert strategy['link_topology'] == 'mesh'
         assert strategy['bulk_size'] == 2000
         assert strategy['multi_value_threshold'] == 0.3
         assert strategy['enable_progress_tracking'] is True
@@ -410,7 +408,6 @@ class TestConfigTranslator:
         # Check default import strategy values
         strategy = execution_config.import_strategy
         assert strategy['update_strategy'] == 'SKIP_EXISTING'
-        assert strategy['link_topology'] == 'row'
         assert strategy['bulk_size'] == 1000
         assert strategy['multi_value_threshold'] == 0.2
         assert strategy['enable_progress_tracking'] is True

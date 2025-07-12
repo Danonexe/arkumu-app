@@ -159,7 +159,6 @@ class TestExecuteGUIMappingView:
         assert call_args['institution'] == 'test_org'
         assert call_args['base_uri'] == 'http://arkumu.org/data'
         assert call_args['link_row_cells'] is True
-        assert call_args['link_topology'] == 'first_column'
         assert call_args['multi_value_threshold'] == 0.2
     
     @patch('arkumu.metadata.views.csv_mapping.views.execution_views.S3DirectDataAnalyzer')
@@ -572,7 +571,6 @@ class TestSmartBulkUpdaterIntegration:
         assert call_kwargs['institution'] == 'test_org'
         assert call_kwargs['base_uri'] == 'http://arkumu.org/data'
         assert call_kwargs['link_row_cells'] is True
-        assert call_kwargs['link_topology'] == 'first_column'
         assert call_kwargs['multi_value_threshold'] == 0.2
     
     @patch('arkumu.metadata.views.csv_mapping.views.execution_views.S3DirectDataAnalyzer')
