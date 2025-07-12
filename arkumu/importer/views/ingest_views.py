@@ -1537,21 +1537,64 @@ def start_import(request):
         if not selected_files:
             return HttpResponse('<div class="alert alert-error">No files selected</div>', status=400)
         
-        # For now, return a placeholder response
-        # TODO: Implement actual import logic
+        # Use mapping-aware processing for the import
+        from arkumu.importer.tasks.import_metadata import run_mapping_aware_import_workflow
+        from arkumu.storage.services.bucket_service import BucketService
+        import uuid
+        
+        # Generate task ID for status tracking
+        task_id = str(uuid.uuid4())
+        
+        # Create IngestSession for tracking
+        from arkumu.importer.models import IngestSession
+        ingest_session = IngestSession.objects.create(
+            organization=current_org,
+            status='pending',
+            file_paths=selected_files,
+            mapping_id=current_mapping['id']
+        )
+        
+        # Get S3 bucket for organization
+        bucket_service = BucketService()
+        bucket_name = bucket_service.get_organization_bucket(current_org.code)
+        
+        # Queue mapping-aware import tasks for each selected file
+        task_results = []
+        for file_path in selected_files:
+            # Extract dataset name from file path (remove .csv extension)
+            dataset_name = file_path.split('/')[-1].replace('.csv', '')
+            
+            # Queue the mapping-aware import task
+            task_result = run_mapping_aware_import_workflow(
+                s3_bucket_name=bucket_name,
+                s3_object_key=file_path,
+                dataset_name=dataset_name,
+                institution=current_org.code,
+                mapping_id=current_mapping['id'],
+                task_id_for_cache=f"{task_id}_{dataset_name}",
+                upload_session_id=ingest_session.id
+            )
+            task_results.append(task_result)
+        
+        logger.info(f"Started mapping-aware import for {len(selected_files)} files with mapping '{current_mapping['name']}' (ID: {current_mapping['id']})")
+        
         return HttpResponse(f'''
             <div class="alert alert-success">
                 <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                     <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"/>
                 </svg>
                 <div>
-                    <h3 class="font-bold">Import Started!</h3>
-                    <div class="text-sm">Processing {len(selected_files)} files with mapping "{current_mapping['name']}"</div>
+                    <h3 class="font-bold">Mapping-Aware Import Started!</h3>
+                    <div class="text-sm">Processing {len(selected_files)} files with mapping "{current_mapping['name']}" using MappingAwareProcessor</div>
+                    <div class="text-xs mt-1">Task ID: {task_id} | Session ID: {ingest_session.id}</div>
                 </div>
             </div>
             <div class="mt-4">
-                <progress class="progress progress-primary w-full" value="100" max="100"></progress>
-                <p class="text-center text-sm mt-2">Import process initiated...</p>
+                <progress class="progress progress-primary w-full" value="15" max="100"></progress>
+                <p class="text-center text-sm mt-2">Mapping-aware processing initiated...</p>
+                <div class="text-xs text-center mt-1">
+                    Using execution config translation and MappingAwareProcessor with STREAMING_ENTITY_CENTRIC strategy
+                </div>
             </div>
         ''')
         

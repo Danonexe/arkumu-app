@@ -59,6 +59,296 @@ from arkumu.importer.services.progress import progress_estimator, ExecutionStrat
 logger = logging.getLogger(__name__)
 
 @db_task(retries=1, retry_delay=60)
+def run_mapping_aware_import_workflow(
+    s3_bucket_name: str,
+    s3_object_key: str,
+    dataset_name: str,
+    institution: str,
+    mapping_id: str,
+    base_uri: str = "http://arkumu.org/data",
+    task_id_for_cache: Optional[str] = None,
+    upload_session_id: Optional[UUID] = None,
+    csv_sources: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """
+    Mapping-aware Huey task that implements the full production integration workflow
+    from test_00_full_integration.py. This task processes CSV files using the
+    MappingAwareProcessor with real execution config and CSV data.
+
+    Args:
+        s3_bucket_name: Name of the S3 bucket where the CSV file is located
+        s3_object_key: The S3 object key (path) for the CSV file
+        dataset_name: Name to assign to the dataset being imported
+        institution: Identifier for the institution owning the data
+        mapping_id: ID of the mapping configuration to use (required)
+        base_uri: Base URI for generating resource URIs
+        task_id_for_cache: Explicit task ID for caching
+        upload_session_id: ID of the IngestSession to update
+        csv_sources: Optional pre-loaded CSV data sources
+
+    Returns:
+        A dictionary containing the status of the import and execution metrics
+    """
+    actual_task_id = task_id_for_cache
+    
+    if not actual_task_id and hasattr(run_mapping_aware_import_workflow, 'request') and run_mapping_aware_import_workflow.request.id:
+        actual_task_id = run_mapping_aware_import_workflow.request.id
+    
+    if not actual_task_id:
+        logger.warning(f"Task ID for caching not available for mapping-aware import: {dataset_name}, S3 key: {s3_object_key}")
+    
+    cache_key = f"task_status_{actual_task_id}" if actual_task_id else None
+
+    def update_cache_with_phase_info(status: str, message: str, progress: int, 
+                                   phase_info: Optional[Dict] = None, 
+                                   details: Optional[Dict] = None, 
+                                   error_type: Optional[str] = None):
+        if cache_key:
+            payload = {
+                "status": status,
+                "message": message,
+                "progress": progress,
+                "timestamp": timezone.now().isoformat()
+            }
+            
+            if phase_info:
+                payload["phase_info"] = phase_info
+            if details:
+                payload["details"] = details
+            if error_type:
+                payload["error_type"] = error_type
+                
+            cache.set(cache_key, payload, timeout=3600)
+            logger.info(f"Task {actual_task_id or 'UnknownID'}: Cache updated - Status: {status}, Message: {message[:50]}...")
+
+    def update_upload_session_status(status: str, message: Optional[str] = None, files_processed: int = 0, errors_count: int = 0):
+        if upload_session_id:
+            try:
+                session = IngestSession.objects.get(id=upload_session_id)
+                session.status = status
+                session.completed_at = timezone.now()
+                if message:
+                    session.error_message = message[:1024]
+                if status == 'completed':
+                    session.successful_rows = files_processed
+                    session.failed_rows = errors_count
+                elif status == 'failed':
+                    session.failed_rows = 1
+                session.save()
+            except IngestSession.DoesNotExist:
+                logger.error(f"Task {actual_task_id or 'UnknownID'}: IngestSession with ID {upload_session_id} not found")
+            except Exception as e:
+                logger.error(f"Task {actual_task_id or 'UnknownID'}: Error updating IngestSession {upload_session_id}: {e}")
+
+    # Initialize mapping-aware phases
+    mapping_phases = [
+        "initialization",
+        "mapping_load",
+        "data_preparation", 
+        "mapping_aware_processing",
+        "finalization"
+    ]
+    
+    def get_mapping_phase_info(phase_name: str, phase_progress: int = 0) -> Dict:
+        try:
+            phase_index = mapping_phases.index(phase_name)
+        except ValueError:
+            phase_index = 0
+        
+        return {
+            "current_phase": phase_name,
+            "current_phase_index": phase_index,
+            "total_phases": len(mapping_phases),
+            "phase_progress": phase_progress,
+            "phase_description": get_mapping_phase_description(phase_name),
+            "execution_strategy": "mapping_aware"
+        }
+    
+    def get_mapping_phase_description(phase_name: str) -> str:
+        descriptions = {
+            "initialization": "Initializing mapping-aware import",
+            "mapping_load": "Loading and translating mapping configuration",
+            "data_preparation": "Preparing CSV data sources",
+            "mapping_aware_processing": "Processing with MappingAwareProcessor",
+            "finalization": "Finalizing mapping-aware import"
+        }
+        return descriptions.get(phase_name, "Processing")
+    
+    logger.info(
+        f"Task {actual_task_id or 'UnknownID'}: Starting mapping-aware import workflow for dataset '{dataset_name}' "
+        f"from S3 object '{s3_bucket_name}/{s3_object_key}' with mapping ID '{mapping_id}' for institution '{institution}'"
+    )
+    
+    temp_local_path = None
+    final_metrics = {}
+
+    try:
+        # Phase 1: Initialization
+        phase_info = get_mapping_phase_info("initialization", 100)
+        update_cache_with_phase_info("processing", f"Starting mapping-aware import for {dataset_name}...", 5, phase_info)
+        
+        # Phase 2: Load and translate mapping using MappingAdapter
+        phase_info = get_mapping_phase_info("mapping_load", 25)
+        update_cache_with_phase_info("processing", "Loading mapping configuration...", 15, phase_info)
+        
+        from arkumu.metadata.models import Mapping
+        from arkumu.importer.services.mapping_consumer.mapping_adapter import MappingAdapter
+        from arkumu.importer.services.execution.mapping_aware_processor import MappingAwareProcessor
+        from arkumu.importer.services.execution.statistics import ExecutionStatistics
+        from arkumu.importer.services.mapping_consumer.config_translator import ProcessingStrategy
+        
+        # Ensure mapping exists
+        mapping = Mapping.objects.get(id=mapping_id)
+        mapping_adapter = MappingAdapter()
+        
+        # Load and translate mapping using the automated system from test
+        logger.info(f"Task {actual_task_id or 'UnknownID'}: Loading mapping: ID={mapping.id}, Name={mapping.name}")
+        
+        execution_config = mapping_adapter.translate_to_execution_config(mapping_id)
+        
+        logger.info(f"Task {actual_task_id or 'UnknownID'}: Loaded execution config with {len(execution_config.datasets)} datasets")
+        logger.info(f"Task {actual_task_id or 'UnknownID'}: Total columns: {sum(len(ds.columns) for ds in execution_config.datasets)}")
+        logger.info(f"Task {actual_task_id or 'UnknownID'}: FK relationships: {len(execution_config.fk_relationships)}")
+        
+        phase_info = get_mapping_phase_info("mapping_load", 100)
+        update_cache_with_phase_info("processing", "Mapping configuration loaded", 25, phase_info)
+        
+        # Phase 3: Prepare CSV data sources
+        phase_info = get_mapping_phase_info("data_preparation", 25)
+        update_cache_with_phase_info("processing", "Preparing CSV data sources...", 35, phase_info)
+        
+        if csv_sources is None:
+            # Download file from S3 if not provided
+            bucket_service = BucketService()
+            
+            with tempfile.NamedTemporaryFile(mode='w+b', suffix='.csv', delete=False) as temp_file_obj:
+                temp_local_path = temp_file_obj.name
+            
+            logger.info(f"Task {actual_task_id or 'UnknownID'}: Downloading S3 object {s3_bucket_name}/{s3_object_key} to {temp_local_path}")
+            
+            bucket_service.base_s3_service.s3_client.download_file(
+                s3_bucket_name, 
+                s3_object_key, 
+                temp_local_path
+            )
+            
+            # Create csv_sources dict with single file
+            csv_sources = {dataset_name: temp_local_path}
+        
+        logger.info(f"Task {actual_task_id or 'UnknownID'}: CSV sources prepared with {len(csv_sources)} datasets")
+        
+        phase_info = get_mapping_phase_info("data_preparation", 100)
+        update_cache_with_phase_info("processing", "CSV data sources prepared", 45, phase_info)
+        
+        # Phase 4: Initialize MappingAwareProcessor and execute
+        phase_info = get_mapping_phase_info("mapping_aware_processing", 10)
+        update_cache_with_phase_info("processing", "Initializing MappingAwareProcessor...", 50, phase_info)
+        
+        # Initialize execution statistics
+        execution_statistics = ExecutionStatistics()
+        
+        # Initialize processor with test-specific URI to ensure isolation from production
+        processor = MappingAwareProcessor(
+            institution=f"MAPPING_AWARE_{institution}",
+            base_uri=f"{base_uri}/mapping_aware",
+            statistics=execution_statistics
+        )
+        
+        # Track processing time like in the test
+        from datetime import datetime, timezone as dt_timezone
+        start_time = datetime.now(dt_timezone.utc)
+        
+        phase_info = get_mapping_phase_info("mapping_aware_processing", 30)
+        update_cache_with_phase_info("processing", "Executing mapping-aware processing...", 60, phase_info)
+        
+        # Execute the mapping-aware processing using STREAMING_ENTITY_CENTRIC strategy
+        metrics = processor.process_with_execution_config(
+            execution_config=execution_config,
+            csv_sources=csv_sources,
+            strategy=ProcessingStrategy.STREAMING_ENTITY_CENTRIC
+        )
+        
+        end_time = datetime.now(dt_timezone.utc)
+        processing_time = (end_time - start_time).total_seconds()
+        
+        phase_info = get_mapping_phase_info("mapping_aware_processing", 100)
+        update_cache_with_phase_info("processing", "Mapping-aware processing completed", 80, phase_info)
+        
+        # Phase 5: Finalization
+        phase_info = get_mapping_phase_info("finalization", 50)
+        update_cache_with_phase_info("processing", "Finalizing mapping-aware import...", 85, phase_info)
+        
+        # Verify processing completed successfully
+        if not isinstance(metrics, type(metrics)) or metrics.rows_processed <= 0:
+            raise ValueError("No rows were processed by MappingAwareProcessor")
+        
+        final_metrics = {
+            "rows_processed": metrics.rows_processed,
+            "resources_created": metrics.resources_created,
+            "triples_created": metrics.triples_created,
+            "values_created": metrics.values_created,
+            "processing_time_seconds": processing_time,
+            "execution_strategy": "mapping_aware",
+            "mapping_id": mapping_id,
+            "mapping_name": mapping.name,
+            "datasets_processed": len(csv_sources),
+            "execution_config_datasets": len(execution_config.datasets),
+            "execution_config_columns": sum(len(ds.columns) for ds in execution_config.datasets),
+            "execution_config_relationships": len(execution_config.fk_relationships)
+        }
+        
+        success_message = (
+            f"Mapping-aware import for '{dataset_name}' completed successfully using mapping '{mapping.name}'. "
+            f"Processed: {metrics.rows_processed} rows in {processing_time:.2f}s. "
+            f"Created: {metrics.resources_created} resources, {metrics.triples_created} triples, {metrics.values_created} values."
+        )
+        
+        logger.info("=== MAPPING-AWARE IMPORT RESULTS ===")
+        logger.info(f"Task {actual_task_id or 'UnknownID'}: {success_message}")
+        logger.info(f"Task {actual_task_id or 'UnknownID'}: Execution config: {len(execution_config.datasets)} datasets, {sum(len(ds.columns) for ds in execution_config.datasets)} columns, {len(execution_config.fk_relationships)} FK relationships")
+        logger.info("=== MAPPING-AWARE IMPORT COMPLETED ===")
+        
+        phase_info = get_mapping_phase_info("finalization", 100)
+        update_cache_with_phase_info("completed", success_message, 100, phase_info, details=final_metrics)
+        update_upload_session_status('completed', success_message, 1, 0)
+        
+        return {
+            "status": "success",
+            "dataset_name": dataset_name,
+            "s3_object_key": s3_object_key,
+            **final_metrics
+        }
+        
+    except Exception as e:
+        error_message = f"Error in mapping-aware import for dataset '{dataset_name}' from S3 object {s3_bucket_name}/{s3_object_key}: {str(e)}"
+        logger.error(
+            f"Task {actual_task_id or 'UnknownID'}: Mapping-aware import failed: {e}",
+            exc_info=True
+        )
+        
+        phase_info = get_mapping_phase_info("initialization", 0)
+        update_cache_with_phase_info("failed", error_message, 0, phase_info, error_type=type(e).__name__)
+        update_upload_session_status('failed', error_message)
+        
+        return {
+            "status": "error",
+            "dataset_name": dataset_name,
+            "s3_object_key": s3_object_key,
+            "error_message": str(e),
+            "error_type": type(e).__name__
+        }
+    
+    finally:
+        # Clean up temporary file
+        if temp_local_path and os.path.exists(temp_local_path):
+            try:
+                os.unlink(temp_local_path)
+                logger.info(f"Task {actual_task_id or 'UnknownID'}: Cleaned up temporary file {temp_local_path}")
+            except OSError as e:
+                logger.error(f"Task {actual_task_id or 'UnknownID'}: Error cleaning up temporary file {temp_local_path}: {e}")
+
+
+@db_task(retries=1, retry_delay=60)
 def run_csv_import_workflow_with_mapping(
     # csv_path: str, # Removed: task will download its own file
     s3_bucket_name: str, # Added
