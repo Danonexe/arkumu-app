@@ -97,23 +97,62 @@ class DataProcessor:
             Dictionary mapping column names to multi-value analysis
         """
         if df.height == 0:
+            logger.debug("Empty DataFrame provided for multi-value detection")
             return {}
         
+        logger.debug(f"Starting multi-value detection for {len(df.columns)} columns in DataFrame with {df.height} rows")
+        
         multi_value_analysis = {}
+        columns_processed = []
         
         for column_name in df.columns:
             if column_name == 'row_id':
                 continue
                 
+            columns_processed.append(column_name)
+            
             # Check if mapping config specifies this as multi-value
             is_multi_value_from_config = False
-            if mapping_config and 'columns' in mapping_config:
-                column_config = mapping_config['columns'].get(column_name, {})
-                is_multi_value_from_config = column_config.get('is_multi_value', False)
+            separator = ','  # default separator
+            column_config = None
+            config_structure_used = None
+            
+            if mapping_config:
+                # Try different possible mapping config structures
+                
+                # Structure 1: mapping_config['columns'][column_name]
+                if 'columns' in mapping_config:
+                    column_config = mapping_config['columns'].get(column_name, {})
+                    if column_config:
+                        config_structure_used = 'columns'
+                
+                # Structure 2: mapping_config['workspace_columns'] with qualified names
+                elif 'workspace_columns' in mapping_config:
+                    # Look for column in workspace_columns with various name patterns
+                    workspace_columns = mapping_config['workspace_columns']
+                    for qualified_name, config in workspace_columns.items():
+                        # Match by exact name or if qualified name ends with our column name
+                        if (qualified_name == column_name or 
+                            qualified_name.endswith(f"::{column_name}") or
+                            qualified_name.endswith(f".{column_name}")):
+                            column_config = config
+                            config_structure_used = f'workspace_columns[{qualified_name}]'
+                            break
+                
+                if column_config and isinstance(column_config, dict):
+                    is_multi_value_from_config = column_config.get('is_multi_value', False)
+                    separator = column_config.get('separator', ',')
+                    if is_multi_value_from_config:
+                        logger.info(f"Found multi-value column '{column_name}' via {config_structure_used} with separator '{separator}'")
+                    else:
+                        logger.debug(f"Column '{column_name}' found in {config_structure_used} but is_multi_value=False")
+                else:
+                    logger.debug(f"No mapping configuration found for column '{column_name}'")
+            else:
+                logger.debug("No mapping_config provided for multi-value detection")
             
             if is_multi_value_from_config:
-                # Use mapping configuration
-                separator = mapping_config['columns'][column_name].get('separator', ',')
+                # Use mapping configuration (separator already extracted above)
                 multi_value_analysis[column_name] = {
                     "is_multi_value": True,
                     "separator": separator,
@@ -133,7 +172,13 @@ class DataProcessor:
                     }
                 }
         
-        logger.info(f"Multi-value analysis completed: {sum(1 for col in multi_value_analysis.values() if col['is_multi_value'])} multi-value columns detected")
+        multi_value_count = sum(1 for col in multi_value_analysis.values() if col['is_multi_value'])
+        logger.info(f"Multi-value analysis completed: {multi_value_count} multi-value columns detected out of {len(columns_processed)} columns processed")
+        
+        if multi_value_count > 0:
+            multi_value_columns = [col for col, config in multi_value_analysis.items() if config['is_multi_value']]
+            logger.info(f"Multi-value columns found: {multi_value_columns}")
+        
         return multi_value_analysis
     
     def split_multi_value_cells(self, df: pl.DataFrame, multi_value_config: Dict[str, Dict[str, Any]]) -> pl.DataFrame:

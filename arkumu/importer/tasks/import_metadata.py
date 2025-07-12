@@ -179,7 +179,6 @@ def run_mapping_aware_import_workflow(
         f"from S3 object '{s3_bucket_name}/{s3_object_key}' with mapping ID '{mapping_id}' for institution '{institution}'"
     )
     
-    temp_local_path = None
     final_metrics = {}
 
     try:
@@ -218,22 +217,36 @@ def run_mapping_aware_import_workflow(
         update_cache_with_phase_info("processing", "Preparing CSV data sources...", 35, phase_info)
         
         if csv_sources is None:
-            # Download file from S3 if not provided
+            # Download and parse CSV from S3 using the same pattern as tests
+            import csv
+            import io
+            
             bucket_service = BucketService()
             
-            with tempfile.NamedTemporaryFile(mode='w+b', suffix='.csv', delete=False) as temp_file_obj:
-                temp_local_path = temp_file_obj.name
+            logger.info(f"Task {actual_task_id or 'UnknownID'}: Loading CSV data from S3 object {s3_bucket_name}/{s3_object_key}")
             
-            logger.info(f"Task {actual_task_id or 'UnknownID'}: Downloading S3 object {s3_bucket_name}/{s3_object_key} to {temp_local_path}")
+            # Get file content directly using BucketService (same as tests)
+            result = bucket_service.get_file_content(s3_bucket_name, s3_object_key)
             
-            bucket_service.base_s3_service.s3_client.download_file(
-                s3_bucket_name, 
-                s3_object_key, 
-                temp_local_path
-            )
+            if isinstance(result, dict) and 'content' in result:
+                content = result['content']
+                if isinstance(content, bytes):
+                    content = content.decode('utf-8')
+            else:
+                raise Exception(f"Unexpected result format from get_file_content: {result}")
             
-            # Create csv_sources dict with single file
-            csv_sources = {dataset_name: temp_local_path}
+            # Parse CSV with semicolon delimiter (same as tests)
+            csv_reader = csv.DictReader(io.StringIO(content), delimiter=';')
+            rows = list(csv_reader)
+            
+            # Create csv_sources dict in the same format as test fixture
+            csv_sources = {dataset_name: {
+                'headers': csv_reader.fieldnames,
+                'rows': rows,
+                'row_count': len(rows)
+            }}
+            
+            logger.info(f"Task {actual_task_id or 'UnknownID'}: Loaded {len(rows)} rows from S3 CSV")
         
         logger.info(f"Task {actual_task_id or 'UnknownID'}: CSV sources prepared with {len(csv_sources)} datasets")
         
@@ -339,13 +352,8 @@ def run_mapping_aware_import_workflow(
         }
     
     finally:
-        # Clean up temporary file
-        if temp_local_path and os.path.exists(temp_local_path):
-            try:
-                os.unlink(temp_local_path)
-                logger.info(f"Task {actual_task_id or 'UnknownID'}: Cleaned up temporary file {temp_local_path}")
-            except OSError as e:
-                logger.error(f"Task {actual_task_id or 'UnknownID'}: Error cleaning up temporary file {temp_local_path}: {e}")
+        # No cleanup needed - using in-memory processing like tests
+        pass
 
 
 @db_task(retries=1, retry_delay=60)
