@@ -330,12 +330,4 @@ class TestFullProductionIntegration:
         if hasattr(self.statistics, 'reset'):
             self.statistics.reset()
         
-        # Clean up database resources created during test
-        try:
-            # Delete all resources created with test URIs
-            Resource.objects.filter(uri__contains="test.arkumu.org").delete()
-            # Delete any related triples
-            Triple.objects.filter(subject__uri__contains="test.arkumu.org").delete()
-            Triple.objects.filter(object__uri__contains="test.arkumu.org").delete()
-        except Exception as e:
-            logger.warning(f"Error cleaning up test resources: {e}")
+        # Database cleanup is handled automatically by Django test framework

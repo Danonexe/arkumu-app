@@ -62,13 +62,8 @@ class TestDatabaseValidation:
     
     def teardown_method(self):
         """Clean up test data"""
-        try:
-            # Clean up database resources created during test
-            Resource.objects.filter(uri__contains=self.test_uri_pattern).delete()
-            Triple.objects.filter(subject__uri__contains=self.test_uri_pattern).delete()
-            Triple.objects.filter(object__uri__contains=self.test_uri_pattern).delete()
-        except Exception as e:
-            logger.warning(f"Error cleaning up test resources: {e}")
+        # Database cleanup is handled automatically by Django test framework
+        pass
     
     @pytest.mark.django_db(transaction=True)
     def test_resource_creation_validation(self, production_test_mapping, real_csv_data, execution_statistics):
