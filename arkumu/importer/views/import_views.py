@@ -39,7 +39,7 @@ def ingest_file(request):
         dataset_name = os.path.splitext(os.path.basename(s3_object_key))[0]
         
         # Get organization
-        from arkumu.core.models import Organization
+        from arkumu.users.models import Organization
         try:
             organization = Organization.objects.get(id=organization_id)
             organization_slug = organization.slug
@@ -85,7 +85,7 @@ def ingest_file(request):
         ingest_session = IngestSession.objects.create(
             user=user_instance,
             dataset_name=dataset_name,
-            organization=organization_slug,
+            organization=organization,
             s3_bucket=s3_bucket_name,
             s3_object_key=s3_object_key,
             status='pending',  # Will be updated when task starts
@@ -384,7 +384,7 @@ def start_directory_import(request):
         ingest_session = IngestSession.objects.create(
             user=user_instance,
             dataset_name=dataset_name,
-            organization=organization_slug,
+            organization=organization,
             s3_bucket=s3_bucket_name,
             s3_object_key=s3_folder_path,  # Store folder path in s3_object_key field
             status='pending',

@@ -1626,7 +1626,7 @@ def start_import(request):
         
         # Get S3 bucket for organization
         bucket_service = BucketService()
-        bucket_name = bucket_service.get_organization_bucket(current_org.code)
+        bucket_name = bucket_service.get_organization_bucket(current_org['code'])
         
         # Queue mapping-aware import tasks for each selected file
         task_results = []
@@ -1639,7 +1639,7 @@ def start_import(request):
                 s3_bucket_name=bucket_name,
                 s3_object_key=file_path,
                 dataset_name=dataset_name,
-                institution=current_org.code,
+                institution=current_org['code'],
                 mapping_id=current_mapping['id'],
                 task_id_for_cache=f"{task_id}_{dataset_name}",
                 upload_session_id=ingest_session.id
