@@ -305,6 +305,16 @@ theme/static_src/tests/
 # Markdown notes
 md_notes/
 
+# Analysis and planning documents (temporary files)
+*ANALYSIS*.md
+*STRATEGY*.md
+*PLAN*.md
+*SUMMARY*.md
+*INTEGRATION*.md
+*IMPLEMENTATION*.md
+*ARCHITECTURE*.md
+*REPORT*.md
+
 #.md instructions
 CLAUDE.md
 cursor.md
