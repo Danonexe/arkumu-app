@@ -357,6 +357,21 @@ class ConfigTranslator:
         )
         
         execution_config.external_ontologies.append(ext_ontology)
+        
+        # Link the external ontology config back to the corresponding column configuration
+        column_key = f"{dataset_name}.{column_name}"
+        if column_key in execution_config.column_configurations:
+            column_config = execution_config.column_configurations[column_key]
+            # Update the column's external_ontology_config with the detailed configuration
+            column_config.external_ontology_config = {
+                'ontology_type': ontology_config.get('ontology_type', ''),
+                'uri_template': ontology_config.get('uri_template', ''),
+                'identifier_pattern': ontology_config.get('identifier_pattern'),
+                'validation_enabled': ontology_config.get('validation_enabled', True)
+            }
+            logger.debug(f"Linked external ontology config to column {column_key}: {ontology_config.get('ontology_type', 'unknown')}")
+        else:
+            logger.warning(f"Could not find column configuration for external ontology: {column_key}")
     
     def _translate_import_strategy(self, import_strategy: Dict[str, Any],
                                  execution_config: ExecutionConfig):
