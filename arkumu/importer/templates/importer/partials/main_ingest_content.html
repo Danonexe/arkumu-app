@@ -23,21 +23,26 @@
         </div>
         
         <!-- Right Pane: Execution -->
-        <div class="card bg-base-100 shadow-xl overflow-hidden">
-            <div class="card-body p-4">
-                <h2 class="card-title text-lg mb-4">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/>
-                    </svg>
-                    Analyze Files and Mapping
-                </h2>
+        <div class="card bg-base-100 shadow-xl overflow-hidden h-full">
+            <div class="card-body p-0 h-full flex flex-col">
+                <!-- Fixed header -->
+                <div class="p-4 border-b border-base-200 flex-none">
+                    <h2 class="card-title text-lg">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/>
+                        </svg>
+                        Analyze Files and Mapping
+                    </h2>
+                </div>
                 
-                <!-- HTMX-Driven Status Display -->
-                <div id="execution-status-container"
-                     hx-get="{% url 'importer:execution_status' %}"
-                     hx-trigger="load, fileSelectionChanged from:body, mappingSelected from:body"
-                     hx-vals='{"organization": "{{ organization_id }}"}'
-                     hx-swap="innerHTML">
+                <!-- Scrollable content area -->
+                <div class="flex-1 overflow-y-auto p-4">
+                    <!-- HTMX-Driven Status Display -->
+                    <div id="execution-status-container"
+                         hx-get="{% url 'importer:execution_status' %}"
+                         hx-trigger="load, fileSelectionChanged from:body, mappingSelected from:body"
+                         hx-vals='{"organization": "{{ organization_id }}"}'
+                         hx-swap="innerHTML">
                     <!-- Loading state -->
                     <div class="space-y-4">
                         <div class="flex items-center gap-2 text-base-content/60">
@@ -70,8 +75,10 @@
                     </div>
                 </div>
                 
-                <!-- Progress will be shown here -->
-                <div id="import-progress" class="mt-6"></div>
+                    <!-- Progress will be shown here -->
+                    <div id="import-progress" class="mt-6"></div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

@@ -3,7 +3,7 @@ import logging
 from typing import List, Dict, Any, Tuple, Optional
 from django.contrib.auth import get_user_model
 from arkumu.metadata.models.mappings import Mapping
-from arkumu.importer.services.file_upload.s3_upload_service import S3UploadService
+from arkumu.storage.services.base_storage_service import BaseStorageService
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -14,31 +14,33 @@ class MappingImportService:
     Service for importing mapping definitions from JSON files stored in S3 metadata/ folder.
     """
     
-    def __init__(self, s3_service: Optional[S3UploadService] = None):
+    def __init__(self, storage_service: Optional[BaseStorageService] = None):
         """
         Initialize the mapping import service.
         
         Args:
-            s3_service: Optional S3 service instance. If None, creates a new one.
+            storage_service: Optional storage service instance. If None, creates a new one.
         """
-        self.s3_service = s3_service or S3UploadService()
+        self.storage_service = storage_service or BaseStorageService()
     
     def list_available_mapping_files(self, organization_id: str) -> List[Dict[str, Any]]:
         """
         List JSON files in S3 metadata/ folder for the given organization.
         
         Args:
-            organization_id: Organization identifier
+            organization_id: Organization identifier (organization code)
             
         Returns:
             List of file metadata dictionaries
         """
         try:
-            # List objects in the metadata/ folder for this organization
-            prefix = f"{organization_id}/metadata/"
+            # List objects in the metadata/ folder in the organization's production bucket
+            # The bucket name is the organization code, and files are in metadata/ directory
+            bucket_name = organization_id  # Use organization code as bucket name
+            prefix = "metadata/"
             
-            response = self.s3_service.s3_client.list_objects_v2(
-                Bucket=self.s3_service.bucket_name,
+            response = self.storage_service.s3_client.list_objects_v2(
+                Bucket=bucket_name,
                 Prefix=prefix
             )
             
@@ -70,6 +72,7 @@ class MappingImportService:
     def validate_mapping_file(self, file_content: str) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
         """
         Validate JSON structure and required fields for a mapping file.
+        Supports both new format and existing workspace export format.
         
         Args:
             file_content: Raw JSON file content as string
@@ -81,33 +84,80 @@ class MappingImportService:
             # Parse JSON
             data = json.loads(file_content)
             
-            # Check required fields
-            required_fields = ['name', 'mapping_config']
-            missing_fields = [field for field in required_fields if field not in data]
+            # Detect format type
+            is_workspace_export = ('entity_mappings' in data and 'workspace_datasets' in data 
+                                 and 'version' in data and 'metadata' in data)
             
-            if missing_fields:
-                return False, f"Missing required fields: {', '.join(missing_fields)}", None
-            
-            # Validate data types
-            if not isinstance(data['name'], str) or not data['name'].strip():
-                return False, "Field 'name' must be a non-empty string", None
-            
-            if not isinstance(data['mapping_config'], dict):
-                return False, "Field 'mapping_config' must be a dictionary", None
-            
-            # Optional field validation
-            if 'description' in data and not isinstance(data['description'], str):
-                return False, "Field 'description' must be a string", None
-            
-            if 'source_datasets' in data and not isinstance(data['source_datasets'], list):
-                return False, "Field 'source_datasets' must be a list", None
-            
-            # Check file size (mapping_config shouldn't be too large)
-            config_str = json.dumps(data['mapping_config'])
-            if len(config_str) > 1024 * 1024:  # 1MB limit
-                return False, "Mapping configuration is too large (>1MB)", None
-            
-            return True, "Valid mapping file", data
+            if is_workspace_export:
+                # Validate workspace export format
+                if not isinstance(data.get('metadata'), dict):
+                    return False, "Workspace export must have metadata object", None
+                
+                # Generate name from metadata or fallback
+                mapping_name = None
+                if isinstance(data['metadata'], dict):
+                    mapping_name = data['metadata'].get('mapping_name')
+                
+                if not mapping_name:
+                    # Generate name from creation date
+                    created_at = data.get('created_at', 'unknown')
+                    org_id = data.get('organization_id', 'unknown')
+                    mapping_name = f"{org_id.upper()} Mapping ({created_at[:10]})"
+                
+                # Normalize to expected format
+                # Note: source_datasets is derived from mapping_config['workspace_datasets'] - don't set it independently
+                normalized_data = {
+                    'name': mapping_name,
+                    'description': f"Imported workspace mapping with {data['metadata'].get('total_datasets', 0)} datasets",
+                    'mapping_config': {
+                        'entity_mappings': data.get('entity_mappings', {}),
+                        'workspace_datasets': data.get('workspace_datasets', []),
+                        'workspace_columns': data.get('workspace_columns', {}),
+                        'fk_relationships': data.get('fk_relationships', {}),
+                        'relationship_contexts': data.get('relationship_contexts', {}),
+                        'external_ontologies': data.get('external_ontologies', {}),
+                        'version': data.get('version'),
+                        'original_metadata': data.get('metadata', {})
+                    },
+                    # Don't set source_datasets - it will be computed from mapping_config
+                    'metadata': {
+                        'imported_from': 'workspace_export',
+                        'original_created_at': data.get('created_at'),
+                        'original_exported_by': data.get('exported_by'),
+                        'export_timestamp': data.get('export_timestamp')
+                    }
+                }
+                
+                return True, "Valid workspace export file", normalized_data
+                
+            else:
+                # Validate new format
+                required_fields = ['name', 'mapping_config']
+                missing_fields = [field for field in required_fields if field not in data]
+                
+                if missing_fields:
+                    return False, f"Missing required fields: {', '.join(missing_fields)}", None
+                
+                # Validate data types
+                if not isinstance(data['name'], str) or not data['name'].strip():
+                    return False, "Field 'name' must be a non-empty string", None
+                
+                if not isinstance(data['mapping_config'], dict):
+                    return False, "Field 'mapping_config' must be a dictionary", None
+                
+                # Optional field validation
+                if 'description' in data and not isinstance(data['description'], str):
+                    return False, "Field 'description' must be a string", None
+                
+                if 'source_datasets' in data and not isinstance(data['source_datasets'], list):
+                    return False, "Field 'source_datasets' must be a list", None
+                
+                # Check file size (mapping_config shouldn't be too large)
+                config_str = json.dumps(data.get('mapping_config', {}))
+                if len(config_str) > 1024 * 1024:  # 1MB limit
+                    return False, "Mapping configuration is too large (>1MB)", None
+                
+                return True, "Valid mapping file", data
             
         except json.JSONDecodeError as e:
             return False, f"Invalid JSON format: {str(e)}", None
@@ -149,11 +199,13 @@ class MappingImportService:
                     counter += 1
             
             # Create the mapping object
+            # Note: During transition, populate source_datasets from mapping_config['workspace_datasets']
+            workspace_datasets = json_data['mapping_config'].get('workspace_datasets', [])
             mapping = Mapping.objects.create(
                 name=json_data['name'],
                 description=json_data.get('description', ''),
                 organization_id=organization_id,
-                source_datasets=json_data.get('source_datasets', []),
+                source_datasets=workspace_datasets,  # Populate from mapping_config during transition
                 mapping_config=json_data['mapping_config'],
                 created_by=created_by,
                 validation_status='draft'  # Always import as draft
@@ -188,9 +240,12 @@ class MappingImportService:
         
         for file_key in file_keys:
             try:
+                # Extract bucket name from file key (organization/path format)
+                bucket_name = organization_id  # Use organization code as bucket name
+                
                 # Download file content from S3
-                response = self.s3_service.s3_client.get_object(
-                    Bucket=self.s3_service.bucket_name,
+                response = self.storage_service.s3_client.get_object(
+                    Bucket=bucket_name,
                     Key=file_key
                 )
                 file_content = response['Body'].read().decode('utf-8')
@@ -216,7 +271,13 @@ class MappingImportService:
                         'mapping_name': mapping.name,
                         'mapping_id': str(mapping.id)
                     })
-                    results['imported_mappings'].append(mapping)
+                    # Store just the mapping metadata, not the actual object for JSON serialization
+                    results['imported_mappings'].append({
+                        'id': str(mapping.id),
+                        'name': mapping.name,
+                        'description': mapping.description or '',
+                        'created_at': mapping.created_at.isoformat() if mapping.created_at else None
+                    })
                 else:
                     results['failed_imports'].append({
                         'file': file_key,
@@ -237,19 +298,21 @@ class MappingImportService:
         
         return results
     
-    def download_file_content(self, file_key: str) -> Tuple[bool, str]:
+    def download_file_content(self, file_key: str, organization_id: str) -> Tuple[bool, str]:
         """
         Download file content from S3.
         
         Args:
             file_key: S3 object key
+            organization_id: Organization identifier for bucket name
             
         Returns:
             Tuple of (success, content_or_error_message)
         """
         try:
-            response = self.s3_service.s3_client.get_object(
-                Bucket=self.s3_service.bucket_name,
+            bucket_name = organization_id  # Use organization code as bucket name
+            response = self.storage_service.s3_client.get_object(
+                Bucket=bucket_name,
                 Key=file_key
             )
             content = response['Body'].read().decode('utf-8')

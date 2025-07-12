@@ -8,12 +8,26 @@ class IngestSession(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE
+        on_delete=models.CASCADE,
+        null=True, blank=True
     )
-    dataset_name = models.CharField(max_length=255, help_text="Name of the dataset being ingested")
-    organization = models.CharField(max_length=255, help_text="Organization slug/identifier")
-    s3_bucket = models.CharField(max_length=255, help_text="S3 bucket containing the CSV file")
-    s3_object_key = models.CharField(max_length=512, help_text="S3 object key/path to the CSV file")
+    dataset_name = models.CharField(max_length=255, help_text="Name of the dataset being ingested", null=True, blank=True)
+    organization = models.ForeignKey(
+        'users.Organization',
+        on_delete=models.CASCADE,
+        help_text="Organization this ingestion belongs to"
+    )
+    s3_bucket = models.CharField(max_length=255, help_text="S3 bucket containing the CSV file", null=True, blank=True)
+    s3_object_key = models.CharField(max_length=512, help_text="S3 object key/path to the CSV file", null=True, blank=True)
+    
+    # Multi-file mapping-aware import fields
+    file_paths = models.JSONField(default=list, blank=True, help_text="List of file paths for multi-file imports")
+    mapping = models.ForeignKey(
+        'metadata.Mapping',
+        on_delete=models.CASCADE,
+        null=True, blank=True,
+        help_text="Mapping configuration used for this import"
+    )
     
     created_at = models.DateTimeField(auto_now_add=True)
     started_at = models.DateTimeField(null=True, blank=True)

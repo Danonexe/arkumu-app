@@ -13,8 +13,9 @@ class Mapping(UUIDModel):
     # Organization context
     organization_id = models.CharField(max_length=255, db_index=True)
     
-    # Source information (for traceability)
-    source_datasets = models.JSONField(default=list, help_text="List of datasets this mapping applies to")
+    # Source information (for traceability) - TRANSITIONING to computed property
+    # This field will be deprecated once migration is complete
+    source_datasets = models.JSONField(default=list, help_text="DEPRECATED: List of datasets - now computed from mapping_config")
     
     # Flexible mapping configuration - GUI interprets structure
     mapping_config = models.JSONField(default=dict, help_text="Flexible mapping configuration interpreted by GUI")
@@ -37,6 +38,10 @@ class Mapping(UUIDModel):
     
     def __str__(self):
         return f"{self.name} - {self.organization_id}"
+    
+    def get_source_datasets(self):
+        """Get list of datasets this mapping applies to - computed from mapping_config"""
+        return self.mapping_config.get('workspace_datasets', [])
     
     def get_dataset_count(self):
         """Get number of datasets in this mapping"""

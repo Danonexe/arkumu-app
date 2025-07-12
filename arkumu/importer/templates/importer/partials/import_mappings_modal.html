@@ -77,8 +77,8 @@
 </div>
 
 <script>
-// Handle select all functionality
-document.addEventListener('DOMContentLoaded', function() {
+// Handle select all functionality - execute immediately for HTMX loaded content
+(function() {
     const selectAllCheckbox = document.getElementById('select-all-mappings');
     const fileCheckboxes = document.querySelectorAll('.mapping-file-checkbox');
     const selectedCountSpan = document.getElementById('selected-count');
@@ -119,7 +119,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Initial count update
     updateSelectedCount();
-});
+})();
 
 // Handle form submission
 document.addEventListener('htmx:beforeRequest', function(event) {

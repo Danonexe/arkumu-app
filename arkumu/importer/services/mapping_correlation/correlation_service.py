@@ -76,7 +76,7 @@ class MappingFileCorrelationService:
                     mapping_analysis=None,
                     dataset_correlations=[],
                     exactly_matched_datasets=[],
-                    missing_datasets=mapping_validation['missing_components'],
+                    missing_datasets=[],  # Don't treat config validation errors as missing datasets
                     unmatched_files=file_paths,
                     has_all_required_datasets=False,
                     has_no_extra_files=False,

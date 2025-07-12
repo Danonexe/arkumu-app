@@ -1460,17 +1460,43 @@ def correlation_analysis(request):
         current_mapping = view_instance.get_current_mapping(request)
         
         if not current_org or not current_mapping:
-            return render(request, 'importer/partials/correlation_analysis.html', {
+            # Render template and clear import actions
+            from django.template.loader import render_to_string
+            main_html = render_to_string('importer/partials/correlation_analysis.html', {
                 'correlation_result': None
-            })
+            }, request=request)
+            
+            # Use template helper for OOB response - clear import actions
+            from arkumu.metadata.views.csv_mapping.mixins.template_helpers import CSVMappingTemplateHelperMixin
+            helper = CSVMappingTemplateHelperMixin()
+            
+            oob_updates = {
+                'import-actions': ""  # Clear import actions when no org/mapping
+            }
+            
+            response_html = helper.build_oob_response(main_html, oob_updates)
+            return HttpResponse(response_html)
         
         # Get selected files
         selected_files = request.session.get(SELECTED_FILES_SESSION_KEY, [])
         
         if not selected_files:
-            return render(request, 'importer/partials/correlation_analysis.html', {
+            # Render template and clear import actions
+            from django.template.loader import render_to_string
+            main_html = render_to_string('importer/partials/correlation_analysis.html', {
                 'correlation_result': None
-            })
+            }, request=request)
+            
+            # Use template helper for OOB response - clear import actions
+            from arkumu.metadata.views.csv_mapping.mixins.template_helpers import CSVMappingTemplateHelperMixin
+            helper = CSVMappingTemplateHelperMixin()
+            
+            oob_updates = {
+                'import-actions': ""  # Clear import actions when no files selected
+            }
+            
+            response_html = helper.build_oob_response(main_html, oob_updates)
+            return HttpResponse(response_html)
         
         # Initialize correlation service (reuses existing MappingValidator)
         from arkumu.importer.services.mapping_correlation import MappingFileCorrelationService
@@ -1482,6 +1508,9 @@ def correlation_analysis(request):
         
         # Load mapping configuration
         mapping_config = mapping_adapter.load_mapping_config(current_mapping['id'])
+        
+        # Add organization_id to mapping_config (required by MappingValidator)
+        mapping_config['organization_id'] = current_org['code']
         
         # Perform exact correlation analysis using MappingValidator methods
         correlation_result = correlation_service.analyze_file_dataset_correlation(
@@ -1499,19 +1528,54 @@ def correlation_analysis(request):
         # - missing_datasets: List of required datasets without files
         # - unmatched_files: List of files not matching any dataset
         
-        # Return rendered template with both raw and formatted data
-        return render(request, 'importer/partials/correlation_analysis.html', {
+        # Render main correlation analysis template
+        from django.template.loader import render_to_string
+        main_html = render_to_string('importer/partials/correlation_analysis.html', {
             'correlation_result': correlation_result,
             'formatted_result': formatted_result,
             'organization_code': current_org['code']
-        })
+        }, request=request)
+        
+        # Build import button content for out-of-band swap
+        if correlation_result and correlation_result.is_ready_for_execution:
+            import_button_html = render_to_string('importer/partials/import_button.html', {
+                'organization_code': current_org['code']
+            }, request=request)
+        else:
+            import_button_html = ""
+        
+        # Use template helper pattern for OOB response
+        from arkumu.metadata.views.csv_mapping.mixins.template_helpers import CSVMappingTemplateHelperMixin
+        helper = CSVMappingTemplateHelperMixin()
+        
+        # Build response with out-of-band updates for import actions
+        oob_updates = {
+            'import-actions': import_button_html
+        }
+        
+        response_html = helper.build_oob_response(main_html, oob_updates)
+        return HttpResponse(response_html)
         
     except Exception as e:
         logger.error(f"Error in correlation analysis: {e}", exc_info=True)
-        return render(request, 'importer/partials/correlation_analysis.html', {
+        
+        # Render error template and clear import actions
+        from django.template.loader import render_to_string
+        main_html = render_to_string('importer/partials/correlation_analysis.html', {
             'correlation_result': None,
             'error': str(e)
-        })
+        }, request=request)
+        
+        # Use template helper for OOB response - clear import actions on error
+        from arkumu.metadata.views.csv_mapping.mixins.template_helpers import CSVMappingTemplateHelperMixin
+        helper = CSVMappingTemplateHelperMixin()
+        
+        oob_updates = {
+            'import-actions': ""  # Clear import actions on error
+        }
+        
+        response_html = helper.build_oob_response(main_html, oob_updates)
+        return HttpResponse(response_html)
 
 
 @general_login_required
@@ -1547,11 +1611,17 @@ def start_import(request):
         
         # Create IngestSession for tracking
         from arkumu.importer.models import IngestSession
+        # Get the Organization and Mapping objects
+        from arkumu.users.models import Organization
+        from arkumu.metadata.models.mappings import Mapping
+        organization_obj = Organization.objects.get(code=current_org['code'])
+        mapping_obj = Mapping.objects.get(id=current_mapping['id'])
+        
         ingest_session = IngestSession.objects.create(
-            organization=current_org,
+            organization=organization_obj,
             status='pending',
             file_paths=selected_files,
-            mapping_id=current_mapping['id']
+            mapping=mapping_obj
         )
         
         # Get S3 bucket for organization
