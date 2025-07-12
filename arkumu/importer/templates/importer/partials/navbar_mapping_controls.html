@@ -33,6 +33,15 @@
                         Create new mapping
                     </a>
                 </li>
+                <li>
+                    <a class="text-sm text-secondary" 
+                       onclick="document.getElementById('import-mappings-modal').showModal(); loadImportableMappings()">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                        </svg>
+                        Import mappings
+                    </a>
+                </li>
             </ul>
         </div>
     </div>
@@ -121,4 +130,38 @@
     // Add the event listener
     document.addEventListener('click', window.navbarMappingHandler);
 })();
+
+// Import mappings functionality
+function loadImportableMappings() {
+    const modal = document.getElementById('import-mappings-modal');
+    const content = modal.querySelector('.modal-box');
+    
+    // Show loading state
+    content.innerHTML = `
+        <div class="text-center py-8">
+            <span class="loading loading-spinner loading-lg"></span>
+            <p class="mt-4 text-base-content/60">Loading available mapping files...</p>
+        </div>
+    `;
+    
+    // Load mapping files via HTMX
+    htmx.ajax('GET', '{% url "importer:list_importable_mappings" %}', {
+        target: content,
+        swap: 'innerHTML'
+    });
+}
 </script>
+
+<!-- Import Mappings Modal -->
+<dialog id="import-mappings-modal" class="modal">
+    <div class="modal-box w-11/12 max-w-3xl">
+        <!-- Content will be loaded here -->
+        <div class="text-center py-8">
+            <span class="loading loading-spinner loading-lg"></span>
+            <p class="mt-4 text-base-content/60">Preparing import interface...</p>
+        </div>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+        <button>close</button>
+    </form>
+</dialog>

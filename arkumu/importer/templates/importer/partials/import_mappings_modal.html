@@ -1,0 +1,229 @@
+<!-- Import Mappings Modal Content -->
+{% if mapping_files and mapping_files|length > 0 %}
+<div class="space-y-4">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <h3 class="text-lg font-semibold text-base-content">Import Mappings from S3</h3>
+        <div class="text-sm text-base-content/60">{{ total_files }} file{{ total_files|pluralize }} found</div>
+    </div>
+    
+    <!-- File Selection Form -->
+    <form id="import-mappings-form" hx-post="{% url 'importer:import_selected_mappings' %}" hx-target="#import-results" hx-swap="innerHTML">
+        {% csrf_token %}
+        
+        <!-- Select All Controls -->
+        <div class="flex items-center justify-between py-2 border-b border-base-300">
+            <div class="flex items-center gap-2">
+                <input type="checkbox" id="select-all-mappings" class="checkbox checkbox-sm checkbox-primary">
+                <label for="select-all-mappings" class="text-sm font-medium cursor-pointer">Select All</label>
+            </div>
+            <div class="text-xs text-base-content/60">
+                <span id="selected-count">0</span> selected
+            </div>
+        </div>
+        
+        <!-- Files List -->
+        <div class="max-h-64 overflow-y-auto space-y-2 py-2">
+            {% for file in mapping_files %}
+            <div class="flex items-start gap-3 p-3 bg-base-100 rounded-lg border border-base-300 hover:border-primary/30 transition-colors">
+                <input type="checkbox" 
+                       name="selected_files" 
+                       value="{{ file.key }}" 
+                       class="checkbox checkbox-sm checkbox-primary mapping-file-checkbox mt-1">
+                
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center justify-between">
+                        <h4 class="font-medium text-base-content truncate">{{ file.display_name }}</h4>
+                        <div class="text-xs text-base-content/50">{{ file.size|filesizeformat }}</div>
+                    </div>
+                    
+                    <div class="text-sm text-base-content/70 mt-1">
+                        <div class="truncate">{{ file.name }}</div>
+                        <div class="text-xs text-base-content/50 mt-1">
+                            Modified: {{ file.last_modified|date:"M d, Y H:i" }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <!-- Import Controls -->
+        <div class="flex items-center justify-between pt-4 border-t border-base-300">
+            <div class="text-sm text-base-content/60">
+                Files will be imported as draft mappings
+            </div>
+            <div class="flex items-center gap-2">
+                <button type="button" 
+                        class="btn btn-sm btn-ghost"
+                        onclick="document.getElementById('import-mappings-modal').close()">
+                    Cancel
+                </button>
+                <button type="submit" 
+                        class="btn btn-sm btn-primary"
+                        id="import-mappings-btn"
+                        disabled>
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                    </svg>
+                    Import Selected
+                </button>
+            </div>
+        </div>
+    </form>
+    
+    <!-- Results Container -->
+    <div id="import-results" class="mt-4"></div>
+</div>
+
+<script>
+// Handle select all functionality
+document.addEventListener('DOMContentLoaded', function() {
+    const selectAllCheckbox = document.getElementById('select-all-mappings');
+    const fileCheckboxes = document.querySelectorAll('.mapping-file-checkbox');
+    const selectedCountSpan = document.getElementById('selected-count');
+    const importBtn = document.getElementById('import-mappings-btn');
+    
+    function updateSelectedCount() {
+        const checkedBoxes = document.querySelectorAll('.mapping-file-checkbox:checked');
+        const count = checkedBoxes.length;
+        
+        selectedCountSpan.textContent = count;
+        importBtn.disabled = count === 0;
+        
+        // Update select all checkbox state
+        if (count === 0) {
+            selectAllCheckbox.indeterminate = false;
+            selectAllCheckbox.checked = false;
+        } else if (count === fileCheckboxes.length) {
+            selectAllCheckbox.indeterminate = false;
+            selectAllCheckbox.checked = true;
+        } else {
+            selectAllCheckbox.indeterminate = true;
+            selectAllCheckbox.checked = false;
+        }
+    }
+    
+    // Handle select all
+    selectAllCheckbox.addEventListener('change', function() {
+        fileCheckboxes.forEach(checkbox => {
+            checkbox.checked = this.checked;
+        });
+        updateSelectedCount();
+    });
+    
+    // Handle individual checkboxes
+    fileCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', updateSelectedCount);
+    });
+    
+    // Initial count update
+    updateSelectedCount();
+});
+
+// Handle form submission
+document.addEventListener('htmx:beforeRequest', function(event) {
+    if (event.detail.elt.id === 'import-mappings-form') {
+        const importBtn = document.getElementById('import-mappings-btn');
+        importBtn.innerHTML = `
+            <span class="loading loading-spinner loading-sm"></span>
+            Importing...
+        `;
+        importBtn.disabled = true;
+    }
+});
+
+// Handle successful import
+document.addEventListener('htmx:afterRequest', function(event) {
+    if (event.detail.elt.id === 'import-mappings-form' && event.detail.xhr.status === 200) {
+        try {
+            const response = JSON.parse(event.detail.xhr.responseText);
+            if (response.success && response.imported_count > 0) {
+                // Show success message
+                document.getElementById('import-results').innerHTML = `
+                    <div class="alert alert-success">
+                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"/>
+                        </svg>
+                        <div>
+                            <h4 class="font-bold">Import Successful!</h4>
+                            <div class="text-sm">${response.message}</div>
+                        </div>
+                    </div>
+                `;
+                
+                // Trigger mapping dropdown refresh
+                htmx.trigger('#mapping-dropdown-list', 'load');
+                
+                // Close modal after 2 seconds
+                setTimeout(() => {
+                    document.getElementById('import-mappings-modal').close();
+                }, 2000);
+            } else {
+                // Show error message
+                document.getElementById('import-results').innerHTML = `
+                    <div class="alert alert-error">
+                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"/>
+                        </svg>
+                        <div>
+                            <h4 class="font-bold">Import Failed</h4>
+                            <div class="text-sm">${response.error || 'No mappings were imported'}</div>
+                        </div>
+                    </div>
+                `;
+            }
+        } catch (e) {
+            console.error('Error parsing import response:', e);
+        }
+        
+        // Reset import button
+        const importBtn = document.getElementById('import-mappings-btn');
+        importBtn.innerHTML = `
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+            </svg>
+            Import Selected
+        `;
+        importBtn.disabled = document.querySelectorAll('.mapping-file-checkbox:checked').length === 0;
+    }
+});
+</script>
+
+{% elif error %}
+<!-- Error State -->
+<div class="text-center py-8">
+    <div class="alert alert-error">
+        <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"/>
+        </svg>
+        <div>
+            <h3 class="font-bold">Error Loading Mapping Files</h3>
+            <div class="text-sm">{{ error }}</div>
+        </div>
+    </div>
+    <button type="button" 
+            class="btn btn-sm btn-ghost mt-4"
+            onclick="document.getElementById('import-mappings-modal').close()">
+        Close
+    </button>
+</div>
+
+{% else %}
+<!-- Empty State -->
+<div class="text-center py-8">
+    <svg class="w-16 h-16 mx-auto text-base-content/30 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+    </svg>
+    <h3 class="text-lg font-semibold text-base-content mb-2">No Mapping Files Found</h3>
+    <p class="text-base-content/60 mb-4">No JSON mapping files were found in the metadata/ folder for this organization.</p>
+    <div class="text-sm text-base-content/50 mb-4">
+        Upload mapping files to <code>{{ organization_code }}/metadata/</code> in S3 to import them.
+    </div>
+    <button type="button" 
+            class="btn btn-sm btn-ghost"
+            onclick="document.getElementById('import-mappings-modal').close()">
+        Close
+    </button>
+</div>
+{% endif %}

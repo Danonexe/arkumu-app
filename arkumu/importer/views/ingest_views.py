@@ -1601,3 +1601,125 @@ def start_import(request):
     except Exception as e:
         logger.error(f"Error starting import: {e}", exc_info=True)
         return HttpResponse(f'<div class="alert alert-error">Error starting import: {str(e)}</div>', status=500)
+
+
+@general_login_required
+def list_importable_mappings(request):
+    """
+    HTMX endpoint to list available JSON mapping files for import.
+    
+    Returns HTML list of available JSON mapping files with checkboxes for selection.
+    """
+    if request.method != 'GET':
+        return HttpResponse('Method not allowed', status=405)
+    
+    try:
+        # Get current organization
+        view_instance = IngestDataView()
+        current_org = view_instance.get_current_organization(request)
+        
+        if not current_org:
+            return render(request, 'importer/partials/import_mappings_modal.html', {
+                'mapping_files': [],
+                'error': 'No organization selected'
+            })
+        
+        organization_id = current_org['code']  # Use organization code for S3 paths
+        
+        # Initialize mapping import service
+        from arkumu.metadata.services.mapping.mapping_import_service import MappingImportService
+        mapping_import_service = MappingImportService()
+        
+        # Get available mapping files
+        mapping_files = mapping_import_service.list_available_mapping_files(organization_id)
+        
+        context = {
+            'mapping_files': mapping_files,
+            'organization_id': current_org['id'],
+            'organization_code': organization_id,
+            'total_files': len(mapping_files)
+        }
+        
+        return render(request, 'importer/partials/import_mappings_modal.html', context)
+        
+    except Exception as e:
+        logger.error(f"Error listing importable mappings: {e}", exc_info=True)
+        return render(request, 'importer/partials/import_mappings_modal.html', {
+            'mapping_files': [],
+            'error': str(e)
+        })
+
+
+@general_login_required
+def import_selected_mappings(request):
+    """
+    HTMX endpoint to import selected mapping files.
+    
+    Processes selected mapping files and creates Mapping objects.
+    Returns success/error status with imported mapping names.
+    """
+    if request.method != 'POST':
+        return HttpResponse('Method not allowed', status=405)
+    
+    try:
+        # Get current organization
+        view_instance = IngestDataView()
+        current_org = view_instance.get_current_organization(request)
+        
+        if not current_org:
+            return JsonResponse({
+                'success': False,
+                'error': 'No organization selected',
+                'results': {}
+            }, status=400)
+        
+        organization_id = current_org['code']  # Use organization code for S3 paths
+        
+        # Get selected file keys from form data
+        selected_files = request.POST.getlist('selected_files')
+        
+        if not selected_files:
+            return JsonResponse({
+                'success': False,
+                'error': 'No files selected for import',
+                'results': {}
+            }, status=400)
+        
+        # Initialize mapping import service
+        from arkumu.metadata.services.mapping.mapping_import_service import MappingImportService
+        mapping_import_service = MappingImportService()
+        
+        # Import selected mappings
+        import_results = mapping_import_service.batch_import_mappings(
+            file_keys=selected_files,
+            organization_id=organization_id,
+            created_by=request.user
+        )
+        
+        # Format results for response
+        response_data = {
+            'success': True,
+            'results': import_results,
+            'imported_count': len(import_results['successful_imports']),
+            'failed_count': len(import_results['failed_imports']),
+            'total_count': import_results['total_files']
+        }
+        
+        # Add success message
+        if import_results['successful_imports']:
+            success_names = [imp['mapping_name'] for imp in import_results['successful_imports']]
+            response_data['message'] = f"Successfully imported {len(success_names)} mapping(s): {', '.join(success_names)}"
+        else:
+            response_data['message'] = "No mappings were successfully imported"
+        
+        logger.info(f"Mapping import completed: {len(import_results['successful_imports'])} successful, {len(import_results['failed_imports'])} failed")
+        
+        return JsonResponse(response_data)
+        
+    except Exception as e:
+        logger.error(f"Error importing selected mappings: {e}", exc_info=True)
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+            'results': {}
+        }, status=500)

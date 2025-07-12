@@ -19,6 +19,9 @@ urlpatterns = [
     path("ingest/start-import/", ingest_views.start_import, name="start_import"),
     path("ingest/run-validation/", ingest_views.run_pre_execution_validation, name="run_validation"),
     path("ingest/validation-results/", ingest_views.validation_results_display, name="validation_results"),
+    # Mapping import endpoints
+    path("mappings/list-importable/", ingest_views.list_importable_mappings, name="list_importable_mappings"),
+    path("mappings/import/", ingest_views.import_selected_mappings, name="import_selected_mappings"),
     # Organization changes now handled in main ingest_data view
     
     # CSV ingest endpoint (existing)
