@@ -17,6 +17,7 @@ from .resource_manager import ResourceManager
 from .statistics import ExecutionMetrics
 from .statistics import ExecutionStatistics
 from .update_analyzer import UpdateAnalyzer
+from .uri_generator import UnifiedURIGenerator
 
 
 class ValidationError(Exception):
@@ -75,6 +76,9 @@ class MappingExecutionEngine:
 
         # Initialize mapping validator
         self.validator = MappingValidator()
+
+        # Initialize URI generator for entity-based processing
+        self.uri_generator = UnifiedURIGenerator(base_uri, organization_id)
 
     def execute_with_processing_plan(self,
                                    csv_data: list[dict[str, Any]] | pl.DataFrame,
@@ -257,6 +261,9 @@ class MappingExecutionEngine:
 
             logger.debug(f"Processing batch {batch_start}-{batch_end}")
             self._process_batch(batch_df, dataset_name, mapping_config, column_resources)
+            
+            # Update rows processed
+            self.statistics.current_metrics.rows_processed += batch_df.height
 
         # Step 4: Handle special column types (FK, external ontology, etc.)
         if mapping_config:
@@ -269,81 +276,69 @@ class MappingExecutionEngine:
                       dataset_name: str,
                       mapping_config: dict | None,
                       column_resources: dict[str, Any]) -> None:
-        """Process a batch of rows."""
-        logger.debug(f"Processing batch with {batch_df.height} rows")
-        cell_data = []
-        value_data = []
-
-        # Collect cell and value data
-        for row_data in batch_df.iter_rows(named=True):
-            row_id = row_data.get("row_id", 0)
-            display_row_id = int(row_id) + 1 if str(row_id).isdigit() else row_id
-
-            for column_name, value in row_data.items():
-                if column_name == "row_id" or value is None:
-                    continue
-
-                value_str = str(value).strip()
-                if not value_str:
-                    continue
-
-                cell_data.append((dataset_name, column_name, str(display_row_id)))
-                value_data.append((value_str, "http://www.w3.org/2001/XMLSchema#string"))
-
-        logger.debug(f"Collected {len(cell_data)} cell data items, {len(value_data)} value data items")
-
-        if not cell_data:
-            logger.debug("No cell data to process, returning early")
+        """Process batch using entity-based approach."""
+        logger.debug(f"Processing batch with {batch_df.height} rows using entity-based approach")
+        
+        if batch_df.height == 0:
+            logger.debug("No rows to process, returning early")
             return
-
-        # Create cell resources
-        logger.debug("Creating cell resources...")
-        cell_resources = self.resource_manager.create_cell_resources_bulk(cell_data)
-        logger.debug(f"Created {len(cell_resources)} cell resources")
-
-        # Create value resources
-        logger.debug("Creating value resources...")
-        unique_values = list(set(value_data))
-        value_resources = self.resource_manager.create_value_resources_bulk(unique_values)
-        logger.debug(f"Created {len(value_resources)} value resources")
-
-        # Create value triples
-        cell_value_pairs = []
-        value_index = 0
-
-        for row_data in batch_df.iter_rows(named=True):
-            row_id = row_data.get("row_id", 0)
-            display_row_id = int(row_id) + 1 if str(row_id).isdigit() else row_id
-
+        
+        # Step 1: Resolve anchor columns
+        csv_headers = [col for col in batch_df.columns if col != "row_id"]
+        anchor_columns = self.uri_generator.resolve_anchor_columns(mapping_config, csv_headers)
+        logger.debug(f"Resolved anchor columns: {anchor_columns}")
+        
+        # Step 2: Generate entity URIs for all rows
+        entity_uris = self.uri_generator.generate_entity_uris_bulk(batch_df, dataset_name, anchor_columns)
+        logger.debug(f"Generated {len(entity_uris)} entity URIs")
+        
+        # Step 3: Create entity resources
+        # Extract entity IDs from URIs for bulk creation
+        entity_data = []
+        for uri in entity_uris:
+            entity_id = uri.split('/')[-1]  # Get the last part of the URI as entity ID
+            entity_data.append((dataset_name, entity_id))
+        
+        entity_resources = self.resource_manager.create_entity_resources_bulk(entity_data)
+        logger.debug(f"Created {len(entity_resources)} entity resources")
+        
+        # Step 4: Create property triples for each column
+        property_data = []
+        for row_idx, row_data in enumerate(batch_df.iter_rows(named=True)):
+            entity_uri = entity_uris[row_idx]
+            entity_resource = entity_resources.get(entity_uri)
+            
+            if not entity_resource:
+                logger.warning(f"Could not find entity resource for URI: {entity_uri}")
+                continue
+            
             for column_name, value in row_data.items():
                 if column_name == "row_id" or value is None:
                     continue
-
+                    
                 value_str = str(value).strip()
                 if not value_str:
                     continue
-
-                cell_uri = self.resource_manager.generate_cell_uri(
-                    dataset_name, column_name, str(display_row_id),
-                )
-
-                if cell_uri in cell_resources and value_str in value_resources:
-                    cell_value_pairs.append((cell_resources[cell_uri], value_resources[value_str]))
-
-        logger.debug(f"Prepared {len(cell_value_pairs)} cell-value pairs")
-
-        # Create all value triples at once
-        if cell_value_pairs:
-            logger.debug("Creating value triples...")
-            self.resource_manager.create_value_triples_bulk(cell_value_pairs)
-            logger.debug("Value triples created successfully")
-
-        # Update statistics
-        self.statistics.current_metrics.cells_processed += len(cell_data)
-        logger.debug(f"Updated statistics: cells_processed = {self.statistics.current_metrics.cells_processed}")
+                
+                # Generate property URI from column name
+                property_uri = self._generate_property_uri(column_name, mapping_config)
+                property_data.append((entity_resource, property_uri, value_str))
+        
+        logger.debug(f"Prepared {len(property_data)} property triples")
+        
+        # Step 5: Create all property triples in bulk
+        if property_data:
+            self.resource_manager.create_property_triples_bulk(property_data)
+            logger.debug("Property triples created successfully")
+        
+        # Step 6: Update statistics
+        self.statistics.current_metrics.entities_processed += len(entity_data)
+        self.statistics.current_metrics.properties_created += len(property_data)
+        logger.debug(f"Updated statistics: entities_processed = {self.statistics.current_metrics.entities_processed}, "
+                    f"properties_created = {self.statistics.current_metrics.properties_created}")
 
     def _extract_mapping_config(self, dataset_name: str, workspace_columns: list[dict]) -> dict | None:
-        """Extract mapping configuration for a specific dataset."""
+        """Enhanced mapping config extraction with anchor column detection."""
         # Find columns for this dataset
         dataset_columns = [
             col for col in workspace_columns
@@ -355,13 +350,16 @@ class MappingExecutionEngine:
 
         mapping_config = {
             "columns": {},
+            "anchor_columns": [],  # New: explicitly track anchor columns
         }
 
+        anchor_columns_found = []
         for col in dataset_columns:
             col_name = col.get("column_name")
             if col_name:
                 mapping_config["columns"][col_name] = {
                     "is_anchor": col.get("is_anchor", False),
+                    "arkumu_type": col.get("arkumu_type", col_name),
                     "is_fk": col.get("is_fk", False),
                     "is_multi_value": col.get("is_multi_value", False),
                     "is_relationship_context": col.get("is_relationship_context", False),
@@ -370,6 +368,12 @@ class MappingExecutionEngine:
                     "target_column": col.get("target_column"),
                     "separator": col.get("separator", ","),
                 }
+                
+                if col.get("is_anchor", False):
+                    anchor_columns_found.append(col_name)
+
+        # Set anchor columns (will be used by URI generator)
+        mapping_config["anchor_columns"] = anchor_columns_found
 
         return mapping_config
 
@@ -379,6 +383,22 @@ class MappingExecutionEngine:
         # This can be made configurable later
         return False
 
+    def _generate_property_uri(self, column_name: str, mapping_config: dict | None) -> str:
+        """
+        Generate property URI for a column.
+        Uses arkumu_type from mapping if available, otherwise uses column name.
+        """
+        if mapping_config and "columns" in mapping_config:
+            column_config = mapping_config["columns"].get(column_name, {})
+            arkumu_type = column_config.get("arkumu_type", column_name)
+        else:
+            arkumu_type = column_name
+        
+        # Use existing property URI generation logic
+        from arkumu.common.uri_utils import mint_uri, slugify_uri_part
+        safe_property = slugify_uri_part(arkumu_type)
+        return mint_uri(self.base_uri, self.organization_id, "properties", safe_property)
+
     def _process_special_columns(self,
                                df: pl.DataFrame,
                                dataset_name: str,
@@ -387,12 +407,20 @@ class MappingExecutionEngine:
         if "columns" not in mapping_config:
             return
 
-        # Count special column types for statistics
+        # Process FK relationships with entity-based URIs
         for col_name, col_config in mapping_config["columns"].items():
             if col_config.get("is_fk", False):
-                # Placeholder for FK processing
-                logger.debug(f"FK column detected: {col_name} -> {col_config.get('target_dataset')}")
-                # TODO: Implement FK relationship creation
+                logger.info(f"Processing FK column: {col_name} -> {col_config.get('target_dataset')}")
+                
+                # Generate FK relationships between entities
+                target_dataset = col_config.get("target_dataset")
+                target_column = col_config.get("target_column")
+                
+                if target_dataset and target_column:
+                    # Create entity-to-entity relationships
+                    self._create_entity_relationships(df, col_name, dataset_name, target_dataset, target_column, col_config)
+                else:
+                    logger.warning(f"FK column {col_name} missing target configuration: target_dataset={target_dataset}, target_column={target_column}")
 
             elif col_config.get("is_external_ontology", False):
                 # Placeholder for external ontology processing
@@ -403,6 +431,146 @@ class MappingExecutionEngine:
                 # Placeholder for multi-value processing
                 logger.debug(f"Multi-value column detected: {col_name}")
                 # TODO: Implement multi-value splitting
+
+    def _create_entity_relationships(self,
+                                   df: pl.DataFrame,
+                                   col_name: str,
+                                   dataset_name: str,
+                                   target_dataset: str,
+                                   target_column: str,
+                                   col_config: dict) -> None:
+        """
+        Create entity-to-entity relationships for foreign keys.
+        
+        Args:
+            df: DataFrame containing the data
+            col_name: Name of the FK column
+            dataset_name: Source dataset name
+            target_dataset: Target dataset name
+            target_column: Target column name
+            col_config: Column configuration dictionary
+        """
+        logger.info(f"Creating entity relationships for {col_name}: {dataset_name} -> {target_dataset}")
+        
+        # Check if the FK column exists in the DataFrame
+        if col_name not in df.columns:
+            logger.warning(f"FK column {col_name} not found in DataFrame columns: {df.columns}")
+            return
+        
+        # Get mapping config for anchor column resolution
+        anchor_columns = self.uri_generator.resolve_anchor_columns(None, [col for col in df.columns if col != "row_id"])
+        
+        relationship_count = 0
+        error_count = 0
+        
+        # Use the provided column configuration for multi-value support
+        
+        # Process each row to create FK relationships
+        for row_data in df.iter_rows(named=True):
+            fk_value = row_data.get(col_name)
+            
+            # Skip empty or null FK values
+            if fk_value is None or str(fk_value).strip() == "":
+                continue
+            
+            fk_value_str = str(fk_value).strip()
+            
+            # Handle multi-value FK columns (comma-separated values)
+            fk_values = []
+            if col_config and col_config.get("is_multi_value", False):
+                separator = col_config.get("separator", ",")
+                fk_values = [v.strip() for v in fk_value_str.split(separator) if v.strip()]
+            else:
+                fk_values = [fk_value_str]
+            
+            # Generate source entity URI once per row
+            try:
+                source_entity_uri = self._generate_source_entity_uri(
+                    dataset_name, row_data, anchor_columns
+                )
+                
+                # Create or get source entity resource
+                source_entity_resource = self.resource_manager.create_entity_resource(
+                    source_entity_uri, dataset_name
+                )
+                
+                # Generate relationship property URI
+                relationship_property_uri = self._generate_relationship_property_uri(
+                    col_name, target_dataset
+                )
+                
+                # Create relationships for each FK value
+                for single_fk_value in fk_values:
+                    try:
+                        # Generate target entity URI using FK value as entity ID
+                        target_entity_uri = self.resource_manager.generate_entity_uri(
+                            target_dataset, single_fk_value
+                        )
+                        
+                        # Create or get target entity resource (stub if doesn't exist)
+                        target_entity_resource = self.resource_manager.create_entity_resource(
+                            target_entity_uri, target_dataset, is_stub=True
+                        )
+                        
+                        # Create the relationship triple
+                        self.resource_manager.create_relationship_triple(
+                            source_entity_resource,
+                            relationship_property_uri, 
+                            target_entity_resource
+                        )
+                        
+                        relationship_count += 1
+                        
+                    except Exception as e:
+                        logger.error(f"Failed to create FK relationship for {col_name}={single_fk_value}: {e}")
+                        error_count += 1
+                        self.statistics.add_error(f"FK relationship creation failed: {e}", dataset_name)
+                
+            except Exception as e:
+                logger.error(f"Failed to process FK relationships for row in {col_name}: {e}")
+                error_count += 1
+                self.statistics.add_error(f"FK row processing failed: {e}", dataset_name)
+        
+        # Update statistics
+        self.statistics.current_metrics.relationships_created += relationship_count
+        if hasattr(self.statistics, 'increment_fk_relationships'):
+            self.statistics.increment_fk_relationships(relationship_count, dataset_name)
+        
+        logger.info(f"FK relationships created for {col_name}: {relationship_count} successful, {error_count} errors")
+
+    def _generate_source_entity_uri(self, 
+                                  dataset_name: str, 
+                                  row_data: dict, 
+                                  anchor_columns: list[str]) -> str:
+        """Generate source entity URI using anchor columns or row_id."""
+        if anchor_columns:
+            # Use anchor columns to generate entity ID
+            anchor_values = []
+            for anchor_col in anchor_columns:
+                value = row_data.get(anchor_col)
+                if value is not None and str(value).strip():
+                    anchor_values.append(str(value).strip())
+            
+            if anchor_values:
+                entity_id = '_'.join(anchor_values)
+                return self.resource_manager.generate_entity_uri(dataset_name, entity_id)
+        
+        # Fall back to row_id
+        row_id = row_data.get('row_id', 0)
+        display_row_id = int(row_id) + 1 if str(row_id).isdigit() else row_id
+        return self.resource_manager.generate_entity_uri(dataset_name, str(display_row_id))
+
+    def _generate_relationship_property_uri(self, 
+                                          col_name: str, 
+                                          target_dataset: str) -> str:
+        """Generate property URI for FK relationships."""
+        # Create a meaningful relationship property name
+        relationship_name = f"has_{target_dataset.lower()}_reference"
+        
+        # Use standard property URI generation
+        from arkumu.common.uri_utils import mint_uri, slugify_uri_part
+        safe_property = slugify_uri_part(relationship_name)
+        return mint_uri(self.base_uri, self.organization_id, "properties", safe_property)
 
     def get_execution_summary(self) -> dict[str, Any]:
         """Get a complete execution summary."""
