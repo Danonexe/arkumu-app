@@ -404,7 +404,7 @@ class MappingExecutionEngine:
                                dataset_name: str,
                                mapping_config: dict) -> None:
         """Process special column types (FK, external ontology, etc.)."""
-        if "columns" not in mapping_config:
+        if not mapping_config or "columns" not in mapping_config:
             return
 
         # Process FK relationships with entity-based URIs

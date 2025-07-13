@@ -54,6 +54,8 @@ class ExecutionMetrics:
     multi_value_items_created: int = 0
     
     # Entity processing
+    entities_processed: int = 0
+    properties_created: int = 0
     stub_entities_created: int = 0
     relationships_created: int = 0
     
@@ -101,6 +103,8 @@ class ExecutionMetrics:
         self.multi_value_items_created += other.multi_value_items_created
         
         # Entity processing
+        self.entities_processed += other.entities_processed
+        self.properties_created += other.properties_created
         self.stub_entities_created += other.stub_entities_created
         self.relationships_created += other.relationships_created
     
@@ -122,6 +126,8 @@ class ExecutionMetrics:
             'fk_relationships_created': self.fk_relationships_created,
             'external_ontology_matches': self.external_ontology_matches,
             'multi_value_items_created': self.multi_value_items_created,
+            'entities_processed': self.entities_processed,
+            'properties_created': self.properties_created,
             'stub_entities_created': self.stub_entities_created,
             'relationships_created': self.relationships_created
         }

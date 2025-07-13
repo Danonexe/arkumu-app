@@ -260,10 +260,10 @@ def run_mapping_aware_import_workflow(
         # Initialize execution statistics
         execution_statistics = ExecutionStatistics()
         
-        # Initialize processor with test-specific URI to ensure isolation from production
+        # Initialize processor
         processor = MappingAwareProcessor(
-            institution=f"MAPPING_AWARE_{institution}",
-            base_uri=f"{base_uri}/mapping_aware",
+            institution=institution,
+            base_uri=base_uri,
             statistics=execution_statistics
         )
         

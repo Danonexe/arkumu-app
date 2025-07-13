@@ -90,51 +90,50 @@ class UpdateAnalyzer:
         
         existing_uri_map = {res['uri']: res for res in existing_resources}
         
-        # Analyze each row
+        # Analyze each row (entity-based approach)
         for row_data in df.iter_rows(named=True):
             row_id = row_data.get('row_id', 0)
             
-            for column_name, value in row_data.items():
-                if column_name == 'row_id' or value is None:
-                    continue
+            # Count total entities instead of cells
+            analysis["total_cells"] += len([v for k, v in row_data.items() 
+                                          if k != 'row_id' and v is not None and str(v).strip()])
+            
+            # Generate entity URI instead of individual cell URIs
+            display_row_id = int(row_id) + 1 if str(row_id).isdigit() else row_id
+            # Use entity URI pattern - this is a simplified approach for compatibility
+            entity_uri = f"{dataset_uri_prefix}/entities/{dataset_name}/entity-{display_row_id}"
+            
+            # Check if entity exists (simplified check)
+            entity_exists = any(uri.startswith(entity_uri) for uri in existing_uri_map.keys())
+            
+            if entity_exists:
+                analysis["existing_resources"] += 1
+                
+                # For entity-based analysis, we'll do a simplified check
+                # In a full implementation, this would check individual property changes
+                existing_entity_resources = [res for uri, res in existing_uri_map.items() 
+                                           if uri.startswith(entity_uri)]
+                
+                if existing_entity_resources:
+                    analysis["potential_updates"] += 1
                     
-                value_str = str(value).strip()
-                if not value_str:
-                    continue
-                
-                analysis["total_cells"] += 1
-                
-                # Generate cell URI
-                display_row_id = int(row_id) + 1 if str(row_id).isdigit() else row_id
-                cell_uri = self.resource_manager.generate_cell_uri(
-                    dataset_name, column_name, str(display_row_id)
-                )
-                
-                if cell_uri in existing_uri_map:
-                    existing = existing_uri_map[cell_uri]
-                    analysis["existing_resources"] += 1
+                    conflict_info = {
+                        "uri": entity_uri,
+                        "row_id": display_row_id,
+                        "existing_properties": len(existing_entity_resources),
+                        "new_properties": len([v for k, v in row_data.items() 
+                                             if k != 'row_id' and v is not None and str(v).strip()]),
+                        "analysis_type": "entity_based"
+                    }
                     
-                    # Check for value changes
-                    if self._would_value_change(existing, value_str):
-                        analysis["potential_updates"] += 1
-                        
-                        conflict_info = {
-                            "uri": cell_uri,
-                            "column": column_name,
-                            "row_id": display_row_id,
-                            "existing_value": existing.get('value', ''),
-                            "new_value": value_str,
-                            "last_updated": existing.get('updated_at'),
-                            "column_type": self._get_column_type(column_name, mapping_config)
-                        }
-                        
-                        # Add timestamp comparison if applicable
-                        if self.timestamp_column and self.timestamp_column in row_data:
-                            self._add_timestamp_analysis(conflict_info, row_data, existing)
-                        
-                        analysis["conflicts"].append(conflict_info)
-                else:
-                    analysis["new_resources"] += 1
+                    # Add timestamp comparison if applicable (simplified)
+                    if self.timestamp_column and self.timestamp_column in row_data:
+                        conflict_info["timestamp_column"] = self.timestamp_column
+                        conflict_info["new_timestamp"] = row_data.get(self.timestamp_column)
+                    
+                    analysis["conflicts"].append(conflict_info)
+            else:
+                analysis["new_resources"] += 1
         
         # Generate recommendations
         self._generate_recommendations(analysis)

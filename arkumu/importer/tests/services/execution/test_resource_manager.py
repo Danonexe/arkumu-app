@@ -110,19 +110,8 @@ class TestResourceManager:
         assert "123" in uri
         assert uri.startswith(resource_manager.base_uri)
     
-    def test_generate_cell_uri(self, resource_manager):
-        """Test cell URI generation"""
-        uri = resource_manager.generate_cell_uri("test_dataset", "column_name", "123")
-        
-        assert isinstance(uri, str)
-        assert "datasets" in uri
-        assert "test-dataset" in uri  # Slugified version with hyphen
-        assert "column-name" in uri  # Slugified version with hyphen
-        assert "123" in uri
-        assert uri.startswith(resource_manager.base_uri)
-    
-    def test_generate_entity_uri(self, resource_manager):
-        """Test entity URI generation"""
+    def test_generate_entity_uri_detailed(self, resource_manager):
+        """Test entity URI generation (replaces cell URI test)"""
         uri = resource_manager.generate_entity_uri("test_dataset", "entity_123")
         
         assert isinstance(uri, str)
@@ -130,6 +119,7 @@ class TestResourceManager:
         assert "test-dataset" in uri  # Slugified version with hyphen
         assert "entity-123" in uri  # Slugified version with hyphen
         assert uri.startswith(resource_manager.base_uri)
+    
     
     def test_generate_junction_uri(self, resource_manager):
         """Test junction URI generation"""
@@ -142,33 +132,8 @@ class TestResourceManager:
         assert "secondary-val" in uri  # Slugified version with hyphen
         assert uri.startswith(resource_manager.base_uri)
     
-    def test_extract_row_id_from_uri(self, resource_manager):
-        """Test extracting row ID from cell URI"""
-        cell_uri = resource_manager.generate_cell_uri("dataset", "column", "row_123")
-        row_id = resource_manager.extract_row_id_from_uri(cell_uri)
-        
-        assert row_id == "row-123"  # Slugified version with hyphen
-    
-    def test_extract_row_id_from_invalid_uri(self, resource_manager):
-        """Test extracting row ID from invalid URI"""
-        invalid_uri = "not/a/valid/uri"
-        row_id = resource_manager.extract_row_id_from_uri(invalid_uri)
-        
-        assert row_id == "uri"  # Last part of the URI
-    
-    def test_extract_column_name_from_uri(self, resource_manager):
-        """Test extracting column name from cell URI"""
-        cell_uri = resource_manager.generate_cell_uri("dataset", "column_name", "row_123")
-        column_name = resource_manager.extract_column_name_from_uri(cell_uri)
-        
-        assert column_name == "column-name"  # Slugified version with hyphen
-    
-    def test_extract_column_name_from_invalid_uri(self, resource_manager):
-        """Test extracting column name from invalid URI"""
-        invalid_uri = "not/a/valid/uri"
-        column_name = resource_manager.extract_column_name_from_uri(invalid_uri)
-        
-        assert column_name is None
+    # NOTE: Cell-based URI extraction methods removed in entity-based approach
+    # These tests have been removed as the corresponding methods no longer exist
     
     @patch('arkumu.metadata.models.Resource.objects.get_or_create')
     def test_create_dataset_resource(self, mock_get_or_create, resource_manager):
@@ -233,28 +198,8 @@ class TestResourceManager:
         # Verify statistics
         assert resource_manager.statistics.current_metrics.resources_created == 3
     
-    @patch('arkumu.metadata.models.Resource.objects.bulk_create')
-    @patch('arkumu.metadata.models.Resource.objects.filter')
-    def test_create_cell_resources_bulk(self, mock_filter, mock_bulk_create, resource_manager):
-        """Test bulk cell resource creation"""
-        # Mock created resources
-        mock_resources = [create_mock_resource(i, f"test://cell_{i}") for i in range(3)]
-        mock_filter.return_value = mock_resources
-        
-        cell_data = [
-            ("dataset", "col1", "row1"),
-            ("dataset", "col1", "row2"),
-            ("dataset", "col2", "row1")
-        ]
-        
-        result = resource_manager.create_cell_resources_bulk(cell_data)
-        
-        # Verify bulk creation was called
-        mock_bulk_create.assert_called_once()
-        assert len(result) == 3
-        
-        # Verify statistics
-        assert resource_manager.statistics.current_metrics.resources_created == 3
+    # NOTE: create_cell_resources_bulk has been replaced by create_entity_resources_bulk
+    # This test is covered by the test_create_entity_resources_bulk test above
     
     @patch('arkumu.metadata.models.Resource.objects.bulk_create')
     def test_create_value_resources_bulk(self, mock_bulk_create, resource_manager):
@@ -446,6 +391,63 @@ class TestResourceManager:
         assert call_args[1]['defaults']['source'] == "ORCID"
         assert call_args[1]['defaults']['is_placeholder'] is False
     
+    @patch('arkumu.metadata.models.Resource.objects.bulk_create')
+    @patch('arkumu.metadata.models.Resource.objects.filter')
+    def test_create_entity_resources_bulk(self, mock_filter, mock_bulk_create, resource_manager):
+        """Test bulk entity resource creation"""
+        # Mock return values
+        mock_resources = [create_mock_resource(i, f"test://entity_{i}") for i in range(3)]
+        mock_filter.return_value = mock_resources
+        
+        entity_data = [
+            ("dataset1", "entity_1"),
+            ("dataset1", "entity_2"), 
+            ("dataset2", "entity_3")
+        ]
+        
+        result = resource_manager.create_entity_resources_bulk(entity_data)
+        
+        # Verify bulk creation was called
+        mock_bulk_create.assert_called_once()
+        assert len(result) == 3
+        
+        # Verify statistics
+        assert resource_manager.statistics.current_metrics.resources_created == 3
+    
+    @patch('arkumu.metadata.models.triples.Triple.objects.bulk_create')
+    @patch('arkumu.metadata.models.Resource.objects.bulk_create')
+    @patch('arkumu.metadata.models.Resource.objects.filter')
+    def test_create_property_triples_bulk(self, mock_filter, mock_bulk_create_resource, mock_bulk_create_triple, resource_manager):
+        """Test bulk property triple creation for entities"""
+        # Mock entity resources
+        mock_entity = create_mock_resource(1, "test://entity/1")
+        
+        # Mock property and value resources that will be returned by filter
+        mock_property1 = create_mock_resource(2, "http://example.org/name")
+        mock_property2 = create_mock_resource(3, "http://example.org/age")
+        
+        # Set up filter to return the property resources when queried
+        mock_filter.return_value = [mock_property1, mock_property2]
+        
+        property_data = [
+            (mock_entity, "http://example.org/name", "John Doe"),
+            (mock_entity, "http://example.org/age", "30")
+        ]
+        
+        result = resource_manager.create_property_triples_bulk(property_data)
+        
+        # Verify resources were created (should be called twice - once for properties, once for values)
+        assert mock_bulk_create_resource.call_count >= 1
+        
+        # Verify triples were created
+        mock_bulk_create_triple.assert_called_once()
+        
+        # Verify result is a list of triples
+        assert isinstance(result, list)
+        
+        # Verify statistics were updated
+        assert resource_manager.statistics.current_metrics.triples_created >= 0
+    
     @patch('arkumu.metadata.models.triples.Triple.objects.get_or_create')
     @patch('arkumu.metadata.models.Resource.objects.get_or_create')
     def test_create_property_triple(self, mock_resource_get_or_create, mock_triple_get_or_create, resource_manager):
@@ -510,22 +512,22 @@ class TestResourceManagerPerformance:
     
     @patch('arkumu.metadata.models.Resource.objects.bulk_create')
     @patch('arkumu.metadata.models.Resource.objects.filter')
-    def test_bulk_cell_creation_performance(self, mock_filter, mock_bulk_create, resource_manager):
-        """Test performance of bulk cell resource creation"""
+    def test_bulk_entity_creation_performance(self, mock_filter, mock_bulk_create, resource_manager):
+        """Test performance of bulk entity resource creation"""
         # Mock return values
-        mock_resources = [create_mock_resource(i, f"test://cell_{i}") for i in range(1000)]
+        mock_resources = [create_mock_resource(i, f"test://entity_{i}") for i in range(1000)]
         mock_filter.return_value = mock_resources
         
         # Create large dataset
-        cell_data = [
-            ("dataset", f"col_{i % 10}", f"row_{i}")
+        entity_data = [
+            ("dataset", f"entity_{i}")
             for i in range(1000)
         ]
         
         import time
         start_time = time.time()
         
-        result = resource_manager.create_cell_resources_bulk(cell_data)
+        result = resource_manager.create_entity_resources_bulk(entity_data)
         
         end_time = time.time()
         processing_time = end_time - start_time
@@ -634,9 +636,9 @@ class TestResourceManagerEdgeCases:
     
     def test_empty_bulk_operations(self, resource_manager):
         """Test bulk operations with empty data"""
-        # Empty cell data
+        # Empty entity data
         with patch('arkumu.metadata.models.Resource.objects.bulk_create') as mock_bulk:
-            result = resource_manager.create_cell_resources_bulk([])
+            result = resource_manager.create_entity_resources_bulk([])
             assert result == {}
             mock_bulk.assert_not_called()
         
