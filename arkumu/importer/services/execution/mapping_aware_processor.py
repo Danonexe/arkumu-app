@@ -293,6 +293,9 @@ class MappingAwareProcessor:
             
             # Process external ontology columns
             self._process_external_ontology_columns(entity_resource, row_data, column_groups['external_ontology'], context)
+            
+            # Track row processing
+            self.statistics.current_metrics.rows_processed += 1
     
     def _process_entities_only(self,
                              dataset_config,
@@ -863,7 +866,6 @@ class MappingAwareProcessor:
         logger.info(f"  - Rows processed: {metrics.rows_processed}")
         logger.info(f"  - Resources created: {metrics.resources_created}")
         logger.info(f"  - Triples created: {metrics.triples_created}")
-        logger.info(f"  - Values created: {metrics.values_created}")
         logger.info(f"  - Relationships created: {metrics.relationships_created}")
         if metrics.errors:
             logger.info(f"  - Errors: {metrics.errors}")

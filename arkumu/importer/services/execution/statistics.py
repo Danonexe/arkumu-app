@@ -32,8 +32,7 @@ class ExecutionMetrics:
     triples_created: int = 0
     triples_updated: int = 0
     
-    # Values
-    values_created: int = 0
+    # Values (legacy - kept for truncation tracking)
     values_truncated: int = 0
     
     # Errors
@@ -82,7 +81,6 @@ class ExecutionMetrics:
         self.triples_updated += other.triples_updated
         
         # Values
-        self.values_created += other.values_created
         self.values_truncated += other.values_truncated
         
         # Errors
@@ -119,7 +117,6 @@ class ExecutionMetrics:
             'resources_updated': self.resources_updated,
             'resources_skipped': self.resources_skipped,
             'triples_created': self.triples_created,
-            'values_created': self.values_created,
             'values_truncated': self.values_truncated,
             'errors': self.errors,
             'warnings': self.warnings,

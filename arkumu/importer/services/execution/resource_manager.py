@@ -285,7 +285,6 @@ class ResourceManager:
         if value_triples:
             Triple.objects.bulk_create(value_triples, ignore_conflicts=True)
             self.statistics.current_metrics.triples_created += len(value_triples)
-            self.statistics.current_metrics.values_created += len(value_triples)
         
         return value_triples
     

@@ -20,7 +20,6 @@ class BulkUpdateStats:
     errors: int = 0
     truncated_values: int = 0
     multi_value_cells_detected: int = 0
-    total_values_created: int = 0
     relationships_created: int = 0
     
     def merge(self, other: 'BulkUpdateStats'):
@@ -37,7 +36,6 @@ class BulkUpdateStats:
         self.errors += other.errors
         self.truncated_values += other.truncated_values
         self.multi_value_cells_detected += other.multi_value_cells_detected
-        self.total_values_created += other.total_values_created
         self.relationships_created += other.relationships_created
 
 
