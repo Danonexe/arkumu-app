@@ -141,7 +141,8 @@ class DataProcessor:
                 
                 if column_config and isinstance(column_config, dict):
                     is_multi_value_from_config = column_config.get('is_multi_value', False)
-                    separator = column_config.get('separator', ',')
+                    # Check for both 'separator' and 'multi_value_separator' fields
+                    separator = column_config.get('separator') or column_config.get('multi_value_separator', ',')
                     if is_multi_value_from_config:
                         logger.info(f"Found multi-value column '{column_name}' via {config_structure_used} with separator '{separator}'")
                     else:

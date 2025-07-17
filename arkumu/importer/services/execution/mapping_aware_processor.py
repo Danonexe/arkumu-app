@@ -30,6 +30,7 @@ class ProcessingContext:
     all_csv_sources: Dict[str, Any]
     entity_cache: Dict[str, Any]  # Cache for FK resolution
     processed_datasets: Set[str]  # Track which datasets have been processed
+    log_details: bool = False  # Control detailed logging
 
 
 class MappingAwareProcessor:
@@ -156,6 +157,9 @@ class MappingAwareProcessor:
         if context.execution_config.fk_relationships:
             logger.info(f"FK relationships ({len(context.execution_config.fk_relationships)}) are handled by execution engine")
         
+        # Log processing summary
+        self._log_processing_summary(context)
+        
         return self.statistics.current_metrics
     
     def _process_streaming_entity_centric(self, context: ProcessingContext) -> ExecutionMetrics:
@@ -197,6 +201,9 @@ class MappingAwareProcessor:
         # Resolve relationships
         self._resolve_pending_relationships(context)
         
+        # Log processing summary
+        self._log_processing_summary(context)
+        
         return self.statistics.current_metrics
     
     def _process_multi_phase(self, context: ProcessingContext) -> ExecutionMetrics:
@@ -225,6 +232,9 @@ class MappingAwareProcessor:
         logger.info("Phase 3: Processing relationship contexts")
         self._process_all_relationship_contexts(context)
         
+        # Log processing summary
+        self._log_processing_summary(context)
+        
         return self.statistics.current_metrics
     
     def _process_dataset_with_entities(self,
@@ -234,10 +244,15 @@ class MappingAwareProcessor:
         """Process a dataset with complete entity creation"""
         
         dataset_name = dataset_config.dataset_name
-        logger.info(f"Processing dataset '{dataset_name}' with {len(csv_data)} rows")
+        logger.info(f"\n{'='*60}")
+        logger.info(f"Processing dataset: {dataset_name}")
+        logger.info(f"Total rows: {len(csv_data)}")
         
-        # Prepare data
-        df = self.data_processor.prepare_for_processing(csv_data)
+        # Create mapping configuration for multi-value detection
+        mapping_config = self._create_mapping_config_from_dataset(dataset_config)
+        
+        # Prepare data with mapping configuration
+        df = self.data_processor.prepare_for_processing(csv_data, mapping_config)
         if df.height == 0:
             return
         
@@ -246,6 +261,15 @@ class MappingAwareProcessor:
         
         # Group columns by type for efficient processing
         column_groups = self._group_columns_by_type(dataset_config.columns)
+        
+        # Log column type distribution
+        logger.info(f"Column types for {dataset_name}:")
+        logger.info(f"  - Regular columns: {len(column_groups['regular'])}")
+        logger.info(f"  - Anchor columns: {len(column_groups['anchor'])}")
+        logger.info(f"  - Multi-value columns: {len(column_groups['multi_value'])}")
+        logger.info(f"  - Foreign key columns: {len(column_groups['foreign_key'])}")
+        logger.info(f"  - External ontology columns: {len(column_groups['external_ontology'])}")
+        logger.info(f"  - Relationship context columns: {len(column_groups['relationship_context'])}")
         
         # Process each row as a complete entity
         for row_data in df.iter_rows(named=True):
@@ -279,8 +303,11 @@ class MappingAwareProcessor:
         dataset_name = dataset_config.dataset_name
         logger.info(f"Processing entities only for dataset '{dataset_name}'")
         
-        # Prepare data
-        df = self.data_processor.prepare_for_processing(csv_data)
+        # Create mapping configuration for multi-value detection
+        mapping_config = self._create_mapping_config_from_dataset(dataset_config)
+        
+        # Prepare data with mapping configuration
+        df = self.data_processor.prepare_for_processing(csv_data, mapping_config)
         if df.height == 0:
             return
         
@@ -362,6 +389,8 @@ class MappingAwareProcessor:
                                columns: List[ColumnConfig],
                                context: ProcessingContext):
         """Process regular columns as simple properties"""
+        if columns and context.log_details:
+            logger.debug(f"Processing {len(columns)} regular columns for entity {entity_resource.uri}")
         
         for column in columns:
             value = row_data.get(column.column_name)
@@ -383,6 +412,8 @@ class MappingAwareProcessor:
                               columns: List[ColumnConfig],
                               context: ProcessingContext):
         """Process anchor columns (primary key properties)"""
+        if columns:
+            logger.debug(f"Processing {len(columns)} anchor columns: {[col.column_name for col in columns]}")
         
         for column in columns:
             value = row_data.get(column.column_name)
@@ -404,6 +435,8 @@ class MappingAwareProcessor:
                                    columns: List[ColumnConfig],
                                    context: ProcessingContext):
         """Process multi-value columns (comma-separated values)"""
+        if columns:
+            logger.debug(f"Processing {len(columns)} multi-value columns: {[col.column_name for col in columns]}")
         
         for column in columns:
             value = row_data.get(column.column_name)
@@ -457,6 +490,8 @@ class MappingAwareProcessor:
                                          columns: List[ColumnConfig],
                                          context: ProcessingContext):
         """Process external ontology columns"""
+        if columns:
+            logger.debug(f"Processing {len(columns)} external ontology columns: {[col.column_name for col in columns]}")
         
         for column in columns:
             value = row_data.get(column.column_name)
@@ -484,7 +519,19 @@ class MappingAwareProcessor:
     def _resolve_pending_relationships(self, context: ProcessingContext):
         """Resolve all pending FK relationships"""
         
+        logger.info(f"\n{'='*60}")
         logger.info(f"Resolving {len(self.pending_relationships)} pending FK relationships")
+        
+        # Log FK relationship types
+        fk_by_type = {}
+        for pending_fk in self.pending_relationships:
+            fk_type = f"{pending_fk['source_dataset']} -> {pending_fk['target_dataset']}"
+            fk_by_type[fk_type] = fk_by_type.get(fk_type, 0) + 1
+        
+        if fk_by_type:
+            logger.info("FK relationships by type:")
+            for fk_type, count in sorted(fk_by_type.items()):
+                logger.info(f"  - {fk_type}: {count}")
         
         resolved_count = 0
         failed_count = 0
@@ -536,7 +583,9 @@ class MappingAwareProcessor:
                 continue
             
             csv_data = context.all_csv_sources[execution_config.dataset_name]
-            df = self.data_processor.prepare_for_processing(csv_data)
+            # Create mapping configuration for multi-value detection
+            mapping_config = self._create_mapping_config_from_dataset(execution_config)
+            df = self.data_processor.prepare_for_processing(csv_data, mapping_config)
             
             # Find FK columns for this dataset
             fk_columns = [col for col in execution_config.columns if col.column_type.value == 'foreign_key']
@@ -555,10 +604,15 @@ class MappingAwareProcessor:
     def _process_all_relationship_contexts(self, context: ProcessingContext):
         """Process all relationship contexts (junction table attributes)"""
         
-        logger.info("Processing relationship contexts")
+        logger.info(f"\n{'='*60}")
+        logger.info(f"Processing {len(context.execution_config.relationship_contexts)} relationship contexts (junction tables)")
         
         for rel_context in context.execution_config.relationship_contexts:
-            logger.info(f"Processing relationship context: {rel_context.context_id}")
+            logger.info(f"\nProcessing relationship context: {rel_context.context_id}")
+            logger.info(f"  - Dataset: {rel_context.dataset_name}")
+            logger.info(f"  - Primary FK: {rel_context.primary_fk} -> {rel_context.primary_entity_type}")
+            logger.info(f"  - Secondary FK: {rel_context.secondary_fk} -> {rel_context.secondary_entity_type}")
+            logger.info(f"  - Junction attributes: {len(rel_context.junction_attributes)}")
             
             # Find the dataset for this context
             if rel_context.dataset_name not in context.all_csv_sources:
@@ -566,7 +620,11 @@ class MappingAwareProcessor:
                 continue
             
             csv_data = context.all_csv_sources[rel_context.dataset_name]
-            df = self.data_processor.prepare_for_processing(csv_data)
+            # For relationship contexts, we need to find the dataset config
+            dataset_config = next((ds for ds in context.execution_config.datasets 
+                                   if ds.dataset_name == rel_context.dataset_name), None)
+            mapping_config = self._create_mapping_config_from_dataset(dataset_config) if dataset_config else None
+            df = self.data_processor.prepare_for_processing(csv_data, mapping_config)
             
             # Process each row as a junction entity
             for row_data in df.iter_rows(named=True):
@@ -754,6 +812,63 @@ class MappingAwareProcessor:
             }
         
         return column_configs
+    
+    def _log_processing_summary(self, context: ProcessingContext):
+        """Log comprehensive processing summary"""
+        logger.info(f"\n{'='*60}")
+        logger.info("PROCESSING SUMMARY")
+        logger.info(f"{'='*60}")
+        
+        # Dataset summary
+        logger.info(f"Datasets processed: {len(context.processed_datasets)}")
+        
+        # Column type summary across all datasets
+        total_regular = 0
+        total_anchor = 0
+        total_multi_value = 0
+        total_fk = 0
+        total_ontology = 0
+        total_relationship_context = 0
+        
+        for dataset_config in context.execution_config.datasets:
+            if dataset_config.dataset_name in context.processed_datasets:
+                column_groups = self._group_columns_by_type(dataset_config.columns)
+                total_regular += len(column_groups['regular'])
+                total_anchor += len(column_groups['anchor'])
+                total_multi_value += len(column_groups['multi_value'])
+                total_fk += len(column_groups['foreign_key'])
+                total_ontology += len(column_groups['external_ontology'])
+                total_relationship_context += len(column_groups['relationship_context'])
+        
+        logger.info(f"\nColumn types across all datasets:")
+        logger.info(f"  - Regular columns: {total_regular}")
+        logger.info(f"  - Anchor columns: {total_anchor}")
+        logger.info(f"  - Multi-value columns: {total_multi_value}")
+        logger.info(f"  - Foreign key columns: {total_fk}")
+        logger.info(f"  - External ontology columns: {total_ontology}")
+        logger.info(f"  - Relationship context columns: {total_relationship_context}")
+        
+        # FK relationships summary
+        logger.info(f"\nFK Relationships:")
+        logger.info(f"  - Total defined: {len(context.execution_config.fk_relationships)}")
+        logger.info(f"  - Pending resolution: {len(self.pending_relationships)}")
+        
+        # Relationship contexts summary
+        logger.info(f"\nRelationship Contexts (Junction Tables):")
+        logger.info(f"  - Total contexts: {len(context.execution_config.relationship_contexts)}")
+        
+        # Metrics summary
+        metrics = self.statistics.current_metrics
+        logger.info(f"\nExecution Metrics:")
+        logger.info(f"  - Rows processed: {metrics.rows_processed}")
+        logger.info(f"  - Resources created: {metrics.resources_created}")
+        logger.info(f"  - Triples created: {metrics.triples_created}")
+        logger.info(f"  - Values created: {metrics.values_created}")
+        logger.info(f"  - Relationships created: {metrics.relationships_created}")
+        if metrics.errors:
+            logger.info(f"  - Errors: {metrics.errors}")
+        
+        logger.info(f"{'='*60}\n")
     
     def _merge_bulk_stats_to_execution_metrics(self, bulk_stats):
         """Merge BulkUpdateStats into ExecutionMetrics."""
