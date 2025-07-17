@@ -44,15 +44,15 @@ class TestSSEAuthMiddleware(TestCase):
         # Create organization
         self.organization = Organization.objects.create(
             name='Test Organization',
-            slug='test-org'
+            code='test-org'
         )
         
         # Create mapping
         self.mapping = Mapping.objects.create(
             name='Test Mapping',
             created_by=self.user1,
-            organization=self.organization,
-            configuration={'columns': {}}
+            organization_id=self.organization.code,
+            mapping_config={'columns': {}}
         )
         
         # Create session
@@ -193,15 +193,15 @@ class TestSSEAuthMiddlewareWithMultipleSessions(TestCase):
         # Create organization
         self.organization = Organization.objects.create(
             name='Test Organization',
-            slug='test-org'
+            code='test-org'
         )
         
         # Create mapping
         self.mapping = Mapping.objects.create(
             name='Test Mapping',
             created_by=self.user1,
-            organization=self.organization,
-            configuration={'columns': {}}
+            organization_id=self.organization.code,
+            mapping_config={'columns': {}}
         )
         
         # Create sessions for both users
@@ -276,14 +276,14 @@ class TestSSEAuthMiddlewareIntegration:
         
         organization = Organization.objects.create(
             name='Test Organization',
-            slug='test-org'
+            code='test-org'
         )
         
         mapping = Mapping.objects.create(
             name='Test Mapping',
             created_by=user,
-            organization=organization,
-            configuration={'columns': {}}
+            organization_id=organization.code,
+            mapping_config={'columns': {}}
         )
         
         # Create session

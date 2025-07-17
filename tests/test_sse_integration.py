@@ -16,7 +16,7 @@ from django.urls import reverse
 
 from arkumu.importer.models import IngestSession
 from arkumu.importer.utils.progress import publish_progress, create_channel_id
-from arkumu.importer.tasks import run_import
+from arkumu.importer.tasks.tasks import run_import
 from arkumu.importer.middleware import SSEAuthMiddleware
 from arkumu.users.models import Organization
 from arkumu.metadata.models import Mapping
@@ -39,14 +39,14 @@ class TestSSESystemIntegration:
         
         organization = Organization.objects.create(
             name='Test Organization',
-            slug='test-org'
+            code='test-org'
         )
         
         mapping = Mapping.objects.create(
             name='Test Mapping',
             created_by=user,
-            organization=organization,
-            configuration={'columns': {}, 'datasets': []}
+            organization_id=organization.code,
+            mapping_config={'columns': {}, 'datasets': []}
         )
         
         session = IngestSession.objects.create(
@@ -58,9 +58,9 @@ class TestSSESystemIntegration:
         )
         
         # Mock the SSE publishing
-        with patch('arkumu.importer.utils.progress.send_event') as mock_send_event:
+        with patch('django_eventstream.send_event') as mock_send_event:
             # Mock the processor
-            with patch('arkumu.importer.services.execution.mapping_aware_processor.MappingAwareProcessor') as mock_processor_class:
+            with patch('arkumu.importer.tasks.tasks.MappingAwareProcessor') as mock_processor_class:
                 mock_processor = MagicMock()
                 mock_processor.process_with_execution_config.return_value = MagicMock(
                     rows_processed=100,
@@ -93,14 +93,14 @@ class TestSSESystemIntegration:
         
         organization = Organization.objects.create(
             name='Test Organization',
-            slug='test-org'
+            code='test-org'
         )
         
         mapping = Mapping.objects.create(
             name='Test Mapping',
             created_by=user,
-            organization=organization,
-            configuration={'columns': {}, 'datasets': []}
+            organization_id=organization.code,
+            mapping_config={'columns': {}, 'datasets': []}
         )
         
         session = IngestSession.objects.create(
@@ -112,9 +112,9 @@ class TestSSESystemIntegration:
         )
         
         # Mock the SSE publishing
-        with patch('arkumu.importer.utils.progress.send_event') as mock_send_event:
+        with patch('django_eventstream.send_event') as mock_send_event:
             # Mock the processor to fail
-            with patch('arkumu.importer.services.execution.mapping_aware_processor.MappingAwareProcessor') as mock_processor_class:
+            with patch('arkumu.importer.tasks.tasks.MappingAwareProcessor') as mock_processor_class:
                 mock_processor = MagicMock()
                 mock_processor.process_with_execution_config.side_effect = Exception("Test error")
                 mock_processor_class.return_value = mock_processor
@@ -144,14 +144,14 @@ class TestSSESystemIntegration:
         
         organization = Organization.objects.create(
             name='Test Organization',
-            slug='test-org'
+            code='test-org'
         )
         
         mapping = Mapping.objects.create(
             name='Test Mapping',
             created_by=user,
-            organization=organization,
-            configuration={'columns': {}}
+            organization_id=organization.code,
+            mapping_config={'columns': {}}
         )
         
         session = IngestSession.objects.create(
@@ -184,7 +184,7 @@ class TestSSESystemIntegration:
         
         organization = Organization.objects.create(
             name='Test Organization',
-            slug='test-org'
+            code='test-org'
         )
         
         session = IngestSession.objects.create(
@@ -196,7 +196,7 @@ class TestSSESystemIntegration:
         
         channel = create_channel_id(session.pk)
         
-        with patch('arkumu.importer.utils.progress.send_event') as mock_send_event:
+        with patch('django_eventstream.send_event') as mock_send_event:
             # Test different types of progress events
             events = [
                 ({'message': 'Starting import...', 'percentage': 0}, 'start'),
@@ -229,17 +229,17 @@ class TestSSESystemResilience(TestCase):
         
         self.organization = Organization.objects.create(
             name='Test Organization',
-            slug='test-org'
+            code='test-org'
         )
         
         self.mapping = Mapping.objects.create(
             name='Test Mapping',
             created_by=self.user,
-            organization=self.organization,
-            configuration={'columns': {}}
+            organization_id=self.organization.code,
+            mapping_config={'columns': {}}
         )
 
-    @patch('arkumu.importer.utils.progress.send_event')
+    @patch('django_eventstream.send_event')
     def test_progress_publishing_handles_sse_failure(self, mock_send_event):
         """Test that progress publishing handles SSE failures gracefully."""
         # Mock SSE failure
@@ -261,7 +261,7 @@ class TestSSESystemResilience(TestCase):
         except Exception as e:
             self.fail(f"publish_progress should handle SSE failures gracefully: {e}")
 
-    @patch('arkumu.importer.utils.progress.send_event')
+    @patch('django_eventstream.send_event')
     def test_import_task_continues_despite_sse_failure(self, mock_send_event):
         """Test that import task continues even if SSE fails."""
         # Mock SSE failure
@@ -276,7 +276,7 @@ class TestSSESystemResilience(TestCase):
         )
         
         # Mock successful processing
-        with patch('arkumu.importer.services.execution.mapping_aware_processor.MappingAwareProcessor') as mock_processor_class:
+        with patch('arkumu.importer.tasks.tasks.MappingAwareProcessor') as mock_processor_class:
             mock_processor = MagicMock()
             mock_processor.process_with_execution_config.return_value = MagicMock(
                 rows_processed=100,
@@ -346,17 +346,17 @@ class TestSSESystemPerformance(TestCase):
         
         self.organization = Organization.objects.create(
             name='Test Organization',
-            slug='test-org'
+            code='test-org'
         )
         
         self.mapping = Mapping.objects.create(
             name='Test Mapping',
             created_by=self.user,
-            organization=self.organization,
-            configuration={'columns': {}}
+            organization_id=self.organization.code,
+            mapping_config={'columns': {}}
         )
 
-    @patch('arkumu.importer.utils.progress.send_event')
+    @patch('django_eventstream.send_event')
     def test_high_frequency_progress_updates(self, mock_send_event):
         """Test system handles high-frequency progress updates."""
         session = IngestSession.objects.create(
@@ -403,7 +403,7 @@ class TestSSESystemPerformance(TestCase):
             }
         }
         
-        with patch('arkumu.importer.utils.progress.send_event') as mock_send_event:
+        with patch('django_eventstream.send_event') as mock_send_event:
             # Should handle large payload without issues
             publish_progress(channel, large_payload)
             mock_send_event.assert_called_once_with(channel, 'progress', large_payload)
@@ -424,14 +424,14 @@ class TestSSESystemEdgeCases:
         
         organization = Organization.objects.create(
             name='Test Organization',
-            slug='test-org'
+            code='test-org'
         )
         
         mapping = Mapping.objects.create(
             name='Test Mapping',
             created_by=user,
-            organization=organization,
-            configuration={'columns': {}}
+            organization_id=organization.code,
+            mapping_config={'columns': {}}
         )
         
         session = IngestSession.objects.create(
@@ -462,14 +462,14 @@ class TestSSESystemEdgeCases:
         
         organization = Organization.objects.create(
             name='Test Organization',
-            slug='test-org'
+            code='test-org'
         )
         
         mapping = Mapping.objects.create(
             name='Test Mapping',
             created_by=user,
-            organization=organization,
-            configuration={'columns': {}}
+            organization_id=organization.code,
+            mapping_config={'columns': {}}
         )
         
         session = IngestSession.objects.create(
@@ -498,14 +498,14 @@ class TestSSESystemEdgeCases:
         
         organization = Organization.objects.create(
             name='Test Organization',
-            slug='test-org'
+            code='test-org'
         )
         
         mapping = Mapping.objects.create(
             name='Test Mapping',
             created_by=user,
-            organization=organization,
-            configuration={'columns': {}}
+            organization_id=organization.code,
+            mapping_config={'columns': {}}
         )
         
         session = IngestSession.objects.create(

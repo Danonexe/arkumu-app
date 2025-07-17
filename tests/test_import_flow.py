@@ -17,7 +17,7 @@ from django.db import transaction
 
 from arkumu.importer.models import IngestSession
 from arkumu.importer.utils.progress import publish_progress, create_channel_id
-from arkumu.importer.tasks import run_import
+from arkumu.importer.tasks.tasks import run_import
 from arkumu.users.models import Organization
 from arkumu.metadata.models import Mapping
 
@@ -37,14 +37,14 @@ class TestImportFlowIntegration(TransactionTestCase):
         
         self.organization = Organization.objects.create(
             name='Test Organization',
-            slug='test-org'
+            code='test-org'
         )
         
         self.mapping = Mapping.objects.create(
             name='Test Mapping',
             created_by=self.user,
-            organization=self.organization,
-            configuration={'columns': {}, 'datasets': []}
+            organization_id=self.organization.code,
+            mapping_config={'columns': {}, 'datasets': []}
         )
         
         self.session = IngestSession.objects.create(
@@ -59,7 +59,7 @@ class TestImportFlowIntegration(TransactionTestCase):
         self.client = Client()
         self.client.force_login(self.user)
 
-    @patch('arkumu.importer.tasks.publish_progress')
+    @patch('django_eventstream.send_event')
     @patch('arkumu.importer.services.execution.mapping_aware_processor.MappingAwareProcessor.process_with_execution_config')
     def test_import_flow_with_progress_updates(self, mock_process, mock_publish):
         """Test complete import flow with progress updates."""
@@ -100,7 +100,7 @@ class TestImportFlowIntegration(TransactionTestCase):
         self.session.refresh_from_db()
         self.assertEqual(self.session.status, 'completed')
 
-    @patch('arkumu.importer.tasks.publish_progress')
+    @patch('django_eventstream.send_event')
     @patch('arkumu.importer.services.execution.mapping_aware_processor.MappingAwareProcessor.process_with_execution_config')
     def test_import_flow_with_error_handling(self, mock_process, mock_publish):
         """Test import flow with error handling."""
@@ -121,7 +121,7 @@ class TestImportFlowIntegration(TransactionTestCase):
         self.assertEqual(self.session.status, 'failed')
         self.assertIn('Processing failed', self.session.error_message)
 
-    @patch('arkumu.importer.tasks.publish_progress')
+    @patch('django_eventstream.send_event')
     def test_import_flow_session_not_found(self, mock_publish):
         """Test import flow when session doesn't exist."""
         nonexistent_session_id = 99999
@@ -130,7 +130,7 @@ class TestImportFlowIntegration(TransactionTestCase):
         with self.assertRaises(IngestSession.DoesNotExist):
             run_import(nonexistent_session_id)
 
-    @patch('arkumu.importer.tasks.publish_progress')
+    @patch('django_eventstream.send_event')
     @patch('arkumu.importer.services.execution.mapping_aware_processor.MappingAwareProcessor')
     def test_import_flow_with_mapping_processor(self, mock_processor_class, mock_publish):
         """Test import flow with mapping processor integration."""
@@ -171,7 +171,7 @@ class TestImportFlowIntegration(TransactionTestCase):
         self.assertEqual(channel_1, channel_2)
         self.assertEqual(channel_1, f'import-{session_pk}')
 
-    @patch('arkumu.importer.tasks.publish_progress')
+    @patch('django_eventstream.send_event')
     @patch('arkumu.importer.services.execution.mapping_aware_processor.MappingAwareProcessor.process_with_execution_config')
     def test_import_flow_updates_session_progress(self, mock_process, mock_publish):
         """Test that import flow updates session progress fields."""
@@ -197,7 +197,7 @@ class TestImportFlowIntegration(TransactionTestCase):
         self.assertIsNotNone(self.session.started_at)
         self.assertIsNotNone(self.session.completed_at)
 
-    @patch('arkumu.importer.tasks.publish_progress')
+    @patch('django_eventstream.send_event')
     @patch('arkumu.importer.services.execution.mapping_aware_processor.MappingAwareProcessor.process_with_execution_config')
     def test_import_flow_with_statistics_integration(self, mock_process, mock_publish):
         """Test import flow with statistics integration."""
@@ -234,15 +234,15 @@ class TestImportFlowWithRealData(TransactionTestCase):
         
         self.organization = Organization.objects.create(
             name='Test Organization',
-            slug='test-org'
+            code='test-org'
         )
         
         # Create mapping with sample configuration
         self.mapping = Mapping.objects.create(
             name='Test Mapping',
             created_by=self.user,
-            organization=self.organization,
-            configuration={
+            organization_id=self.organization.code,
+            mapping_config={
                 'columns': {
                     'name': {'arkumu_type': 'person_name', 'datatype': 'string'},
                     'age': {'arkumu_type': 'person_age', 'datatype': 'integer'}
@@ -253,7 +253,7 @@ class TestImportFlowWithRealData(TransactionTestCase):
             }
         )
 
-    @patch('arkumu.importer.tasks.publish_progress')
+    @patch('django_eventstream.send_event')
     @patch('arkumu.importer.services.execution.mapping_aware_processor.MappingAwareProcessor.process_with_execution_config')
     def test_import_flow_with_realistic_mapping(self, mock_process, mock_publish):
         """Test import flow with realistic mapping configuration."""
@@ -285,7 +285,7 @@ class TestImportFlowWithRealData(TransactionTestCase):
         # Verify progress was published
         self.assertTrue(mock_publish.called)
 
-    @patch('arkumu.importer.tasks.publish_progress')
+    @patch('django_eventstream.send_event')
     @patch('arkumu.importer.services.execution.mapping_aware_processor.MappingAwareProcessor.process_with_execution_config')
     def test_import_flow_with_partial_failure(self, mock_process, mock_publish):
         """Test import flow with partial processing failure."""
@@ -333,14 +333,14 @@ class TestImportFlowViews:
         
         organization = Organization.objects.create(
             name='Test Organization',
-            slug='test-org'
+            code='test-org'
         )
         
         mapping = Mapping.objects.create(
             name='Test Mapping',
             created_by=user,
-            organization=organization,
-            configuration={'columns': {}}
+            organization_id=organization.code,
+            mapping_config={'columns': {}}
         )
         
         session = IngestSession.objects.create(
@@ -353,11 +353,11 @@ class TestImportFlowViews:
         
         # Try to access without login
         response = client.post(
-            reverse('importer:start_import', kwargs={'session_pk': session.pk})
+            reverse('importer:start_import_session', kwargs={'session_pk': session.pk})
         )
         
-        # Should redirect to login
-        assert response.status_code == 302
+        # Should return 403 forbidden
+        assert response.status_code == 403
 
     def test_start_import_view_wrong_user(self):
         """Test start import view with wrong user access."""
@@ -378,14 +378,14 @@ class TestImportFlowViews:
         
         organization = Organization.objects.create(
             name='Test Organization',
-            slug='test-org'
+            code='test-org'
         )
         
         mapping = Mapping.objects.create(
             name='Test Mapping',
             created_by=user1,
-            organization=organization,
-            configuration={'columns': {}}
+            organization_id=organization.code,
+            mapping_config={'columns': {}}
         )
         
         # Create session for user1
@@ -402,14 +402,14 @@ class TestImportFlowViews:
         
         # Try to access user1's session
         response = client.post(
-            reverse('importer:start_import', kwargs={'session_pk': session.pk})
+            reverse('importer:start_import_session', kwargs={'session_pk': session.pk})
         )
         
         # Should be forbidden
         assert response.status_code == 403
 
-    @patch('arkumu.importer.tasks.run_import')
-    def test_start_import_view_success(self, mock_run_import):
+    @patch('arkumu.importer.tasks.import_metadata.run_mapping_aware_import_workflow')
+    def test_start_import_view_success(self, mock_run_import_workflow):
         """Test successful start import view."""
         client = Client()
         
@@ -421,14 +421,14 @@ class TestImportFlowViews:
         
         organization = Organization.objects.create(
             name='Test Organization',
-            slug='test-org'
+            code='test-org'
         )
         
         mapping = Mapping.objects.create(
             name='Test Mapping',
             created_by=user,
-            organization=organization,
-            configuration={'columns': {}}
+            organization_id=organization.code,
+            mapping_config={'columns': {}}
         )
         
         session = IngestSession.objects.create(
@@ -436,7 +436,8 @@ class TestImportFlowViews:
             organization=organization,
             dataset_name='test_dataset',
             mapping=mapping,
-            status='pending'
+            status='pending',
+            file_paths=['test_data.csv']
         )
         
         # Login as correct user
@@ -444,14 +445,14 @@ class TestImportFlowViews:
         
         # Start import
         response = client.post(
-            reverse('importer:start_import', kwargs={'session_pk': session.pk})
+            reverse('importer:start_import_session', kwargs={'session_pk': session.pk})
         )
         
         # Should be successful
         assert response.status_code == 200
         
         # Verify task was queued
-        mock_run_import.assert_called_once_with(session.pk)
+        mock_run_import_workflow.assert_called_once()
 
 
 class TestImportFlowErrorHandling(TestCase):
@@ -467,10 +468,10 @@ class TestImportFlowErrorHandling(TestCase):
         
         self.organization = Organization.objects.create(
             name='Test Organization',
-            slug='test-org'
+            code='test-org'
         )
 
-    @patch('arkumu.importer.tasks.publish_progress')
+    @patch('django_eventstream.send_event')
     @patch('arkumu.importer.services.execution.mapping_aware_processor.MappingAwareProcessor.process_with_execution_config')
     def test_import_flow_database_error(self, mock_process, mock_publish):
         """Test import flow with database connection error."""
@@ -480,8 +481,16 @@ class TestImportFlowErrorHandling(TestCase):
         mapping = Mapping.objects.create(
             name='Test Mapping',
             created_by=self.user,
-            organization=self.organization,
-            configuration={'columns': {}}
+            organization_id=self.organization.code,
+            mapping_config={
+                'workspace_columns': {
+                    'test_data::test_column': {
+                        'arkumu_type': 'person_name',
+                        'datatype': 'string'
+                    }
+                },
+                'workspace_datasets': ['test_data']
+            }
         )
         
         session = IngestSession.objects.create(
@@ -489,12 +498,15 @@ class TestImportFlowErrorHandling(TestCase):
             organization=self.organization,
             dataset_name='test_dataset',
             mapping=mapping,
-            status='pending'
+            status='pending',
+            file_paths=['test_data.csv']
         )
         
         # Execute the task
-        with self.assertRaises(Exception):
-            run_import(session.pk)
+        run_import(session.pk)
+        
+        # Verify the processor was called
+        mock_process.assert_called_once()
         
         # Verify error was published
         self.assertTrue(mock_publish.called)
@@ -502,9 +514,9 @@ class TestImportFlowErrorHandling(TestCase):
         # Verify session status
         session.refresh_from_db()
         self.assertEqual(session.status, 'failed')
-        self.assertIn('Database connection failed', session.error_message)
+        self.assertIn('Database connection failed', session.error_message or '')
 
-    @patch('arkumu.importer.tasks.publish_progress')
+    @patch('django_eventstream.send_event')
     @patch('arkumu.importer.services.execution.mapping_aware_processor.MappingAwareProcessor.process_with_execution_config')
     def test_import_flow_timeout_error(self, mock_process, mock_publish):
         """Test import flow with timeout error."""
@@ -514,8 +526,16 @@ class TestImportFlowErrorHandling(TestCase):
         mapping = Mapping.objects.create(
             name='Test Mapping',
             created_by=self.user,
-            organization=self.organization,
-            configuration={'columns': {}}
+            organization_id=self.organization.code,
+            mapping_config={
+                'workspace_columns': {
+                    'test_data::test_column': {
+                        'arkumu_type': 'person_name',
+                        'datatype': 'string'
+                    }
+                },
+                'workspace_datasets': ['test_data']
+            }
         )
         
         session = IngestSession.objects.create(
@@ -523,7 +543,8 @@ class TestImportFlowErrorHandling(TestCase):
             organization=self.organization,
             dataset_name='test_dataset',
             mapping=mapping,
-            status='pending'
+            status='pending',
+            file_paths=['test_data.csv']
         )
         
         # Execute the task

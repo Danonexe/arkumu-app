@@ -31,8 +31,6 @@ def run_import(session_pk: int):
         logger.info(f"Starting import for session {session_pk}")
         
         # Update status
-        session.status = 'in_progress'
-        session.progress_status = 'running'
         session.mark_started()
         
         # Initial notification
@@ -51,22 +49,25 @@ def run_import(session_pk: int):
         # Create statistics tracker
         statistics = ExecutionStatistics()
         
-        # Initialize processor with progress tracking
+        # Initialize processor
         processor = MappingAwareProcessor(
-            institution=session.organization.slug,
+            institution=session.organization.code,
             base_uri=session.base_uri,
-            statistics=statistics,
-            channel_id=channel,
-            session=session
+            statistics=statistics
         )
         
         # Translate mapping configuration
         if session.mapping:
             config_translator = ConfigTranslator()
-            execution_config = config_translator.translate_mapping_to_execution_config(
-                session.mapping, 
-                session.file_paths
+            execution_config = config_translator.translate_mapping_config(
+                session.mapping.mapping_config
             )
+            
+            # If no valid execution config, skip processing
+            if not execution_config or not execution_config.datasets:
+                logger.warning(f"No valid execution config for session {session_pk}")
+                session.mark_completed({'message': 'No valid configuration'})
+                return
             
             # Create mock CSV sources for testing
             # In production, this would load actual CSV data
@@ -97,7 +98,6 @@ def run_import(session_pk: int):
             }
         
         # Success notification
-        session.progress_status = 'complete'
         session.mark_completed(session.ingestion_stats)
         
         publish_progress(channel, {
@@ -112,7 +112,6 @@ def run_import(session_pk: int):
         logger.error(f"Import failed for session {session_pk}: {exc}")
         
         # Error handling
-        session.progress_status = 'error'
         session.mark_failed(str(exc))
         
         publish_progress(channel, {

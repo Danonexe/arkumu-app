@@ -31,7 +31,7 @@ class TestProgressUtilities(TestCase):
         
         self.organization = Organization.objects.create(
             name='Test Organization',
-            slug='test-org'
+            code='test-org'
         )
         
         self.session = IngestSession.objects.create(
@@ -41,7 +41,7 @@ class TestProgressUtilities(TestCase):
             status='pending'
         )
 
-    @patch('arkumu.importer.utils.progress.send_event')
+    @patch('django_eventstream.send_event')
     def test_publish_progress_basic(self, mock_send_event):
         """Test basic progress publishing."""
         channel = 'test-channel'
@@ -56,7 +56,7 @@ class TestProgressUtilities(TestCase):
         
         mock_send_event.assert_called_once_with(channel, 'progress', payload)
 
-    @patch('arkumu.importer.utils.progress.send_event')
+    @patch('django_eventstream.send_event')
     def test_publish_progress_with_custom_event(self, mock_send_event):
         """Test progress publishing with custom event type."""
         channel = 'test-channel'
@@ -67,7 +67,7 @@ class TestProgressUtilities(TestCase):
         
         mock_send_event.assert_called_once_with(channel, event_type, payload)
 
-    @patch('arkumu.importer.utils.progress.send_event')
+    @patch('django_eventstream.send_event')
     def test_publish_progress_empty_payload(self, mock_send_event):
         """Test progress publishing with empty payload."""
         channel = 'test-channel'
@@ -77,7 +77,7 @@ class TestProgressUtilities(TestCase):
         
         mock_send_event.assert_called_once_with(channel, 'progress', payload)
 
-    @patch('arkumu.importer.utils.progress.send_event')
+    @patch('django_eventstream.send_event')
     def test_publish_progress_complex_payload(self, mock_send_event):
         """Test progress publishing with complex payload."""
         channel = 'test-channel'
@@ -119,7 +119,7 @@ class TestProgressUtilities(TestCase):
         self.assertEqual(channel_id, expected_channel)
         self.assertIn('import-', channel_id)
 
-    @patch('arkumu.importer.utils.progress.send_event')
+    @patch('django_eventstream.send_event')
     def test_publish_progress_handles_send_event_exception(self, mock_send_event):
         """Test that publish_progress handles exceptions from send_event."""
         mock_send_event.side_effect = Exception("Redis connection failed")
@@ -133,7 +133,7 @@ class TestProgressUtilities(TestCase):
         except Exception as e:
             self.fail(f"publish_progress should handle exceptions gracefully, but raised: {e}")
 
-    @patch('arkumu.importer.utils.progress.send_event')
+    @patch('django_eventstream.send_event')
     def test_publish_progress_json_serializable_payload(self, mock_send_event):
         """Test that only JSON-serializable payloads are accepted."""
         channel = 'test-channel'
@@ -153,7 +153,7 @@ class TestProgressUtilities(TestCase):
 class TestProgressUtilitiesWithMockSession(TestCase):
     """Test progress utilities with mock session objects."""
 
-    @patch('arkumu.importer.utils.progress.send_event')
+    @patch('django_eventstream.send_event')
     def test_publish_progress_multiple_calls(self, mock_send_event):
         """Test multiple progress publishing calls."""
         channel = 'test-channel'
@@ -177,7 +177,7 @@ class TestProgressUtilitiesWithMockSession(TestCase):
         mock_send_event.assert_has_calls(expected_calls)
         self.assertEqual(mock_send_event.call_count, len(updates))
 
-    @patch('arkumu.importer.utils.progress.send_event')
+    @patch('django_eventstream.send_event')
     def test_publish_progress_different_channels(self, mock_send_event):
         """Test progress publishing to different channels."""
         channels = ['import-1', 'import-2', 'import-3']
@@ -192,7 +192,7 @@ class TestProgressUtilitiesWithMockSession(TestCase):
         ]
         mock_send_event.assert_has_calls(expected_calls)
 
-    @patch('arkumu.importer.utils.progress.send_event')
+    @patch('django_eventstream.send_event')
     def test_publish_progress_different_event_types(self, mock_send_event):
         """Test progress publishing with different event types."""
         channel = 'test-channel'
@@ -229,7 +229,7 @@ class TestProgressUtilitiesIntegration:
         
         organization = Organization.objects.create(
             name='Test Organization',
-            slug='test-org'
+            code='test-org'
         )
         
         # Create session
@@ -246,7 +246,7 @@ class TestProgressUtilitiesIntegration:
         
         assert channel_id == expected_channel
 
-    @patch('arkumu.importer.utils.progress.send_event')
+    @patch('django_eventstream.send_event')
     def test_publish_progress_with_session_channel(self, mock_send_event):
         """Test progress publishing using session-generated channel."""
         # Create test user and organization
@@ -258,7 +258,7 @@ class TestProgressUtilitiesIntegration:
         
         organization = Organization.objects.create(
             name='Test Organization',
-            slug='test-org'
+            code='test-org'
         )
         
         # Create session
