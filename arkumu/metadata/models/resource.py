@@ -1,6 +1,7 @@
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from arkumu.metadata.models.base import UUIDModel
+import hashlib
 
 
 class ResourceType(models.TextChoices):
@@ -145,6 +146,14 @@ class Resource(UUIDModel):
         help_text="Value of this resource (literal value or descriptive value for IRIs)"
     )
     
+    value_hash = models.CharField(
+        max_length=64,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="SHA-256 hash of the value field for efficient uniqueness checking"
+    )
+    
     is_placeholder = models.BooleanField(
         default=False,
         help_text="Indicates if this is a placeholder resource created during cross-reference that hasn't been fully imported yet"
@@ -172,18 +181,21 @@ class Resource(UUIDModel):
                 ),
                 name='resource_type_consistency'
             ),
-            # Add uniqueness constraint for literal values
+            # Add uniqueness constraint for literal values using hash
+            # Note: 'source' removed to allow literal deduplication across archives
+            # Hash used to prevent PostgreSQL btree index size limitations
+            # Provenance is maintained through the subject URIs in triples
             models.UniqueConstraint(
-                fields=['value', 'language', 'datatype', 'source', 'name'],
+                fields=['value_hash', 'language', 'datatype', 'name'],
                 condition=models.Q(resource_type='LITERAL'),
-                name='unique_literal_value'
+                name='unique_literal_value_hash'
             )
         ]
         
         # Add indexes for common queries
         indexes = [
             models.Index(fields=['name'], name='name_idx'),
-            models.Index(fields=['value'], name='value_idx'),
+            # Removed value_idx - using value_hash index instead to avoid PostgreSQL btree size limits
             models.Index(fields=['source', 'name'], name='source_name_idx'),
             models.Index(fields=['source', 'uri']),
             models.Index(fields=['source', 'resource_type']),
@@ -256,6 +268,12 @@ class Resource(UUIDModel):
     @literal_datatype.setter
     def literal_datatype(self, value):
         self.datatype = value
+    
+    def save(self, *args, **kwargs):
+        """Auto-generate hash for literal values before saving."""
+        if self.resource_type == ResourceType.LITERAL and self.value:
+            self.value_hash = hashlib.sha256(self.value.encode('utf-8')).hexdigest()
+        super().save(*args, **kwargs)
     
     @property
     def literal_language(self):

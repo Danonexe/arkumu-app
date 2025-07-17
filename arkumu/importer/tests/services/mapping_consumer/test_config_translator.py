@@ -455,6 +455,41 @@ class TestConfigTranslator:
         assert execution_config.column_configurations['dataset.external_col'].column_type == ColumnType.EXTERNAL_ONTOLOGY
         assert execution_config.column_configurations['dataset.regular_col'].column_type == ColumnType.REGULAR
         assert execution_config.column_configurations['dataset.fk_col'].column_type == ColumnType.FOREIGN_KEY
+        
+    def test_relationship_context_column_detection(self, config_translator):
+        """Test that columns with is_relationship_context=True are correctly detected"""
+        config = {
+            'version': '1.1',
+            '_metadata': {'mapping_id': 1, 'mapping_name': 'Test', 'organization': 'TEST'},
+            'workspace_columns': {
+                'junction_table': {
+                    'context_col': {
+                        'arkumu_type': 'Entity.value',
+                        'is_relationship_context': True,
+                        'relationship_context': {
+                            'context_predicate': 'hasValue',
+                            'primary_fk_column': 'entity1_id',
+                            'secondary_fk_column': 'entity2_id'
+                        }
+                    },
+                    'regular_col': {
+                        'arkumu_type': 'Entity.name',
+                        'is_relationship_context': False
+                    }
+                }
+            },
+            'selected_datasets': ['junction_table'],
+            'fk_relationships': {},
+            'relationship_contexts': {},
+            'external_ontologies': {},
+            'import_strategy': {}
+        }
+        
+        execution_config = config_translator.translate_mapping_config(config)
+        
+        # Check that relationship context column is correctly detected
+        assert execution_config.column_configurations['junction_table.context_col'].column_type == ColumnType.RELATIONSHIP_CONTEXT
+        assert execution_config.column_configurations['junction_table.regular_col'].column_type == ColumnType.REGULAR
 
 
 class TestDataClasses:

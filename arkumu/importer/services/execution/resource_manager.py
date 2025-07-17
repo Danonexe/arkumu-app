@@ -374,20 +374,31 @@ class ResourceManager:
                 )
                 
                 # Create value resource if needed
-                value_uri = mint_uri(self.base_uri, self.institution, "values", 
-                                   slugify_uri_part(object_value[:50]))  # Truncate for URI
+                # Use hash-based uniqueness without source to enable deduplication across archives
+                # and prevent PostgreSQL btree index size limitations
+                import hashlib
+                value_hash = hashlib.sha256(object_value.encode('utf-8')).hexdigest()
                 
-                value_resource, _ = Resource.objects.get_or_create(
-                    uri=value_uri,
+                value_resource, created = Resource.objects.get_or_create(
+                    value_hash=value_hash,
+                    language=None,  # Add language support if needed
+                    datatype=datatype,
+                    name=object_value[:100],  # Truncate for name
                     defaults={
                         "resource_type": ResourceType.LITERAL,
-                        "name": object_value[:100],  # Truncate for name
-                        "value": object_value,
-                        "datatype": datatype,
-                        "source": self.institution,
+                        "value": object_value,  # Store full value (no data loss)
+                        "source": self.institution,  # First archive to create wins
                         "is_placeholder": False
                     }
                 )
+                
+                # Generate URI for the literal if it was just created
+                if created:
+                    # Use hash suffix to ensure URI uniqueness even for identical truncated values
+                    value_identifier = f"{slugify_uri_part(object_value[:50])}-{value_hash[:8]}"
+                    value_uri = mint_uri(self.base_uri, self.institution, "values", value_identifier)
+                    value_resource.uri = value_uri
+                    value_resource.save()
                 
                 # Create the triple
                 triple, created = Triple.objects.get_or_create(

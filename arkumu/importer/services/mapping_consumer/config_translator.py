@@ -269,6 +269,8 @@ class ConfigTranslator:
                 # Determine column type
                 if col_config.is_anchor:
                     col_config.column_type = ColumnType.ANCHOR
+                elif column_config.get('is_relationship_context', False):
+                    col_config.column_type = ColumnType.RELATIONSHIP_CONTEXT
                 elif col_config.is_external_ontology:
                     col_config.column_type = ColumnType.EXTERNAL_ONTOLOGY
                 elif col_config.is_multi_value:
