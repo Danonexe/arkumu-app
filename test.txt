@@ -1,0 +1,763 @@
+============================================================
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:248 Processing dataset: Ort
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:249 Total rows: 624
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:333 Starting data preparation pipeline
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:177 Multi-value analysis completed: 0 multi-value columns detected out of 3 columns processed
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:356 Data preparation completed: 624 rows ready for processing
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:266 Column types for Ort:
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:267   - Regular columns: 2
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:268   - Anchor columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:269   - Multi-value columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:270   - Foreign key columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:271   - External ontology columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:272   - Relationship context columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:247 
+============================================================
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:248 Processing dataset: Rolle
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:249 Total rows: 381
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:333 Starting data preparation pipeline
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:177 Multi-value analysis completed: 0 multi-value columns detected out of 11 columns processed
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:356 Data preparation completed: 381 rows ready for processing
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:266 Column types for Rolle:
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:267   - Regular columns: 5
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:268   - Anchor columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:269   - Multi-value columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:270   - Foreign key columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:271   - External ontology columns: 5
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:272   - Relationship context columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:247 
+============================================================
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:248 Processing dataset: AkteurIn
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:249 Total rows: 1000
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:333 Starting data preparation pipeline
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Wirkungsort' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Andere Normdaten' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Webseite der AkteurIn' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Beruf und Tätigkeit' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:177 Multi-value analysis completed: 4 multi-value columns detected out of 33 columns processed
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:181 Multi-value columns found: ['Wirkungsort', 'Andere Normdaten', 'Webseite der AkteurIn', 'Beruf und Tätigkeit']
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:356 Data preparation completed: 1000 rows ready for processing
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:266 Column types for AkteurIn:
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:267   - Regular columns: 19
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:268   - Anchor columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:269   - Multi-value columns: 4
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:270   - Foreign key columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:271   - External ontology columns: 9
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:272   - Relationship context columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:247 
+============================================================
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:248 Processing dataset: AkteurIn
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:249 Total rows: 1000
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:333 Starting data preparation pipeline
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Wirkungsort' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Andere Normdaten' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Webseite der AkteurIn' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Beruf und Tätigkeit' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:177 Multi-value analysis completed: 4 multi-value columns detected out of 33 columns processed
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:181 Multi-value columns found: ['Wirkungsort', 'Andere Normdaten', 'Webseite der AkteurIn', 'Beruf und Tätigkeit']
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:356 Data preparation completed: 1000 rows ready for processing
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:266 Column types for AkteurIn:
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:267   - Regular columns: 19
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:268   - Anchor columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:269   - Multi-value columns: 4
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:270   - Foreign key columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:271   - External ontology columns: 9
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:272   - Relationship context columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:247 
+============================================================
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:248 Processing dataset: AkteurIn
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:249 Total rows: 257
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:333 Starting data preparation pipeline
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Wirkungsort' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Andere Normdaten' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Webseite der AkteurIn' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Beruf und Tätigkeit' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:177 Multi-value analysis completed: 4 multi-value columns detected out of 33 columns processed
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:181 Multi-value columns found: ['Wirkungsort', 'Andere Normdaten', 'Webseite der AkteurIn', 'Beruf und Tätigkeit']
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:356 Data preparation completed: 257 rows ready for processing
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:266 Column types for AkteurIn:
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:267   - Regular columns: 19
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:268   - Anchor columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:269   - Multi-value columns: 4
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:270   - Foreign key columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:271   - External ontology columns: 9
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:272   - Relationship context columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:247 
+============================================================
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:248 Processing dataset: Projekt
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:249 Total rows: 563
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:333 Starting data preparation pipeline
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Beschreibung' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Projektart' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Externe Projektwebseite' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Signatur beim Einlieferer' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Schlagwort' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Projektkategorie' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Organisationseinheit' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Alternativer Titel-Set' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Ereignis' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Andere Normdaten' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:177 Multi-value analysis completed: 10 multi-value columns detected out of 35 columns processed
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:181 Multi-value columns found: ['Beschreibung', 'Projektart', 'Externe Projektwebseite', 'Signatur beim Einlieferer', 'Schlagwort', 'Projektkategorie', 'Organisationseinheit', 'Alternativer Titel-Set', 'Ereignis', 'Andere Normdaten']
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:356 Data preparation completed: 563 rows ready for processing
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:266 Column types for Projekt:
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:267   - Regular columns: 21
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:268   - Anchor columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:269   - Multi-value columns: 10
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:270   - Foreign key columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:271   - External ontology columns: 3
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:272   - Relationship context columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:247 
+============================================================
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:248 Processing dataset: Ereignis
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:249 Total rows: 953
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:333 Starting data preparation pipeline
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Ereignisort' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Digitales Objekt' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Ereignisbeschreibung' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Equipment und Software' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Physisches Objekt' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Informationsträger' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Andere Normdaten' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:177 Multi-value analysis completed: 7 multi-value columns detected out of 23 columns processed
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:181 Multi-value columns found: ['Ereignisort', 'Digitales Objekt', 'Ereignisbeschreibung', 'Equipment und Software', 'Physisches Objekt', 'Informationsträger', 'Andere Normdaten']
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:356 Data preparation completed: 953 rows ready for processing
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:266 Column types for Ereignis:
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:267   - Regular columns: 12
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:268   - Anchor columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:269   - Multi-value columns: 7
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:270   - Foreign key columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:271   - External ontology columns: 3
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:272   - Relationship context columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:247 
+============================================================
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:248 Processing dataset: Ereignistyp
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:249 Total rows: 54
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:333 Starting data preparation pipeline
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:177 Multi-value analysis completed: 0 multi-value columns detected out of 8 columns processed
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:356 Data preparation completed: 54 rows ready for processing
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:266 Column types for Ereignistyp:
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:267   - Regular columns: 3
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:268   - Anchor columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:269   - Multi-value columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:270   - Foreign key columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:271   - External ontology columns: 4
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:272   - Relationship context columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:247 
+============================================================
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:248 Processing dataset: Sprache
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:249 Total rows: 487
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:333 Starting data preparation pipeline
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:177 Multi-value analysis completed: 0 multi-value columns detected out of 6 columns processed
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:356 Data preparation completed: 487 rows ready for processing
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:266 Column types for Sprache:
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:267   - Regular columns: 5
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:268   - Anchor columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:269   - Multi-value columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:270   - Foreign key columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:271   - External ontology columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:272   - Relationship context columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:247 
+============================================================
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:248 Processing dataset: Digitales_Objekt
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:249 Total rows: 1000
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:333 Starting data preparation pipeline
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Objekttyp' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Originalsprache' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Sprachfassung' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Untertitelsprache' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:177 Multi-value analysis completed: 4 multi-value columns detected out of 36 columns processed
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:181 Multi-value columns found: ['Objekttyp', 'Originalsprache', 'Sprachfassung', 'Untertitelsprache']
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:356 Data preparation completed: 1000 rows ready for processing
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:266 Column types for Digitales_Objekt:
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:267   - Regular columns: 31
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:268   - Anchor columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:269   - Multi-value columns: 4
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:270   - Foreign key columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:271   - External ontology columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:272   - Relationship context columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:247 
+============================================================
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:248 Processing dataset: Digitales_Objekt
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:249 Total rows: 1000
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:333 Starting data preparation pipeline
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Objekttyp' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Originalsprache' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Sprachfassung' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Untertitelsprache' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:177 Multi-value analysis completed: 4 multi-value columns detected out of 36 columns processed
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:181 Multi-value columns found: ['Objekttyp', 'Originalsprache', 'Sprachfassung', 'Untertitelsprache']
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:356 Data preparation completed: 1000 rows ready for processing
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:266 Column types for Digitales_Objekt:
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:267   - Regular columns: 31
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:268   - Anchor columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:269   - Multi-value columns: 4
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:270   - Foreign key columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:271   - External ontology columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:272   - Relationship context columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:247 
+============================================================
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:248 Processing dataset: Digitales_Objekt
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:249 Total rows: 1000
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:333 Starting data preparation pipeline
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Objekttyp' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Originalsprache' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Sprachfassung' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Untertitelsprache' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:177 Multi-value analysis completed: 4 multi-value columns detected out of 36 columns processed
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:181 Multi-value columns found: ['Objekttyp', 'Originalsprache', 'Sprachfassung', 'Untertitelsprache']
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:356 Data preparation completed: 1000 rows ready for processing
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:266 Column types for Digitales_Objekt:
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:267   - Regular columns: 31
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:268   - Anchor columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:269   - Multi-value columns: 4
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:270   - Foreign key columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:271   - External ontology columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:272   - Relationship context columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:247 
+============================================================
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:248 Processing dataset: Digitales_Objekt
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:249 Total rows: 538
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:333 Starting data preparation pipeline
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Objekttyp' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Originalsprache' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Sprachfassung' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Untertitelsprache' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:177 Multi-value analysis completed: 4 multi-value columns detected out of 36 columns processed
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:181 Multi-value columns found: ['Objekttyp', 'Originalsprache', 'Sprachfassung', 'Untertitelsprache']
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:356 Data preparation completed: 538 rows ready for processing
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:266 Column types for Digitales_Objekt:
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:267   - Regular columns: 31
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:268   - Anchor columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:269   - Multi-value columns: 4
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:270   - Foreign key columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:271   - External ontology columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:272   - Relationship context columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:247 
+============================================================
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:248 Processing dataset: Equipmentart
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:249 Total rows: 57
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:333 Starting data preparation pipeline
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:177 Multi-value analysis completed: 0 multi-value columns detected out of 6 columns processed
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:356 Data preparation completed: 57 rows ready for processing
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:266 Column types for Equipmentart:
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:267   - Regular columns: 2
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:268   - Anchor columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:269   - Multi-value columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:270   - Foreign key columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:271   - External ontology columns: 3
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:272   - Relationship context columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:247 
+============================================================
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:248 Processing dataset: Nummernart
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:249 Total rows: 5
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:333 Starting data preparation pipeline
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:177 Multi-value analysis completed: 0 multi-value columns detected out of 5 columns processed
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:356 Data preparation completed: 5 rows ready for processing
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:266 Column types for Nummernart:
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:267   - Regular columns: 2
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:268   - Anchor columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:269   - Multi-value columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:270   - Foreign key columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:271   - External ontology columns: 2
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:272   - Relationship context columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:247 
+============================================================
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:248 Processing dataset: Projektart
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:249 Total rows: 11
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:333 Starting data preparation pipeline
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:177 Multi-value analysis completed: 0 multi-value columns detected out of 4 columns processed
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:356 Data preparation completed: 11 rows ready for processing
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:266 Column types for Projektart:
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:267   - Regular columns: 2
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:268   - Anchor columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:269   - Multi-value columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:270   - Foreign key columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:271   - External ontology columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:272   - Relationship context columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:247 
+============================================================
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:248 Processing dataset: Schlagwort
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:249 Total rows: 1000
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:333 Starting data preparation pipeline
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:177 Multi-value analysis completed: 0 multi-value columns detected out of 3 columns processed
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:356 Data preparation completed: 1000 rows ready for processing
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:266 Column types for Schlagwort:
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:267   - Regular columns: 2
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:268   - Anchor columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:269   - Multi-value columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:270   - Foreign key columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:271   - External ontology columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:272   - Relationship context columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:247 
+============================================================
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:248 Processing dataset: Schlagwort
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:249 Total rows: 373
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:333 Starting data preparation pipeline
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:177 Multi-value analysis completed: 0 multi-value columns detected out of 3 columns processed
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:356 Data preparation completed: 373 rows ready for processing
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:266 Column types for Schlagwort:
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:267   - Regular columns: 2
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:268   - Anchor columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:269   - Multi-value columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:270   - Foreign key columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:271   - External ontology columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:272   - Relationship context columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:247 
+============================================================
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:248 Processing dataset: Beschreibung
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:249 Total rows: 601
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:333 Starting data preparation pipeline
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:177 Multi-value analysis completed: 0 multi-value columns detected out of 4 columns processed
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:356 Data preparation completed: 601 rows ready for processing
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:266 Column types for Beschreibung:
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:267   - Regular columns: 3
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:268   - Anchor columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:269   - Multi-value columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:270   - Foreign key columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:271   - External ontology columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:272   - Relationship context columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:247 
+============================================================
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:248 Processing dataset: Projektkategorie
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:249 Total rows: 280
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:333 Starting data preparation pipeline
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:177 Multi-value analysis completed: 0 multi-value columns detected out of 8 columns processed
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:356 Data preparation completed: 280 rows ready for processing
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:266 Column types for Projektkategorie:
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:267   - Regular columns: 3
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:268   - Anchor columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:269   - Multi-value columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:270   - Foreign key columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:271   - External ontology columns: 4
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:272   - Relationship context columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:247 
+============================================================
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:248 Processing dataset: Digitales-Objekt-Lizenz
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:249 Total rows: 11
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:333 Starting data preparation pipeline
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:177 Multi-value analysis completed: 0 multi-value columns detected out of 7 columns processed
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:356 Data preparation completed: 11 rows ready for processing
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:266 Column types for Digitales-Objekt-Lizenz:
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:267   - Regular columns: 6
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:268   - Anchor columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:269   - Multi-value columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:270   - Foreign key columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:271   - External ontology columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:272   - Relationship context columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:247 
+============================================================
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:248 Processing dataset: Informationsträgertyp
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:249 Total rows: 135
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:333 Starting data preparation pipeline
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:177 Multi-value analysis completed: 0 multi-value columns detected out of 7 columns processed
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:356 Data preparation completed: 135 rows ready for processing
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:266 Column types for Informationsträgertyp:
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:267   - Regular columns: 3
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:268   - Anchor columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:269   - Multi-value columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:270   - Foreign key columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:271   - External ontology columns: 3
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:272   - Relationship context columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:247 
+============================================================
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:248 Processing dataset: Projekteigenschaft
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:249 Total rows: 23
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:333 Starting data preparation pipeline
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:177 Multi-value analysis completed: 0 multi-value columns detected out of 8 columns processed
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:356 Data preparation completed: 23 rows ready for processing
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:266 Column types for Projekteigenschaft:
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:267   - Regular columns: 5
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:268   - Anchor columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:269   - Multi-value columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:270   - Foreign key columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:271   - External ontology columns: 2
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:272   - Relationship context columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:247 
+============================================================
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:248 Processing dataset: Ereignisbeschreibung
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:249 Total rows: 581
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:333 Starting data preparation pipeline
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:177 Multi-value analysis completed: 0 multi-value columns detected out of 4 columns processed
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:356 Data preparation completed: 581 rows ready for processing
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:266 Column types for Ereignisbeschreibung:
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:267   - Regular columns: 3
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:268   - Anchor columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:269   - Multi-value columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:270   - Foreign key columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:271   - External ontology columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:272   - Relationship context columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:247 
+============================================================
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:248 Processing dataset: Equipment_und_Software
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:249 Total rows: 26
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:333 Starting data preparation pipeline
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:177 Multi-value analysis completed: 0 multi-value columns detected out of 9 columns processed
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:356 Data preparation completed: 26 rows ready for processing
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:266 Column types for Equipment_und_Software:
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:267   - Regular columns: 6
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:268   - Anchor columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:269   - Multi-value columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:270   - Foreign key columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:271   - External ontology columns: 2
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:272   - Relationship context columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:247 
+============================================================
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:248 Processing dataset: Einliefernde_Hochschule
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:249 Total rows: 5
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:333 Starting data preparation pipeline
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:177 Multi-value analysis completed: 0 multi-value columns detected out of 5 columns processed
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:356 Data preparation completed: 5 rows ready for processing
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:266 Column types for Einliefernde_Hochschule:
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:267   - Regular columns: 2
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:268   - Anchor columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:269   - Multi-value columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:270   - Foreign key columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:271   - External ontology columns: 2
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:272   - Relationship context columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:247 
+============================================================
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:248 Processing dataset: Alternativer_Titel
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:249 Total rows: 13
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:333 Starting data preparation pipeline
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:177 Multi-value analysis completed: 0 multi-value columns detected out of 5 columns processed
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:356 Data preparation completed: 13 rows ready for processing
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:266 Column types for Alternativer_Titel:
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:267   - Regular columns: 4
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:268   - Anchor columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:269   - Multi-value columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:270   - Foreign key columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:271   - External ontology columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:272   - Relationship context columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:247 
+============================================================
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:248 Processing dataset: Projekt_Projekt_Kreuztabelle
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:249 Total rows: 532
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:333 Starting data preparation pipeline
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:177 Multi-value analysis completed: 0 multi-value columns detected out of 4 columns processed
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:356 Data preparation completed: 532 rows ready for processing
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:266 Column types for Projekt_Projekt_Kreuztabelle:
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:267   - Regular columns: 2
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:268   - Anchor columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:269   - Multi-value columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:270   - Foreign key columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:271   - External ontology columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:272   - Relationship context columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:247 
+============================================================
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:248 Processing dataset: AkteurIn_AkteurIn_Kreuztabelle
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:249 Total rows: 6
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:333 Starting data preparation pipeline
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:177 Multi-value analysis completed: 0 multi-value columns detected out of 4 columns processed
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:356 Data preparation completed: 6 rows ready for processing
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:266 Column types for AkteurIn_AkteurIn_Kreuztabelle:
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:267   - Regular columns: 2
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:268   - Anchor columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:269   - Multi-value columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:270   - Foreign key columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:271   - External ontology columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:272   - Relationship context columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:247 
+============================================================
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:248 Processing dataset: Ereignis_Ereignis_Kreuztabelle
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:249 Total rows: 26
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:333 Starting data preparation pipeline
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:177 Multi-value analysis completed: 0 multi-value columns detected out of 4 columns processed
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:356 Data preparation completed: 26 rows ready for processing
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:266 Column types for Ereignis_Ereignis_Kreuztabelle:
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:267   - Regular columns: 2
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:268   - Anchor columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:269   - Multi-value columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:270   - Foreign key columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:271   - External ontology columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:272   - Relationship context columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:247 
+============================================================
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:248 Processing dataset: AkteurIn_Ereignis_Kreuztabelle
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:249 Total rows: 1000
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:333 Starting data preparation pipeline
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Rollen der AkteurIn im Ereignis' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:177 Multi-value analysis completed: 1 multi-value columns detected out of 7 columns processed
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:181 Multi-value columns found: ['Rollen der AkteurIn im Ereignis']
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:356 Data preparation completed: 1000 rows ready for processing
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:266 Column types for AkteurIn_Ereignis_Kreuztabelle:
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:267   - Regular columns: 2
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:268   - Anchor columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:269   - Multi-value columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:270   - Foreign key columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:271   - External ontology columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:272   - Relationship context columns: 3
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:247 
+============================================================
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:248 Processing dataset: AkteurIn_Ereignis_Kreuztabelle
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:249 Total rows: 1000
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:333 Starting data preparation pipeline
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Rollen der AkteurIn im Ereignis' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:177 Multi-value analysis completed: 1 multi-value columns detected out of 7 columns processed
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:181 Multi-value columns found: ['Rollen der AkteurIn im Ereignis']
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:356 Data preparation completed: 1000 rows ready for processing
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:266 Column types for AkteurIn_Ereignis_Kreuztabelle:
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:267   - Regular columns: 2
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:268   - Anchor columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:269   - Multi-value columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:270   - Foreign key columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:271   - External ontology columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:272   - Relationship context columns: 3
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:247 
+============================================================
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:248 Processing dataset: AkteurIn_Ereignis_Kreuztabelle
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:249 Total rows: 1000
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:333 Starting data preparation pipeline
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Rollen der AkteurIn im Ereignis' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:177 Multi-value analysis completed: 1 multi-value columns detected out of 7 columns processed
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:181 Multi-value columns found: ['Rollen der AkteurIn im Ereignis']
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:356 Data preparation completed: 1000 rows ready for processing
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:266 Column types for AkteurIn_Ereignis_Kreuztabelle:
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:267   - Regular columns: 2
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:268   - Anchor columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:269   - Multi-value columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:270   - Foreign key columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:271   - External ontology columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:272   - Relationship context columns: 3
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:247 
+============================================================
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:248 Processing dataset: AkteurIn_Ereignis_Kreuztabelle
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:249 Total rows: 1000
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:333 Starting data preparation pipeline
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Rollen der AkteurIn im Ereignis' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:177 Multi-value analysis completed: 1 multi-value columns detected out of 7 columns processed
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:181 Multi-value columns found: ['Rollen der AkteurIn im Ereignis']
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:356 Data preparation completed: 1000 rows ready for processing
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:266 Column types for AkteurIn_Ereignis_Kreuztabelle:
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:267   - Regular columns: 2
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:268   - Anchor columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:269   - Multi-value columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:270   - Foreign key columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:271   - External ontology columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:272   - Relationship context columns: 3
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:247 
+============================================================
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:248 Processing dataset: AkteurIn_Ereignis_Kreuztabelle
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:249 Total rows: 523
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:333 Starting data preparation pipeline
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:147 Found multi-value column 'Rollen der AkteurIn im Ereignis' via columns with separator ','
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:177 Multi-value analysis completed: 1 multi-value columns detected out of 7 columns processed
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:181 Multi-value columns found: ['Rollen der AkteurIn im Ereignis']
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:356 Data preparation completed: 523 rows ready for processing
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:266 Column types for AkteurIn_Ereignis_Kreuztabelle:
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:267   - Regular columns: 2
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:268   - Anchor columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:269   - Multi-value columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:270   - Foreign key columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:271   - External ontology columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:272   - Relationship context columns: 3
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:247 
+============================================================
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:248 Processing dataset: Informationsträgereigenschaft
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:249 Total rows: 8
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:333 Starting data preparation pipeline
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:177 Multi-value analysis completed: 0 multi-value columns detected out of 6 columns processed
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:356 Data preparation completed: 8 rows ready for processing
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:266 Column types for Informationsträgereigenschaft:
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:267   - Regular columns: 4
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:268   - Anchor columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:269   - Multi-value columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:270   - Foreign key columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:271   - External ontology columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:272   - Relationship context columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:247 
+============================================================
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:248 Processing dataset: Organisationseinheit
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:249 Total rows: 226
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:333 Starting data preparation pipeline
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:177 Multi-value analysis completed: 0 multi-value columns detected out of 5 columns processed
+INFO     arkumu.importer.services.execution.data_processor:data_processor.py:356 Data preparation completed: 226 rows ready for processing
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:266 Column types for Organisationseinheit:
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:267   - Regular columns: 4
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:268   - Anchor columns: 1
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:269   - Multi-value columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:270   - Foreign key columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:271   - External ontology columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:272   - Relationship context columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:522 
+============================================================
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:523 Resolving 0 pending FK relationships
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:571 FK resolution completed: 0 resolved, 0 failed
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:818 
+============================================================
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:819 PROCESSING SUMMARY
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:820 ============================================================
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:823 Datasets processed: 35
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:843 
+Column types across all datasets:
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:844   - Regular columns: 204
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:845   - Anchor columns: 35
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:846   - Multi-value columns: 43
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:847   - Foreign key columns: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:848   - External ontology columns: 46
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:849   - Relationship context columns: 9
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:852 
+FK Relationships:
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:853   - Total defined: 72
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:854   - Pending resolution: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:857 
+Relationship Contexts (Junction Tables):
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:858   - Total contexts: 10
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:862 
+Execution Metrics:
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:863   - Rows processed: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:864   - Resources created: 22695
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:865   - Triples created: 131375
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:866   - Values created: 0
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:867   - Relationships created: 6064
+INFO     arkumu.importer.services.execution.mapping_aware_processor:mapping_aware_processor.py:871 ============================================================
+
+ERROR    arkumu.importer.tests.services.execution.test_real_production_integration:test_real_production_integration.py:208 Pipeline execution failed: No rows were processed
+assert 0 > 0
+ +  where 0 = ExecutionMetrics(start_time=None, end_time=None, rows_processed=0, cells_processed=0, columns_processed=0, resources_created=22695, resources_updated=0, resources_skipped=0, triples_created=131375, triples_updated=0, values_created=0, values_truncated=0, errors=0, warnings=0, fk_relationships_created=0, fk_dependencies_resolved=0, cross_dataset_links=0, external_ontology_lookups=0, external_ontology_matches=0, multi_value_cells_split=0, multi_value_items_created=0, entities_processed=0, properties_created=0, stub_entities_created=0, relationships_created=6064).rows_processed
+
+ arkumu/importer/tests/services/execution/test_real_production_integration.py::TestRealProductionIntegration.test_full_production_pipeline_integration ⨯                                                            50% █████     INFO 2025-07-17 09:19:31,502 bucket_service 1 129637598198656 -----> BucketService.__init__ ENTERED
+INFO 2025-07-17 09:19:31,503 base_storage_service 1 129637598198656 -----> BaseStorageService.__new__: Instance already existed.
+INFO 2025-07-17 09:19:31,503 base_storage_service 1 129637598198656 ===> BaseStorageService.__init__: Already fully initialized. Skipping one-time setup.
+INFO 2025-07-17 09:19:31,503 bucket_service 1 129637598198656 -----> BucketService.__init__ COMPLETED. Using BaseStorageService for S3 operations.
+INFO 2025-07-17 09:19:31,503 bucket_service 1 129637598198656 -----> BucketService.__init__ ENTERED
+INFO 2025-07-17 09:19:31,503 base_storage_service 1 129637598198656 -----> BaseStorageService.__new__: Instance already existed.
+INFO 2025-07-17 09:19:31,503 base_storage_service 1 129637598198656 ===> BaseStorageService.__init__: Already fully initialized. Skipping one-time setup.
+INFO 2025-07-17 09:19:31,503 bucket_service 1 129637598198656 -----> BucketService.__init__ COMPLETED. Using BaseStorageService for S3 operations.
+INFO 2025-07-17 09:19:31,503 conftest 1 129637598198656 Loading mapping configuration from S3: fuk/metadata/fuk_mapping.json
+INFO 2025-07-17 09:19:31,509 conftest 1 129637598198656 Successfully loaded mapping data from S3
+INFO 2025-07-17 09:19:31,535 conftest 1 129637598198656 Created new mapping 'fuk-test' in test database
+INFO 2025-07-17 09:19:31,535 bucket_service 1 129637598198656 -----> BucketService.__init__ ENTERED
+INFO 2025-07-17 09:19:31,536 base_storage_service 1 129637598198656 -----> BaseStorageService.__new__: Instance already existed.
+INFO 2025-07-17 09:19:31,536 base_storage_service 1 129637598198656 ===> BaseStorageService.__init__: Already fully initialized. Skipping one-time setup.
+INFO 2025-07-17 09:19:31,536 bucket_service 1 129637598198656 -----> BucketService.__init__ COMPLETED. Using BaseStorageService for S3 operations.
+INFO 2025-07-17 09:19:31,536 conftest 1 129637598198656 Loading REAL CSV data from MinIO bucket: fuk
+INFO 2025-07-17 09:19:31,536 bucket_service 1 129637598198656 Listing contents for bucket: fuk, prefix: metadata/
+INFO 2025-07-17 09:19:31,543 bucket_service 1 129637598198656 Found 38 items in fuk with prefix 'metadata/'
+INFO 2025-07-17 09:19:31,543 conftest 1 129637598198656 Found 35 CSV files in S3 bucket fuk
+INFO 2025-07-17 09:19:31,558 conftest 1 129637598198656 Loaded REAL data from AkteurIn.csv: 2257 rows
+INFO 2025-07-17 09:19:31,561 conftest 1 129637598198656 Loaded REAL data from AkteurIn_AkteurIn_Kreuztabelle.csv: 6 rows
+INFO 2025-07-17 09:19:31,569 conftest 1 129637598198656 Loaded REAL data from AkteurIn_Ereignis_Kreuztabelle.csv: 4523 rows
+INFO 2025-07-17 09:19:31,571 conftest 1 129637598198656 Loaded REAL data from Alternativer_Titel.csv: 13 rows
+INFO 2025-07-17 09:19:31,581 conftest 1 129637598198656 Loaded REAL data from Beschreibung.csv: 601 rows
+INFO 2025-07-17 09:19:31,584 conftest 1 129637598198656 Loaded REAL data from Bestehender_Lizenzvertrag.csv: 0 rows
+INFO 2025-07-17 09:19:31,587 conftest 1 129637598198656 Loaded REAL data from Digitales-Objekt-Lizenz.csv: 11 rows
+INFO 2025-07-17 09:19:31,606 conftest 1 129637598198656 Loaded REAL data from Digitales_Objekt.csv: 3538 rows
+INFO 2025-07-17 09:19:31,609 conftest 1 129637598198656 Loaded REAL data from Einliefernde_Hochschule.csv: 5 rows
+INFO 2025-07-17 09:19:31,611 conftest 1 129637598198656 Loaded REAL data from Equipment_und_Software.csv: 26 rows
+INFO 2025-07-17 09:19:31,613 conftest 1 129637598198656 Loaded REAL data from Equipmentart.csv: 57 rows
+INFO 2025-07-17 09:19:31,620 conftest 1 129637598198656 Loaded REAL data from Ereignis.csv: 953 rows
+INFO 2025-07-17 09:19:31,623 conftest 1 129637598198656 Loaded REAL data from Ereignis_Ereignis_Kreuztabelle.csv: 26 rows
+INFO 2025-07-17 09:19:31,627 conftest 1 129637598198656 Loaded REAL data from Ereignisbeschreibung.csv: 581 rows
+INFO 2025-07-17 09:19:31,629 conftest 1 129637598198656 Loaded REAL data from Ereignistyp.csv: 54 rows
+INFO 2025-07-17 09:19:31,631 conftest 1 129637598198656 Loaded REAL data from Informationsträger.csv: 0 rows
+INFO 2025-07-17 09:19:31,634 conftest 1 129637598198656 Loaded REAL data from Informationsträger_Kreuztabelle.csv: 0 rows
+INFO 2025-07-17 09:19:31,637 conftest 1 129637598198656 Loaded REAL data from Informationsträgereigenschaft.csv: 8 rows
+INFO 2025-07-17 09:19:31,640 conftest 1 129637598198656 Loaded REAL data from Informationsträgertyp.csv: 135 rows
+INFO 2025-07-17 09:19:31,642 conftest 1 129637598198656 Loaded REAL data from Materialschlagwort.csv: 0 rows
+INFO 2025-07-17 09:19:31,643 conftest 1 129637598198656 Loaded REAL data from Nummernart.csv: 5 rows
+INFO 2025-07-17 09:19:31,645 conftest 1 129637598198656 Loaded REAL data from Organisationseinheit.csv: 226 rows
+INFO 2025-07-17 09:19:31,647 conftest 1 129637598198656 Loaded REAL data from Ort.csv: 624 rows
+INFO 2025-07-17 09:19:31,649 conftest 1 129637598198656 Loaded REAL data from Physisches_Objekt.csv: 0 rows
+INFO 2025-07-17 09:19:31,652 conftest 1 129637598198656 Loaded REAL data from ProduktID_Kreuztabelle.csv: 0 rows
+INFO 2025-07-17 09:19:31,656 conftest 1 129637598198656 Loaded REAL data from Projekt.csv: 563 rows
+INFO 2025-07-17 09:19:31,659 conftest 1 129637598198656 Loaded REAL data from Projekt_Projekt_Kreuztabelle.csv: 532 rows
+INFO 2025-07-17 09:19:31,660 conftest 1 129637598198656 Loaded REAL data from Projektart.csv: 11 rows
+INFO 2025-07-17 09:19:31,661 conftest 1 129637598198656 Loaded REAL data from Projekteigenschaft.csv: 23 rows
+INFO 2025-07-17 09:19:31,662 conftest 1 129637598198656 Loaded REAL data from Projekteigenschaft_Kreuztabelle.csv: 0 rows
+INFO 2025-07-17 09:19:31,665 conftest 1 129637598198656 Loaded REAL data from Projektkategorie.csv: 280 rows
+INFO 2025-07-17 09:19:31,669 conftest 1 129637598198656 Loaded REAL data from Rolle.csv: 381 rows
+INFO 2025-07-17 09:19:31,672 conftest 1 129637598198656 Loaded REAL data from Sammlung.csv: 0 rows
+INFO 2025-07-17 09:19:31,676 conftest 1 129637598198656 Loaded REAL data from Schlagwort.csv: 1373 rows
+INFO 2025-07-17 09:19:31,678 conftest 1 129637598198656 Loaded REAL data from Sprache.csv: 487 rows
+INFO 2025-07-17 09:19:31,678 conftest 1 129637598198656 Successfully loaded 35 datasets from S3
+INFO 2025-07-17 09:19:31,679 bucket_service 1 129637598198656 -----> BucketService.__init__ ENTERED
+INFO 2025-07-17 09:19:31,679 base_storage_service 1 129637598198656 -----> BaseStorageService.__new__: Instance already existed.
+INFO 2025-07-17 09:19:31,679 base_storage_service 1 129637598198656 ===> BaseStorageService.__init__: Already fully initialized. Skipping one-time setup.
+INFO 2025-07-17 09:19:31,679 bucket_service 1 129637598198656 -----> BucketService.__init__ COMPLETED. Using BaseStorageService for S3 operations.
+INFO 2025-07-17 09:19:31,682 mapping_adapter 1 129637598198656 Loaded mapping 'fuk-test' (ID: 00c1dcd4-34cb-496b-a406-75f7a97fd78d)
+INFO 2025-07-17 09:19:31,682 bucket_service 1 129637598198656 -----> BucketService.__init__ ENTERED
+INFO 2025-07-17 09:19:31,682 base_storage_service 1 129637598198656 -----> BaseStorageService.__new__: Instance already existed.
+INFO 2025-07-17 09:19:31,682 base_storage_service 1 129637598198656 ===> BaseStorageService.__init__: Already fully initialized. Skipping one-time setup.
+INFO 2025-07-17 09:19:31,682 bucket_service 1 129637598198656 -----> BucketService.__init__ COMPLETED. Using BaseStorageService for S3 operations.
+INFO 2025-07-17 09:19:31,682 test_real_production_integration 1 129637598198656 === MAPPING VALIDATION RESULTS ===
+INFO 2025-07-17 09:19:31,682 test_real_production_integration 1 129637598198656 Mapping complete: True
+INFO 2025-07-17 09:19:31,682 test_real_production_integration 1 129637598198656 Issues: 0
+INFO 2025-07-17 09:19:31,682 test_real_production_integration 1 129637598198656 Errors: 0
+INFO 2025-07-17 09:19:31,682 test_real_production_integration 1 129637598198656 Warnings: 0
+INFO 2025-07-17 09:19:31,682 test_real_production_integration 1 129637598198656 === VALIDATION COMPLETE ===
+
+ arkumu/importer/tests/services/execution/test_real_production_integration.py::TestRealProductionIntegration.test_mapping_validation_with_real_data ✓                                                               75% ███████▌  INFO 2025-07-17 09:19:32,618 bucket_service 1 129637598198656 -----> BucketService.__init__ ENTERED
+INFO 2025-07-17 09:19:32,618 base_storage_service 1 129637598198656 -----> BaseStorageService.__new__: Instance already existed.
+INFO 2025-07-17 09:19:32,618 base_storage_service 1 129637598198656 ===> BaseStorageService.__init__: Already fully initialized. Skipping one-time setup.
+INFO 2025-07-17 09:19:32,618 bucket_service 1 129637598198656 -----> BucketService.__init__ COMPLETED. Using BaseStorageService for S3 operations.
+INFO 2025-07-17 09:19:32,618 bucket_service 1 129637598198656 -----> BucketService.__init__ ENTERED
+INFO 2025-07-17 09:19:32,618 base_storage_service 1 129637598198656 -----> BaseStorageService.__new__: Instance already existed.
+INFO 2025-07-17 09:19:32,618 base_storage_service 1 129637598198656 ===> BaseStorageService.__init__: Already fully initialized. Skipping one-time setup.
+INFO 2025-07-17 09:19:32,618 bucket_service 1 129637598198656 -----> BucketService.__init__ COMPLETED. Using BaseStorageService for S3 operations.
+INFO 2025-07-17 09:19:32,618 conftest 1 129637598198656 Loading mapping configuration from S3: fuk/metadata/fuk_mapping.json
+INFO 2025-07-17 09:19:32,622 conftest 1 129637598198656 Successfully loaded mapping data from S3
+INFO 2025-07-17 09:19:32,649 conftest 1 129637598198656 Created new mapping 'fuk-test' in test database
+INFO 2025-07-17 09:19:32,649 bucket_service 1 129637598198656 -----> BucketService.__init__ ENTERED
+INFO 2025-07-17 09:19:32,649 base_storage_service 1 129637598198656 -----> BaseStorageService.__new__: Instance already existed.
+INFO 2025-07-17 09:19:32,649 base_storage_service 1 129637598198656 ===> BaseStorageService.__init__: Already fully initialized. Skipping one-time setup.
+INFO 2025-07-17 09:19:32,649 bucket_service 1 129637598198656 -----> BucketService.__init__ COMPLETED. Using BaseStorageService for S3 operations.
+INFO 2025-07-17 09:19:32,649 conftest 1 129637598198656 Loading REAL CSV data from MinIO bucket: fuk
+INFO 2025-07-17 09:19:32,649 bucket_service 1 129637598198656 Listing contents for bucket: fuk, prefix: metadata/
+INFO 2025-07-17 09:19:32,656 bucket_service 1 129637598198656 Found 38 items in fuk with prefix 'metadata/'
+INFO 2025-07-17 09:19:32,656 conftest 1 129637598198656 Found 35 CSV files in S3 bucket fuk
+INFO 2025-07-17 09:19:32,673 conftest 1 129637598198656 Loaded REAL data from AkteurIn.csv: 2257 rows
+INFO 2025-07-17 09:19:32,676 conftest 1 129637598198656 Loaded REAL data from AkteurIn_AkteurIn_Kreuztabelle.csv: 6 rows
+INFO 2025-07-17 09:19:32,683 conftest 1 129637598198656 Loaded REAL data from AkteurIn_Ereignis_Kreuztabelle.csv: 4523 rows
+INFO 2025-07-17 09:19:32,685 conftest 1 129637598198656 Loaded REAL data from Alternativer_Titel.csv: 13 rows
+INFO 2025-07-17 09:19:32,695 conftest 1 129637598198656 Loaded REAL data from Beschreibung.csv: 601 rows
+INFO 2025-07-17 09:19:32,698 conftest 1 129637598198656 Loaded REAL data from Bestehender_Lizenzvertrag.csv: 0 rows
+INFO 2025-07-17 09:19:32,701 conftest 1 129637598198656 Loaded REAL data from Digitales-Objekt-Lizenz.csv: 11 rows
+INFO 2025-07-17 09:19:32,720 conftest 1 129637598198656 Loaded REAL data from Digitales_Objekt.csv: 3538 rows
+INFO 2025-07-17 09:19:32,723 conftest 1 129637598198656 Loaded REAL data from Einliefernde_Hochschule.csv: 5 rows
+INFO 2025-07-17 09:19:32,725 conftest 1 129637598198656 Loaded REAL data from Equipment_und_Software.csv: 26 rows
+INFO 2025-07-17 09:19:32,726 conftest 1 129637598198656 Loaded REAL data from Equipmentart.csv: 57 rows
+INFO 2025-07-17 09:19:32,730 conftest 1 129637598198656 Loaded REAL data from Ereignis.csv: 953 rows
+INFO 2025-07-17 09:19:32,733 conftest 1 129637598198656 Loaded REAL data from Ereignis_Ereignis_Kreuztabelle.csv: 26 rows
+INFO 2025-07-17 09:19:32,740 conftest 1 129637598198656 Loaded REAL data from Ereignisbeschreibung.csv: 581 rows
+INFO 2025-07-17 09:19:32,743 conftest 1 129637598198656 Loaded REAL data from Ereignistyp.csv: 54 rows
+INFO 2025-07-17 09:19:32,745 conftest 1 129637598198656 Loaded REAL data from Informationsträger.csv: 0 rows
+INFO 2025-07-17 09:19:32,747 conftest 1 129637598198656 Loaded REAL data from Informationsträger_Kreuztabelle.csv: 0 rows
+INFO 2025-07-17 09:19:32,750 conftest 1 129637598198656 Loaded REAL data from Informationsträgereigenschaft.csv: 8 rows
+INFO 2025-07-17 09:19:32,753 conftest 1 129637598198656 Loaded REAL data from Informationsträgertyp.csv: 135 rows
+INFO 2025-07-17 09:19:32,756 conftest 1 129637598198656 Loaded REAL data from Materialschlagwort.csv: 0 rows
+INFO 2025-07-17 09:19:32,758 conftest 1 129637598198656 Loaded REAL data from Nummernart.csv: 5 rows
+INFO 2025-07-17 09:19:32,760 conftest 1 129637598198656 Loaded REAL data from Organisationseinheit.csv: 226 rows
+INFO 2025-07-17 09:19:32,762 conftest 1 129637598198656 Loaded REAL data from Ort.csv: 624 rows
+INFO 2025-07-17 09:19:32,763 conftest 1 129637598198656 Loaded REAL data from Physisches_Objekt.csv: 0 rows
+INFO 2025-07-17 09:19:32,764 conftest 1 129637598198656 Loaded REAL data from ProduktID_Kreuztabelle.csv: 0 rows
+INFO 2025-07-17 09:19:32,770 conftest 1 129637598198656 Loaded REAL data from Projekt.csv: 563 rows
+INFO 2025-07-17 09:19:32,773 conftest 1 129637598198656 Loaded REAL data from Projekt_Projekt_Kreuztabelle.csv: 532 rows
+INFO 2025-07-17 09:19:32,774 conftest 1 129637598198656 Loaded REAL data from Projektart.csv: 11 rows
+INFO 2025-07-17 09:19:32,776 conftest 1 129637598198656 Loaded REAL data from Projekteigenschaft.csv: 23 rows
+INFO 2025-07-17 09:19:32,777 conftest 1 129637598198656 Loaded REAL data from Projekteigenschaft_Kreuztabelle.csv: 0 rows
+INFO 2025-07-17 09:19:32,779 conftest 1 129637598198656 Loaded REAL data from Projektkategorie.csv: 280 rows
+INFO 2025-07-17 09:19:32,782 conftest 1 129637598198656 Loaded REAL data from Rolle.csv: 381 rows
+INFO 2025-07-17 09:19:32,784 conftest 1 129637598198656 Loaded REAL data from Sammlung.csv: 0 rows
+INFO 2025-07-17 09:19:32,789 conftest 1 129637598198656 Loaded REAL data from Schlagwort.csv: 1373 rows
+INFO 2025-07-17 09:19:32,792 conftest 1 129637598198656 Loaded REAL data from Sprache.csv: 487 rows
+INFO 2025-07-17 09:19:32,793 conftest 1 129637598198656 Successfully loaded 35 datasets from S3
+INFO 2025-07-17 09:19:32,793 bucket_service 1 129637598198656 -----> BucketService.__init__ ENTERED
+INFO 2025-07-17 09:19:32,793 base_storage_service 1 129637598198656 -----> BaseStorageService.__new__: Instance already existed.
+INFO 2025-07-17 09:19:32,793 base_storage_service 1 129637598198656 ===> BaseStorageService.__init__: Already fully initialized. Skipping one-time setup.
+INFO 2025-07-17 09:19:32,793 bucket_service 1 129637598198656 -----> BucketService.__init__ COMPLETED. Using BaseStorageService for S3 operations.
+INFO 2025-07-17 09:19:32,793 test_real_production_integration 1 129637598198656 Loading test mapping: ID=2a56a091-5439-4dee-a5fa-be8448957dfc, Name=fuk-test from test database
+INFO 2025-07-17 09:19:32,795 mapping_adapter 1 129637598198656 Loaded mapping 'fuk-test' (ID: 2a56a091-5439-4dee-a5fa-be8448957dfc)
+INFO 2025-07-17 09:19:32,796 config_translator 1 129637598198656 Translated mapping config: 35 datasets, 337 columns, 72 FK relationships
+INFO 2025-07-17 09:19:32,796 mapping_adapter 1 129637598198656 Successfully translated mapping 2a56a091-5439-4dee-a5fa-be8448957dfc to execution config
+INFO 2025-07-17 09:19:32,796 test_real_production_integration 1 129637598198656 Loaded and translated mapping with 35 datasets
+INFO 2025-07-17 09:19:32,796 test_real_production_integration 1 129637598198656 Total columns: 337
+INFO 2025-07-17 09:19:32,796 test_real_production_integration 1 129637598198656 FK relationships: 72
+INFO 2025-07-17 09:19:32,796 test_real_production_integration 1 129637598198656 === FILE CORRELATION ANALYSIS ===
+INFO 2025-07-17 09:19:32,796 test_real_production_integration 1 129637598198656 Mapping datasets: 35
+INFO 2025-07-17 09:19:32,797 test_real_production_integration 1 129637598198656 CSV datasets: 35
+INFO 2025-07-17 09:19:32,797 test_real_production_integration 1 129637598198656 Matched datasets: 35
+INFO 2025-07-17 09:19:32,797 test_real_production_integration 1 129637598198656 Mapping-only datasets: 0
+INFO 2025-07-17 09:19:32,797 test_real_production_integration 1 129637598198656 CSV-only datasets: 0
+INFO 2025-07-17 09:19:32,797 test_real_production_integration 1 129637598198656 Matched: ['AkteurIn', 'AkteurIn_AkteurIn_Kreuztabelle', 'AkteurIn_Ereignis_Kreuztabelle', 'Alternativer_Titel', 'Beschreibung']...
+INFO 2025-07-17 09:19:32,797 test_real_production_integration 1 129637598198656 === CORRELATION ANALYSIS COMPLETE ===

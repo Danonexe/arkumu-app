@@ -50,6 +50,8 @@ urlpatterns = [
     path('metadata/', include('arkumu.metadata.urls', namespace='metadata')),
     path('storage/', include('arkumu.storage.urls', namespace='storage')),
     path('importer/', include('arkumu.importer.urls', namespace='importer')),
+    # Server-Sent Events (SSE)
+    path('events/', include('django_eventstream.urls')),
     
     # ============================================================================
     # MEDIA & INTERNATIONALIZATION

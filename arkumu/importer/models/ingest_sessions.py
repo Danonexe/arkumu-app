@@ -55,6 +55,20 @@ class IngestSession(models.Model):
     successful_rows = models.IntegerField(default=0, help_text="Number of rows successfully ingested")
     failed_rows = models.IntegerField(default=0, help_text="Number of rows that failed to ingest")
     
+    # SSE Progress fields
+    progress_percentage = models.IntegerField(default=0)
+    progress_message = models.CharField(max_length=255, blank=True)
+    progress_status = models.CharField(
+        max_length=20,
+        choices=[
+            ('pending', 'Pending'),
+            ('running', 'Running'),
+            ('complete', 'Complete'),
+            ('error', 'Error'),
+        ],
+        default='pending'
+    )
+    
     # Results and error tracking
     ingestion_stats = models.JSONField(default=dict, blank=True, help_text="Detailed ingestion statistics")
     error_message = models.TextField(blank=True, help_text="Error message if ingestion failed")
@@ -117,6 +131,11 @@ class IngestSession(models.Model):
         if self.processed_rows == 0:
             return 0
         return (self.successful_rows / self.processed_rows) * 100
+    
+    @property
+    def progress_channel_id(self) -> str:
+        """Get SSE channel ID for this session."""
+        return f"import-{self.pk}"
     
     @property
     def file_name(self):

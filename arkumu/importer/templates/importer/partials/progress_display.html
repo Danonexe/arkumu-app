@@ -1,0 +1,190 @@
+<!-- Progress Display Template for SSE Real-Time Updates -->
+<div id="import-progress-{{ session.pk }}"
+     hx-ext="sse"
+     sse-connect="/events/stream/?channel=import-{{ session.pk }}"
+     class="mt-4 border rounded-lg p-4 bg-base-200">
+    
+    <!-- Progress Bar Container -->
+    <div class="mb-4">
+        <div class="flex justify-between text-sm text-base-content mb-2">
+            <span id="progress-message" sse-swap="progress" class="font-medium">Waiting to start...</span>
+            <span id="progress-percentage" class="font-mono">0%</span>
+        </div>
+        <div class="w-full bg-neutral rounded-full h-3">
+            <div id="progress-bar" 
+                 class="bg-primary h-3 rounded-full transition-all duration-300 ease-out" 
+                 style="width: 0%"></div>
+        </div>
+        <div class="flex justify-between text-xs text-base-content/70 mt-1">
+            <span id="progress-details">0 / 0 records</span>
+            <span id="progress-status">pending</span>
+        </div>
+    </div>
+    
+    <!-- Success Message (hidden initially) -->
+    <div id="import-success" sse-swap="complete" class="hidden">
+        <div class="alert alert-success">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <div>
+                <h3 class="font-bold">Import Completed Successfully!</h3>
+                <div class="text-sm" id="success-details">All records processed successfully.</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Error Message (hidden initially) -->
+    <div id="import-error" sse-swap="error" class="hidden">
+        <div class="alert alert-error">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <div>
+                <h3 class="font-bold">Import Failed</h3>
+                <div class="text-sm" id="error-message">An error occurred during import.</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Progress Info Panel -->
+    <div class="mt-4 p-3 bg-base-100 rounded-lg">
+        <div class="text-sm">
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <span class="font-medium">Session ID:</span>
+                    <span class="font-mono text-xs">{{ session.pk }}</span>
+                </div>
+                <div>
+                    <span class="font-medium">Started:</span>
+                    <span id="start-time">{{ session.started_at|default:"Not started" }}</span>
+                </div>
+                <div>
+                    <span class="font-medium">Dataset:</span>
+                    <span>{{ session.dataset_name|default:"Unknown" }}</span>
+                </div>
+                <div>
+                    <span class="font-medium">Organization:</span>
+                    <span>{{ session.organization.name|default:"Unknown" }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Handle SSE progress events for import session {{ session.pk }}
+document.addEventListener('DOMContentLoaded', function() {
+    const progressDiv = document.getElementById('import-progress-{{ session.pk }}');
+    const progressBar = document.getElementById('progress-bar');
+    const progressMessage = document.getElementById('progress-message');
+    const progressPercentage = document.getElementById('progress-percentage');
+    const progressDetails = document.getElementById('progress-details');
+    const progressStatus = document.getElementById('progress-status');
+    const successDiv = document.getElementById('import-success');
+    const errorDiv = document.getElementById('import-error');
+    const errorMessage = document.getElementById('error-message');
+    const successDetails = document.getElementById('success-details');
+    
+    if (!progressDiv) return;
+    
+    // Handle progress updates
+    progressDiv.addEventListener('sse:progress', function(e) {
+        try {
+            const data = JSON.parse(e.detail);
+            
+            // Update progress bar and message
+            if (data.message) {
+                progressMessage.textContent = data.message;
+            }
+            
+            if (data.percentage !== undefined) {
+                progressPercentage.textContent = data.percentage + '%';
+                progressBar.style.width = data.percentage + '%';
+            }
+            
+            // Update details
+            if (data.processed !== undefined && data.total !== undefined) {
+                progressDetails.textContent = `${data.processed} / ${data.total} records`;
+            }
+            
+            // Update status
+            if (data.status) {
+                progressStatus.textContent = data.status;
+            }
+            
+            // Update progress bar color based on status
+            if (data.status === 'running') {
+                progressBar.classList.remove('bg-error', 'bg-success');
+                progressBar.classList.add('bg-primary');
+            }
+            
+        } catch (error) {
+            console.error('Error parsing SSE progress data:', error);
+        }
+    });
+    
+    // Handle completion
+    progressDiv.addEventListener('sse:complete', function(e) {
+        try {
+            const data = JSON.parse(e.detail);
+            
+            // Update final progress
+            progressMessage.textContent = data.message || 'Import completed successfully!';
+            progressPercentage.textContent = '100%';
+            progressBar.style.width = '100%';
+            progressBar.classList.remove('bg-primary', 'bg-error');
+            progressBar.classList.add('bg-success');
+            progressStatus.textContent = 'completed';
+            
+            // Show success message
+            successDiv.classList.remove('hidden');
+            
+            if (data.processed && data.total) {
+                successDetails.textContent = `Successfully processed ${data.processed} of ${data.total} records.`;
+            }
+            
+            // Hide error message if it was shown
+            errorDiv.classList.add('hidden');
+            
+        } catch (error) {
+            console.error('Error parsing SSE completion data:', error);
+        }
+    });
+    
+    // Handle errors
+    progressDiv.addEventListener('sse:error', function(e) {
+        try {
+            const data = JSON.parse(e.detail);
+            
+            // Update progress bar to error state
+            progressBar.classList.remove('bg-primary', 'bg-success');
+            progressBar.classList.add('bg-error');
+            progressStatus.textContent = 'error';
+            
+            // Show error message
+            errorDiv.classList.remove('hidden');
+            errorMessage.textContent = data.message || 'An error occurred during import.';
+            
+            // Hide success message if it was shown
+            successDiv.classList.add('hidden');
+            
+        } catch (error) {
+            console.error('Error parsing SSE error data:', error);
+        }
+    });
+    
+    // Handle SSE connection events
+    progressDiv.addEventListener('sse:open', function(e) {
+        console.log('SSE connection opened for import session {{ session.pk }}');
+    });
+    
+    progressDiv.addEventListener('sse:close', function(e) {
+        console.log('SSE connection closed for import session {{ session.pk }}');
+    });
+    
+    progressDiv.addEventListener('sse:error', function(e) {
+        console.error('SSE connection error for import session {{ session.pk }}:', e.detail);
+    });
+});
+</script>

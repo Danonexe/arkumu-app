@@ -7,4 +7,11 @@ class ImportConfig(AppConfig):
     
     def ready(self):
         # Import tasks to ensure they are registered with Huey
-        from arkumu.importer.tasks import import_metadata
+        try:
+            from arkumu.importer.tasks.import_metadata import run_mapping_aware_import_workflow
+        except ImportError:
+            # Fall back to the main tasks module if it exists
+            try:
+                from arkumu.importer.tasks import run_import
+            except ImportError:
+                pass  # No tasks to import

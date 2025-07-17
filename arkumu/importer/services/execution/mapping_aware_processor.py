@@ -18,6 +18,7 @@ from .resource_manager import ResourceManager
 from .statistics import ExecutionStatistics, ExecutionMetrics
 from arkumu.common.enums import UpdateStrategy
 from arkumu.metadata.services.mapping import FKConfig as BulkFKRelationship
+from arkumu.importer.utils.progress import publish_progress
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +49,9 @@ class MappingAwareProcessor:
     def __init__(self,
                  institution: str,
                  base_uri: str,
-                 statistics: ExecutionStatistics):
+                 statistics: ExecutionStatistics,
+                 channel_id: Optional[str] = None,
+                 session = None):
         """
         Initialize mapping-aware processor.
         
@@ -56,10 +59,16 @@ class MappingAwareProcessor:
             institution: Institution identifier
             base_uri: Base URI for resource generation
             statistics: Statistics tracker
+            channel_id: SSE channel ID for progress updates
+            session: IngestSession instance for progress tracking
         """
         self.institution = institution
         self.base_uri = base_uri
         self.statistics = statistics
+        self.channel_id = channel_id
+        self.session = session
+        self.total_records = 0
+        self.processed_records = 0
         
         # Initialize component processors
         self.data_processor = DataProcessor()
@@ -81,6 +90,28 @@ class MappingAwareProcessor:
         self.entity_cache = {}
         self.pending_relationships = []
     
+    def _update_progress(self, message: str, percentage: Optional[int] = None):
+        """Send progress update via SSE and update model."""
+        if not self.channel_id or not self.session:
+            return
+        
+        if percentage is None:
+            percentage = int((self.processed_records / self.total_records) * 100) if self.total_records > 0 else 0
+        
+        payload = {
+            'message': message,
+            'percentage': percentage,
+            'processed': self.processed_records,
+            'total': self.total_records,
+        }
+        
+        publish_progress(self.channel_id, payload)
+        
+        # Update model
+        self.session.progress_percentage = percentage
+        self.session.progress_message = message
+        self.session.save(update_fields=['progress_percentage', 'progress_message'])
+    
     def process_with_execution_config(self,
                                     execution_config: ExecutionConfig,
                                     csv_sources: Dict[str, Any],
@@ -97,6 +128,9 @@ class MappingAwareProcessor:
             Aggregated execution metrics
         """
         logger.info(f"Starting mapping-aware processing with {strategy} strategy")
+        
+        # Initialize progress
+        self._update_progress("Initializing import...", 0)
         
         # Create processing context
         context = ProcessingContext(
@@ -122,6 +156,10 @@ class MappingAwareProcessor:
         
         logger.info("Processing with entity-centric strategy using MappingExecutionEngine")
         
+        # Count total records for progress tracking
+        self.total_records = sum(len(csv_data) for csv_data in context.all_csv_sources.values())
+        self._update_progress(f"Found {self.total_records} records to process", 5)
+        
         # Process each dataset with the execution engine
         for dataset_config in context.execution_config.datasets:
             if dataset_config.dataset_name not in context.all_csv_sources:
@@ -136,6 +174,9 @@ class MappingAwareProcessor:
             # Use the execution engine for data processing
             logger.info(f"Processing dataset '{dataset_config.dataset_name}' with mapping-aware execution engine")
             
+            # Update progress for starting dataset
+            self._update_progress(f"Processing dataset '{dataset_config.dataset_name}'")
+            
             try:
                 # Execute the import with mapping configuration
                 metrics = self.execution_engine.execute_simple_import(
@@ -146,6 +187,10 @@ class MappingAwareProcessor:
                 
                 # Update our statistics with the returned metrics
                 self.statistics.merge_metrics(metrics)
+                
+                # Update processed records count
+                self.processed_records += len(csv_data)
+                self._update_progress(f"Completed dataset '{dataset_config.dataset_name}'")
                 
             except Exception as e:
                 logger.error(f"Error processing dataset {dataset_config.dataset_name}: {e}")
@@ -159,6 +204,9 @@ class MappingAwareProcessor:
         
         # Log processing summary
         self._log_processing_summary(context)
+        
+        # Final progress update
+        self._update_progress("Import complete!", 100)
         
         return self.statistics.current_metrics
     

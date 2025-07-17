@@ -29,9 +29,11 @@
 
 <!-- HTMX -->
 <script defer src="{% static 'js/htmx.min.js' %}"></script>
-
+<script defer src="{% static 'js/htmx-ext-sse.min.js' %}"></script>
 <!-- Hyperscript for interactive behavior -->
-<script src="https://unpkg.com/hyperscript.org@0.9.12"></script>
+<script defer src="{% static 'js/_hyperscript.js' %}"></script>
+
+
 
 <!-- S3 Upload Components -->
 <script defer src="{% static 'js/src/s3/s3-client.js' %}"></script>
