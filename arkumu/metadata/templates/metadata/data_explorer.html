@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Metadata Data Explorer{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-900 mb-2">Metadata Data Explorer</h1>
+        <p class="text-gray-600">Explore our public metadata resources and their relationships</p>
+    </div>
+    
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <!-- Filters Sidebar -->
+        <div class="lg:col-span-1">
+            <div class="bg-white rounded-lg shadow-md p-6 sticky top-4">
+                <h2 class="text-xl font-semibold mb-4">Filters</h2>
+                
+                <form hx-get="{% url 'metadata:data_explorer_results' %}" 
+                      hx-target="#results-pane" 
+                      hx-trigger="change from:body, search from:#search-input"
+                      hx-indicator="#loading-indicator">
+                    
+                    <!-- Search -->
+                    <div class="form-control mb-4">
+                        <label class="label">
+                            <span class="label-text font-medium">Search</span>
+                        </label>
+                        <input type="text" 
+                               id="search-input"
+                               name="search" 
+                               placeholder="Search resources..." 
+                               class="input input-bordered w-full"
+                               value="{{ current_filters.search }}">
+                    </div>
+                    
+                    <!-- Resource Type Groups -->
+                    <div class="collapse collapse-arrow bg-base-200 mb-4">
+                        <input type="checkbox" checked>
+                        <div class="collapse-title text-sm font-medium">Resource Type Groups</div>
+                        <div class="collapse-content">
+                            {% for group in filter_options.type_groups %}
+                            <label class="label cursor-pointer">
+                                <span class="label-text text-sm">{{ group.label }}</span>
+                                <input type="radio" 
+                                       name="type_group" 
+                                       value="{{ group.value }}"
+                                       class="radio radio-primary radio-sm"
+                                       {% if current_filters.type_group == group.value %}checked{% endif %}>
+                            </label>
+                            {% endfor %}
+                            <label class="label cursor-pointer">
+                                <span class="label-text text-sm">All Types</span>
+                                <input type="radio" 
+                                       name="type_group" 
+                                       value=""
+                                       class="radio radio-primary radio-sm"
+                                       {% if not current_filters.type_group %}checked{% endif %}>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <!-- Resource Types -->
+                    <div class="collapse collapse-arrow bg-base-200 mb-4">
+                        <input type="checkbox">
+                        <div class="collapse-title text-sm font-medium">Resource Types</div>
+                        <div class="collapse-content">
+                            {% for type in filter_options.resource_types %}
+                            <label class="label cursor-pointer">
+                                <span class="label-text text-sm">{{ type.label }}</span>
+                                <input type="checkbox" 
+                                       name="resource_type" 
+                                       value="{{ type.value }}"
+                                       class="checkbox checkbox-primary checkbox-sm"
+                                       {% if type.value in current_filters.resource_type %}checked{% endif %}>
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    
+                    <!-- Triple Usage -->
+                    <div class="collapse collapse-arrow bg-base-200 mb-4">
+                        <input type="checkbox">
+                        <div class="collapse-title text-sm font-medium">Triple Usage</div>
+                        <div class="collapse-content">
+                            {% for usage in filter_options.triple_usage %}
+                            <label class="label cursor-pointer">
+                                <span class="label-text text-sm">{{ usage.label }}</span>
+                                <input type="radio" 
+                                       name="triple_usage" 
+                                       value="{{ usage.value }}"
+                                       class="radio radio-primary radio-sm"
+                                       {% if current_filters.triple_usage == usage.value %}checked{% endif %}>
+                            </label>
+                            {% endfor %}
+                            <label class="label cursor-pointer">
+                                <span class="label-text text-sm">All Usage</span>
+                                <input type="radio" 
+                                       name="triple_usage" 
+                                       value=""
+                                       class="radio radio-primary radio-sm"
+                                       {% if not current_filters.triple_usage %}checked{% endif %}>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <!-- Sources -->
+                    <div class="collapse collapse-arrow bg-base-200 mb-4">
+                        <input type="checkbox">
+                        <div class="collapse-title text-sm font-medium">Sources</div>
+                        <div class="collapse-content max-h-32 overflow-y-auto">
+                            {% for source in filter_options.sources %}
+                            <label class="label cursor-pointer">
+                                <span class="label-text text-sm">{{ source }}</span>
+                                <input type="checkbox" 
+                                       name="source" 
+                                       value="{{ source }}"
+                                       class="checkbox checkbox-primary checkbox-sm"
+                                       {% if source in current_filters.source %}checked{% endif %}>
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    
+                    <!-- External Linking -->
+                    <div class="collapse collapse-arrow bg-base-200 mb-4">
+                        <input type="checkbox">
+                        <div class="collapse-title text-sm font-medium">External Linking</div>
+                        <div class="collapse-content">
+                            <label class="label cursor-pointer">
+                                <span class="label-text text-sm">Externally Linked</span>
+                                <input type="radio" 
+                                       name="externally_linked" 
+                                       value="true"
+                                       class="radio radio-primary radio-sm"
+                                       {% if current_filters.externally_linked == 'true' %}checked{% endif %}>
+                            </label>
+                            <label class="label cursor-pointer">
+                                <span class="label-text text-sm">Not Externally Linked</span>
+                                <input type="radio" 
+                                       name="externally_linked" 
+                                       value="false"
+                                       class="radio radio-primary radio-sm"
+                                       {% if current_filters.externally_linked == 'false' %}checked{% endif %}>
+                            </label>
+                            <label class="label cursor-pointer">
+                                <span class="label-text text-sm">All</span>
+                                <input type="radio" 
+                                       name="externally_linked" 
+                                       value=""
+                                       class="radio radio-primary radio-sm"
+                                       {% if not current_filters.externally_linked %}checked{% endif %}>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <!-- Clear Filters -->
+                    <div class="mt-4">
+                        <a href="{% url 'metadata:data_explorer' %}" class="btn btn-outline btn-sm w-full">Clear All Filters</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Results Area -->
+        <div class="lg:col-span-3">
+            <div id="results-pane">
+                {% include 'metadata/data_explorer_results.html' %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Indicator -->
+<div id="loading-indicator" class="htmx-indicator fixed top-4 right-4">
+    <div class="badge badge-primary">
+        <span class="loading loading-spinner loading-sm"></span>
+        Loading...
+    </div>
+</div>
+
+<!-- Resource Detail Modal -->
+<dialog id="resource-modal" class="modal">
+    <div class="modal-box w-11/12 max-w-4xl">
+        <div id="modal-content">
+            <!-- Content loaded via HTMX -->
+        </div>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+        <button>close</button>
+    </form>
+</dialog>
+{% endblock %}

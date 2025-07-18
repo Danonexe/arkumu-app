@@ -1,0 +1,129 @@
+<div class="bg-white rounded-lg shadow-md">
+    <div class="p-6 border-b">
+        <div class="flex justify-between items-center">
+            <h2 class="text-xl font-semibold">Results</h2>
+            <span class="badge badge-neutral">{{ page_obj.paginator.count }} resources</span>
+        </div>
+    </div>
+    
+    <div class="overflow-x-auto">
+        <table class="table table-zebra w-full">
+            <thead>
+                <tr>
+                    <th>Resource</th>
+                    <th>Type</th>
+                    <th>Source</th>
+                    <th>Triple Usage</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for resource in resources %}
+                <tr>
+                    <td>
+                        <div class="flex flex-col">
+                            {% if resource.resource_type == 'LITERAL' %}
+                                <code class="bg-gray-100 px-2 py-1 rounded text-sm">
+                                    "{{ resource.value|truncatechars:50 }}"
+                                    {% if resource.language %}@{{ resource.language }}{% endif %}
+                                    {% if resource.datatype %}^^{{ resource.datatype|slice:":30" }}{% endif %}
+                                </code>
+                            {% elif resource.uri %}
+                                <a href="{{ resource.uri }}" target="_blank" class="link link-primary text-sm" title="{{ resource.uri }}">
+                                    {{ resource.uri|truncatechars:60 }}
+                                </a>
+                            {% elif resource.name %}
+                                <strong class="text-sm">{{ resource.name }}</strong>
+                            {% else %}
+                                <em class="text-gray-500 text-sm">Resource {{ resource.id }}</em>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td>
+                        <div class="badge badge-sm
+                            {% if resource.resource_type == 'IRI' %}badge-info
+                            {% elif resource.resource_type == 'CLASS' %}badge-secondary
+                            {% elif resource.resource_type == 'PROPERTY' %}badge-accent
+                            {% elif resource.resource_type == 'LITERAL' %}badge-success
+                            {% endif %}">
+                            {{ resource.get_resource_type_display }}
+                        </div>
+                        {% if resource.is_placeholder %}
+                            <div class="badge badge-warning badge-sm">Placeholder</div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if resource.source %}
+                            <code class="text-sm">{{ resource.source }}</code>
+                        {% else %}
+                            <span class="text-gray-400">-</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="text-sm">
+                            {% if resource.subject_count %}
+                                <span class="badge badge-outline badge-sm mr-1">S:{{ resource.subject_count }}</span>
+                            {% endif %}
+                            {% if resource.predicate_count %}
+                                <span class="badge badge-outline badge-sm mr-1">P:{{ resource.predicate_count }}</span>
+                            {% endif %}
+                            {% if resource.object_count %}
+                                <span class="badge badge-outline badge-sm mr-1">O:{{ resource.object_count }}</span>
+                            {% endif %}
+                            {% if not resource.subject_count and not resource.predicate_count and not resource.object_count %}
+                                <span class="text-gray-400">No triples</span>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-primary"
+                                hx-get="{% url 'metadata:resource_detail_modal' resource.pk %}"
+                                hx-target="#modal-content"
+                                onclick="document.getElementById('resource-modal').showModal()">
+                            View Details
+                        </button>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="text-center py-8">
+                        <div class="text-gray-500">
+                            <div class="text-lg mb-2">No resources found</div>
+                            <div class="text-sm">Try adjusting your filters or search terms</div>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    
+    <!-- Pagination -->
+    {% if page_obj.has_other_pages %}
+    <div class="p-6 border-t">
+        <div class="flex justify-center">
+            <div class="join">
+                {% if page_obj.has_previous %}
+                    <button class="join-item btn btn-outline"
+                            hx-get="{% url 'metadata:data_explorer_results' %}?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}"
+                            hx-target="#results-pane">
+                        Previous
+                    </button>
+                {% endif %}
+                
+                <button class="join-item btn btn-outline">
+                    Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                </button>
+                
+                {% if page_obj.has_next %}
+                    <button class="join-item btn btn-outline"
+                            hx-get="{% url 'metadata:data_explorer_results' %}?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}"
+                            hx-target="#results-pane">
+                        Next
+                    </button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>

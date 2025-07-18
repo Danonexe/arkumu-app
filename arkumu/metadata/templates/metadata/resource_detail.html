@@ -1,0 +1,200 @@
+<div class="p-6">
+    <div class="flex justify-between items-start mb-6">
+        <div>
+            <h3 class="text-2xl font-bold mb-2">Resource Details</h3>
+            <div class="flex items-center gap-2">
+                <div class="badge badge-lg
+                    {% if resource.resource_type == 'IRI' %}badge-info
+                    {% elif resource.resource_type == 'CLASS' %}badge-secondary
+                    {% elif resource.resource_type == 'PROPERTY' %}badge-accent
+                    {% elif resource.resource_type == 'LITERAL' %}badge-success
+                    {% endif %}">
+                    {{ resource.get_resource_type_display }}
+                </div>
+                {% if resource.is_placeholder %}
+                    <div class="badge badge-warning">Placeholder</div>
+                {% endif %}
+                {% if resource.is_externally_linked %}
+                    <div class="badge badge-info">Externally Linked</div>
+                {% endif %}
+            </div>
+        </div>
+        <button class="btn btn-circle btn-ghost" onclick="document.getElementById('resource-modal').close()">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+        </button>
+    </div>
+    
+    <!-- Resource Information -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body">
+                <h4 class="card-title text-lg">Basic Information</h4>
+                {% if resource.resource_type == 'LITERAL' %}
+                    <div class="space-y-2">
+                        <div>
+                            <strong>Value:</strong>
+                            <code class="ml-2 bg-gray-100 px-2 py-1 rounded">{{ resource.value }}</code>
+                        </div>
+                        {% if resource.language %}
+                            <div><strong>Language:</strong> {{ resource.language }}</div>
+                        {% endif %}
+                        {% if resource.datatype %}
+                            <div><strong>Datatype:</strong> <code>{{ resource.datatype }}</code></div>
+                        {% endif %}
+                    </div>
+                {% else %}
+                    <div class="space-y-2">
+                        {% if resource.uri %}
+                            <div>
+                                <strong>URI:</strong>
+                                <a href="{{ resource.uri }}" target="_blank" class="link link-primary break-all">{{ resource.uri }}</a>
+                            </div>
+                        {% endif %}
+                        {% if resource.name %}
+                            <div><strong>Name:</strong> {{ resource.name }}</div>
+                        {% endif %}
+                    </div>
+                {% endif %}
+                {% if resource.source %}
+                    <div><strong>Source:</strong> <code>{{ resource.source }}</code></div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body">
+                <h4 class="card-title text-lg">Triple Usage</h4>
+                <div class="stats stats-vertical">
+                    <div class="stat">
+                        <div class="stat-title">As Subject</div>
+                        <div class="stat-value text-lg">{{ subject_count }}</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-title">As Predicate</div>
+                        <div class="stat-value text-lg">{{ predicate_count }}</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-title">As Object</div>
+                        <div class="stat-value text-lg">{{ object_count }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Triple Relationships -->
+    <div class="space-y-6">
+        <!-- As Subject -->
+        {% if subject_triples %}
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body">
+                <h4 class="card-title text-lg">As Subject ({{ subject_count }} total)</h4>
+                <div class="space-y-2">
+                    {% for triple in subject_triples %}
+                    <div class="flex items-center gap-2 p-3 bg-gray-50 rounded">
+                        <span class="font-medium">{{ resource.name|default:resource.uri|default:resource.value|truncatechars:30 }}</span>
+                        <span class="text-gray-500">→</span>
+                        <button class="link link-primary"
+                                hx-get="{% url 'metadata:resource_detail_modal' triple.predicate.pk %}"
+                                hx-target="#modal-content">
+                            {{ triple.predicate.name|default:triple.predicate.uri|truncatechars:30 }}
+                        </button>
+                        <span class="text-gray-500">→</span>
+                        <button class="link link-primary"
+                                hx-get="{% url 'metadata:resource_detail_modal' triple.object.pk %}"
+                                hx-target="#modal-content">
+                            {{ triple.object.name|default:triple.object.uri|default:triple.object.value|truncatechars:30 }}
+                        </button>
+                    </div>
+                    {% endfor %}
+                    {% if subject_count > 10 %}
+                    <div class="text-center text-sm text-gray-500">
+                        ... and {{ subject_count|add:"-10" }} more
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- As Predicate -->
+        {% if predicate_triples %}
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body">
+                <h4 class="card-title text-lg">As Predicate ({{ predicate_count }} total)</h4>
+                <div class="space-y-2">
+                    {% for triple in predicate_triples %}
+                    <div class="flex items-center gap-2 p-3 bg-gray-50 rounded">
+                        <button class="link link-primary"
+                                hx-get="{% url 'metadata:resource_detail_modal' triple.subject.pk %}"
+                                hx-target="#modal-content">
+                            {{ triple.subject.name|default:triple.subject.uri|truncatechars:30 }}
+                        </button>
+                        <span class="text-gray-500">→</span>
+                        <span class="font-medium">{{ resource.name|default:resource.uri|truncatechars:30 }}</span>
+                        <span class="text-gray-500">→</span>
+                        <button class="link link-primary"
+                                hx-get="{% url 'metadata:resource_detail_modal' triple.object.pk %}"
+                                hx-target="#modal-content">
+                            {{ triple.object.name|default:triple.object.uri|default:triple.object.value|truncatechars:30 }}
+                        </button>
+                    </div>
+                    {% endfor %}
+                    {% if predicate_count > 10 %}
+                    <div class="text-center text-sm text-gray-500">
+                        ... and {{ predicate_count|add:"-10" }} more
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- As Object -->
+        {% if object_triples %}
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body">
+                <h4 class="card-title text-lg">As Object ({{ object_count }} total)</h4>
+                <div class="space-y-2">
+                    {% for triple in object_triples %}
+                    <div class="flex items-center gap-2 p-3 bg-gray-50 rounded">
+                        <button class="link link-primary"
+                                hx-get="{% url 'metadata:resource_detail_modal' triple.subject.pk %}"
+                                hx-target="#modal-content">
+                            {{ triple.subject.name|default:triple.subject.uri|truncatechars:30 }}
+                        </button>
+                        <span class="text-gray-500">→</span>
+                        <button class="link link-primary"
+                                hx-get="{% url 'metadata:resource_detail_modal' triple.predicate.pk %}"
+                                hx-target="#modal-content">
+                            {{ triple.predicate.name|default:triple.predicate.uri|truncatechars:30 }}
+                        </button>
+                        <span class="text-gray-500">→</span>
+                        <span class="font-medium">{{ resource.name|default:resource.uri|default:resource.value|truncatechars:30 }}</span>
+                    </div>
+                    {% endfor %}
+                    {% if object_count > 10 %}
+                    <div class="text-center text-sm text-gray-500">
+                        ... and {{ object_count|add:"-10" }} more
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- No Relationships -->
+        {% if not subject_triples and not predicate_triples and not object_triples %}
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body">
+                <div class="text-center text-gray-500 py-8">
+                    <div class="text-lg mb-2">No Triple Relationships</div>
+                    <div class="text-sm">This resource is not connected to any other resources</div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
