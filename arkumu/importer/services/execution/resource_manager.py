@@ -102,7 +102,7 @@ class ResourceManager:
     
     def create_canonical_literal_uri(self, value: str, datatype: str = None, strategy: LiteralURIStrategy = LiteralURIStrategy.CANONICAL) -> str:
         """
-        Generate canonical URI for literal values.
+        Generate canonical URI for literal values using Blake2b hash.
         
         Args:
             value: The literal value
@@ -114,19 +114,20 @@ class ResourceManager:
         """
         import hashlib
         
-        # Content-only hash for canonical URIs
-        value_hash = hashlib.sha256(value.encode('utf-8')).hexdigest()
+        # Use Blake2b with 8-byte digest for better collision resistance and performance
+        value_hash = hashlib.blake2b(value.encode('utf-8'), digest_size=8).hexdigest()
         
         if strategy == LiteralURIStrategy.SEMANTIC and datatype:
             # Extract simple type name from URI for semantic URIs
             type_name = datatype.split('/')[-1].split('#')[-1]
             type_slug = slugify_uri_part(type_name)
-            return f"{self.base_uri}/literals/{type_slug}/{value_hash[:16]}"
+            return f"{self.base_uri}/literals/{type_slug}/{value_hash}"
         elif strategy == LiteralURIStrategy.CANONICAL:
-            return f"{self.base_uri}/literals/{value_hash[:16]}"
+            return f"{self.base_uri}/literals/{value_hash}"
         else:
-            # Legacy contextual URIs (existing behavior)
-            value_identifier = f"{slugify_uri_part(value[:50])}-{value_hash[:8]}"
+            # Legacy contextual URIs (existing behavior with Blake2b)
+            legacy_hash = hashlib.blake2b(value.encode('utf-8'), digest_size=4).hexdigest()
+            value_identifier = f"{slugify_uri_part(value[:50])}-{legacy_hash}"
             return mint_uri(self.base_uri, self.institution, "values", value_identifier)
     
     

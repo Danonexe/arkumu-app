@@ -5,80 +5,30 @@
 
 {% block content %}
 <div class="container mx-auto px-4 py-6">
-    <!-- Header -->
-    <div class="bg-base-200 rounded-lg p-6 mb-6">
-        <div class="flex items-start justify-between">
-            <div>
-                <h1 class="text-3xl font-bold text-base-content mb-2">Resource Relationships</h1>
-                <div class="space-y-2">
-                    <h2 class="text-xl font-semibold text-base-content">{{ resource.name }}</h2>
-                    <p class="text-sm text-base-content/70 font-mono">{{ resource.uri }}</p>
-                    <div class="flex items-center gap-2">
-                        <span class="badge badge-outline">{{ resource.resource_type }}</span>
-                        <span class="badge badge-primary">{{ resource.source }}</span>
-                    </div>
-                </div>
-            </div>
-            <div class="flex items-center gap-2">
-                <select class="select select-bordered select-sm" 
-                        hx-get="{% url 'metadata:related_resources_htmx' resource.id %}"
-                        hx-target="#relationship-content"
-                        hx-indicator="#loading-indicator"
-                        name="depth">
-                    {% for depth in max_depth_options %}
-                        <option value="{{ depth }}" {% if depth == current_depth %}selected{% endif %}>
-                            Depth {{ depth }}
-                        </option>
-                    {% endfor %}
-                </select>
-                <button class="btn btn-sm btn-outline"
-                        hx-get="{% url 'metadata:related_resources_htmx' resource.id %}"
-                        hx-target="#relationship-content"
-                        hx-indicator="#loading-indicator">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                    </svg>
-                    Refresh
-                </button>
-            </div>
-        </div>
+    <!-- Simple Header -->
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold text-base-content mb-2">{{ resource.name|default:"Unnamed Resource" }}</h1>
+        <p class="text-sm text-base-content/70 font-mono">{{ resource.uri }}</p>
     </div>
 
-    <!-- Navigation Tabs -->
-    <div class="tabs tabs-lifted mb-6">
-        <button class="tab tab-active" 
-                hx-get="{% url 'metadata:related_resources_htmx' resource.id %}"
-                hx-target="#relationship-content"
-                hx-indicator="#loading-indicator"
-                hx-push-url="false">
-            Related Resources
-        </button>
-        <button class="tab" 
-                hx-get="{% url 'metadata:resource_graph_htmx' resource.id %}"
-                hx-target="#relationship-content"
-                hx-indicator="#loading-indicator"
-                hx-push-url="false">
-            Graph View
-        </button>
-    </div>
 
     <!-- Loading Indicator -->
     <div id="loading-indicator" class="htmx-indicator mb-4">
-        <div class="flex items-center justify-center p-8">
-            <div class="loading loading-spinner loading-lg text-primary"></div>
-            <span class="ml-3 text-base-content">Loading relationships...</span>
+        <div class="flex items-center justify-center p-4">
+            <div class="loading loading-spinner loading-md text-primary"></div>
+            <span class="ml-2 text-base-content">Loading...</span>
         </div>
     </div>
 
     <!-- Main Content Area -->
-    <div id="relationship-content" class="min-h-[400px]">
+    <div id="relationship-content">
         <!-- Initial content will be loaded here -->
-        {% if relationships %}
+        {% if related_resources %}
             {% include 'metadata/relationships/partials/related_resources.html' %}
         {% else %}
             <div class="text-center py-12">
                 <div class="text-base-content/50 mb-4">
-                    <svg class="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
                     </svg>
                 </div>
@@ -87,26 +37,6 @@
             </div>
         {% endif %}
     </div>
-
-    <!-- Summary Stats -->
-    {% if relationships %}
-    <div class="bg-base-200 rounded-lg p-4 mt-6">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
-            <div>
-                <div class="text-2xl font-bold text-primary">{{ relationships.relationships.outgoing|length }}</div>
-                <div class="text-sm text-base-content/70">Outgoing Relationships</div>
-            </div>
-            <div>
-                <div class="text-2xl font-bold text-secondary">{{ relationships.relationships.incoming|length }}</div>
-                <div class="text-sm text-base-content/70">Incoming Relationships</div>
-            </div>
-            <div>
-                <div class="text-2xl font-bold text-accent">{{ relationships.graph.nodes|length }}</div>
-                <div class="text-sm text-base-content/70">Connected Resources</div>
-            </div>
-        </div>
-    </div>
-    {% endif %}
 </div>
 
 <!-- Custom Styles -->

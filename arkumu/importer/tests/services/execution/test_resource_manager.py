@@ -700,6 +700,160 @@ class TestCanonicalLiteralURIs:
 
 
 @pytest.mark.django_db
+class TestBlake2bImplementation:
+    """Test Blake2b hash implementation for literal URIs"""
+    
+    def test_blake2b_hash_length(self, resource_manager):
+        """Test that Blake2b produces exactly 16 character hashes"""
+        test_values = [
+            "beethoven",
+            "a",
+            "very long string that should still produce a 16 character hash",
+            "🎵🎶",
+            "测试数据",
+            ""
+        ]
+        
+        for value in test_values:
+            uri = resource_manager.create_canonical_literal_uri(value)
+            hash_part = uri.split("/")[-1]
+            assert len(hash_part) == 16, f"Hash length should be 16, got {len(hash_part)} for value: {value}"
+    
+    def test_blake2b_consistency(self, resource_manager):
+        """Test that Blake2b produces consistent results"""
+        test_value = "beethoven"
+        
+        # Generate multiple URIs for the same value
+        uris = [resource_manager.create_canonical_literal_uri(test_value) for _ in range(10)]
+        
+        # All URIs should be identical
+        assert len(set(uris)) == 1
+        
+        # Verify the expected Blake2b hash for "beethoven"
+        import hashlib
+        expected_hash = hashlib.blake2b(test_value.encode('utf-8'), digest_size=8).hexdigest()
+        expected_uri = f"{resource_manager.base_uri}/literals/{expected_hash}"
+        
+        assert uris[0] == expected_uri
+    
+    def test_blake2b_collision_resistance(self, resource_manager):
+        """Test Blake2b collision resistance with similar values"""
+        similar_values = [
+            "beethoven",
+            "Beethoven",
+            "beethove",
+            "beethovens",
+            "beethoven ",
+            " beethoven",
+            "beethoven\n",
+            "beethoven\t"
+        ]
+        
+        uris = [resource_manager.create_canonical_literal_uri(value) for value in similar_values]
+        
+        # All URIs should be different (no collisions)
+        assert len(set(uris)) == len(uris)
+        
+        # Print for debugging
+        for value, uri in zip(similar_values, uris):
+            print(f"'{value}' -> {uri.split('/')[-1]}")
+    
+    def test_blake2b_semantic_strategy(self, resource_manager):
+        """Test Blake2b with semantic URI strategy"""
+        uri = resource_manager.create_canonical_literal_uri(
+            "beethoven",
+            "http://www.w3.org/2001/XMLSchema#string",
+            LiteralURIStrategy.SEMANTIC
+        )
+        
+        # Should contain type slug and 16-character hash
+        assert "/literals/string/" in uri
+        hash_part = uri.split("/")[-1]
+        assert len(hash_part) == 16
+        
+        # Verify it's the same Blake2b hash
+        import hashlib
+        expected_hash = hashlib.blake2b("beethoven".encode('utf-8'), digest_size=8).hexdigest()
+        assert hash_part == expected_hash
+    
+    def test_blake2b_contextual_strategy(self, resource_manager):
+        """Test Blake2b with contextual URI strategy"""
+        uri = resource_manager.create_canonical_literal_uri(
+            "beethoven",
+            strategy=LiteralURIStrategy.CONTEXTUAL
+        )
+        
+        # Should contain institution and shorter hash (8 chars)
+        assert resource_manager.institution in uri
+        assert "values" in uri
+        assert "beethoven" in uri
+        
+        # Extract hash part (should be 8 chars for contextual)
+        hash_part = uri.split("-")[-1]
+        assert len(hash_part) == 8
+        
+        # Verify it's the Blake2b hash with 4-byte digest
+        import hashlib
+        expected_hash = hashlib.blake2b("beethoven".encode('utf-8'), digest_size=4).hexdigest()
+        assert hash_part == expected_hash
+    
+    def test_blake2b_performance_comparison(self, resource_manager):
+        """Test Blake2b performance compared to SHA-256"""
+        import time
+        import hashlib
+        
+        test_values = [f"test_value_{i}" for i in range(1000)]
+        
+        # Time Blake2b (current implementation)
+        start_time = time.time()
+        blake2b_uris = [resource_manager.create_canonical_literal_uri(value) for value in test_values]
+        blake2b_time = time.time() - start_time
+        
+        # Time SHA-256 for comparison
+        start_time = time.time()
+        sha256_hashes = [hashlib.sha256(value.encode('utf-8')).hexdigest()[:16] for value in test_values]
+        sha256_time = time.time() - start_time
+        
+        # Blake2b should be faster or comparable
+        print(f"Blake2b time: {blake2b_time:.4f}s")
+        print(f"SHA-256 time: {sha256_time:.4f}s")
+        print(f"Blake2b is {sha256_time/blake2b_time:.2f}x faster")
+        
+        # Verify no collisions in Blake2b results
+        assert len(set(blake2b_uris)) == len(blake2b_uris)
+        assert len(set(sha256_hashes)) == len(sha256_hashes)
+    
+    def test_blake2b_unicode_handling(self, resource_manager):
+        """Test Blake2b with Unicode characters"""
+        unicode_values = [
+            "音楽",  # Japanese
+            "müsik",  # German with umlaut
+            "ñandú",  # Spanish with tilde
+            "Москва",  # Russian Cyrillic
+            "🎵🎶🎸",  # Emoji
+            "🇩🇪🇯🇵",  # Flag emoji
+            "test\u0000null",  # With null byte
+            "test\u200Bzwsp"  # With zero-width space
+        ]
+        
+        for value in unicode_values:
+            uri = resource_manager.create_canonical_literal_uri(value)
+            
+            # Should produce valid 16-character hash
+            hash_part = uri.split("/")[-1]
+            assert len(hash_part) == 16
+            
+            # Should be consistent
+            uri2 = resource_manager.create_canonical_literal_uri(value)
+            assert uri == uri2
+            
+            # Verify it matches expected Blake2b hash
+            import hashlib
+            expected_hash = hashlib.blake2b(value.encode('utf-8'), digest_size=8).hexdigest()
+            assert hash_part == expected_hash
+
+
+@pytest.mark.django_db
 class TestResourceManagerPerformance:
     """Performance tests for ResourceManager"""
     

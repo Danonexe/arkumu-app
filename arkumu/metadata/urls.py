@@ -30,7 +30,6 @@ urlpatterns = [
     # Resource Relationship Explorer (HTMX-based)
     path('resources/<uuid:resource_id>/relationships/', resource_relationship_views.ResourceRelationshipExplorerView.as_view(), name='resource_relationships'),
     path('resources/<uuid:resource_id>/related/', resource_relationship_views.RelatedResourcesHTMXView.as_view(), name='related_resources_htmx'),
-    path('resources/<uuid:resource_id>/graph/', resource_relationship_views.ResourceGraphHTMXView.as_view(), name='resource_graph_htmx'),
     path('resources/<uuid:resource_id>/chain/<uuid:target_id>/', resource_relationship_views.RelationshipChainHTMXView.as_view(), name='relationship_chain_htmx'),
     path('mappings/<uuid:mapping_id>/relationships/', resource_relationship_views.MappingRelationshipsHTMXView.as_view(), name='mapping_relationships_htmx'),
     path('organizations/<str:org_code>/relationship-types/', resource_relationship_views.OrganizationRelationshipTypesHTMXView.as_view(), name='org_relationship_types_htmx'),

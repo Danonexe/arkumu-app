@@ -53,9 +53,30 @@ class ResourceRelationshipExplorerView(GeneralLoginRequiredMixin, CSVMappingTemp
                 organization=organization
             )
             
+            # Extract the related resources from the relationships structure
+            related_resources = []
+            if relationships and 'relationships' in relationships:
+                outgoing = relationships['relationships'].get('outgoing', [])
+                incoming = relationships['relationships'].get('incoming', [])
+                
+                # Transform the relationship objects to match template expectations
+                for rel in outgoing:
+                    target = rel.get('target', {}).copy()  # Create a copy to avoid modifying original
+                    target['relationship_type'] = rel.get('relationship_type', 'Connected')
+                    target['direction'] = 'outgoing'
+                    related_resources.append(target)
+                
+                for rel in incoming:
+                    # For incoming relationships, the related resource is in 'source', not 'target'
+                    source = rel.get('source', {}).copy()  # Create a copy to avoid modifying original
+                    source['relationship_type'] = rel.get('relationship_type', 'Connected')
+                    source['direction'] = 'incoming'
+                    related_resources.append(source)
+            
             context.update({
                 'resource': resource,
                 'relationships': relationships,
+                'related_resources': related_resources,
                 'organization_id': organization or resource.source,
                 'max_depth_options': [1, 2, 3],
                 'current_depth': 1,
@@ -71,13 +92,21 @@ class ResourceRelationshipExplorerView(GeneralLoginRequiredMixin, CSVMappingTemp
     
     def _can_access_resource(self, user, resource):
         """Check if user can access the resource."""
+        # Django superusers can access everything
+        if user.is_superuser:
+            return True
+        
         # System admins can access everything
         if getattr(user, 'role', None) == 'system_admin':
             return True
         
         # Users can access their organization's resources
-        if user.organization and resource.source == user.organization.code:
-            return True
+        if user.organization:
+            # Check both organization field and source field
+            if resource.organization_id == user.organization.id:
+                return True
+            if resource.source == user.organization.code:
+                return True
         
         # Users can access public resources
         if hasattr(resource, 'is_publicly_accessible') and resource.is_publicly_accessible:
@@ -85,6 +114,10 @@ class ResourceRelationshipExplorerView(GeneralLoginRequiredMixin, CSVMappingTemp
         
         # Users can access restricted resources if authenticated
         if hasattr(resource, 'public_access_level') and resource.public_access_level == 'restricted':
+            return True
+        
+        # Users can access public resources
+        if hasattr(resource, 'public_access_level') and resource.public_access_level == 'public':
             return True
         
         return False
@@ -185,112 +218,21 @@ class RelatedResourcesHTMXView(GeneralLoginRequiredMixin, CSVMappingTemplateHelp
     
     def _can_access_resource(self, user, resource):
         """Check if user can access the resource."""
+        # Django superusers can access everything
+        if user.is_superuser:
+            return True
+        
         # System admins can access everything
         if getattr(user, 'role', None) == 'system_admin':
             return True
         
         # Users can access their organization's resources
-        if user.organization and resource.source == user.organization.code:
-            return True
-        
-        # Users can access public resources
-        if hasattr(resource, 'is_publicly_accessible') and resource.is_publicly_accessible:
-            return True
-        
-        # Users can access restricted resources if authenticated
-        if hasattr(resource, 'public_access_level') and resource.public_access_level == 'restricted':
-            return True
-        
-        return False
-    
-    def _get_organization_filter(self, user, resource):
-        """Get organization filter for the user."""
-        # System admins see everything
-        if getattr(user, 'role', None) == 'system_admin':
-            return None
-        
-        # Regular users see their organization's data
         if user.organization:
-            return user.organization.code
-        
-        return None
-
-
-class ResourceGraphHTMXView(GeneralLoginRequiredMixin, CSVMappingTemplateHelperMixin, View):
-    """
-    HTMX view for getting resource relationship graph.
-    GET /metadata/resources/<uuid:resource_id>/graph/
-    """
-    
-    @method_decorator(cache_page(60 * 5))  # Cache for 5 minutes
-    @method_decorator(vary_on_headers('Authorization'))
-    def get(self, request, resource_id):
-        try:
-            # Get the resource
-            resource = get_object_or_404(Resource, id=resource_id)
-            
-            # Check permissions
-            if not self._can_access_resource(request.user, resource):
-                raise PermissionDenied("You don't have permission to access this resource")
-            
-            # Get query parameters
-            depth = min(int(request.GET.get('depth', 1)), 3)  # Limit depth to prevent abuse
-            organization = self._get_organization_filter(request.user, resource)
-            
-            # Use the service to get the graph
-            service = ResourceRelationshipService()
-            graph_data = service.get_relationship_graph(
-                resource.uri,
-                depth=depth,
-                organization=organization
-            )
-            
-            # Render the template
-            html = self.render_graph_template(request, resource, graph_data, organization)
-            
-            return HttpResponse(html)
-            
-        except Resource.DoesNotExist:
-            return HttpResponse(
-                '<div class="alert alert-error">Resource not found</div>',
-                status=404
-            )
-        except PermissionDenied as e:
-            return HttpResponse(
-                f'<div class="alert alert-error">{str(e)}</div>',
-                status=403
-            )
-        except Exception as e:
-            logger.error(f"Error getting graph for resource {resource_id}: {str(e)}")
-            return HttpResponse(
-                '<div class="alert alert-error">An error occurred while loading the graph</div>',
-                status=500
-            )
-    
-    def render_graph_template(self, request, resource, graph_data, organization):
-        """Render graph template using template helper pattern."""
-        context = {
-            'resource': resource,
-            'graph': graph_data,
-            'organization_id': organization or resource.source,
-            'csrf_token': get_token(request),
-        }
-        
-        return render_to_string(
-            'metadata/relationships/partials/relationship_graph.html',
-            context,
-            request=request
-        )
-    
-    def _can_access_resource(self, user, resource):
-        """Check if user can access the resource."""
-        # System admins can access everything
-        if getattr(user, 'role', None) == 'system_admin':
-            return True
-        
-        # Users can access their organization's resources
-        if user.organization and resource.source == user.organization.code:
-            return True
+            # Check both organization field and source field
+            if resource.organization_id == user.organization.id:
+                return True
+            if resource.source == user.organization.code:
+                return True
         
         # Users can access public resources
         if hasattr(resource, 'is_publicly_accessible') and resource.is_publicly_accessible:
@@ -298,6 +240,10 @@ class ResourceGraphHTMXView(GeneralLoginRequiredMixin, CSVMappingTemplateHelperM
         
         # Users can access restricted resources if authenticated
         if hasattr(resource, 'public_access_level') and resource.public_access_level == 'restricted':
+            return True
+        
+        # Users can access public resources
+        if hasattr(resource, 'public_access_level') and resource.public_access_level == 'public':
             return True
         
         return False
@@ -383,13 +329,21 @@ class RelationshipChainHTMXView(GeneralLoginRequiredMixin, CSVMappingTemplateHel
     
     def _can_access_resource(self, user, resource):
         """Check if user can access the resource."""
+        # Django superusers can access everything
+        if user.is_superuser:
+            return True
+        
         # System admins can access everything
         if getattr(user, 'role', None) == 'system_admin':
             return True
         
         # Users can access their organization's resources
-        if user.organization and resource.source == user.organization.code:
-            return True
+        if user.organization:
+            # Check both organization field and source field
+            if resource.organization_id == user.organization.id:
+                return True
+            if resource.source == user.organization.code:
+                return True
         
         # Users can access public resources
         if hasattr(resource, 'is_publicly_accessible') and resource.is_publicly_accessible:
@@ -397,6 +351,10 @@ class RelationshipChainHTMXView(GeneralLoginRequiredMixin, CSVMappingTemplateHel
         
         # Users can access restricted resources if authenticated
         if hasattr(resource, 'public_access_level') and resource.public_access_level == 'restricted':
+            return True
+        
+        # Users can access public resources
+        if hasattr(resource, 'public_access_level') and resource.public_access_level == 'public':
             return True
         
         return False

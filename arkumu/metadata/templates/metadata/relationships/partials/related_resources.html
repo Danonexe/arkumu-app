@@ -1,54 +1,66 @@
 <!-- Related Resources Content -->
-<div class="space-y-6">
-    <!-- Search and Filter Bar -->
-    <div class="bg-base-200 rounded-lg p-4">
-        <div class="flex flex-col sm:flex-row gap-4 items-center">
-            <div class="flex-1">
-                <input type="text" 
-                       class="input input-bordered w-full" 
-                       placeholder="Search related resources..."
-                       hx-get="{% url 'metadata:related_resources_htmx' resource.id %}"
-                       hx-target="#relationship-content"
-                       hx-trigger="keyup changed delay:300ms"
-                       name="search">
-            </div>
-            <div class="flex gap-2">
-                <select class="select select-bordered select-sm"
-                        hx-get="{% url 'metadata:related_resources_htmx' resource.id %}"
-                        hx-target="#relationship-content"
-                        hx-trigger="change"
-                        name="relationship_type">
-                    <option value="">All Types</option>
-                    <option value="relation">Relations</option>
-                    <option value="hasPart">Has Part</option>
-                    <option value="partOf">Part Of</option>
-                </select>
-                <div class="dropdown dropdown-end">
-                    <label tabindex="0" class="btn btn-sm btn-outline">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path>
-                        </svg>
-                        Filter
-                    </label>
-                    <ul tabindex="0" class="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-52">
-                        <li><a>Show outgoing only</a></li>
-                        <li><a>Show incoming only</a></li>
-                        <li><a>Show all directions</a></li>
-                    </ul>
-                </div>
-            </div>
+<div class="space-y-4">
+    <!-- Simple relationship count -->
+    <div class="flex items-center gap-4 mb-4">
+        <div class="text-lg font-semibold">
+            {% if related_resources %}
+                {{ related_resources|length }} relationship{{ related_resources|length|pluralize }}
+            {% else %}
+                No relationships found
+            {% endif %}
         </div>
     </div>
 
-    <!-- Related Resources Grid -->
+    <!-- Simple Table Layout -->
     {% if related_resources %}
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {% for related_resource in related_resources %}
-                {% include 'metadata/relationships/components/resource_card.html' with resource=related_resource %}
-            {% endfor %}
+        <div class="overflow-x-auto">
+            <table class="table table-zebra w-full">
+                <thead>
+                    <tr>
+                        <th class="w-1/3">Resource</th>
+                        <th class="w-1/6">Type</th>
+                        <th class="w-1/4">Relationship</th>
+                        <th class="w-1/6">Direction</th>
+                        <th class="w-1/6">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for related_resource in related_resources %}
+                        <tr class="hover">
+                            <td>
+                                <div class="font-medium">{{ related_resource.name|default:"Unnamed Resource" }}</div>
+                                <div class="text-sm text-base-content/70 font-mono truncate">{{ related_resource.uri|truncatechars:60 }}</div>
+                            </td>
+                            <td>
+                                <span class="badge badge-outline badge-sm">{{ related_resource.type }}</span>
+                            </td>
+                            <td>
+                                <span class="badge badge-primary badge-sm">{{ related_resource.relationship_type|default:"Connected" }}</span>
+                            </td>
+                            <td>
+                                {% if related_resource.direction == 'outgoing' %}
+                                    <span class="badge badge-success badge-sm">→ Outgoing</span>
+                                {% else %}
+                                    <span class="badge badge-info badge-sm">← Incoming</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if related_resource.id %}
+                                    <a href="{% url 'metadata:resource_relationships' related_resource.id %}" 
+                                       class="btn btn-sm btn-outline">
+                                        Explore
+                                    </a>
+                                {% else %}
+                                    <span class="text-sm text-base-content/50">No ID</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
 
-        <!-- Pagination -->
+        <!-- Simple Pagination -->
         {% if paginator.num_pages > 1 %}
             <div class="flex justify-center mt-6">
                 <div class="join">
@@ -57,15 +69,12 @@
                                 hx-get="{% url 'metadata:related_resources_htmx' resource.id %}?page={{ related_resources.previous_page_number }}"
                                 hx-target="#relationship-content"
                                 hx-indicator="#loading-indicator">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
-                            </svg>
                             Previous
                         </button>
                     {% endif %}
                     
                     <button class="join-item btn btn-active">
-                        Page {{ related_resources.number }} of {{ paginator.num_pages }}
+                        {{ related_resources.number }} / {{ paginator.num_pages }}
                     </button>
                     
                     {% if related_resources.has_next %}
@@ -74,9 +83,6 @@
                                 hx-target="#relationship-content"
                                 hx-indicator="#loading-indicator">
                             Next
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                            </svg>
                         </button>
                     {% endif %}
                 </div>
@@ -86,7 +92,7 @@
         <!-- No Results -->
         <div class="text-center py-12">
             <div class="text-base-content/50 mb-4">
-                <svg class="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                 </svg>
             </div>

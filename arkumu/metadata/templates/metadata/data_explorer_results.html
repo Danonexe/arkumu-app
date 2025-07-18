@@ -19,7 +19,7 @@
                 <th class="text-left">Resource</th>
                 <th class="text-left w-20">Source</th>
                 <th class="text-left w-24">Triples</th>
-                <th class="text-center w-20">Actions</th>
+                <th class="text-center w-32">Actions</th>
             </tr>
         </thead>
         <tbody>
@@ -92,18 +92,27 @@
                     </div>
                 </td>
                 
-                <!-- Action Button -->
+                <!-- Action Buttons -->
                 <td class="text-center">
-                    <button class="btn btn-primary btn-sm"
-                            hx-get="{% url 'metadata:resource_detail_modal' resource.pk %}"
-                            hx-target="#modal-content"
-                            onclick="document.getElementById('resource-modal').showModal()">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                        </svg>
-                        View
-                    </button>
+                    <div class="flex gap-1 justify-center">
+                        <button class="btn btn-primary btn-sm"
+                                hx-get="{% url 'metadata:resource_detail_modal' resource.pk %}"
+                                hx-target="#modal-content"
+                                onclick="document.getElementById('resource-modal').showModal()">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                            View
+                        </button>
+                        <a href="{% url 'metadata:resource_relationships' resource.pk %}" 
+                           class="btn btn-outline btn-primary btn-sm">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                            </svg>
+                            Relations
+                        </a>
+                    </div>
                 </td>
             </tr>
             {% endfor %}
