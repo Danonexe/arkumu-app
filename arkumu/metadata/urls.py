@@ -1,5 +1,6 @@
 from django.urls import path
 from arkumu.metadata.views import dashboard_views, resource_views, triple_views, graph_views, bulk_editor_views, data_discovery_views, data_explorer_views, split_views, direct_data_views, model_graph_views
+from arkumu.metadata.views.data_explorer import DataExplorerView, ResourceDetailView, DataExplorerResultsView
 from arkumu.metadata.views.csv_mapping import saved_mappings_api
 from arkumu.metadata.views.csv_mapping.views import mapping_validation_views, mapping_save_views, mapping_load_views, mapping_delete_views
 from arkumu.metadata.views.csv_mapping.views import core_editor_views, dataset_views, column_views, utility_views, relationship_views, ontology_views
@@ -18,11 +19,13 @@ urlpatterns = [
     path('dashboard/all-ingests/', dashboard_views.all_ingest_sessions, name='all_ingest_sessions'),
     
     # Data Explorer (unified resource and triple browsing)
-    path('data-explorer/', data_explorer_views.data_explorer, name='data_explorer'),
+    path('data-explorer/', DataExplorerView.as_view(), name='data_explorer'),
+    path('data-explorer/results/', DataExplorerResultsView.as_view(), name='data_explorer_results'),
     
     # Resource details (still needed for individual resource pages)
     path('resources/<uuid:resource_id>/', resource_views.resource_detail, name='resource_detail'),
     path('resources/<uuid:resource_id>/graph/', resource_views.resource_graph, name='resource_graph'),
+    path('resource-detail/<uuid:pk>/', ResourceDetailView.as_view(), name='resource_detail_modal'),
     
     # Graph visualization
     path('dataset-viewer/', graph_views.dataset_viewer_view, name='dataset_viewer'),
