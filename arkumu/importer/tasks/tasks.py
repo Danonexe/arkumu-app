@@ -108,10 +108,15 @@ def run_import(session_pk: int):
         
         logger.info(f"Import completed successfully for session {session_pk}")
         
+    except IngestSession.DoesNotExist as exc:
+        logger.error(f"Import failed for session {session_pk}: {exc}")
+        # Can't update session or send progress since it doesn't exist
+        raise  # Re-raise for Huey retry mechanism
+        
     except Exception as exc:
         logger.error(f"Import failed for session {session_pk}: {exc}")
         
-        # Error handling
+        # Error handling - session is guaranteed to exist here
         session.mark_failed(str(exc))
         
         publish_progress(channel, {
