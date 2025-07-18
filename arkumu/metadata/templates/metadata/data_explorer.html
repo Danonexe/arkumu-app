@@ -4,17 +4,28 @@
 {% block title %}Metadata Data Explorer{% endblock %}
 
 {% block content %}
-<div class="container mx-auto px-4 py-8">
-    <div class="mb-8">
-        <h1 class="text-3xl font-bold text-gray-900 mb-2">Metadata Data Explorer</h1>
-        <p class="text-gray-600">Explore our public metadata resources and their relationships</p>
+<div class="container mx-auto px-6 py-12">
+    <!-- Hero Section -->
+    <div class="hero bg-base-200 rounded-box mb-12">
+        <div class="hero-content text-center py-12">
+            <div class="max-w-2xl">
+                <h1 class="text-4xl font-bold mb-4">Metadata Data Explorer</h1>
+                <p class="text-lg text-base-content/70">Explore our public metadata resources and their relationships</p>
+            </div>
+        </div>
     </div>
     
-    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+    <div class="flex flex-col lg:flex-row gap-8">
         <!-- Filters Sidebar -->
-        <div class="lg:col-span-1">
-            <div class="bg-white rounded-lg shadow-md p-6 sticky top-4">
-                <h2 class="text-xl font-semibold mb-4">Filters</h2>
+        <div class="lg:w-80 flex-shrink-0">
+            <div class="card bg-base-100 shadow-xl sticky top-6 border border-base-300">
+                <div class="card-body p-6">
+                    <h2 class="card-title text-xl mb-6 text-primary">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                        </svg>
+                        Filters
+                    </h2>
                 
                 <form hx-get="{% url 'metadata:data_explorer_results' %}" 
                       hx-target="#results-pane" 
@@ -22,22 +33,22 @@
                       hx-indicator="#loading-indicator">
                     
                     <!-- Search -->
-                    <div class="form-control mb-4">
+                    <div class="form-control mb-6">
                         <label class="label">
-                            <span class="label-text font-medium">Search</span>
+                            <span class="label-text font-semibold">Search</span>
                         </label>
                         <input type="text" 
                                id="search-input"
                                name="search" 
                                placeholder="Search resources..." 
-                               class="input input-bordered w-full"
+                               class="input input-bordered w-full input-primary focus:input-primary"
                                value="{{ current_filters.search }}">
                     </div>
                     
                     <!-- Resource Type Groups -->
-                    <div class="collapse collapse-arrow bg-base-200 mb-4">
+                    <div class="collapse collapse-arrow bg-base-200 mb-4 rounded-lg">
                         <input type="checkbox" checked>
-                        <div class="collapse-title text-sm font-medium">Resource Type Groups</div>
+                        <div class="collapse-title text-sm font-semibold">Resource Type Groups</div>
                         <div class="collapse-content">
                             {% for group in filter_options.type_groups %}
                             <label class="label cursor-pointer">
@@ -61,9 +72,9 @@
                     </div>
                     
                     <!-- Resource Types -->
-                    <div class="collapse collapse-arrow bg-base-200 mb-4">
+                    <div class="collapse collapse-arrow bg-base-200 mb-4 rounded-lg">
                         <input type="checkbox">
-                        <div class="collapse-title text-sm font-medium">Resource Types</div>
+                        <div class="collapse-title text-sm font-semibold">Resource Types</div>
                         <div class="collapse-content">
                             {% for type in filter_options.resource_types %}
                             <label class="label cursor-pointer">
@@ -79,9 +90,9 @@
                     </div>
                     
                     <!-- Triple Usage -->
-                    <div class="collapse collapse-arrow bg-base-200 mb-4">
+                    <div class="collapse collapse-arrow bg-base-200 mb-4 rounded-lg">
                         <input type="checkbox">
-                        <div class="collapse-title text-sm font-medium">Triple Usage</div>
+                        <div class="collapse-title text-sm font-semibold">Triple Usage</div>
                         <div class="collapse-content">
                             {% for usage in filter_options.triple_usage %}
                             <label class="label cursor-pointer">
@@ -105,9 +116,9 @@
                     </div>
                     
                     <!-- Sources -->
-                    <div class="collapse collapse-arrow bg-base-200 mb-4">
+                    <div class="collapse collapse-arrow bg-base-200 mb-4 rounded-lg">
                         <input type="checkbox">
-                        <div class="collapse-title text-sm font-medium">Sources</div>
+                        <div class="collapse-title text-sm font-semibold">Sources</div>
                         <div class="collapse-content max-h-32 overflow-y-auto">
                             {% for source in filter_options.sources %}
                             <label class="label cursor-pointer">
@@ -123,9 +134,9 @@
                     </div>
                     
                     <!-- External Linking -->
-                    <div class="collapse collapse-arrow bg-base-200 mb-4">
+                    <div class="collapse collapse-arrow bg-base-200 mb-4 rounded-lg">
                         <input type="checkbox">
-                        <div class="collapse-title text-sm font-medium">External Linking</div>
+                        <div class="collapse-title text-sm font-semibold">External Linking</div>
                         <div class="collapse-content">
                             <label class="label cursor-pointer">
                                 <span class="label-text text-sm">Externally Linked</span>
@@ -155,15 +166,16 @@
                     </div>
                     
                     <!-- Clear Filters -->
-                    <div class="mt-4">
+                    <div class="mt-6">
                         <a href="{% url 'metadata:data_explorer' %}" class="btn btn-outline btn-sm w-full">Clear All Filters</a>
                     </div>
                 </form>
+                </div>
             </div>
         </div>
         
         <!-- Results Area -->
-        <div class="lg:col-span-3">
+        <div class="flex-1 min-w-0">
             <div id="results-pane">
                 {% include 'metadata/data_explorer_results.html' %}
             </div>

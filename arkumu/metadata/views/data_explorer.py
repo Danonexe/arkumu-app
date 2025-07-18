@@ -5,6 +5,7 @@ from django.db.models import Q, Count, Exists, OuterRef
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from django.views.generic import ListView, DetailView
+from django.conf import settings
 from arkumu.metadata.models.resource import Resource, ResourceType, PublicAccessLevel
 from arkumu.metadata.models.triples import Triple
 
@@ -16,18 +17,65 @@ class DataExplorerView(ListView):
     paginate_by = 20
     
     def get_queryset(self):
-        """Return only public approved resources with filters"""
-        queryset = Resource.objects.filter(
-            public_access_level=PublicAccessLevel.PUBLIC,
-            is_public_approved=True
-        ).select_related('organization').annotate(
+        """Get resources with appropriate access control and debug mode support."""
+        # Start with all resources
+        queryset = Resource.objects.all().select_related('organization').annotate(
             subject_count=Count('subject_triples', distinct=True),
             predicate_count=Count('predicate_triples', distinct=True),
             object_count=Count('object_triples', distinct=True),
         )
         
+        # Debug mode - show all resources in development
+        if settings.DEBUG and self.request.GET.get('debug') == 'true':
+            return self.apply_filters(queryset).order_by('-created_at')
+        
+        # Apply access control based on user permissions
+        if not self.request.user.is_authenticated:
+            # Anonymous users see only public approved resources
+            queryset = queryset.filter(
+                public_access_level=PublicAccessLevel.PUBLIC,
+                is_public_approved=True
+            )
+        elif not self.request.user.has_perm('metadata.view_all_resources'):
+            # Authenticated users see public + restricted resources
+            queryset = queryset.filter(
+                public_access_level__in=[
+                    PublicAccessLevel.PUBLIC, 
+                    PublicAccessLevel.RESTRICTED
+                ]
+            )
+        # Staff/admin users see all resources (no additional filtering)
+        
         # Apply filters
         return self.apply_filters(queryset).order_by('-created_at')
+    
+    def _get_accessible_sources(self):
+        """Get list of sources accessible to current user."""
+        # Start with all resources
+        queryset = Resource.objects.all()
+        
+        # Debug mode - show all sources in development
+        if settings.DEBUG and self.request.GET.get('debug') == 'true':
+            return queryset.values_list('source', flat=True).distinct().order_by('source')
+        
+        # Apply access control based on user permissions
+        if not self.request.user.is_authenticated:
+            # Anonymous users see only public approved resources
+            queryset = queryset.filter(
+                public_access_level=PublicAccessLevel.PUBLIC,
+                is_public_approved=True
+            )
+        elif not self.request.user.has_perm('metadata.view_all_resources'):
+            # Authenticated users see public + restricted resources
+            queryset = queryset.filter(
+                public_access_level__in=[
+                    PublicAccessLevel.PUBLIC, 
+                    PublicAccessLevel.RESTRICTED
+                ]
+            )
+        # Staff/admin users see all resources (no additional filtering)
+        
+        return queryset.values_list('source', flat=True).distinct().order_by('source')
     
     def apply_filters(self, queryset):
         """Apply various filters based on request parameters"""
@@ -116,10 +164,7 @@ class DataExplorerView(ListView):
                 {'value': 'as_object', 'label': 'Used as Object'},
                 {'value': 'no_triples', 'label': 'No Triple References'},
             ],
-            'sources': Resource.objects.filter(
-                public_access_level=PublicAccessLevel.PUBLIC,
-                is_public_approved=True
-            ).values_list('source', flat=True).distinct().order_by('source'),
+            'sources': self._get_accessible_sources(),
         }
         
         # Current filters for template
@@ -141,11 +186,32 @@ class ResourceDetailView(DetailView):
     context_object_name = 'resource'
     
     def get_queryset(self):
-        """Only show public approved resources"""
-        return Resource.objects.filter(
-            public_access_level=PublicAccessLevel.PUBLIC,
-            is_public_approved=True
-        ).select_related('organization')
+        """Get resources with appropriate access control."""
+        # Start with all resources
+        queryset = Resource.objects.all().select_related('organization')
+        
+        # Debug mode - show all resources in development
+        if settings.DEBUG and self.request.GET.get('debug') == 'true':
+            return queryset
+        
+        # Apply access control based on user permissions
+        if not self.request.user.is_authenticated:
+            # Anonymous users see only public approved resources
+            queryset = queryset.filter(
+                public_access_level=PublicAccessLevel.PUBLIC,
+                is_public_approved=True
+            )
+        elif not self.request.user.has_perm('metadata.view_all_resources'):
+            # Authenticated users see public + restricted resources
+            queryset = queryset.filter(
+                public_access_level__in=[
+                    PublicAccessLevel.PUBLIC, 
+                    PublicAccessLevel.RESTRICTED
+                ]
+            )
+        # Staff/admin users see all resources (no additional filtering)
+        
+        return queryset
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)

@@ -1,134 +1,157 @@
-<div class="card bg-base-100 shadow-xl">
-    <div class="card-body">
-        <div class="flex justify-between items-center mb-6">
-            <h2 class="card-title text-2xl">Results</h2>
-            <div class="badge badge-primary badge-lg">{{ page_obj.paginator.count }} resources</div>
-        </div>
-        
-        <!-- Card-based layout for better visibility -->
-        <div class="space-y-4">
-            {% for resource in resources %}
-            <div class="card bg-base-200 shadow-md hover:shadow-lg transition-shadow">
-                <div class="card-body p-6">
-                    <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-                        <!-- Resource Information -->
-                        <div class="flex-1">
-                            <div class="flex flex-col gap-2">
-                                <div class="flex items-center gap-2 flex-wrap">
-                                    <div class="badge badge-sm
-                                        {% if resource.resource_type == 'IRI' %}badge-info
-                                        {% elif resource.resource_type == 'CLASS' %}badge-secondary
-                                        {% elif resource.resource_type == 'PROPERTY' %}badge-accent
-                                        {% elif resource.resource_type == 'LITERAL' %}badge-success
-                                        {% endif %}">
-                                        {{ resource.get_resource_type_display }}
-                                    </div>
-                                    {% if resource.is_placeholder %}
-                                        <div class="badge badge-warning badge-sm">Placeholder</div>
-                                    {% endif %}
-                                </div>
-                                
-                                <div class="text-lg font-medium">
-                                    {% if resource.resource_type == 'LITERAL' %}
-                                        <code class="bg-neutral text-neutral-content px-3 py-2 rounded-lg text-sm inline-block">
-                                            "{{ resource.value|truncatechars:80 }}"
-                                            {% if resource.language %}@{{ resource.language }}{% endif %}
-                                            {% if resource.datatype %}^^{{ resource.datatype|slice:":30" }}{% endif %}
-                                        </code>
-                                    {% elif resource.uri %}
-                                        <a href="{{ resource.uri }}" target="_blank" class="link link-primary hover:link-hover" title="{{ resource.uri }}">
-                                            {{ resource.uri|truncatechars:80 }}
-                                        </a>
-                                    {% elif resource.name %}
-                                        <strong>{{ resource.name }}</strong>
-                                    {% else %}
-                                        <em class="text-base-content/70">Resource {{ resource.id }}</em>
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Metadata -->
-                        <div class="flex flex-col lg:flex-row lg:items-center gap-4">
-                            <div class="flex flex-col gap-2">
-                                <div class="text-sm text-base-content/70">
-                                    <strong>Source:</strong>
-                                    {% if resource.source %}
-                                        <code class="bg-base-300 px-2 py-1 rounded text-xs">{{ resource.source }}</code>
-                                    {% else %}
-                                        <span class="text-base-content/50">-</span>
-                                    {% endif %}
-                                </div>
-                                
-                                <div class="text-sm">
-                                    <strong class="text-base-content/70">Triple Usage:</strong>
-                                    <div class="flex gap-1 mt-1 flex-wrap">
-                                        {% if resource.subject_count %}
-                                            <span class="badge badge-outline badge-sm">S:{{ resource.subject_count }}</span>
-                                        {% endif %}
-                                        {% if resource.predicate_count %}
-                                            <span class="badge badge-outline badge-sm">P:{{ resource.predicate_count }}</span>
-                                        {% endif %}
-                                        {% if resource.object_count %}
-                                            <span class="badge badge-outline badge-sm">O:{{ resource.object_count }}</span>
-                                        {% endif %}
-                                        {% if not resource.subject_count and not resource.predicate_count and not resource.object_count %}
-                                            <span class="text-base-content/50 text-sm">No triples</span>
-                                        {% endif %}
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- Action Button -->
-                            <div class="flex-shrink-0">
-                                <button class="btn btn-primary btn-md"
-                                        hx-get="{% url 'metadata:resource_detail_modal' resource.pk %}"
-                                        hx-target="#modal-content"
-                                        onclick="document.getElementById('resource-modal').showModal()">
-                                    View Details
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            {% empty %}
-            <div class="card bg-base-200 shadow-md">
-                <div class="card-body text-center py-12">
-                    <div class="text-base-content/60">
-                        <div class="text-xl mb-2">No resources found</div>
-                        <div class="text-sm">Try adjusting your filters or search terms</div>
-                    </div>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-    </div>
-    
-    <!-- Pagination -->
-    {% if page_obj.has_other_pages %}
-    <div class="card-actions justify-center pt-6">
-        <div class="join">
-            {% if page_obj.has_previous %}
-                <button class="join-item btn btn-outline btn-md"
-                        hx-get="{% url 'metadata:data_explorer_results' %}?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}"
-                        hx-target="#results-pane">
-                    Previous
-                </button>
-            {% endif %}
-            
-            <button class="join-item btn btn-primary btn-md">
-                Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
-            </button>
-            
-            {% if page_obj.has_next %}
-                <button class="join-item btn btn-outline btn-md"
-                        hx-get="{% url 'metadata:data_explorer_results' %}?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}"
-                        hx-target="#results-pane">
-                    Next
-                </button>
-            {% endif %}
-        </div>
-    </div>
-    {% endif %}
+<!-- Results Header -->
+<div class="flex justify-between items-center mb-6">
+    <h2 class="text-2xl font-bold text-primary flex items-center gap-2">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+        </svg>
+        Results
+    </h2>
+    <div class="badge badge-primary badge-lg">{{ page_obj.paginator.count }} resources</div>
 </div>
+
+<!-- Results Table -->
+{% if resources %}
+<div class="overflow-x-auto">
+    <table class="table table-zebra w-full">
+        <thead>
+            <tr>
+                <th class="text-left w-32">Type</th>
+                <th class="text-left">Resource</th>
+                <th class="text-left w-20">Source</th>
+                <th class="text-left w-24">Triples</th>
+                <th class="text-center w-20">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for resource in resources %}
+            <tr class="hover">
+                <!-- Resource Type -->
+                <td class="text-center">
+                    <div class="flex flex-col items-center gap-1">
+                        <div class="badge badge-sm font-semibold
+                            {% if resource.resource_type == 'IRI' %}badge-info
+                            {% elif resource.resource_type == 'CLASS' %}badge-secondary
+                            {% elif resource.resource_type == 'PROPERTY' %}badge-accent
+                            {% elif resource.resource_type == 'LITERAL' %}badge-success
+                            {% endif %}">
+                            {{ resource.get_resource_type_display }}
+                        </div>
+                        {% if resource.is_placeholder %}
+                            <div class="badge badge-warning badge-xs">Placeholder</div>
+                        {% endif %}
+                    </div>
+                </td>
+                
+                <!-- Resource Display -->
+                <td class="max-w-md">
+                    {% if resource.resource_type == 'LITERAL' %}
+                        <div class="font-mono text-sm bg-neutral text-neutral-content px-3 py-2 rounded inline-block max-w-full">
+                            <span class="text-success">"</span>{{ resource.value|truncatechars:80 }}<span class="text-success">"</span>
+                            {% if resource.language %}
+                                <span class="text-warning">@{{ resource.language }}</span>
+                            {% endif %}
+                            {% if resource.datatype %}
+                                <span class="text-info">^^{{ resource.datatype|slice:":20" }}</span>
+                            {% endif %}
+                        </div>
+                    {% elif resource.uri %}
+                        <a href="{{ resource.uri }}" target="_blank" class="link link-primary hover:link-hover font-medium break-all" title="{{ resource.uri }}">
+                            {{ resource.uri|truncatechars:120 }}
+                        </a>
+                    {% elif resource.name %}
+                        <div class="font-semibold">{{ resource.name }}</div>
+                    {% else %}
+                        <div class="text-base-content/70 font-medium">Resource {{ resource.id }}</div>
+                    {% endif %}
+                </td>
+                
+                <!-- Source -->
+                <td>
+                    {% if resource.source %}
+                        <code class="bg-base-300 px-2 py-1 rounded text-sm">{{ resource.source }}</code>
+                    {% else %}
+                        <span class="text-base-content/50">-</span>
+                    {% endif %}
+                </td>
+                
+                <!-- Triple Usage -->
+                <td>
+                    <div class="flex gap-1">
+                        {% if resource.subject_count %}
+                            <span class="badge badge-outline badge-xs">S:{{ resource.subject_count }}</span>
+                        {% endif %}
+                        {% if resource.predicate_count %}
+                            <span class="badge badge-outline badge-xs">P:{{ resource.predicate_count }}</span>
+                        {% endif %}
+                        {% if resource.object_count %}
+                            <span class="badge badge-outline badge-xs">O:{{ resource.object_count }}</span>
+                        {% endif %}
+                        {% if not resource.subject_count and not resource.predicate_count and not resource.object_count %}
+                            <span class="text-base-content/50 text-xs">No triples</span>
+                        {% endif %}
+                    </div>
+                </td>
+                
+                <!-- Action Button -->
+                <td class="text-center">
+                    <button class="btn btn-primary btn-sm"
+                            hx-get="{% url 'metadata:resource_detail_modal' resource.pk %}"
+                            hx-target="#modal-content"
+                            onclick="document.getElementById('resource-modal').showModal()">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                        View
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<!-- Empty State -->
+<div class="text-center py-16">
+    <div class="text-base-content/60">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+        <div class="text-xl mb-2 font-semibold">No resources found</div>
+        <div class="text-sm">Try adjusting your filters or search terms</div>
+    </div>
+</div>
+{% endif %}
+    
+<!-- Pagination -->
+{% if page_obj.has_other_pages %}
+<div class="flex justify-center pt-8">
+    <div class="join">
+        {% if page_obj.has_previous %}
+            <button class="join-item btn btn-outline"
+                    hx-get="{% url 'metadata:data_explorer_results' %}?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}"
+                    hx-target="#results-pane">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                </svg>
+                Previous
+            </button>
+        {% endif %}
+        
+        <button class="join-item btn btn-primary">
+            Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+        </button>
+        
+        {% if page_obj.has_next %}
+            <button class="join-item btn btn-outline"
+                    hx-get="{% url 'metadata:data_explorer_results' %}?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}"
+                    hx-target="#results-pane">
+                Next
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+            </button>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
