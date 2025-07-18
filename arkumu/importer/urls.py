@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import import_views, ingest_views
+from .views import import_views, ingest_views, progress_views, mock_views
 
 app_name = "importer"
 
@@ -33,6 +33,14 @@ urlpatterns = [
     
     # Task status polling endpoint  
     path("task-status/<str:task_id>/", import_views.task_status_view, name="task_status"),
+    
+    # Progress polling endpoint for HTMX
+    path("progress/<uuid:session_pk>/", progress_views.import_progress_view, name="import_progress"),
+    
+    # Mock testing endpoints for development
+    path("mock/test-interface/", mock_views.mock_test_interface, name="mock_test_interface"),
+    path("mock/start-import/", mock_views.start_mock_import, name="start_mock_import"),
+    path("mock/progress/<uuid:session_pk>/", mock_views.mock_import_progress, name="mock_import_progress"),
     
     # Database management endpoints (development utilities)
     path("reset-database/", import_views.reset_database, name="reset_database"),

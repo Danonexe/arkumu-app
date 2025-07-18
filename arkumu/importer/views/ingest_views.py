@@ -1648,9 +1648,10 @@ def start_import(request):
         
         logger.info(f"Started mapping-aware import for {len(selected_files)} files with mapping '{current_mapping['name']}' (ID: {current_mapping['id']})")
         
-        # Return progress display template for SSE updates
-        return render(request, 'importer/partials/progress_display.html', {
-            'session': ingest_session
+        # Return progress display template for HTMX polling
+        return render(request, 'importer/partials/progress_display_polling.html', {
+            'session': ingest_session,
+            'should_poll': True
         })
         
     except Exception as e:
@@ -1710,9 +1711,10 @@ def start_import_session(request, session_pk):
         
         logger.info(f"Started import for session {session.pk} with {len(session.file_paths)} files")
         
-        # Return progress display template for SSE updates
-        return render(request, 'importer/partials/progress_display.html', {
-            'session': session
+        # Return progress display template for HTMX polling
+        return render(request, 'importer/partials/progress_display_polling.html', {
+            'session': session,
+            'should_poll': True
         })
         
     except IngestSession.DoesNotExist:

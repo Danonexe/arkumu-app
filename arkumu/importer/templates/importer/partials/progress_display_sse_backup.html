@@ -73,6 +73,15 @@
 </div>
 
 <script>
+// Override HTMX's createEventSource to include credentials
+if (typeof htmx !== 'undefined') {
+    htmx.createEventSource = function(url) {
+        // EventSource always sends cookies for same-origin requests
+        // but we need to ensure the URL is absolute
+        return new EventSource(url, {withCredentials: true});
+    };
+}
+
 // Handle SSE progress events for import session {{ session.pk }}
 document.addEventListener('DOMContentLoaded', function() {
     const progressDiv = document.getElementById('import-progress-{{ session.pk }}');

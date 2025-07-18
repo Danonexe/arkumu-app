@@ -55,7 +55,7 @@ class SSEAuthMiddleware:
                     session = IngestSession.objects.get(pk=session_pk)
                     
                     # Check authentication and ownership
-                    if not request.user.is_authenticated:
+                    if not hasattr(request, 'user') or request.user is None or not request.user.is_authenticated:
                         logger.warning(f"Unauthenticated user attempted to access channel: {channel}")
                         return HttpResponseForbidden("Authentication required")
                     

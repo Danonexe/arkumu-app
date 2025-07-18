@@ -299,7 +299,7 @@ def run_mapping_aware_import_workflow(
             "rows_processed": metrics.rows_processed,
             "resources_created": metrics.resources_created,
             "triples_created": metrics.triples_created,
-            "values_created": metrics.values_created,
+            "properties_created": metrics.properties_created,
             "processing_time_seconds": processing_time,
             "execution_strategy": "mapping_aware",
             "mapping_id": mapping_id,
@@ -313,7 +313,7 @@ def run_mapping_aware_import_workflow(
         success_message = (
             f"Mapping-aware import for '{dataset_name}' completed successfully using mapping '{mapping.name}'. "
             f"Processed: {metrics.rows_processed} rows in {processing_time:.2f}s. "
-            f"Created: {metrics.resources_created} resources, {metrics.triples_created} triples, {metrics.values_created} values."
+            f"Created: {metrics.resources_created} resources, {metrics.triples_created} triples, {metrics.properties_created} properties."
         )
         
         logger.info("=== MAPPING-AWARE IMPORT RESULTS ===")

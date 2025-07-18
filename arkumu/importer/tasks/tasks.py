@@ -1,13 +1,13 @@
 """
-Huey Task for Import Processing with SSE Progress Updates
+Huey Task for Import Processing with Cache-Based Progress Updates
 
 This module contains the Huey task for running import jobs asynchronously
-with real-time progress updates via Server-Sent Events (SSE).
+with real-time progress updates via cache-based storage for HTMX polling.
 """
 
 import logging
 from huey.contrib.djhuey import task
-from arkumu.importer.utils.progress import publish_progress, create_channel_id
+from arkumu.importer.utils.progress import publish_progress
 from arkumu.importer.models import IngestSession
 
 logger = logging.getLogger(__name__)
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 @task()
 def run_import(session_pk: int):
     """
-    Run import job asynchronously with progress updates.
+    Run import job asynchronously with cache-based progress updates.
     
     Args:
         session_pk: Primary key of the IngestSession to process
@@ -26,18 +26,17 @@ def run_import(session_pk: int):
     """
     try:
         session = IngestSession.objects.get(pk=session_pk)
-        channel = create_channel_id(session_pk)
         
         logger.info(f"Starting import for session {session_pk}")
         
-        # Update status
+        # Update status and initial progress
         session.mark_started()
-        
-        # Initial notification
-        publish_progress(channel, {
+        publish_progress(str(session_pk), {
             'status': 'started',
             'message': 'Import job started',
-            'percentage': 0
+            'percentage': 0,
+            'processed': 0,
+            'total': 0
         })
         
         # Import the processor here to avoid circular imports
@@ -67,19 +66,38 @@ def run_import(session_pk: int):
             if not execution_config or not execution_config.datasets:
                 logger.warning(f"No valid execution config for session {session_pk}")
                 session.mark_completed({'message': 'No valid configuration'})
+                publish_progress(str(session_pk), {
+                    'status': 'completed',
+                    'message': 'No valid configuration found',
+                    'percentage': 100,
+                    'processed': 0,
+                    'total': 0
+                }, event='complete')
                 return
             
             # Create mock CSV sources for testing
             # In production, this would load actual CSV data
             csv_sources = {}
+            total_rows = 0
             for dataset in execution_config.datasets:
+                mock_rows = [
+                    {'id': '1', 'name': 'Test 1', 'value': 'Value 1'},
+                    {'id': '2', 'name': 'Test 2', 'value': 'Value 2'},
+                ]
                 csv_sources[dataset.dataset_name] = {
                     'headers': ['id', 'name', 'value'],
-                    'rows': [
-                        {'id': '1', 'name': 'Test 1', 'value': 'Value 1'},
-                        {'id': '2', 'name': 'Test 2', 'value': 'Value 2'},
-                    ]
+                    'rows': mock_rows
                 }
+                total_rows += len(mock_rows)
+            
+            # Update progress with total count
+            publish_progress(str(session_pk), {
+                'status': 'processing',
+                'message': 'Processing data...',
+                'percentage': 25,
+                'processed': 0,
+                'total': total_rows
+            })
             
             # Run processor with entity-centric strategy
             from arkumu.importer.services.mapping_consumer import ProcessingStrategy
@@ -100,10 +118,12 @@ def run_import(session_pk: int):
         # Success notification
         session.mark_completed(session.ingestion_stats)
         
-        publish_progress(channel, {
-            'status': 'complete',
+        publish_progress(str(session_pk), {
+            'status': 'completed',
             'message': 'Import completed successfully',
-            'percentage': 100
+            'percentage': 100,
+            'processed': session.ingestion_stats.get('rows_processed', 0),
+            'total': session.ingestion_stats.get('rows_processed', 0)
         }, event='complete')
         
         logger.info(f"Import completed successfully for session {session_pk}")
@@ -119,8 +139,8 @@ def run_import(session_pk: int):
         # Error handling - session is guaranteed to exist here
         session.mark_failed(str(exc))
         
-        publish_progress(channel, {
-            'status': 'error',
+        publish_progress(str(session_pk), {
+            'status': 'failed',
             'message': f'Import failed: {str(exc)}',
             'percentage': session.get_progress_percentage()
         }, event='error')

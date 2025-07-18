@@ -61,15 +61,7 @@ CACHES = {
     }
 }
 
-# SSE (Server-Sent Events) Configuration
-# ------------------------------------------------------------------------------
-# django-eventstream configuration
-EVENTSTREAM_STORAGE_CLASS = 'django_eventstream.storage.RedisStorage'
-EVENTSTREAM_REDIS_CONNECTION = {
-    'host': env('REDIS_HOST', default='redis'),
-    'port': env.int('REDIS_PORT', default=6379),
-    'db': env.int('EVENTSTREAM_REDIS_DB', default=0),  # Using same DB as Huey by default
-}
+# SSE configuration removed - migrated to HTMX polling
 
 # DATABASES
 # ------------------------------------------------------------------------------
@@ -113,7 +105,6 @@ THIRD_PARTY_APPS = [
     "drf_spectacular",
     "modeltranslation",
     "huey.contrib.djhuey",
-    "django_eventstream",
 ]
 
 LOCAL_APPS = [
@@ -179,7 +170,6 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "allauth.account.middleware.AccountMiddleware",
-    "arkumu.importer.middleware.SSEAuthMiddleware",
 
 ]
 
