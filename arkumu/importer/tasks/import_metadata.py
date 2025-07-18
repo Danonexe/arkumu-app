@@ -260,11 +260,24 @@ def run_mapping_aware_import_workflow(
         # Initialize execution statistics
         execution_statistics = ExecutionStatistics()
         
-        # Initialize processor
+        # Get session for progress updates
+        session = None
+        channel_id = None
+        if upload_session_id:
+            try:
+                session = IngestSession.objects.get(id=upload_session_id)
+                from arkumu.importer.utils.progress import create_channel_id
+                channel_id = create_channel_id(session.pk)
+            except IngestSession.DoesNotExist:
+                logger.warning(f"Task {actual_task_id or 'UnknownID'}: IngestSession with ID {upload_session_id} not found")
+        
+        # Initialize processor with session and channel_id for progress updates
         processor = MappingAwareProcessor(
             institution=institution,
             base_uri=base_uri,
-            statistics=execution_statistics
+            statistics=execution_statistics,
+            channel_id=channel_id,
+            session=session
         )
         
         # Track processing time like in the test
