@@ -48,11 +48,16 @@ def run_import(session_pk: int):
         # Create statistics tracker
         statistics = ExecutionStatistics()
         
-        # Initialize processor
+        # Initialize processor with channel_id and session for progress updates
+        from arkumu.importer.utils.progress import create_channel_id
+        channel_id = create_channel_id(session_pk)
+        
         processor = MappingAwareProcessor(
             institution=session.organization.code,
             base_uri=session.base_uri,
-            statistics=statistics
+            statistics=statistics,
+            channel_id=channel_id,
+            session=session
         )
         
         # Translate mapping configuration
