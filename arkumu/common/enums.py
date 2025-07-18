@@ -9,3 +9,10 @@ class UpdateStrategy(Enum):
     MERGE_TRIPLES = "merge_triples"  # Add new triples, keep existing ones
     REPLACE_ALL = "replace_all"      # Replace all data for the entity
     TIMESTAMP_BASED = "timestamp_based"  # Use timestamps to determine updates
+
+
+class LiteralURIStrategy(Enum):
+    """Strategies for generating literal URIs."""
+    CONTEXTUAL = "contextual"  # Context-based URIs with institution prefix (legacy)
+    CANONICAL = "canonical"    # Canonical content-based URIs
+    SEMANTIC = "semantic"      # Semantic type-based URIs with datatype path

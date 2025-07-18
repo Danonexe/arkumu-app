@@ -11,6 +11,7 @@ from arkumu.metadata.models import Resource
 from arkumu.metadata.models.resource import ResourceType
 from arkumu.metadata.models.triples import Triple
 from arkumu.common.uri_utils import mint_uri, slugify_uri_part
+from arkumu.common.enums import LiteralURIStrategy
 # Define MAX_INDEXED_VALUE_SIZE locally since bulk_data_analyzer was removed
 MAX_INDEXED_VALUE_SIZE = 1000  # Maximum size for indexed values in bytes
 from .statistics import ExecutionStatistics
@@ -98,6 +99,35 @@ class ResourceManager:
         safe_dataset_name = slugify_uri_part(dataset_name)
         safe_row_id = slugify_uri_part(str(row_id))
         return mint_uri(self.base_uri, self.institution, "datasets", safe_dataset_name, "rows", safe_row_id)
+    
+    def create_canonical_literal_uri(self, value: str, datatype: str = None, strategy: LiteralURIStrategy = LiteralURIStrategy.CANONICAL) -> str:
+        """
+        Generate canonical URI for literal values.
+        
+        Args:
+            value: The literal value
+            datatype: Optional datatype URI
+            strategy: URI generation strategy
+            
+        Returns:
+            Canonical URI for the literal
+        """
+        import hashlib
+        
+        # Content-only hash for canonical URIs
+        value_hash = hashlib.sha256(value.encode('utf-8')).hexdigest()
+        
+        if strategy == LiteralURIStrategy.SEMANTIC and datatype:
+            # Extract simple type name from URI for semantic URIs
+            type_name = datatype.split('/')[-1].split('#')[-1]
+            type_slug = slugify_uri_part(type_name)
+            return f"{self.base_uri}/literals/{type_slug}/{value_hash[:16]}"
+        elif strategy == LiteralURIStrategy.CANONICAL:
+            return f"{self.base_uri}/literals/{value_hash[:16]}"
+        else:
+            # Legacy contextual URIs (existing behavior)
+            value_identifier = f"{slugify_uri_part(value[:50])}-{value_hash[:8]}"
+            return mint_uri(self.base_uri, self.institution, "values", value_identifier)
     
     
     
@@ -393,10 +423,9 @@ class ResourceManager:
                 
                 # Generate URI for the literal if it was just created
                 if created:
-                    # Use hash suffix to ensure URI uniqueness even for identical truncated values
-                    value_identifier = f"{slugify_uri_part(object_value[:50])}-{value_hash[:8]}"
-                    value_uri = mint_uri(self.base_uri, self.institution, "values", value_identifier)
-                    value_resource.uri = value_uri
+                    # Use canonical literal URI generation
+                    canonical_uri = self.create_canonical_literal_uri(object_value, datatype)
+                    value_resource.uri = canonical_uri
                     value_resource.save()
                 
                 # Create the triple

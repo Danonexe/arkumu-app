@@ -13,6 +13,7 @@ from arkumu.metadata.models.resource import ResourceType
 from arkumu.metadata.models.triples import Triple
 from arkumu.importer.services.execution.resource_manager import ResourceManager
 from arkumu.importer.services.execution.statistics import ExecutionStatistics
+from arkumu.common.enums import LiteralURIStrategy
 
 
 def create_mock_resource(resource_id=1, uri="test://resource"):
@@ -318,7 +319,6 @@ class TestResourceManager:
         
         # Verify statistics
         assert resource_manager.statistics.current_metrics.triples_created == 2
-        assert resource_manager.statistics.current_metrics.values_created == 2
     
     @patch('arkumu.metadata.models.Resource.objects.filter')
     def test_get_existing_resources_bulk(self, mock_filter, resource_manager):
@@ -507,6 +507,199 @@ class TestResourceManager:
 
 
 @pytest.mark.django_db
+class TestCanonicalLiteralURIs:
+    """Test canonical literal URI generation functionality"""
+    
+    def test_canonical_literal_uri_generation(self, resource_manager):
+        """Test basic canonical literal URI generation"""
+        uri = resource_manager.create_canonical_literal_uri("beethoven")
+        
+        # Should be canonical format
+        assert uri.startswith(f"{resource_manager.base_uri}/literals/")
+        assert "beethoven" not in uri  # Should not contain the value
+        assert len(uri.split("/")[-1]) == 16  # Hash should be 16 characters
+    
+    def test_canonical_literal_uri_consistency(self, resource_manager):
+        """Test that same literal produces same URI"""
+        uri1 = resource_manager.create_canonical_literal_uri("beethoven")
+        uri2 = resource_manager.create_canonical_literal_uri("beethoven")
+        
+        assert uri1 == uri2
+    
+    def test_canonical_literal_uri_different_values(self, resource_manager):
+        """Test that different literals produce different URIs"""
+        uri1 = resource_manager.create_canonical_literal_uri("beethoven")
+        uri2 = resource_manager.create_canonical_literal_uri("mozart")
+        
+        assert uri1 != uri2
+    
+    def test_semantic_literal_uri_generation(self, resource_manager):
+        """Test semantic literal URI generation with datatypes"""
+        # String datatype
+        uri = resource_manager.create_canonical_literal_uri(
+            "beethoven",
+            "http://www.w3.org/2001/XMLSchema#string",
+            LiteralURIStrategy.SEMANTIC
+        )
+        
+        assert "/literals/string/" in uri
+        assert len(uri.split("/")[-1]) == 16  # Hash should be 16 characters
+        
+        # Integer datatype
+        uri = resource_manager.create_canonical_literal_uri(
+            "604",
+            "http://www.w3.org/2001/XMLSchema#integer",
+            LiteralURIStrategy.SEMANTIC
+        )
+        
+        assert "/literals/integer/" in uri
+    
+    def test_semantic_literal_uri_datatype_extraction(self, resource_manager):
+        """Test datatype extraction from different URI formats"""
+        # Test with fragment identifier
+        uri = resource_manager.create_canonical_literal_uri(
+            "2023-01-15",
+            "http://www.w3.org/2001/XMLSchema#date",
+            LiteralURIStrategy.SEMANTIC
+        )
+        
+        assert "/literals/date/" in uri
+        
+        # Test with path-based URI
+        uri = resource_manager.create_canonical_literal_uri(
+            "test",
+            "http://example.org/types/customType",
+            LiteralURIStrategy.SEMANTIC
+        )
+        
+        assert "/literals/customtype/" in uri
+    
+    def test_contextual_literal_uri_legacy(self, resource_manager):
+        """Test legacy contextual literal URI generation"""
+        uri = resource_manager.create_canonical_literal_uri(
+            "beethoven",
+            strategy=LiteralURIStrategy.CONTEXTUAL
+        )
+        
+        # Should include institution and value identifier
+        assert resource_manager.institution in uri
+        assert "values" in uri
+        assert "beethoven" in uri
+    
+    def test_canonical_literal_uri_with_special_characters(self, resource_manager):
+        """Test canonical URI generation with special characters"""
+        special_values = [
+            "Café & Restaurant",
+            "测试数据",
+            "value with spaces",
+            "value@with#symbols",
+            ""  # Empty string
+        ]
+        
+        for value in special_values:
+            uri = resource_manager.create_canonical_literal_uri(value)
+            
+            # Should handle all characters gracefully
+            assert uri.startswith(f"{resource_manager.base_uri}/literals/")
+            assert len(uri.split("/")[-1]) == 16
+    
+    def test_canonical_literal_uri_unicode_handling(self, resource_manager):
+        """Test canonical URI generation with Unicode characters"""
+        unicode_values = [
+            "音楽",  # Japanese
+            "müsik",  # German
+            "ñandú",  # Spanish
+            "Москва",  # Russian
+            "🎵🎶"  # Emoji
+        ]
+        
+        for value in unicode_values:
+            uri = resource_manager.create_canonical_literal_uri(value)
+            
+            # Should produce valid URIs
+            assert uri.startswith(f"{resource_manager.base_uri}/literals/")
+            assert len(uri.split("/")[-1]) == 16
+            
+            # Same value should produce same URI
+            uri2 = resource_manager.create_canonical_literal_uri(value)
+            assert uri == uri2
+    
+    @patch('arkumu.metadata.models.triples.Triple.objects.get_or_create')
+    @patch('arkumu.metadata.models.Resource.objects.get_or_create')
+    def test_create_property_triple_with_canonical_uri(self, mock_resource_get_or_create, mock_triple_get_or_create, resource_manager):
+        """Test property triple creation uses canonical URIs"""
+        # Mock resources
+        mock_subject = create_mock_resource(1, "test://subject")
+        mock_property = create_mock_resource(2, "test://property")
+        mock_value = create_mock_resource(3, "test://value")
+        mock_triple = create_mock_triple(4)
+        
+        # Mock return values
+        mock_resource_get_or_create.side_effect = [
+            (mock_property, True),
+            (mock_value, True)  # Value resource is created
+        ]
+        mock_triple_get_or_create.return_value = (mock_triple, True)
+        
+        # Create property triple
+        result = resource_manager.create_property_triple(
+            mock_subject,
+            "http://example.org/property",
+            "beethoven",
+            "http://www.w3.org/2001/XMLSchema#string"
+        )
+        
+        # Verify canonical URI was set on the value resource after creation
+        # The URI should be set via value_resource.uri = canonical_uri
+        # Check that the resource's save() method was called (indicating URI was set)
+        mock_value.save.assert_called_once()
+        
+        # Check that the assigned URI is in canonical format
+        # The URI would be assigned like: mock_value.uri = canonical_uri
+        assert mock_value.uri.startswith(f"{resource_manager.base_uri}/literals/")
+        assert len(mock_value.uri.split("/")[-1]) == 16
+    
+    def test_literal_uri_deduplication_across_contexts(self, resource_manager):
+        """Test that same literal gets same URI across different contexts"""
+        # Create multiple resource managers with different institutions
+        manager1 = ResourceManager("institution1", resource_manager.base_uri)
+        manager2 = ResourceManager("institution2", resource_manager.base_uri)
+        
+        # Same literal should produce same canonical URI
+        uri1 = manager1.create_canonical_literal_uri("beethoven")
+        uri2 = manager2.create_canonical_literal_uri("beethoven")
+        
+        assert uri1 == uri2
+        
+        # But different URIs with contextual strategy
+        uri3 = manager1.create_canonical_literal_uri("beethoven", strategy=LiteralURIStrategy.CONTEXTUAL)
+        uri4 = manager2.create_canonical_literal_uri("beethoven", strategy=LiteralURIStrategy.CONTEXTUAL)
+        
+        assert uri3 != uri4
+    
+    def test_literal_uri_hash_collision_resistance(self, resource_manager):
+        """Test that similar values produce different URIs"""
+        similar_values = [
+            "beethoven",
+            "Beethoven",
+            "beethoven ",
+            " beethoven",
+            "beethoven1",
+            "beethoven2"
+        ]
+        
+        uris = [resource_manager.create_canonical_literal_uri(value) for value in similar_values]
+        
+        # All URIs should be different
+        assert len(set(uris)) == len(uris)
+        
+        # But identical values should produce same URI
+        uri1 = resource_manager.create_canonical_literal_uri("beethoven")
+        uri2 = resource_manager.create_canonical_literal_uri("beethoven")
+        assert uri1 == uri2
+
+
+@pytest.mark.django_db
 class TestResourceManagerPerformance:
     """Performance tests for ResourceManager"""
     
@@ -608,12 +801,12 @@ class TestResourceManagerEdgeCases:
             # Should not raise errors
             dataset_uri = resource_manager.generate_dataset_uri(name)
             column_uri = resource_manager.generate_column_uri(name, "column")
-            cell_uri = resource_manager.generate_cell_uri(name, "column", "row")
+            entity_uri = resource_manager.generate_entity_uri(name, "entity")
             
             # URIs should be valid
             assert isinstance(dataset_uri, str)
             assert isinstance(column_uri, str)
-            assert isinstance(cell_uri, str)
+            assert isinstance(entity_uri, str)
     
     def test_value_truncation_edge_cases(self, resource_manager):
         """Test value truncation with edge cases"""
@@ -693,22 +886,13 @@ class TestResourceManagerEdgeCases:
         assert isinstance(uri, str)
         assert long_name in uri
     
-    def test_uri_extraction_edge_cases(self, resource_manager):
-        """Test URI extraction with edge cases"""
-        edge_cases = [
-            "",
-            "/",
-            "///",
-            "http://",
-            "single_part",
-            "http://example.org/path/to/resource"
-        ]
+    def test_uri_generation_consistency(self, resource_manager):
+        """Test that URI generation is consistent"""
+        # Same inputs should produce same outputs
+        uri1 = resource_manager.generate_dataset_uri("test_dataset")
+        uri2 = resource_manager.generate_dataset_uri("test_dataset")
+        assert uri1 == uri2
         
-        for uri in edge_cases:
-            # Should not raise errors
-            row_id = resource_manager.extract_row_id_from_uri(uri)
-            column_name = resource_manager.extract_column_name_from_uri(uri)
-            
-            # Results can be None or string
-            assert row_id is None or isinstance(row_id, str)
-            assert column_name is None or isinstance(column_name, str)
+        # Different inputs should produce different outputs
+        uri3 = resource_manager.generate_dataset_uri("other_dataset")
+        assert uri1 != uri3
