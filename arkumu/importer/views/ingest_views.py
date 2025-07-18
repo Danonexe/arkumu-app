@@ -1618,6 +1618,7 @@ def start_import(request):
         mapping_obj = Mapping.objects.get(id=current_mapping['id'])
         
         ingest_session = IngestSession.objects.create(
+            user=request.user,
             organization=organization_obj,
             status='pending',
             file_paths=selected_files,
