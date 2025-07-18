@@ -13,6 +13,8 @@ class Triple(UUIDModel):
         indexes = [
             models.Index(fields=['subject', 'predicate']),
             models.Index(fields=['object']),
+            models.Index(fields=['object', 'predicate']),  # For reverse lookup
+            models.Index(fields=['predicate']),  # For relationship type filtering
         ]
         # Add uniqueness constraint to prevent duplicate triples
         constraints = [

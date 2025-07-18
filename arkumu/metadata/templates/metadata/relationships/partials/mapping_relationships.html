@@ -1,0 +1,177 @@
+<!-- Mapping Relationships Content -->
+<div class="space-y-6">
+    <!-- Mapping Header -->
+    <div class="bg-base-200 rounded-lg p-4">
+        <div class="flex items-center justify-between mb-4">
+            <div>
+                <h3 class="text-lg font-semibold">Mapping Relationships</h3>
+                <p class="text-sm text-base-content/70">{{ mapping.name }}</p>
+            </div>
+            <div class="flex gap-2">
+                <span class="badge badge-primary">{{ mapping.organization_id }}</span>
+                <span class="badge badge-outline">{{ relationships.validation_status|default:"Unknown" }}</span>
+            </div>
+        </div>
+        
+        <!-- Mapping Metadata -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="bg-base-100 rounded p-3">
+                <div class="text-sm text-base-content/70">Created</div>
+                <div class="font-semibold">{{ relationships.created_at|date:"M d, Y" }}</div>
+            </div>
+            <div class="bg-base-100 rounded p-3">
+                <div class="text-sm text-base-content/70">Datasets</div>
+                <div class="font-semibold">{{ relationships.workspace_datasets|length }}</div>
+            </div>
+            <div class="bg-base-100 rounded p-3">
+                <div class="text-sm text-base-content/70">Relationships</div>
+                <div class="font-semibold">{{ relationships.fk_relationships|length }}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Workspace Datasets -->
+    {% if relationships.workspace_datasets %}
+    <div class="bg-base-100 rounded-lg border border-base-300 p-4">
+        <h4 class="font-semibold mb-3">Workspace Datasets</h4>
+        <div class="flex flex-wrap gap-2">
+            {% for dataset in relationships.workspace_datasets %}
+                <span class="badge badge-outline">{{ dataset }}</span>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Foreign Key Relationships -->
+    {% if relationships.fk_relationships %}
+    <div class="bg-base-100 rounded-lg border border-base-300 p-4">
+        <h4 class="font-semibold mb-4">Foreign Key Relationships</h4>
+        <div class="space-y-4">
+            {% for rel_name, rel_config in relationships.fk_relationships.items %}
+                <div class="bg-base-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <h5 class="font-semibold">{{ rel_name }}</h5>
+                        <span class="badge badge-primary">{{ rel_config.type|default:"one_to_many" }}</span>
+                    </div>
+                    
+                    <!-- Relationship Details -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="bg-base-100 rounded p-3">
+                            <div class="text-sm text-base-content/70 mb-1">Source Dataset</div>
+                            <div class="font-semibold">{{ rel_config.source }}</div>
+                            {% if rel_config.source_column %}
+                                <div class="text-xs text-base-content/60 mt-1">Column: {{ rel_config.source_column }}</div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="bg-base-100 rounded p-3">
+                            <div class="text-sm text-base-content/70 mb-1">Target Dataset</div>
+                            <div class="font-semibold">{{ rel_config.target }}</div>
+                            {% if rel_config.target_column %}
+                                <div class="text-xs text-base-content/60 mt-1">Column: {{ rel_config.target_column }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <!-- Relationship Visualization -->
+                    <div class="mt-4 flex items-center justify-center">
+                        <div class="flex items-center gap-4">
+                            <div class="text-center">
+                                <div class="w-16 h-10 bg-success text-success-content rounded flex items-center justify-center text-xs font-bold">
+                                    {{ rel_config.source }}
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <svg class="w-6 h-6 text-base-content/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                </svg>
+                                <div class="text-xs text-base-content/70">{{ rel_config.type|default:"one_to_many" }}</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="w-16 h-10 bg-primary text-primary-content rounded flex items-center justify-center text-xs font-bold">
+                                    {{ rel_config.target }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Additional Configuration -->
+                    {% if rel_config.description %}
+                        <div class="mt-3 p-3 bg-base-100 rounded">
+                            <div class="text-sm text-base-content/70 mb-1">Description</div>
+                            <div class="text-sm">{{ rel_config.description }}</div>
+                        </div>
+                    {% endif %}
+                    
+                    <!-- Actions -->
+                    <div class="mt-4 flex gap-2">
+                        <button class="btn btn-xs btn-outline"
+                                hx-get="{% url 'metadata:related_resources_htmx' 'dummy' %}?relationship_type={{ rel_name }}"
+                                hx-target="#relationship-content"
+                                hx-indicator="#loading-indicator">
+                            View Resources
+                        </button>
+                        <button class="btn btn-xs btn-ghost" onclick="copyRelationshipConfig('{{ rel_name }}')">
+                            Copy Config
+                        </button>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% else %}
+        <!-- No Relationships -->
+        <div class="bg-base-100 rounded-lg border border-base-300 p-12">
+            <div class="text-center">
+                <div class="text-base-content/50 mb-4">
+                    <svg class="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+                    </svg>
+                </div>
+                <h3 class="text-lg font-semibold text-base-content mb-2">No relationships defined</h3>
+                <p class="text-base-content/70">This mapping doesn't have any foreign key relationships configured.</p>
+            </div>
+        </div>
+    {% endif %}
+
+    <!-- Mapping Summary -->
+    <div class="bg-base-200 rounded-lg p-4">
+        <h4 class="font-semibold mb-3">Mapping Summary</h4>
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 text-center">
+            <div>
+                <div class="text-2xl font-bold text-primary">{{ relationships.fk_relationships|length }}</div>
+                <div class="text-sm text-base-content/70">FK Relationships</div>
+            </div>
+            <div>
+                <div class="text-2xl font-bold text-secondary">{{ relationships.workspace_datasets|length }}</div>
+                <div class="text-sm text-base-content/70">Datasets</div>
+            </div>
+            <div>
+                <div class="text-2xl font-bold text-accent">{{ mapping.organization_id }}</div>
+                <div class="text-sm text-base-content/70">Organization</div>
+            </div>
+            <div>
+                <div class="text-2xl font-bold text-info">{{ relationships.validation_status|default:"N/A" }}</div>
+                <div class="text-sm text-base-content/70">Status</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Copy functionality -->
+<script>
+function copyRelationshipConfig(relationshipName) {
+    const relationships = {{ relationships.fk_relationships|safe }};
+    const config = relationships[relationshipName];
+    
+    if (config) {
+        const configText = JSON.stringify(config, null, 2);
+        navigator.clipboard.writeText(configText).then(() => {
+            // Show success message (you might want to use a toast library)
+            alert('Relationship configuration copied to clipboard!');
+        }).catch(err => {
+            console.error('Failed to copy: ', err);
+        });
+    }
+}
+</script>

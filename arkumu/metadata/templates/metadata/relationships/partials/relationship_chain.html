@@ -1,0 +1,178 @@
+<!-- Relationship Chain Content -->
+<div class="space-y-6">
+    <!-- Chain Header -->
+    <div class="bg-base-200 rounded-lg p-4">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold">Relationship Chain</h3>
+            <div class="flex gap-2">
+                <button class="btn btn-sm btn-outline" onclick="exportChain()">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                    </svg>
+                    Export
+                </button>
+            </div>
+        </div>
+        
+        <!-- Source and Target Summary -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="bg-base-100 rounded-lg p-3">
+                <h4 class="font-medium text-success mb-2">Source Resource</h4>
+                <div class="space-y-1">
+                    <div class="font-semibold">{{ source.name }}</div>
+                    <div class="text-xs text-base-content/70 font-mono">{{ source.uri }}</div>
+                    <div class="flex gap-2">
+                        <span class="badge badge-outline badge-xs">{{ source.resource_type }}</span>
+                        <span class="badge badge-primary badge-xs">{{ source.source }}</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-base-100 rounded-lg p-3">
+                <h4 class="font-medium text-error mb-2">Target Resource</h4>
+                <div class="space-y-1">
+                    <div class="font-semibold">{{ target.name }}</div>
+                    <div class="text-xs text-base-content/70 font-mono">{{ target.uri }}</div>
+                    <div class="flex gap-2">
+                        <span class="badge badge-outline badge-xs">{{ target.resource_type }}</span>
+                        <span class="badge badge-primary badge-xs">{{ target.source }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chain Visualization -->
+    {% if chain %}
+        <div class="bg-base-100 rounded-lg border border-base-300 p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h4 class="font-semibold">Connection Path</h4>
+                <div class="text-sm text-base-content/70">
+                    {{ chain|length }} step{{ chain|length|pluralize }}
+                </div>
+            </div>
+            
+            <!-- Chain Steps -->
+            <div class="space-y-4">
+                {% for step in chain %}
+                    <div class="flex items-center gap-4">
+                        <!-- Step Number -->
+                        <div class="flex-shrink-0">
+                            <div class="w-8 h-8 bg-primary text-primary-content rounded-full flex items-center justify-center font-bold text-sm">
+                                {{ forloop.counter }}
+                            </div>
+                        </div>
+                        
+                        <!-- Step Content -->
+                        <div class="flex-1 bg-base-200 rounded-lg p-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-semibold">{{ step.source_name }}</span>
+                                    <svg class="w-4 h-4 text-base-content/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                    </svg>
+                                    <span class="font-semibold">{{ step.target_name }}</span>
+                                </div>
+                                <span class="badge badge-outline">{{ step.predicate_name }}</span>
+                            </div>
+                            <div class="text-sm text-base-content/70 space-y-1">
+                                <div><strong>Source:</strong> {{ step.source }}</div>
+                                <div><strong>Target:</strong> {{ step.target }}</div>
+                                <div><strong>Predicate:</strong> {{ step.predicate }}</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Connector line (except for last step) -->
+                    {% if not forloop.last %}
+                        <div class="flex justify-start ml-4">
+                            <div class="w-0.5 h-8 bg-base-content/20"></div>
+                        </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+        
+        <!-- Chain Summary -->
+        <div class="bg-base-200 rounded-lg p-4">
+            <h4 class="font-semibold mb-3">Chain Summary</h4>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+                <div>
+                    <div class="text-2xl font-bold text-primary">{{ chain|length }}</div>
+                    <div class="text-sm text-base-content/70">Total Steps</div>
+                </div>
+                <div>
+                    <div class="text-2xl font-bold text-secondary">{{ chain|length|add:1 }}</div>
+                    <div class="text-sm text-base-content/70">Resources Involved</div>
+                </div>
+                <div>
+                    <div class="text-2xl font-bold text-accent">
+                        {% for step in chain %}
+                            {% if not forloop.first %}{{ step.predicate_name }}{% if not forloop.last %}, {% endif %}{% endif %}
+                        {% endfor %}
+                    </div>
+                    <div class="text-sm text-base-content/70">Relationship Types</div>
+                </div>
+            </div>
+        </div>
+    {% else %}
+        <!-- No Chain Found -->
+        <div class="bg-base-100 rounded-lg border border-base-300 p-12">
+            <div class="text-center">
+                <div class="text-base-content/50 mb-4">
+                    <svg class="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                </div>
+                <h3 class="text-lg font-semibold text-base-content mb-2">No connection found</h3>
+                <p class="text-base-content/70">There is no relationship chain between these two resources.</p>
+                <div class="mt-4">
+                    <button class="btn btn-outline" 
+                            hx-get="{% url 'metadata:related_resources_htmx' source.id %}"
+                            hx-target="#relationship-content"
+                            hx-indicator="#loading-indicator">
+                        View Source Relationships
+                    </button>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+</div>
+
+<!-- Export functionality -->
+<script>
+function exportChain() {
+    const chainData = {
+        source: {
+            name: "{{ source.name }}",
+            uri: "{{ source.uri }}",
+            type: "{{ source.resource_type }}"
+        },
+        target: {
+            name: "{{ target.name }}",
+            uri: "{{ target.uri }}",
+            type: "{{ target.resource_type }}"
+        },
+        chain: [
+            {% for step in chain %}
+            {
+                source: "{{ step.source }}",
+                source_name: "{{ step.source_name }}",
+                target: "{{ step.target }}",
+                target_name: "{{ step.target_name }}",
+                predicate: "{{ step.predicate }}",
+                predicate_name: "{{ step.predicate_name }}"
+            }{% if not forloop.last %},{% endif %}
+            {% endfor %}
+        ]
+    };
+    
+    const blob = new Blob([JSON.stringify(chainData, null, 2)], {type: "application/json"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'relationship-chain.json';
+    a.click();
+    URL.revokeObjectURL(url);
+}
+</script>

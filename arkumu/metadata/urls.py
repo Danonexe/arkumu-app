@@ -1,5 +1,5 @@
 from django.urls import path
-from arkumu.metadata.views import dashboard_views, resource_views, triple_views, graph_views, bulk_editor_views, data_discovery_views, data_explorer_views, split_views, direct_data_views, model_graph_views
+from arkumu.metadata.views import dashboard_views, resource_views, triple_views, graph_views, bulk_editor_views, data_discovery_views, data_explorer_views, split_views, direct_data_views, model_graph_views, resource_relationship_views
 from arkumu.metadata.views.data_explorer import DataExplorerView, ResourceDetailView, DataExplorerResultsView
 from arkumu.metadata.views.csv_mapping import saved_mappings_api
 from arkumu.metadata.views.csv_mapping.views import mapping_validation_views, mapping_save_views, mapping_load_views, mapping_delete_views
@@ -24,8 +24,16 @@ urlpatterns = [
     
     # Resource details (still needed for individual resource pages)
     path('resources/<uuid:resource_id>/', resource_views.resource_detail, name='resource_detail'),
-    path('resources/<uuid:resource_id>/graph/', resource_views.resource_graph, name='resource_graph'),
+    path('resources/<uuid:resource_id>/graph-legacy/', resource_views.resource_graph, name='resource_graph_legacy'),
     path('resource-detail/<uuid:pk>/', ResourceDetailView.as_view(), name='resource_detail_modal'),
+    
+    # Resource Relationship Explorer (HTMX-based)
+    path('resources/<uuid:resource_id>/relationships/', resource_relationship_views.ResourceRelationshipExplorerView.as_view(), name='resource_relationships'),
+    path('resources/<uuid:resource_id>/related/', resource_relationship_views.RelatedResourcesHTMXView.as_view(), name='related_resources_htmx'),
+    path('resources/<uuid:resource_id>/graph/', resource_relationship_views.ResourceGraphHTMXView.as_view(), name='resource_graph_htmx'),
+    path('resources/<uuid:resource_id>/chain/<uuid:target_id>/', resource_relationship_views.RelationshipChainHTMXView.as_view(), name='relationship_chain_htmx'),
+    path('mappings/<uuid:mapping_id>/relationships/', resource_relationship_views.MappingRelationshipsHTMXView.as_view(), name='mapping_relationships_htmx'),
+    path('organizations/<str:org_code>/relationship-types/', resource_relationship_views.OrganizationRelationshipTypesHTMXView.as_view(), name='org_relationship_types_htmx'),
     
     # Graph visualization
     path('dataset-viewer/', graph_views.dataset_viewer_view, name='dataset_viewer'),

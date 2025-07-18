@@ -1,0 +1,188 @@
+<!-- Relationship Types Content -->
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="bg-base-200 rounded-lg p-4">
+        <div class="flex items-center justify-between mb-4">
+            <div>
+                <h3 class="text-lg font-semibold">Relationship Types</h3>
+                <p class="text-sm text-base-content/70">Organization: {{ organization }}</p>
+            </div>
+            <div class="flex gap-2">
+                <span class="badge badge-primary">{{ relationship_types|length }} types</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Relationship Types List -->
+    {% if relationship_types %}
+    <div class="bg-base-100 rounded-lg border border-base-300 p-4">
+        <h4 class="font-semibold mb-4">Available Relationship Types</h4>
+        
+        <!-- Search and Filter -->
+        <div class="mb-4">
+            <input type="text" 
+                   class="input input-bordered w-full" 
+                   placeholder="Search relationship types..."
+                   id="relationship-search"
+                   onkeyup="filterRelationshipTypes()">
+        </div>
+        
+        <!-- Types Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="relationship-types-grid">
+            {% for rel_type in relationship_types %}
+                <div class="bg-base-200 rounded-lg p-4 relationship-type-card" data-type="{{ rel_type }}">
+                    <div class="flex items-center justify-between mb-2">
+                        <h5 class="font-semibold truncate">{{ rel_type|split:"#"|last|split:"/"|last }}</h5>
+                        <button class="btn btn-xs btn-ghost" onclick="copyRelationType('{{ rel_type }}')">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                            </svg>
+                        </button>
+                    </div>
+                    
+                    <div class="text-xs text-base-content/70 font-mono break-all mb-3">
+                        {{ rel_type }}
+                    </div>
+                    
+                    <!-- Type Classification -->
+                    <div class="flex flex-wrap gap-1 mb-3">
+                        {% if "dcterms" in rel_type %}
+                            <span class="badge badge-success badge-xs">Dublin Core</span>
+                        {% elif "foaf" in rel_type %}
+                            <span class="badge badge-info badge-xs">FOAF</span>
+                        {% elif "rdfs" in rel_type %}
+                            <span class="badge badge-warning badge-xs">RDFS</span>
+                        {% elif "owl" in rel_type %}
+                            <span class="badge badge-error badge-xs">OWL</span>
+                        {% else %}
+                            <span class="badge badge-outline badge-xs">Custom</span>
+                        {% endif %}
+                        
+                        {% if "relation" in rel_type %}
+                            <span class="badge badge-primary badge-xs">Relation</span>
+                        {% elif "part" in rel_type %}
+                            <span class="badge badge-secondary badge-xs">Part</span>
+                        {% elif "has" in rel_type %}
+                            <span class="badge badge-accent badge-xs">Has</span>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Actions -->
+                    <div class="flex gap-2">
+                        <button class="btn btn-xs btn-outline flex-1"
+                                hx-get="{% url 'metadata:related_resources_htmx' 'dummy' %}?relationship_type={{ rel_type }}"
+                                hx-target="#relationship-content"
+                                hx-indicator="#loading-indicator">
+                            View Usage
+                        </button>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+    
+    <!-- Statistics -->
+    <div class="bg-base-200 rounded-lg p-4">
+        <h4 class="font-semibold mb-3">Usage Statistics</h4>
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 text-center">
+            <div>
+                <div class="text-2xl font-bold text-primary">{{ relationship_types|length }}</div>
+                <div class="text-sm text-base-content/70">Total Types</div>
+            </div>
+            <div>
+                <div class="text-2xl font-bold text-secondary">
+                    {% for rel_type in relationship_types %}
+                        {% if "dcterms" in rel_type %}{{ forloop.counter }}{% endif %}
+                    {% endfor %}
+                </div>
+                <div class="text-sm text-base-content/70">Dublin Core</div>
+            </div>
+            <div>
+                <div class="text-2xl font-bold text-accent">
+                    {% for rel_type in relationship_types %}
+                        {% if "custom" in rel_type or "arkumu" in rel_type %}{{ forloop.counter }}{% endif %}
+                    {% endfor %}
+                </div>
+                <div class="text-sm text-base-content/70">Custom</div>
+            </div>
+            <div>
+                <div class="text-2xl font-bold text-info">{{ organization }}</div>
+                <div class="text-sm text-base-content/70">Organization</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Type Categories -->
+    <div class="bg-base-100 rounded-lg border border-base-300 p-4">
+        <h4 class="font-semibold mb-4">Common Categories</h4>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Dublin Core Terms -->
+            <div class="bg-base-200 rounded-lg p-3">
+                <h5 class="font-medium mb-2 flex items-center gap-2">
+                    <span class="badge badge-success badge-xs">Dublin Core</span>
+                    Dublin Core Terms
+                </h5>
+                <div class="space-y-1">
+                    {% for rel_type in relationship_types %}
+                        {% if "dcterms" in rel_type %}
+                            <div class="text-xs text-base-content/70">{{ rel_type|split:"#"|last|split:"/"|last }}</div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+            
+            <!-- Custom Types -->
+            <div class="bg-base-200 rounded-lg p-3">
+                <h5 class="font-medium mb-2 flex items-center gap-2">
+                    <span class="badge badge-outline badge-xs">Custom</span>
+                    Custom Types
+                </h5>
+                <div class="space-y-1">
+                    {% for rel_type in relationship_types %}
+                        {% if "dcterms" not in rel_type and "foaf" not in rel_type and "rdfs" not in rel_type and "owl" not in rel_type %}
+                            <div class="text-xs text-base-content/70">{{ rel_type|split:"#"|last|split:"/"|last }}</div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    {% else %}
+        <!-- No Relationship Types -->
+        <div class="bg-base-100 rounded-lg border border-base-300 p-12">
+            <div class="text-center">
+                <div class="text-base-content/50 mb-4">
+                    <svg class="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path>
+                    </svg>
+                </div>
+                <h3 class="text-lg font-semibold text-base-content mb-2">No relationship types found</h3>
+                <p class="text-base-content/70">This organization doesn't have any relationship types defined yet.</p>
+            </div>
+        </div>
+    {% endif %}
+</div>
+
+<!-- Filter and Copy functionality -->
+<script>
+function filterRelationshipTypes() {
+    const searchTerm = document.getElementById('relationship-search').value.toLowerCase();
+    const cards = document.querySelectorAll('.relationship-type-card');
+    
+    cards.forEach(card => {
+        const type = card.dataset.type.toLowerCase();
+        const isVisible = type.includes(searchTerm);
+        card.style.display = isVisible ? 'block' : 'none';
+    });
+}
+
+function copyRelationType(relType) {
+    navigator.clipboard.writeText(relType).then(() => {
+        // Show success message (you might want to use a toast library)
+        alert('Relationship type copied to clipboard!');
+    }).catch(err => {
+        console.error('Failed to copy: ', err);
+    });
+}
+</script>
