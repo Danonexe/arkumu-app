@@ -19,6 +19,7 @@ Key Features:
 """
 
 import logging
+import uuid
 from typing import List, Dict, Optional, Tuple, Set, Any
 from uuid import UUID
 import os
@@ -52,12 +53,15 @@ from arkumu.storage.services.bucket_service import BucketService # Added to down
 from django.core.cache import cache
 from arkumu.importer.models import IngestSession # Import IngestSession instead of UploadSession
 from django.utils import timezone # To set completion time
+from arkumu.importer.services.task_manager import get_task_manager, cancellable_task, CancellationReason
+from huey.exceptions import CancelExecution
 
 # Import progress estimation
 from arkumu.importer.services.progress import progress_estimator, ExecutionStrategy
 
 logger = logging.getLogger(__name__)
 
+@cancellable_task()
 @db_task(retries=1, retry_delay=60)
 def run_mapping_aware_import_workflow(
     s3_bucket_name: str,
@@ -66,9 +70,10 @@ def run_mapping_aware_import_workflow(
     institution: str,
     mapping_id: str,
     base_uri: str = "http://arkumu.org/data",
-    task_id_for_cache: Optional[str] = None,
     upload_session_id: Optional[UUID] = None,
-    csv_sources: Optional[Dict[str, Any]] = None
+    csv_sources: Optional[Dict[str, Any]] = None,
+    update_progress: Optional[callable] = None,
+    task_context: Optional[Any] = None
 ) -> Dict[str, Any]:
     """
     Mapping-aware Huey task that implements the full production integration workflow
@@ -89,21 +94,57 @@ def run_mapping_aware_import_workflow(
     Returns:
         A dictionary containing the status of the import and execution metrics
     """
-    actual_task_id = task_id_for_cache
-    
-    if not actual_task_id and hasattr(run_mapping_aware_import_workflow, 'request') and run_mapping_aware_import_workflow.request.id:
-        actual_task_id = run_mapping_aware_import_workflow.request.id
+    # Check if we have an ImportTask record for this dataset and session
+    actual_task_id = None
+    if upload_session_id:
+        from arkumu.importer.models import ImportTask
+        try:
+            import_task = ImportTask.objects.get(
+                ingest_session_id=upload_session_id,
+                dataset_name=dataset_name,
+                file_path=s3_object_key
+            )
+            actual_task_id = import_task.task_id
+            logger.info(f"Found ImportTask for dataset '{dataset_name}' with task_id: {actual_task_id}")
+        except ImportTask.DoesNotExist:
+            logger.warning(f"No ImportTask found for dataset '{dataset_name}' in session {upload_session_id} - Creating one automatically")
+            # Create missing ImportTask record
+            try:
+                ingest_session = IngestSession.objects.get(id=upload_session_id)
+                unique_task_id = str(uuid.uuid4())
+                
+                import_task = ImportTask.objects.create(
+                    ingest_session=ingest_session,
+                    dataset_name=dataset_name,
+                    file_path=s3_object_key,
+                    task_id=unique_task_id,
+                    status='pending'
+                )
+                actual_task_id = import_task.task_id
+                logger.info(f"Created ImportTask for dataset '{dataset_name}' with task_id: {actual_task_id}")
+            except IngestSession.DoesNotExist:
+                logger.error(f"CRITICAL: IngestSession {upload_session_id} not found - Cannot create ImportTask")
+                raise Exception(f"IngestSession {upload_session_id} not found for dataset '{dataset_name}'")
     
     if not actual_task_id:
-        logger.warning(f"Task ID for caching not available for mapping-aware import: {dataset_name}, S3 key: {s3_object_key}")
+        raise Exception("No task ID available - ImportTask record is required")
     
     # Use consistent cache key pattern with progress view
-    cache_key = f"import_progress_{upload_session_id}" if upload_session_id else None
+    cache_key = f"task_state_{actual_task_id}" if actual_task_id else None
 
     def update_cache_with_phase_info(status: str, message: str, progress: int, 
                                    phase_info: Optional[Dict] = None, 
                                    details: Optional[Dict] = None, 
                                    error_type: Optional[str] = None):
+        # Use the task manager's progress update if available
+        if 'update_progress' in locals() and callable(locals()['update_progress']):
+            try:
+                locals()['update_progress'](progress, phase_info.get('current_phase', 'processing'), message, details)
+            except CancelExecution:
+                raise  # Re-raise cancellation
+            except Exception as e:
+                logger.warning(f"Failed to update via task manager: {e}")
+        
         if cache_key:
             payload = {
                 "status": status,
@@ -121,7 +162,8 @@ def run_mapping_aware_import_workflow(
                 payload["error_type"] = error_type
                 
             cache.set(cache_key, payload, timeout=3600)
-            logger.info(f"Task {actual_task_id or 'UnknownID'}: Cache updated - Status: {status}, Message: {message[:50]}...")
+            logger.info(f"Task {actual_task_id or 'UnknownID'}: Cache updated - Key: {cache_key}, Status: {status}, Message: {message[:50]}...")
+            logger.info(f"Task {actual_task_id or 'UnknownID'}: Cache payload: {payload}")
 
     def update_upload_session_status(status: str, message: Optional[str] = None, files_processed: int = 0, errors_count: int = 0):
         if upload_session_id:
@@ -184,9 +226,21 @@ def run_mapping_aware_import_workflow(
     final_metrics = {}
 
     try:
+        # Add cleanup callback for temporary files
+        if 'task_context' in locals() and actual_task_id:
+            from arkumu.importer.services.task_manager import get_task_manager
+            task_manager = get_task_manager()
+            task_manager.add_cleanup_callback(actual_task_id, lambda: logger.info(f"Cleaning up task {actual_task_id}"))
+        
         # Phase 1: Initialization
         phase_info = get_mapping_phase_info("initialization", 100)
         update_cache_with_phase_info("processing", f"Starting mapping-aware import for {dataset_name}...", 5, phase_info)
+        
+        # Check for cancellation early
+        from huey.exceptions import CancelExecution
+        if cache.get(f"task_cancel_{actual_task_id}", False):
+            logger.info(f"Task {actual_task_id} cancelled during initialization")
+            raise CancelExecution(f"Task {actual_task_id} cancelled during initialization")
         
         # Phase 2: Load and translate mapping using MappingAdapter
         phase_info = get_mapping_phase_info("mapping_load", 25)
@@ -255,6 +309,11 @@ def run_mapping_aware_import_workflow(
         phase_info = get_mapping_phase_info("data_preparation", 100)
         update_cache_with_phase_info("processing", "CSV data sources prepared", 45, phase_info)
         
+        # Check for cancellation before processing
+        if cache.get(f"task_cancel_{actual_task_id}", False):
+            logger.info(f"Task {actual_task_id} cancelled before processing")
+            raise CancelExecution(f"Task {actual_task_id} cancelled before processing")
+        
         # Phase 4: Initialize MappingAwareProcessor and execute
         phase_info = get_mapping_phase_info("mapping_aware_processing", 10)
         update_cache_with_phase_info("processing", "Initializing MappingAwareProcessor...", 50, phase_info)
@@ -288,6 +347,11 @@ def run_mapping_aware_import_workflow(
         
         phase_info = get_mapping_phase_info("mapping_aware_processing", 30)
         update_cache_with_phase_info("processing", "Executing mapping-aware processing...", 60, phase_info)
+        
+        # Final cancellation check before intensive processing
+        if cache.get(f"task_cancel_{actual_task_id}", False):
+            logger.info(f"Task {actual_task_id} cancelled before intensive processing")
+            raise CancelExecution(f"Task {actual_task_id} cancelled before intensive processing")
         
         # Execute the mapping-aware processing using STREAMING_ENTITY_CENTRIC strategy
         metrics = processor.process_with_execution_config(
@@ -332,6 +396,7 @@ def run_mapping_aware_import_workflow(
         )
         
         logger.info("=== MAPPING-AWARE IMPORT RESULTS ===")
+        logger.info(f"Task {actual_task_id or 'UnknownID'}: METRICS DEBUG - resources_created: {metrics.resources_created}, triples_created: {metrics.triples_created}, properties_created: {metrics.properties_created}")
         logger.info(f"Task {actual_task_id or 'UnknownID'}: {success_message}")
         logger.info(f"Task {actual_task_id or 'UnknownID'}: Execution config: {len(execution_config.datasets)} datasets, {sum(len(ds.columns) for ds in execution_config.datasets)} columns, {len(execution_config.fk_relationships)} FK relationships")
         logger.info("=== MAPPING-AWARE IMPORT COMPLETED ===")
@@ -345,6 +410,22 @@ def run_mapping_aware_import_workflow(
             "dataset_name": dataset_name,
             "s3_object_key": s3_object_key,
             **final_metrics
+        }
+        
+    except CancelExecution as e:
+        cancel_message = f"Task cancelled: {str(e)}"
+        logger.info(f"Task {actual_task_id or 'UnknownID'}: {cancel_message}")
+        
+        # Update cache with cancelled status
+        phase_info = get_mapping_phase_info("initialization", 0)
+        update_cache_with_phase_info("cancelled", cancel_message, 0, phase_info, error_type="CancelExecution")
+        update_upload_session_status('cancelled', cancel_message)
+        
+        return {
+            "status": "cancelled",
+            "dataset_name": dataset_name,
+            "message": cancel_message,
+            "cancelled": True
         }
         
     except Exception as e:
@@ -423,7 +504,25 @@ def run_csv_import_workflow_with_mapping(
     Returns:
         A dictionary containing the status of the import and key statistics.
     """
-    actual_task_id = task_id_for_cache  # Prioritize the custom task ID for consistent polling
+    # Use task_id_for_cache if provided, otherwise fall back to upload_session_id
+    # Check if we have an ImportTask record for this dataset and session
+    actual_task_id = None
+    if upload_session_id:
+        from arkumu.importer.models import ImportTask
+        try:
+            import_task = ImportTask.objects.get(
+                ingest_session_id=upload_session_id,
+                dataset_name=dataset_name,
+                file_path=s3_object_key
+            )
+            actual_task_id = import_task.task_id
+            logger.info(f"Found ImportTask for dataset '{dataset_name}' with task_id: {actual_task_id}")
+        except ImportTask.DoesNotExist:
+            logger.info(f"No ImportTask found for dataset '{dataset_name}' in session {upload_session_id}")
+    
+    # Fallback to generated ID if no ImportTask found
+    if not actual_task_id:
+        actual_task_id = task_id_for_cache if task_id_for_cache else str(uuid.uuid4())
     
     # Only use Huey's task ID if no custom ID was provided
     if not actual_task_id and hasattr(run_csv_import_workflow_with_mapping, 'request') and run_csv_import_workflow_with_mapping.request.id:
@@ -432,7 +531,9 @@ def run_csv_import_workflow_with_mapping(
     if not actual_task_id:
         logger.warning(f"Task ID for caching not available for CSV import: {dataset_name}, S3 key: {s3_object_key}. Status polling may not work.")
     
-    cache_key = f"task_status_{actual_task_id}" if actual_task_id else None
+    logger.info(f"Task {actual_task_id}: Starting CSV import for dataset '{dataset_name}' with unique task ID (session: {upload_session_id})")
+    
+    cache_key = f"task_state_{actual_task_id}" if actual_task_id else None
 
     def update_cache(status: str, message: str, progress: int, details: Optional[Dict] = None, error_type: Optional[str] = None):
         if cache_key:
@@ -1042,7 +1143,8 @@ def run_csv_directory_import_workflow(
     Returns:
         A dictionary containing the status of the import and aggregate statistics.
     """
-    actual_task_id = task_id_for_cache
+    # Use task_id_for_cache if provided, otherwise fall back to upload_session_id
+    actual_task_id = task_id_for_cache if task_id_for_cache else (str(upload_session_id) if upload_session_id else str(uuid.uuid4()))
     
     # Only use Huey's task ID if no custom ID was provided
     if not actual_task_id and hasattr(run_csv_directory_import_workflow, 'request') and run_csv_directory_import_workflow.request.id:
@@ -1051,7 +1153,7 @@ def run_csv_directory_import_workflow(
     if not actual_task_id:
         logger.warning(f"Task ID for caching not available for CSV directory import: {dataset_name}, S3 folder: {s3_bucket_name}/{s3_folder_prefix}. Status polling may not work.")
     
-    cache_key = f"task_status_{actual_task_id}" if actual_task_id else None
+    cache_key = f"task_state_{actual_task_id}" if actual_task_id else None
 
     def update_cache(status: str, message: str, progress: int, details: Optional[Dict] = None, error_type: Optional[str] = None):
         if cache_key:
