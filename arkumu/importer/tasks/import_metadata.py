@@ -97,7 +97,8 @@ def run_mapping_aware_import_workflow(
     if not actual_task_id:
         logger.warning(f"Task ID for caching not available for mapping-aware import: {dataset_name}, S3 key: {s3_object_key}")
     
-    cache_key = f"task_status_{actual_task_id}" if actual_task_id else None
+    # Use consistent cache key pattern with progress view
+    cache_key = f"import_progress_{upload_session_id}" if upload_session_id else None
 
     def update_cache_with_phase_info(status: str, message: str, progress: int, 
                                    phase_info: Optional[Dict] = None, 
@@ -107,7 +108,8 @@ def run_mapping_aware_import_workflow(
             payload = {
                 "status": status,
                 "message": message,
-                "progress": progress,
+                "percentage": progress,  # Use 'percentage' to match progress view expectations
+                "event_type": "progress",
                 "timestamp": timezone.now().isoformat()
             }
             
