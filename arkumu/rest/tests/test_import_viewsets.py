@@ -32,11 +32,13 @@ class ImportViewSetTests(TestCase):
         # Clean up the temp directory
         shutil.rmtree(self.temp_dir)
     
-    @patch('arkumu.common.import_service_bridge.bridge_service.import_csv_directory')
+    @patch('arkumu.importer.tasks.import_metadata.run_csv_directory_import_workflow.delay')
     def test_import_directory_with_path(self, mock_import):
         """Test importing from a directory path"""
-        # Mock the import_csv_directory method
-        mock_import.return_value = {"files_processed": 1, "resources_created": 10}
+        # Mock the NEW directory import workflow task
+        mock_task = MagicMock()
+        mock_task.id = 'test-task-123'
+        mock_import.return_value = mock_task
         
         # Make the request
         data = {
@@ -47,21 +49,25 @@ class ImportViewSetTests(TestCase):
         response = self.client.post(self.import_url, data, format='json')
         
         # Assert the response
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data, {"files_processed": 1, "resources_created": 10})
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)  # Async task returns 202
+        self.assertIn("task_id", response.data)
+        self.assertEqual(response.data["task_id"], 'test-task-123')
         
-        # Assert the import_csv_directory was called with correct args
+        # Assert the NEW directory import workflow was called with correct args
         mock_import.assert_called_once()
+        # Check that the task was called with directory processing parameters
         args, kwargs = mock_import.call_args
-        self.assertEqual(kwargs["directory_path"], self.temp_dir)
+        self.assertIn("s3_folder_prefix", kwargs)  # NEW system uses S3
+        self.assertIn("institution", kwargs)
         self.assertEqual(kwargs["institution"], "TEST")
-        self.assertEqual(kwargs["delimiter"], ";")
     
-    @patch('arkumu.common.import_service_bridge.bridge_service.import_csv_directory')
+    @patch('arkumu.importer.tasks.import_metadata.run_csv_directory_import_workflow.delay')
     def test_import_directory_with_zip(self, mock_import):
         """Test importing from a ZIP file upload"""
-        # Mock the import_csv_directory method
-        mock_import.return_value = {"files_processed": 1, "resources_created": 10}
+        # Mock the NEW directory import workflow task
+        mock_task = MagicMock()
+        mock_task.id = 'test-task-456'
+        mock_import.return_value = mock_task
         
         # Create a ZIP file for upload
         with open(self.zip_path, 'rb') as f:
@@ -82,15 +88,16 @@ class ImportViewSetTests(TestCase):
         response = self.client.post(self.import_url, data, format='multipart')
         
         # Assert the response
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data, {"files_processed": 1, "resources_created": 10})
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)  # Async task returns 202
+        self.assertIn("task_id", response.data)
+        self.assertEqual(response.data["task_id"], 'test-task-456')
         
-        # Assert the import_csv_directory was called with correct args
+        # Assert the NEW directory import workflow was called with correct args
         mock_import.assert_called_once()
         args, kwargs = mock_import.call_args
-        self.assertTrue(kwargs["directory_path"].startswith(tempfile.gettempdir()))
+        self.assertIn("s3_folder_prefix", kwargs)  # NEW system uses S3
+        self.assertIn("institution", kwargs)
         self.assertEqual(kwargs["institution"], "TEST")
-        self.assertEqual(kwargs["delimiter"], ";")
     
     def test_import_directory_without_path_or_zip(self):
         """Test that an error is returned when neither path nor zip is provided"""

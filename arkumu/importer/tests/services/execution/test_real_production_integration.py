@@ -141,6 +141,76 @@ class TestRealProductionIntegration:
             logger.error(f"Failed to load/translate test mapping: {e}")
             raise AssertionError(f"Could not load test mapping: {e}")
     
+    def _assert_dataset_entity_linking(self, execution_config):
+        """Assert that dataset-entity linking is working correctly"""
+        logger.info("=== VERIFYING DATASET-ENTITY LINKING ===")
+        
+        # Get the isPartOf property resource
+        is_part_of_uri = "http://purl.org/dc/terms/isPartOf"
+        try:
+            is_part_of_prop = Resource.objects.get(uri=is_part_of_uri)
+        except Resource.DoesNotExist:
+            raise AssertionError(f"isPartOf property resource not found: {is_part_of_uri}")
+        
+        # Check dataset-entity linking for each dataset
+        datasets_checked = 0
+        total_entities_linked = 0
+        
+        for dataset_config in execution_config.datasets:
+            dataset_name = dataset_config.dataset_name
+            
+            # Find dataset resource
+            dataset_resources = Resource.objects.filter(
+                uri__contains=f"/datasets/{dataset_name}"
+            ).filter(
+                uri__contains="test.arkumu.org"  # Only test resources
+            )
+            
+            if not dataset_resources.exists():
+                logger.warning(f"No dataset resource found for {dataset_name}")
+                continue
+                
+            dataset_resource = dataset_resources.first()
+            
+            # Find entity resources for this dataset
+            entity_resources = Resource.objects.filter(
+                uri__contains=f"/entities/{dataset_name}/"
+            ).filter(
+                uri__contains="test.arkumu.org"  # Only test resources
+            )
+            
+            entity_count = entity_resources.count()
+            
+            if entity_count == 0:
+                logger.warning(f"No entity resources found for dataset {dataset_name}")
+                continue
+            
+            # Check for dataset-entity linking triples
+            linking_triples = Triple.objects.filter(
+                subject__in=entity_resources,
+                predicate=is_part_of_prop,
+                object=dataset_resource
+            )
+            
+            linked_entities = linking_triples.count()
+            
+            logger.info(f"Dataset {dataset_name}: {linked_entities}/{entity_count} entities linked")
+            
+            # Assert that all entities are linked to their dataset
+            assert linked_entities == entity_count, \
+                f"Dataset {dataset_name}: Only {linked_entities}/{entity_count} entities are linked to dataset"
+            
+            datasets_checked += 1
+            total_entities_linked += linked_entities
+        
+        logger.info(f"Dataset-entity linking verified: {datasets_checked} datasets, {total_entities_linked} entities linked")
+        
+        # Ensure we actually checked some datasets
+        assert datasets_checked > 0, "No datasets were checked for entity linking"
+        assert total_entities_linked > 0, "No entities were found to be linked to datasets"
+        
+        logger.info("=== DATASET-ENTITY LINKING VERIFICATION PASSED ===")
+
     # NOTE: Helper methods moved to individual staged tests for better organization
     
     @pytest.mark.django_db(transaction=True)
@@ -200,6 +270,9 @@ class TestRealProductionIntegration:
             
             # Verify processing completed successfully
             assert metrics.errors == 0, f"Processing had {metrics.errors} errors"
+            
+            # Verify dataset-entity linking is working
+            self._assert_dataset_entity_linking(execution_config)
             
             logger.info("=== INTEGRATION TEST PASSED ===")
             
@@ -298,6 +371,115 @@ class TestRealProductionIntegration:
         # Verify we have at least some matches
         assert len(matched) > 0, "No datasets matched between mapping and CSV files"
     
+    @pytest.mark.django_db(transaction=True)
+    def test_dataset_entity_linking_integration(self, production_test_mapping, real_csv_data, execution_statistics):
+        """Test dataset-entity linking with a small subset of production data"""
+        # Ensure we're using the test database
+        assert production_test_mapping.pk is not None, "Mapping must be saved in test database"
+        
+        # Load and translate mapping using the automated system
+        execution_config = self.load_production_test_mapping(production_test_mapping)
+        
+        # Use real CSV data from S3 but limit to first dataset for speed
+        csv_sources = real_csv_data
+        
+        # Pick just the first dataset for faster testing
+        first_dataset_name = list(csv_sources.keys())[0]
+        limited_csv_sources = {first_dataset_name: csv_sources[first_dataset_name]}
+        
+        # Limit to first 5 rows for speed
+        csv_data = limited_csv_sources[first_dataset_name]
+        if isinstance(csv_data, dict) and 'rows' in csv_data:
+            csv_data['rows'] = csv_data['rows'][:5]
+        else:
+            limited_csv_sources[first_dataset_name] = csv_data[:5]
+        
+        logger.info(f"Testing dataset-entity linking with dataset: {first_dataset_name} (5 rows)")
+        logger.info(f"CSV data format: {type(csv_data)}")
+        if isinstance(csv_data, dict):
+            logger.info(f"CSV data keys: {list(csv_data.keys())}")
+            if 'rows' in csv_data:
+                logger.info(f"CSV rows sample: {csv_data['rows'][:2] if csv_data['rows'] else 'empty'}")
+        
+        # Initialize processor with test-specific URI to ensure test isolation
+        self.processor = MappingAwareProcessor(
+            institution="TEST_FUK_LINKING",
+            base_uri="http://test-linking.arkumu.org/data",
+            statistics=execution_statistics
+        )
+        
+        # Execute processing
+        try:
+            metrics = self.processor.process_with_execution_config(
+                execution_config=execution_config,
+                csv_sources=limited_csv_sources,
+                strategy=ProcessingStrategy.STREAMING_ENTITY_CENTRIC  # Use working strategy
+            )
+            
+            # Verify processing completed
+            assert isinstance(metrics, ExecutionMetrics)
+            assert metrics.rows_processed > 0, "No rows were processed"
+            
+            # Test dataset-entity linking specifically
+            logger.info("=== TESTING DATASET-ENTITY LINKING ===")
+            
+            # Get the isPartOf property resource
+            is_part_of_uri = "http://purl.org/dc/terms/isPartOf"
+            is_part_of_prop = Resource.objects.get(uri=is_part_of_uri)
+            
+            # Find dataset resource for our test dataset
+            logger.info(f"Looking for dataset resource with name: {first_dataset_name}")
+            logger.info(f"Institution: TEST_FUK_LINKING")
+            
+            # Debug: Check all dataset resources
+            all_datasets = Resource.objects.filter(uri__contains="/datasets/")
+            logger.info(f"All dataset resources: {[r.uri for r in all_datasets]}")
+            
+            dataset_resource = Resource.objects.filter(
+                uri__contains=f"/datasets/{first_dataset_name.lower()}"  # Dataset names are lowercased in URIs
+            ).filter(
+                uri__contains="test-fuk-linking"  # Institution is also lowercased in URIs
+            ).first()
+            
+            assert dataset_resource is not None, f"Dataset resource not found for {first_dataset_name}"
+            
+            # Find entity resources for this dataset
+            entity_resources = Resource.objects.filter(
+                uri__contains=f"/entities/{first_dataset_name.lower()}/"  # Dataset names are lowercased
+            ).filter(
+                uri__contains="test-fuk-linking"  # Institution is lowercased
+            )
+            
+            entity_count = entity_resources.count()
+            assert entity_count > 0, f"No entity resources found for dataset {first_dataset_name}"
+            
+            # Check for dataset-entity linking triples
+            linking_triples = Triple.objects.filter(
+                subject__in=entity_resources,
+                predicate=is_part_of_prop,
+                object=dataset_resource
+            )
+            
+            linked_entities = linking_triples.count()
+            
+            logger.info(f"Dataset {first_dataset_name}: {linked_entities}/{entity_count} entities linked")
+            
+            # Assert that all entities are linked to their dataset
+            assert linked_entities == entity_count, \
+                f"Dataset {first_dataset_name}: Only {linked_entities}/{entity_count} entities are linked to dataset"
+            
+            logger.info("=== DATASET-ENTITY LINKING TEST PASSED ===")
+            
+        except Exception as e:
+            logger.error(f"Dataset-entity linking test failed: {e}")
+            raise
+        finally:
+            # Clean up test resources
+            try:
+                Resource.objects.filter(uri__contains="test-linking.arkumu.org").delete()
+            except Exception as e:
+                logger.warning(f"Error cleaning up test resources: {e}")
+
     @pytest.mark.django_db
     def test_s3_bucket_access(self, bucket_service):
         """Test basic S3 bucket access for production organization"""

@@ -42,13 +42,29 @@ class TestImportStatsStorage(TestCase):
     
     def test_stats_storage_functionality(self):
         """Test that detailed stats can be saved to ingestion_stats field."""
-        # Sample stats like those from mapping-aware import
+        # Sample stats like those from ExecutionMetrics.to_dict() + mapping metadata
         detailed_stats = {
+            # Core ExecutionMetrics stats
+            "duration_seconds": 45.67,
             "rows_processed": 100,
+            "cells_processed": 2500,
+            "columns_processed": 25,
             "resources_created": 500,
+            "resources_updated": 15,
+            "resources_skipped": 8,
             "triples_created": 1200,
+            "triples_updated": 3,
+            "values_truncated": 2,
+            "errors": 5,                          # Error count
+            "warnings": 12,                       # Warning count
+            "fk_relationships_created": 25,
+            "external_ontology_matches": 8,
+            "multi_value_items_created": 45,
+            "entities_processed": 100,
             "properties_created": 15,
-            "processing_time_seconds": 45.67,
+            "stub_entities_created": 3,
+            "relationships_created": 67,
+            # Mapping-specific metadata
             "execution_strategy": "mapping_aware",
             "mapping_id": "test-mapping-123",
             "mapping_name": "Test Production Mapping",
@@ -76,11 +92,33 @@ class TestImportStatsStorage(TestCase):
         # Verify detailed stats were saved correctly
         stats = self.ingest_session.ingestion_stats
         self.assertIsNotNone(stats)
+        
+        # Core ExecutionMetrics stats
+        self.assertEqual(stats["duration_seconds"], 45.67)
         self.assertEqual(stats["rows_processed"], 100)
+        self.assertEqual(stats["cells_processed"], 2500)
+        self.assertEqual(stats["columns_processed"], 25)
         self.assertEqual(stats["resources_created"], 500)
+        self.assertEqual(stats["resources_updated"], 15)
+        self.assertEqual(stats["resources_skipped"], 8)
         self.assertEqual(stats["triples_created"], 1200)
+        self.assertEqual(stats["triples_updated"], 3)
+        self.assertEqual(stats["values_truncated"], 2)
+        
+        # Error and warning tracking
+        self.assertEqual(stats["errors"], 5)
+        self.assertEqual(stats["warnings"], 12)
+        
+        # Advanced processing stats
+        self.assertEqual(stats["fk_relationships_created"], 25)
+        self.assertEqual(stats["external_ontology_matches"], 8)
+        self.assertEqual(stats["multi_value_items_created"], 45)
+        self.assertEqual(stats["entities_processed"], 100)
         self.assertEqual(stats["properties_created"], 15)
-        self.assertEqual(stats["processing_time_seconds"], 45.67)
+        self.assertEqual(stats["stub_entities_created"], 3)
+        self.assertEqual(stats["relationships_created"], 67)
+        
+        # Mapping-specific metadata
         self.assertEqual(stats["execution_strategy"], "mapping_aware")
         self.assertEqual(stats["mapping_id"], "test-mapping-123")
         self.assertEqual(stats["mapping_name"], "Test Production Mapping")
@@ -158,6 +196,82 @@ class TestImportStatsStorage(TestCase):
         self.assertEqual(stats["execution_strategy"], "mapping_aware")
         self.assertEqual(stats["mapping_id"], "test-mapping-456")
         self.assertEqual(stats["mapping_name"], "Another Test Mapping")
+    
+    def test_execution_metrics_integration(self):
+        """Test that ExecutionMetrics.to_dict() output is properly saved."""
+        from arkumu.importer.services.execution.statistics import ExecutionMetrics
+        from datetime import datetime, timezone
+        
+        # Create a realistic ExecutionMetrics object
+        metrics = ExecutionMetrics()
+        metrics.start_time = datetime.now(timezone.utc)
+        metrics.rows_processed = 487
+        metrics.cells_processed = 12175
+        metrics.columns_processed = 25
+        metrics.resources_created = 2435
+        metrics.resources_updated = 5
+        metrics.resources_skipped = 12
+        metrics.triples_created = 5870
+        metrics.triples_updated = 2
+        metrics.values_truncated = 3
+        metrics.errors = 7                    # Errors encountered
+        metrics.warnings = 15                 # Warnings encountered
+        metrics.fk_relationships_created = 45
+        metrics.external_ontology_matches = 12
+        metrics.multi_value_items_created = 89
+        metrics.entities_processed = 487
+        metrics.properties_created = 18
+        metrics.stub_entities_created = 8
+        metrics.relationships_created = 125
+        metrics.end_time = datetime.now(timezone.utc)
+        
+        # Convert to dict like the task does
+        metrics_dict = metrics.to_dict()
+        
+        # Add mapping metadata like the task does
+        final_metrics = {
+            **metrics_dict,
+            "execution_strategy": "mapping_aware",
+            "mapping_id": "test-exec-metrics",
+            "mapping_name": "ExecutionMetrics Test Mapping",
+            "datasets_processed": 1,
+            "execution_config_datasets": 35,
+            "execution_config_columns": 337,
+            "execution_config_relationships": 72
+        }
+        
+        # Save to session
+        self.ingest_session.status = "completed"
+        self.ingest_session.ingestion_stats = final_metrics
+        self.ingest_session.save()
+        
+        # Refresh and verify
+        self.ingest_session.refresh_from_db()
+        stats = self.ingest_session.ingestion_stats
+        
+        # Verify ExecutionMetrics fields are all present
+        self.assertEqual(stats["rows_processed"], 487)
+        self.assertEqual(stats["cells_processed"], 12175)
+        self.assertEqual(stats["resources_created"], 2435)
+        self.assertEqual(stats["resources_updated"], 5)
+        self.assertEqual(stats["resources_skipped"], 12)
+        self.assertEqual(stats["triples_created"], 5870)
+        self.assertEqual(stats["errors"], 7)
+        self.assertEqual(stats["warnings"], 15)
+        self.assertEqual(stats["fk_relationships_created"], 45)
+        self.assertEqual(stats["external_ontology_matches"], 12)
+        self.assertEqual(stats["entities_processed"], 487)
+        self.assertEqual(stats["stub_entities_created"], 8)
+        self.assertEqual(stats["relationships_created"], 125)
+        
+        # Verify mapping metadata is also present
+        self.assertEqual(stats["execution_strategy"], "mapping_aware")
+        self.assertEqual(stats["mapping_id"], "test-exec-metrics")
+        self.assertEqual(stats["execution_config_relationships"], 72)
+        
+        # Verify duration is calculated
+        self.assertIn("duration_seconds", stats)
+        self.assertIsInstance(stats["duration_seconds"], (int, float))
 
 
 @pytest.mark.django_db
