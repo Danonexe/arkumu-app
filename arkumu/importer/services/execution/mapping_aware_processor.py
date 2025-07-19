@@ -163,10 +163,16 @@ class MappingAwareProcessor:
         # Process each dataset with the execution engine
         for dataset_config in context.execution_config.datasets:
             if dataset_config.dataset_name not in context.all_csv_sources:
-                logger.warning(f"No CSV data for dataset: {dataset_config.dataset_name}")
+                logger.warning(f"No CSV data for dataset: {dataset_config.dataset_name}, creating dataset resource only")
                 self.statistics.increment_datasets_skipped()
+                
+                # IMPORTANT: Still create the dataset resource even for missing datasets
+                dataset_resource = self.resource_manager.create_dataset_resource(dataset_config.dataset_name)
+                logger.info(f"Created dataset resource for missing dataset '{dataset_config.dataset_name}'")
+                
                 # Check for orphaned FK references pointing to this skipped dataset
                 self._check_orphaned_fk_references(dataset_config.dataset_name, context)
+                context.processed_datasets.add(dataset_config.dataset_name)
                 continue
             
             csv_data = context.all_csv_sources[dataset_config.dataset_name]
@@ -239,13 +245,20 @@ class MappingAwareProcessor:
             else:
                 df = self.data_processor.ensure_dataframe(csv_data)
             
-            # Check if dataset is empty and skip if so
+            # Check if dataset is empty
             total_rows = df.height
             if total_rows == 0:
-                logger.warning(f"Dataset {dataset_config.dataset_name} is empty, skipping")
+                logger.warning(f"Dataset {dataset_config.dataset_name} is empty, creating dataset resource only")
                 self.statistics.increment_datasets_skipped()
+                
+                # IMPORTANT: Still create the dataset resource even for empty datasets
+                # This ensures the dataset URI exists in the graph
+                dataset_resource = self.resource_manager.create_dataset_resource(dataset_config.dataset_name)
+                logger.info(f"Created dataset resource for empty dataset '{dataset_config.dataset_name}'")
+                
                 # Check for orphaned FK references pointing to this empty dataset
                 self._check_orphaned_fk_references(dataset_config.dataset_name, context)
+                context.processed_datasets.add(dataset_config.dataset_name)
                 continue
             
             # Track all entities for this dataset across all chunks
@@ -294,10 +307,16 @@ class MappingAwareProcessor:
         logger.info("Phase 1: Creating entities")
         for dataset_config in context.execution_config.datasets:
             if dataset_config.dataset_name not in context.all_csv_sources:
-                logger.warning(f"Dataset {dataset_config.dataset_name} has no CSV data, skipping")
+                logger.warning(f"Dataset {dataset_config.dataset_name} has no CSV data, creating dataset resource only")
                 self.statistics.increment_datasets_skipped()
+                
+                # IMPORTANT: Still create the dataset resource even for missing datasets
+                dataset_resource = self.resource_manager.create_dataset_resource(dataset_config.dataset_name)
+                logger.info(f"Created dataset resource for missing dataset '{dataset_config.dataset_name}'")
+                
                 # Check for orphaned FK references pointing to this skipped dataset
                 self._check_orphaned_fk_references(dataset_config.dataset_name, context)
+                context.processed_datasets.add(dataset_config.dataset_name)
                 continue
             
             context.current_dataset = dataset_config.dataset_name
