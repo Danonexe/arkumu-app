@@ -1305,7 +1305,8 @@ def service_powered_csv_import(request):
     
     try:
         from arkumu.storage.services.bucket_service import BucketService
-        from arkumu.common.import_service_bridge import bridge_service
+        # REMOVED: from arkumu.common.import_service_bridge import bridge_service  # OLD SYSTEM ELIMINATED
+        from arkumu.importer.tasks.import_metadata import run_mapping_aware_import_workflow  # NEW SYSTEM
         import tempfile
         import os
         
@@ -1335,31 +1336,48 @@ def service_powered_csv_import(request):
             temp_path = temp_file.name
         
         try:
-            # Use the modern table-based import approach
-            logger.info(f"Importing {dataset_name} using table-based services")
+            # Upload file to S3 temporarily so NEW system can process it
+            logger.info(f"Uploading {dataset_name} to S3 for NEW MappingAwareProcessor system")
+            temp_s3_key = f"temp_bulk_editor/{organization}/{dataset_name}.csv"
+            bucket_service.base_s3_service.s3_client.upload_file(temp_path, bucket_name, temp_s3_key)
             
-            import_result = bridge_service.import_csv_with_table_services(
-                file_path=temp_path,
-                organization=organization_obj,
-                user=request.user,
-                delimiter=';',
-                has_quoted_fields=False,
-                auto_mapping=use_auto_mapping,
-                session_dict=dict(request.session)  # Pass session for service state
+            # Use the NEW mapping-aware import system instead of old bridge_service
+            import_result = run_mapping_aware_import_workflow(
+                s3_bucket_name=bucket_name,
+                s3_object_key=temp_s3_key,
+                dataset_name=dataset_name,
+                institution=organization,
+                mapping_id="auto-generated",  # Auto-generate mapping for bulk editor
+                base_uri="http://arkumu.org/data",
+                upload_session_id=None,  # No session for bulk editor
+                csv_sources=None,
+                update_progress=None,
+                task_context=None
             )
             
-            # Update session with any new mapping rules created during import
-            if 'mapping_rules' in import_result:
-                request.session['mapping_rules'] = import_result['mapping_rules']
-                request.session.modified = True
+            # Clean up temp S3 file
+            try:
+                bucket_service.base_s3_service.s3_client.delete_object(Bucket=bucket_name, Key=temp_s3_key)
+            except Exception as cleanup_error:
+                logger.warning(f"Failed to cleanup temp S3 file {temp_s3_key}: {cleanup_error}")
+            
+            # Convert result format for compatibility with template
+            formatted_result = {
+                "status": import_result.get("status", "unknown"),
+                "rows_processed": import_result.get("rows_processed", 0),
+                "resources_created": import_result.get("resources_created", 0),
+                "triples_created": import_result.get("triples_created", 0),
+                "errors": 1 if import_result.get("status") != "success" else 0,
+                "mapping_rules": []  # NEW system doesn't use session-based mapping rules
+            }
             
             return render(request, 'partials/service_import_results.html', {
-                'import_result': import_result,
+                'import_result': formatted_result,
                 'dataset_name': dataset_name,
                 'organization': organization,
                 'file_name': os.path.basename(s3_key),
-                'approach': 'table_based_services',
-                'success': True
+                'approach': 'new_mapping_aware_processor',
+                'success': import_result.get("status") == "success"
             })
             
         finally:

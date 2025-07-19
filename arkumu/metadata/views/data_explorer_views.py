@@ -91,6 +91,8 @@ def data_explorer(request):
         context.update(_handle_triples_view(request))
     elif view_mode == 'unified':
         context.update(_handle_unified_view(request))
+    elif view_mode == 'relationships':
+        context.update(_handle_relationships_view(request))
     
     # Return appropriate template based on request type
     if request.headers.get('HX-Request'):
@@ -101,6 +103,8 @@ def data_explorer(request):
             return render(request, 'partials/triple_list.html', context)
         elif view_mode == 'unified':
             return render(request, 'partials/unified_results.html', context)
+        elif view_mode == 'relationships':
+            return render(request, 'partials/relationships_results.html', context)
     
     return render(request, 'data_explorer.html', context)
 
@@ -251,5 +255,76 @@ def _handle_unified_view(request):
         'current_institution': institution,
         'include_resources': include_resources,
         'include_triples': include_triples,
+        'current_search_mode': search_mode,
+    }
+
+def _handle_relationships_view(request):
+    """Handle the relationships view mode - show all connections for a specific resource."""
+    resource_uri = request.GET.get('resource_uri', '')
+    search_mode = request.GET.get('search_mode', 'exact')  # Default to exact for URI matching
+    page = request.GET.get('page', 1)
+    
+    logger.info(f"Relationships view: resource_uri='{resource_uri}', mode='{search_mode}', page={page}")
+    
+    # Don't load any relationships if no resource URI provided
+    if not resource_uri.strip():
+        return {
+            'resource': None,
+            'subject_triples': [],
+            'object_triples': [],
+            'all_triples': [],
+            'page_obj': None,
+            'total_connections': 0,
+            'current_resource_uri': resource_uri,
+            'current_search_mode': search_mode,
+        }
+    
+    # Find the resource
+    if search_mode == 'exact':
+        resources = Resource.objects.filter(uri=resource_uri)
+    else:
+        # Use the search filter for non-exact matches
+        search_filter = _build_search_filter('uri', resource_uri, search_mode)
+        resources = Resource.objects.filter(search_filter)
+    
+    if not resources.exists():
+        logger.warning(f"No resource found for URI: {resource_uri}")
+        return {
+            'resource': None,
+            'subject_triples': [],
+            'object_triples': [],
+            'all_triples': [],
+            'page_obj': None,
+            'total_connections': 0,
+            'current_resource_uri': resource_uri,
+            'current_search_mode': search_mode,
+            'error_message': f'No resource found for URI: {resource_uri}'
+        }
+    
+    # Use the first matching resource (or exact match)
+    resource = resources.first()
+    
+    # Get ALL relationships for this resource (both directions)
+    subject_triples = Triple.objects.filter(subject=resource).select_related('predicate', 'object')
+    object_triples = Triple.objects.filter(object=resource).select_related('subject', 'predicate')
+    
+    # Combine all triples for display
+    all_triples_list = list(subject_triples) + list(object_triples)
+    total_connections = len(all_triples_list)
+    
+    # Paginate the combined results
+    paginator = Paginator(all_triples_list, 50)  # Show 50 relationships per page
+    page_obj = paginator.get_page(page)
+    
+    logger.info(f"Found resource '{resource.uri}' with {len(subject_triples)} outgoing and {len(object_triples)} incoming relationships")
+    
+    return {
+        'resource': resource,
+        'subject_triples': subject_triples,
+        'object_triples': object_triples,
+        'all_triples': all_triples_list,
+        'page_obj': page_obj,
+        'total_connections': total_connections,
+        'current_resource_uri': resource_uri,
         'current_search_mode': search_mode,
     } 

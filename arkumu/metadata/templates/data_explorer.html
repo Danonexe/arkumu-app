@@ -28,6 +28,12 @@
             </svg>
             Unified Search
         </a>
+        <a class="tab" id="relationships-tab" onclick="switchView('relationships')">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+            </svg>
+            Relationships
+        </a>
     </div>
     
     <!-- Resources View -->
@@ -264,6 +270,66 @@
                 <h2 class="card-title">Search Results</h2>
                 <div id="unified-results">
                     {% include "partials/unified_results.html" %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Relationships View -->
+    <div id="relationships-view" class="view-panel hidden">
+        <div class="card bg-base-100 shadow-xl mb-6">
+            <div class="card-body">
+                <h2 class="card-title">Resource Relationships</h2>
+                <p class="text-sm text-base-content/70 mb-4">Explore all connections (incoming and outgoing) for a specific resource</p>
+                
+                <form id="relationships-form" class="space-y-4" 
+                      hx-get="{% url 'metadata:data_explorer' %}" 
+                      hx-target="#relationships-results" 
+                      hx-swap="innerHTML" 
+                      hx-trigger="change, submit"
+                      hx-vals='{"view": "relationships"}'>
+                      
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="form-control md:col-span-2">
+                            <label class="label">Resource URI</label>
+                            <input type="text" name="resource_uri" value="{{ request.GET.resource_uri }}" 
+                                   placeholder="Enter full resource URI (e.g., http://arkumu.org/data/fuk/datasets/sprache)" 
+                                   class="input input-bordered w-full" 
+                                   hx-trigger="keyup changed delay:500ms">
+                            <label class="label">
+                                <span class="label-text-alt">Enter the complete URI of the resource to explore</span>
+                            </label>
+                        </div>
+                        
+                        <div class="form-control">
+                            <label class="label">Search Mode</label>
+                            <select name="search_mode" class="select select-bordered">
+                                <option value="exact" {% if request.GET.search_mode == "exact" or not request.GET.search_mode %}selected{% endif %}>Exact match (recommended)</option>
+                                <option value="contains" {% if request.GET.search_mode == "contains" %}selected{% endif %}>Contains (substring)</option>
+                                <option value="startswith" {% if request.GET.search_mode == "startswith" %}selected{% endif %}>Starts with</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-between items-center">
+                        <div class="text-sm text-base-content/50">
+                            💡 Tip: Copy a resource URI from the Resources or Triples views above
+                        </div>
+                        <button type="submit" class="btn btn-primary">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                            </svg>
+                            Explore Relationships
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div class="card bg-base-100 shadow-xl">
+            <div class="card-body">
+                <div id="relationships-results">
+                    {% include "partials/relationships_results.html" %}
                 </div>
             </div>
         </div>
