@@ -164,6 +164,9 @@ class MappingAwareProcessor:
         for dataset_config in context.execution_config.datasets:
             if dataset_config.dataset_name not in context.all_csv_sources:
                 logger.warning(f"No CSV data for dataset: {dataset_config.dataset_name}")
+                self.statistics.increment_datasets_skipped()
+                # Check for orphaned FK references pointing to this skipped dataset
+                self._check_orphaned_fk_references(dataset_config.dataset_name, context)
                 continue
             
             csv_data = context.all_csv_sources[dataset_config.dataset_name]
@@ -220,6 +223,10 @@ class MappingAwareProcessor:
         
         for dataset_config in context.execution_config.datasets:
             if dataset_config.dataset_name not in context.all_csv_sources:
+                logger.warning(f"Dataset {dataset_config.dataset_name} has no CSV data, skipping")
+                self.statistics.increment_datasets_skipped()
+                # Check for orphaned FK references pointing to this skipped dataset
+                self._check_orphaned_fk_references(dataset_config.dataset_name, context)
                 continue
             
             context.current_dataset = dataset_config.dataset_name
@@ -232,6 +239,15 @@ class MappingAwareProcessor:
             else:
                 df = self.data_processor.ensure_dataframe(csv_data)
             
+            # Check if dataset is empty and skip if so
+            total_rows = df.height
+            if total_rows == 0:
+                logger.warning(f"Dataset {dataset_config.dataset_name} is empty, skipping")
+                self.statistics.increment_datasets_skipped()
+                # Check for orphaned FK references pointing to this empty dataset
+                self._check_orphaned_fk_references(dataset_config.dataset_name, context)
+                continue
+            
             # Track all entities for this dataset across all chunks
             dataset_entities = []
             dataset_name = dataset_config.dataset_name
@@ -240,7 +256,6 @@ class MappingAwareProcessor:
             dataset_resource = self.resource_manager.create_dataset_resource(dataset_name)
             
             # Process in chunks
-            total_rows = df.height
             for chunk_start in range(0, total_rows, chunk_size):
                 chunk_end = min(chunk_start + chunk_size, total_rows)
                 chunk_df = df[chunk_start:chunk_end]
@@ -279,6 +294,10 @@ class MappingAwareProcessor:
         logger.info("Phase 1: Creating entities")
         for dataset_config in context.execution_config.datasets:
             if dataset_config.dataset_name not in context.all_csv_sources:
+                logger.warning(f"Dataset {dataset_config.dataset_name} has no CSV data, skipping")
+                self.statistics.increment_datasets_skipped()
+                # Check for orphaned FK references pointing to this skipped dataset
+                self._check_orphaned_fk_references(dataset_config.dataset_name, context)
                 continue
             
             context.current_dataset = dataset_config.dataset_name
@@ -667,9 +686,33 @@ class MappingAwareProcessor:
         
         resolved_count = 0
         failed_count = 0
+        orphaned_count = 0
+        missing_source_count = 0
+        
+        # Group relationships by target dataset to identify orphaned references
+        skipped_datasets = set()
+        for dataset_config in context.execution_config.datasets:
+            if dataset_config.dataset_name not in context.all_csv_sources:
+                skipped_datasets.add(dataset_config.dataset_name)
         
         for relationship in self.pending_relationships:
             try:
+                # Check if target dataset was skipped
+                target_dataset = relationship['target_dataset']
+                if target_dataset in skipped_datasets:
+                    # Check if we created stub structure for this dataset
+                    if hasattr(context, 'stub_datasets') and target_dataset in context.stub_datasets:
+                        logger.debug(f"Creating stub entity for FK relationship to dataset '{target_dataset}': " +
+                                   f"{relationship['source_dataset']}.{relationship['source_column']} -> " +
+                                   f"{target_dataset}.{relationship.get('target_column', 'unknown')}")
+                        # Continue processing to create stub entity
+                    else:
+                        logger.debug(f"Skipping FK relationship to orphaned dataset '{target_dataset}': " +
+                                   f"{relationship['source_dataset']}.{relationship['source_column']} -> " +
+                                   f"{target_dataset}.{relationship.get('target_column', 'unknown')}")
+                        orphaned_count += 1
+                        continue
+                
                 # Generate target entity URI
                 target_entity_uri = self._generate_target_entity_uri(
                     relationship['target_dataset'],
@@ -692,6 +735,9 @@ class MappingAwareProcessor:
                         target_entity
                     )
                     resolved_count += 1
+                elif not source_entity:
+                    logger.warning(f"Missing source entity for FK relationship: {relationship['source_entity_uri']}")
+                    missing_source_count += 1
                 else:
                     logger.warning(f"Could not resolve FK relationship: {relationship}")
                     failed_count += 1
@@ -700,7 +746,20 @@ class MappingAwareProcessor:
                 logger.error(f"Failed to resolve FK relationship {relationship}: {e}")
                 failed_count += 1
         
-        logger.info(f"FK resolution completed: {resolved_count} resolved, {failed_count} failed")
+        # Enhanced logging with detailed breakdown
+        total_relationships = len(self.pending_relationships)
+        logger.info(f"FK resolution completed:")
+        logger.info(f"  ✅ Resolved: {resolved_count}")
+        logger.info(f"  ❌ Failed: {failed_count}")
+        logger.info(f"  🔗 Orphaned (skipped datasets): {orphaned_count}")
+        logger.info(f"  👻 Missing source entities: {missing_source_count}")
+        logger.info(f"  📊 Total processed: {total_relationships}")
+        
+        # Add warnings to statistics for orphaned relationships
+        if orphaned_count > 0:
+            self.statistics.add_warning(
+                f"Skipped {orphaned_count} FK relationships due to orphaned references to missing/empty datasets"
+            )
         
         # Clear pending relationships
         self.pending_relationships = []
@@ -873,20 +932,89 @@ class MappingAwareProcessor:
         return self.resource_manager.generate_entity_uri(target_dataset, target_value)
     
     def _get_or_create_target_entity(self, target_uri: str, relationship: Dict, context: ProcessingContext):
-        """Get existing target entity or create stub"""
+        """Get existing target entity or create stub with metadata from mapping"""
         # Check cache first
         if target_uri in context.entity_cache:
             return context.entity_cache[target_uri]
         
+        target_dataset = relationship['target_dataset']
+        
         # Create stub entity
         stub_entity = self.resource_manager.create_entity_resource(
             target_uri,
-            relationship['target_dataset'],
+            target_dataset,
             is_stub=True
         )
         
+        # If this is a stub dataset, add metadata from the mapping structure
+        if hasattr(context, 'stub_datasets') and target_dataset in context.stub_datasets:
+            self._enhance_stub_entity_with_mapping_metadata(stub_entity, target_dataset, relationship, context)
+        
         context.entity_cache[target_uri] = stub_entity
         return stub_entity
+    
+    def _enhance_stub_entity_with_mapping_metadata(self, stub_entity, target_dataset: str, relationship: Dict, context: ProcessingContext):
+        """Enhance stub entity with metadata from mapping configuration for legacy data migration."""
+        
+        # Find the dataset configuration
+        target_dataset_config = None
+        for dataset_config in context.execution_config.datasets:
+            if dataset_config.dataset_name == target_dataset:
+                target_dataset_config = dataset_config
+                break
+        
+        if not target_dataset_config:
+            return
+        
+        # Add entity type from mapping
+        entity_columns = [col for col in target_dataset_config.columns if col.column_type.value == 'entity']
+        if entity_columns:
+            primary_entity_column = entity_columns[0]
+            
+            # Add entity type property
+            entity_type_uri = self._generate_property_uri("entity_type")
+            self.resource_manager.create_property_triple(
+                stub_entity,
+                entity_type_uri,
+                primary_entity_column.arkumu_type,
+                "string"
+            )
+        
+        # Add FK target value as the primary identifier
+        target_value = relationship.get('target_value')
+        if target_value:
+            # Find the target column configuration
+            target_column = relationship.get('target_column', 'id')
+            for column in target_dataset_config.columns:
+                if column.column_name == target_column:
+                    identifier_uri = self._generate_property_uri(f"identifier_{column.arkumu_type}")
+                    self.resource_manager.create_property_triple(
+                        stub_entity,
+                        identifier_uri,
+                        str(target_value),
+                        column.datatype or "string"
+                    )
+                    break
+        
+        # Add metadata indicating this is a stub from legacy migration
+        stub_metadata_uri = self._generate_property_uri("legacy_migration_stub")
+        self.resource_manager.create_property_triple(
+            stub_entity,
+            stub_metadata_uri,
+            f"true",
+            "boolean"
+        )
+        
+        # Add original dataset reference
+        original_dataset_uri = self._generate_property_uri("original_dataset")
+        self.resource_manager.create_property_triple(
+            stub_entity,
+            original_dataset_uri,
+            target_dataset,
+            "string"
+        )
+        
+        logger.debug(f"   🏷️  Enhanced stub entity {target_uri} with mapping metadata from '{target_dataset}'")
     
     def _get_target_dataset_from_fk(self, fk_column: str, context: ProcessingContext) -> str:
         """Get target dataset for FK column from configuration"""
@@ -896,6 +1024,123 @@ class MappingAwareProcessor:
         
         return f"unknown_target_for_{fk_column}"
     
+    def _check_orphaned_fk_references(self, skipped_dataset: str, context: ProcessingContext):
+        """Check for FK references pointing to skipped datasets and create stub entities to preserve integrity."""
+        orphaned_refs = []
+        
+        # Check all FK relationships that point to this skipped dataset
+        for fk_rel in context.execution_config.fk_relationships:
+            if fk_rel.target_dataset == skipped_dataset:
+                orphaned_refs.append({
+                    'source_dataset': fk_rel.source_dataset,
+                    'source_column': fk_rel.source_column,
+                    'target_dataset': fk_rel.target_dataset,
+                    'target_column': fk_rel.target_column
+                })
+        
+        # Check relationship contexts that reference this dataset
+        for rel_context in context.execution_config.relationship_contexts:
+            primary_target = self._get_target_dataset_from_fk(rel_context.primary_fk, context)
+            secondary_target = self._get_target_dataset_from_fk(rel_context.secondary_fk, context)
+            
+            if primary_target == skipped_dataset or secondary_target == skipped_dataset:
+                orphaned_refs.append({
+                    'context_id': rel_context.context_id,
+                    'dataset': rel_context.dataset_name,
+                    'affected_fk': rel_context.primary_fk if primary_target == skipped_dataset else rel_context.secondary_fk,
+                    'target_dataset': skipped_dataset
+                })
+        
+        # Create stub metadata structure for the skipped dataset to preserve FK integrity
+        if orphaned_refs:
+            logger.info(f"🏗️  PRESERVING FK INTEGRITY: Creating stub structure for skipped dataset '{skipped_dataset}'")
+            self._create_stub_dataset_structure(skipped_dataset, orphaned_refs, context)
+            
+            logger.info(f"   📊 FK references preserved: {len(orphaned_refs)}")
+            logger.info(f"   🔧 Stub entities will be created during FK resolution for missing targets")
+            
+            # Add to statistics as info, not warnings since we're handling it
+            self.statistics.add_warning(
+                f"Created stub structure for skipped dataset '{skipped_dataset}' to preserve {len(orphaned_refs)} FK references"
+            )
+
+    def _create_stub_dataset_structure(self, skipped_dataset: str, orphaned_refs: list, context: ProcessingContext):
+        """Create stub dataset structure to preserve FK integrity for legacy data migration."""
+        
+        # Find the dataset configuration for the skipped dataset
+        skipped_dataset_config = None
+        for dataset_config in context.execution_config.datasets:
+            if dataset_config.dataset_name == skipped_dataset:
+                skipped_dataset_config = dataset_config
+                break
+        
+        if not skipped_dataset_config:
+            logger.warning(f"Could not find dataset config for '{skipped_dataset}' - cannot create stub structure")
+            return
+        
+        # Create dataset resource for the skipped dataset (metadata container)
+        dataset_resource = self.resource_manager.create_dataset_resource(skipped_dataset)
+        logger.info(f"   📁 Created dataset resource for '{skipped_dataset}' (metadata container)")
+        
+        # Extract entity type configuration from the mapping
+        entity_columns = [col for col in skipped_dataset_config.columns if col.column_type.value == 'entity']
+        if entity_columns:
+            primary_entity_column = entity_columns[0]  # Use first entity column as primary
+            
+            # Create metadata schema entries for the entity type
+            entity_type_uri = self._generate_property_uri(f"entity_type_{skipped_dataset}")
+            schema_property_uri = self._generate_property_uri("defines_entity_type")
+            
+            # Create schema triple linking dataset to entity type
+            self.resource_manager.create_property_triple(
+                dataset_resource,
+                schema_property_uri,
+                entity_type_uri,
+                "uri"
+            )
+            logger.info(f"   🏷️  Defined entity type '{primary_entity_column.arkumu_type}' for dataset '{skipped_dataset}'")
+        
+        # Create property schema definitions from column configurations
+        for column in skipped_dataset_config.columns:
+            if column.column_type.value in ['regular', 'anchor', 'multi_value']:
+                # Create property definition in the metadata schema
+                property_uri = self._generate_property_uri(column.arkumu_type)
+                property_def_uri = self._generate_property_uri(f"property_def_{column.arkumu_type}")
+                
+                # Link dataset to property definition
+                schema_property_uri = self._generate_property_uri("defines_property")
+                self.resource_manager.create_property_triple(
+                    dataset_resource,
+                    schema_property_uri,
+                    property_def_uri,
+                    "uri"
+                )
+                
+                # Add property metadata (type, cardinality, etc.)
+                type_uri = self._generate_property_uri("property_datatype")
+                self.resource_manager.create_property_triple(
+                    property_def_uri,
+                    type_uri,
+                    column.datatype or "string",
+                    "string"
+                )
+                
+                if column.is_multi_value:
+                    cardinality_uri = self._generate_property_uri("property_cardinality")
+                    self.resource_manager.create_property_triple(
+                        property_def_uri,
+                        cardinality_uri,
+                        "multiple",
+                        "string"
+                    )
+        
+        logger.info(f"   📊 Created schema definitions for {len(skipped_dataset_config.columns)} columns")
+        
+        # Mark this dataset as having stub structure created
+        if not hasattr(context, 'stub_datasets'):
+            context.stub_datasets = set()
+        context.stub_datasets.add(skipped_dataset)
+
     def _create_mapping_config_from_dataset(self, dataset_config) -> Dict[str, Any]:
         """Create mapping configuration from dataset config."""
         mapping_config = {

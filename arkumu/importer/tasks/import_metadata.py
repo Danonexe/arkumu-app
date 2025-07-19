@@ -165,7 +165,7 @@ def run_mapping_aware_import_workflow(
             logger.info(f"Task {actual_task_id or 'UnknownID'}: Cache updated - Key: {cache_key}, Status: {status}, Message: {message[:50]}...")
             logger.info(f"Task {actual_task_id or 'UnknownID'}: Cache payload: {payload}")
 
-    def update_upload_session_status(status: str, message: Optional[str] = None, files_processed: int = 0, errors_count: int = 0):
+    def update_upload_session_status(status: str, message: Optional[str] = None, files_processed: int = 0, errors_count: int = 0, detailed_stats: Optional[Dict] = None):
         if upload_session_id:
             try:
                 session = IngestSession.objects.get(id=upload_session_id)
@@ -176,6 +176,9 @@ def run_mapping_aware_import_workflow(
                 if status == 'completed':
                     session.successful_rows = files_processed
                     session.failed_rows = errors_count
+                    # Save detailed stats to ingestion_stats field
+                    if detailed_stats:
+                        session.ingestion_stats = detailed_stats
                 elif status == 'failed':
                     session.failed_rows = 1
                 session.save()
@@ -374,19 +377,20 @@ def run_mapping_aware_import_workflow(
         if not isinstance(metrics, type(metrics)) or metrics.rows_processed <= 0:
             raise ValueError("No rows were processed by MappingAwareProcessor")
         
+        # Get all detailed metrics from ExecutionMetrics
+        detailed_metrics = metrics.to_dict()
+        
+        # Add mapping-specific metadata
         final_metrics = {
-            "rows_processed": metrics.rows_processed,
-            "resources_created": metrics.resources_created,
-            "triples_created": metrics.triples_created,
-            "properties_created": metrics.properties_created,
-            "processing_time_seconds": processing_time,
+            **detailed_metrics,  # Include ALL ExecutionMetrics stats
             "execution_strategy": "mapping_aware",
             "mapping_id": mapping_id,
             "mapping_name": mapping.name,
             "datasets_processed": len(csv_sources),
             "execution_config_datasets": len(execution_config.datasets),
             "execution_config_columns": sum(len(ds.columns) for ds in execution_config.datasets),
-            "execution_config_relationships": len(execution_config.fk_relationships)
+            "execution_config_relationships": len(execution_config.fk_relationships),
+            "skipped_datasets": detailed_metrics.get("datasets_skipped", 0)
         }
         
         success_message = (
@@ -403,7 +407,7 @@ def run_mapping_aware_import_workflow(
         
         phase_info = get_mapping_phase_info("finalization", 100)
         update_cache_with_phase_info("completed", success_message, 100, phase_info, details=final_metrics)
-        update_upload_session_status('completed', success_message, 1, 0)
+        update_upload_session_status('completed', success_message, 1, 0, final_metrics)
         
         return {
             "status": "success",

@@ -54,6 +54,7 @@ class IngestSession(models.Model):
     processed_rows = models.IntegerField(default=0, help_text="Number of rows processed")
     successful_rows = models.IntegerField(default=0, help_text="Number of rows successfully ingested")
     failed_rows = models.IntegerField(default=0, help_text="Number of rows that failed to ingest")
+    skipped_datasets = models.IntegerField(default=0, help_text="Number of datasets skipped (empty or missing)")
     
     # SSE Progress fields
     progress_percentage = models.IntegerField(default=0)
@@ -111,6 +112,8 @@ class IngestSession(models.Model):
                 self.successful_rows = stats['successful_rows']
             if 'failed_rows' in stats:
                 self.failed_rows = stats['failed_rows']
+            if 'skipped_datasets' in stats:
+                self.skipped_datasets = stats['skipped_datasets']
         self.save()
     
     def mark_failed(self, error_message=None):

@@ -23,7 +23,7 @@ from arkumu.importer.services.execution.mapping_aware_processor import MappingAw
 from arkumu.importer.services.orchestrator.import_orchestrator import ImportOrchestrator
 from arkumu.common.enums import UpdateStrategy
 from arkumu.common.data_types import BulkUpdateStats
-from arkumu.common.import_service_bridge import bridge_service
+# REMOVED: from arkumu.common.import_service_bridge import bridge_service  # OLD SYSTEM ELIMINATED
 from arkumu.storage.services.bucket_service import BucketService
 from arkumu.metadata.models import Organization, Mapping
 
@@ -304,38 +304,46 @@ def run_csv_import_with_structured_error_handling(
                 # Get organization
                 organization = Organization.objects.get(code=institution)
                 
-                # Choose import method based on configuration
-                if use_table_services or (use_mapping and mapping_config):
-                    logger.info("Using table-based services with mapping")
-                    
-                    # Execute with mapping-aware processor
-                    stats: BulkUpdateStats = bridge_service.import_csv_with_table_services(
-                        file_path=temp_local_path,
-                        organization=organization,
-                        user=None,  # TODO: Get user from session
-                        delimiter=delimiter,
-                        has_quoted_fields=has_quoted_fields,
-                        auto_mapping=True,
-                        session_dict={'mapping_config': mapping_config} if mapping_config else None
-                    )
-                    
-                else:
-                    logger.info("Using standard import workflow")
-                    
-                    # Execute standard import
-                    stats: BulkUpdateStats = bridge_service.import_csv(
-                        file_path=temp_local_path,
-                        organization=organization,
-                        user=None,  # TODO: Get user from session
-                        update_strategy=update_strategy.value,
-                        delimiter=delimiter,
-                        has_quoted_fields=has_quoted_fields,
-                        link_row_cells=link_row_cells,
-                        link_to_first_column=link_to_first_column,
-                        use_smart_updater=True,
-                        use_polars=True,
-                        use_table_services=use_table_services
-                    )
+                # Use NEW mapping-aware import system instead of old bridge_service
+                logger.info("Using NEW MappingAwareProcessor system with dataset-entity linking")
+                
+                # Upload file to S3 temporarily so NEW system can process it
+                temp_s3_key = f"temp_error_handling/{institution}/{dataset_name}.csv"
+                bucket_service.base_s3_service.s3_client.upload_file(temp_local_path, s3_bucket_name, temp_s3_key)
+                
+                # Import the NEW system
+                from arkumu.importer.tasks.import_metadata import run_mapping_aware_import_workflow
+                
+                # Execute with NEW mapping-aware processor
+                import_result = run_mapping_aware_import_workflow(
+                    s3_bucket_name=s3_bucket_name,
+                    s3_object_key=temp_s3_key,
+                    dataset_name=dataset_name,
+                    institution=institution,
+                    mapping_id=mapping_id or "auto-generated",
+                    base_uri=base_uri,
+                    upload_session_id=upload_session_id,
+                    csv_sources=None,
+                    update_progress=None,
+                    task_context=None
+                )
+                
+                # Clean up temp S3 file
+                try:
+                    bucket_service.base_s3_service.s3_client.delete_object(Bucket=s3_bucket_name, Key=temp_s3_key)
+                except Exception as cleanup_error:
+                    logger.warning(f"Failed to cleanup temp S3 file {temp_s3_key}: {cleanup_error}")
+                
+                # Convert result to BulkUpdateStats format for compatibility
+                stats = {
+                    "stats": {
+                        "rows_processed": import_result.get("rows_processed", 0),
+                        "resources_created": import_result.get("resources_created", 0),
+                        "triples_created": import_result.get("triples_created", 0),
+                        "datasets_skipped": import_result.get("datasets_skipped", 0),
+                        "errors": 0 if import_result.get("status") == "success" else 1
+                    }
+                }
                 
                 # Extract statistics
                 actual_stats = stats.get("stats", {})
@@ -348,6 +356,7 @@ def run_csv_import_with_structured_error_handling(
                     "triples_created": actual_stats.get("triples_created", 0),
                     "triples_updated": actual_stats.get("triples_updated", 0),
                     "triples_skipped": actual_stats.get("triples_skipped", 0),
+                    "datasets_skipped": actual_stats.get("datasets_skipped", 0),
                     "errors": actual_stats.get("errors", 0),
                 }
                 

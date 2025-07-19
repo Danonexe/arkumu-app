@@ -58,6 +58,10 @@ class ExecutionMetrics:
     stub_entities_created: int = 0
     relationships_created: int = 0
     
+    # Dataset processing
+    datasets_skipped: int = 0
+    stub_entities_created: int = 0
+    
     def duration_seconds(self) -> float:
         """Calculate execution duration in seconds."""
         if self.start_time and self.end_time:
@@ -105,6 +109,10 @@ class ExecutionMetrics:
         self.properties_created += other.properties_created
         self.stub_entities_created += other.stub_entities_created
         self.relationships_created += other.relationships_created
+        
+        # Dataset processing
+        self.datasets_skipped += other.datasets_skipped
+        self.stub_entities_created += other.stub_entities_created
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
@@ -126,7 +134,8 @@ class ExecutionMetrics:
             'entities_processed': self.entities_processed,
             'properties_created': self.properties_created,
             'stub_entities_created': self.stub_entities_created,
-            'relationships_created': self.relationships_created
+            'relationships_created': self.relationships_created,
+            'datasets_skipped': self.datasets_skipped
         }
 
 
@@ -191,6 +200,10 @@ class ExecutionStatistics:
             self.dataset_metrics[dataset_name].warnings += 1
         logger.warning(f"Execution warning: {message}")
     
+    def increment_datasets_skipped(self, count: int = 1) -> None:
+        """Increment skipped datasets count."""
+        self.current_metrics.datasets_skipped += count
+    
     def merge_metrics(self, metrics: ExecutionMetrics) -> None:
         """Merge external metrics into current statistics."""
         self.current_metrics.merge(metrics)
@@ -222,6 +235,8 @@ class ExecutionStatistics:
         logger.info("=== EXECUTION SUMMARY ===")
         logger.info(f"Duration: {overall['duration_seconds']:.2f}s")
         logger.info(f"Datasets processed: {summary['totals']['total_datasets']}")
+        if overall['datasets_skipped'] > 0:
+            logger.info(f"Datasets skipped: {overall['datasets_skipped']}")
         logger.info(f"Rows: {overall['rows_processed']}, Cells: {overall['cells_processed']}")
         logger.info(f"Resources: {overall['resources_created']} created, {overall['resources_updated']} updated")
         logger.info(f"FK relationships: {overall['fk_relationships_created']}")
