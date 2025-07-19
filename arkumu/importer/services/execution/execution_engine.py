@@ -260,7 +260,7 @@ class MappingExecutionEngine:
             batch_df = df[batch_start:batch_end]
 
             logger.debug(f"Processing batch {batch_start}-{batch_end}")
-            self._process_batch(batch_df, dataset_name, mapping_config, column_resources)
+            self._process_batch(batch_df, dataset_name, mapping_config, column_resources, dataset_resource)
             
             # Update rows processed
             self.statistics.current_metrics.rows_processed += batch_df.height
@@ -275,7 +275,8 @@ class MappingExecutionEngine:
                       batch_df: pl.DataFrame,
                       dataset_name: str,
                       mapping_config: dict | None,
-                      column_resources: dict[str, Any]) -> None:
+                      column_resources: dict[str, Any],
+                      dataset_resource: Any) -> None:
         """Process batch using entity-based approach."""
         logger.debug(f"Processing batch with {batch_df.height} rows using entity-based approach")
         
@@ -301,6 +302,11 @@ class MappingExecutionEngine:
         
         entity_resources = self.resource_manager.create_entity_resources_bulk(entity_data)
         logger.debug(f"Created {len(entity_resources)} entity resources")
+        
+        # Step 3.5: Link entities to dataset
+        if entity_resources:
+            self.resource_manager.create_dataset_entity_links_bulk(list(entity_resources.values()), dataset_resource)
+            logger.debug(f"Linked {len(entity_resources)} entities to dataset")
         
         # Step 4: Create property triples for each column
         property_data = []
