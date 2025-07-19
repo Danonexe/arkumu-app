@@ -86,11 +86,12 @@ services:
     restart: unless-stopped
     volumes:
       - arkumu_local_redis_data:/data
+      - ./compose/local/redis/redis-init.sh:/usr/local/bin/redis-init.sh:ro
     ports:
       - "127.0.0.1:6379:6379"  # Only bind to localhost
     networks:
       - arkumu_network
-    command: redis-server --appendonly yes
+    command: /usr/local/bin/redis-init.sh
 
   huey:
     build:
