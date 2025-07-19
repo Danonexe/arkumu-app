@@ -1,4 +1,5 @@
 from .ingest_sessions import IngestSession
+from .import_task import ImportTask
 from .error_tracking import (
     ImportPipelineError,
     MappingValidationIssue,
@@ -9,6 +10,7 @@ from .error_tracking import (
 
 __all__ = [
     'IngestSession',
+    'ImportTask',
     'ImportPipelineError',
     'MappingValidationIssue', 
     'FileProcessingIssue',
