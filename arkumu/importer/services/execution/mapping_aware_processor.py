@@ -232,6 +232,13 @@ class MappingAwareProcessor:
             else:
                 df = self.data_processor.ensure_dataframe(csv_data)
             
+            # Track all entities for this dataset across all chunks
+            dataset_entities = []
+            dataset_name = dataset_config.dataset_name
+            
+            # Create dataset resource once for the entire dataset
+            dataset_resource = self.resource_manager.create_dataset_resource(dataset_name)
+            
             # Process in chunks
             total_rows = df.height
             for chunk_start in range(0, total_rows, chunk_size):
@@ -241,8 +248,17 @@ class MappingAwareProcessor:
                 # Convert chunk back to list format
                 chunk_data = chunk_df.to_dicts()
                 
-                # Process entities in this chunk
-                self._process_dataset_with_entities(dataset_config, chunk_data, context)
+                # Process entities in this chunk and collect them
+                chunk_entities = self._process_dataset_chunk_with_entities(dataset_config, chunk_data, context)
+                dataset_entities.extend(chunk_entities)
+            
+            # Create dataset-entity linking triples for ALL entities in the dataset
+            logger.info(f"Creating dataset-entity links for {dataset_name} ({len(dataset_entities)} entities)")
+            if dataset_entities:
+                dataset_entity_triples = self.resource_manager.create_dataset_entity_links_bulk(
+                    dataset_entities, dataset_resource
+                )
+                logger.info(f"Created {len(dataset_entity_triples)} dataset-entity linking triples for {dataset_name}")
             
             context.processed_datasets.add(dataset_config.dataset_name)
         
@@ -285,6 +301,59 @@ class MappingAwareProcessor:
         
         return self.statistics.current_metrics
     
+    def _process_dataset_chunk_with_entities(self,
+                                           dataset_config,
+                                           csv_data: List[Dict[str, Any]],
+                                           context: ProcessingContext) -> List:
+        """Process a chunk of dataset and return created entities (for streaming)"""
+        
+        dataset_name = dataset_config.dataset_name
+        logger.debug(f"Processing chunk for dataset: {dataset_name} ({len(csv_data)} rows)")
+        
+        # Create mapping configuration for multi-value detection
+        mapping_config = self._create_mapping_config_from_dataset(dataset_config)
+        
+        # Prepare data with mapping configuration
+        df = self.data_processor.prepare_for_processing(csv_data, mapping_config)
+        if df.height == 0:
+            return []
+        
+        # Group columns by type for efficient processing
+        column_groups = self._group_columns_by_type(dataset_config.columns)
+        
+        # Track entities created for this chunk
+        chunk_entities = []
+        
+        # Process each row as a complete entity
+        for row_data in df.iter_rows(named=True):
+            entity_uri = self._generate_entity_uri(dataset_name, row_data, dataset_config)
+            
+            # Create the main entity
+            entity_resource = self.resource_manager.create_entity_resource(entity_uri, dataset_name)
+            context.entity_cache[entity_uri] = entity_resource
+            chunk_entities.append(entity_resource)
+            
+            # Process regular columns
+            self._process_regular_columns(entity_resource, row_data, column_groups['regular'], context)
+            
+            # Process anchor columns
+            self._process_anchor_columns(entity_resource, row_data, column_groups['anchor'], context)
+            
+            # Process multi-value columns
+            self._process_multi_value_columns(entity_resource, row_data, column_groups['multi_value'], context)
+            
+            # Queue FK relationships for later resolution
+            self._queue_fk_relationships(entity_uri, row_data, column_groups['foreign_key'], context)
+            
+            # Process external ontology columns
+            self._process_external_ontology_columns(entity_resource, row_data, column_groups['external_ontology'], context)
+            
+            # Track row processing
+            self.statistics.current_metrics.rows_processed += 1
+        
+        logger.debug(f"Processed chunk for {dataset_name}: created {len(chunk_entities)} entities")
+        return chunk_entities
+    
     def _process_dataset_with_entities(self,
                                      dataset_config,
                                      csv_data: List[Dict[str, Any]],
@@ -310,6 +379,9 @@ class MappingAwareProcessor:
         # Group columns by type for efficient processing
         column_groups = self._group_columns_by_type(dataset_config.columns)
         
+        # Track entities created for this dataset
+        dataset_entities = []
+        
         # Log column type distribution
         logger.info(f"Column types for {dataset_name}:")
         logger.info(f"  - Regular columns: {len(column_groups['regular'])}")
@@ -326,6 +398,7 @@ class MappingAwareProcessor:
             # Create the main entity
             entity_resource = self.resource_manager.create_entity_resource(entity_uri, dataset_name)
             context.entity_cache[entity_uri] = entity_resource
+            dataset_entities.append(entity_resource)
             
             # Process regular columns
             self._process_regular_columns(entity_resource, row_data, column_groups['regular'], context)
@@ -344,6 +417,14 @@ class MappingAwareProcessor:
             
             # Track row processing
             self.statistics.current_metrics.rows_processed += 1
+        
+        # Create entity-dataset linking triples (entity → isPartOf → dataset)
+        logger.info(f"Creating dataset-entity links for {dataset_name}")
+        if dataset_entities:
+            dataset_entity_triples = self.resource_manager.create_dataset_entity_links_bulk(
+                dataset_entities, dataset_resource
+            )
+            logger.info(f"Created {len(dataset_entity_triples)} dataset-entity linking triples")
     
     def _process_entities_only(self,
                              dataset_config,

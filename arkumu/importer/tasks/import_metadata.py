@@ -46,7 +46,7 @@ except ImportError:
 from arkumu.importer.services.orchestrator.import_orchestrator import ImportOrchestrator
 from arkumu.common.enums import UpdateStrategy
 from arkumu.common.data_types import BulkUpdateStats
-from arkumu.common.import_service_bridge import bridge_service
+# REMOVED: from arkumu.common.import_service_bridge import bridge_service  # OLD SYSTEM ELIMINATED
 from arkumu.storage.services.bucket_service import BucketService # Added to download S3 file
 
 # Django cache
@@ -853,27 +853,19 @@ def run_csv_import_workflow_with_mapping(
                 else:
                     logger.warning(f"Task {actual_task_id or 'UnknownID'}: File validation failed, proceeding with entity-based import")
         
-        # Phase 5: Determine execution strategy
-        chosen_strategy = execution_strategy
+        # Phase 5: Always use STREAMING_ENTITY_CENTRIC strategy
+        chosen_strategy = "streaming_entity_centric"
         
         # Phase 5: Strategy Selection
         phase_info = get_phase_info("strategy_selection", 50)
-        update_cache_with_phase_info("processing", f"Determining execution strategy...", 38, phase_info)
+        update_cache_with_phase_info("processing", f"Using STREAMING_ENTITY_CENTRIC strategy for dataset-entity linking...", 38, phase_info)
         
-        if execution_strategy == "auto":
-            if execution_config and file_matcher:
-                # Use mapping-driven strategy if mapping is available and valid
-                chosen_strategy = "mapping_driven"
-                logger.info(f"Task {actual_task_id or 'UnknownID'}: Auto-selected mapping_driven strategy")
-            else:
-                # Fall back to entity-centric strategy
-                chosen_strategy = "entity_centric"
-                logger.info(f"Task {actual_task_id or 'UnknownID'}: Auto-selected entity_centric strategy")
+        logger.info(f"Task {actual_task_id or 'UnknownID'}: Always using STREAMING_ENTITY_CENTRIC strategy to ensure dataset-entity linking")
         
         # Update strategy selection completion
         phase_info = get_phase_info("strategy_selection", 100)
         phase_info["execution_strategy"] = chosen_strategy
-        update_cache_with_phase_info("processing", f"Using {chosen_strategy} execution strategy...", 40, phase_info)
+        update_cache_with_phase_info("processing", f"Using {chosen_strategy} strategy with guaranteed dataset-entity linking...", 40, phase_info)
         
         # Phase 6: Execute import based on chosen strategy
         # Get organization (this is a simplified version - in production you'd get it from the session)
@@ -887,67 +879,50 @@ def run_csv_import_workflow_with_mapping(
         if file_dataset_mapping:
             session_dict['file_dataset_mapping'] = file_dataset_mapping
         
-        # Execute import based on strategy
-        if chosen_strategy == "mapping_driven" and execution_config:
-            logger.info(f"Task {actual_task_id or 'UnknownID'}: Executing mapping-driven import with enhanced configuration")
-            
-            # Phase 6: Data Import - Mapping-driven
-            phase_info = get_phase_info("data_import", 10)
-            phase_info["execution_strategy"] = chosen_strategy
-            update_cache_with_phase_info("processing", f"Executing mapping-driven import...", 45, phase_info)
-            
-            # Use table services with mapping configuration
-            stats: BulkUpdateStats = bridge_service.import_csv_with_table_services(
-                file_path=temp_local_path,
-                organization=organization,
-                user=None,  # TODO: Get user from session
-                delimiter=delimiter,
-                has_quoted_fields=has_quoted_fields,
-                auto_mapping=True,
-                session_dict=session_dict
-            )
-            
-        elif chosen_strategy == "entity_centric" or (use_table_services and not execution_config):
-            logger.info(f"Task {actual_task_id or 'UnknownID'}: Executing entity-centric import with table services")
-            
-            # Phase 6: Data Import - Entity-centric
-            phase_info = get_phase_info("data_import", 10)
-            phase_info["execution_strategy"] = chosen_strategy
-            update_cache_with_phase_info("processing", f"Executing entity-centric import...", 45, phase_info)
-            
-            # Use table services without mapping configuration
-            stats: BulkUpdateStats = bridge_service.import_csv_with_table_services(
-                file_path=temp_local_path,
-                organization=organization,
-                user=None,  # TODO: Get user from session
-                delimiter=delimiter,
-                has_quoted_fields=has_quoted_fields,
-                auto_mapping=False,
-                session_dict=session_dict if session_dict else None
-            )
-            
-        else:
-            logger.info(f"Task {actual_task_id or 'UnknownID'}: Using standard import workflow")
-            
-            # Phase 6: Data Import - Standard
-            phase_info = get_phase_info("data_import", 10)
-            phase_info["execution_strategy"] = "standard"
-            update_cache_with_phase_info("processing", f"Executing standard import...", 45, phase_info)
-            
-            # Use standard import workflow
-            stats: BulkUpdateStats = bridge_service.import_csv(
-                file_path=temp_local_path,
-                organization=organization,
-                user=None,  # TODO: Get user from session
-                update_strategy=update_strategy.value,
-                delimiter=delimiter,
-                has_quoted_fields=has_quoted_fields,
-                link_row_cells=link_row_cells,
-                link_to_first_column=link_to_first_column,
-                use_smart_updater=True,
-                use_polars=True,
-                use_table_services=use_table_services
-            )
+        # Ensure we have a valid mapping_id for STREAMING_ENTITY_CENTRIC strategy
+        if not mapping_id:
+            error_msg = f"mapping_id is required for STREAMING_ENTITY_CENTRIC import with dataset-entity linking"
+            logger.error(f"Task {actual_task_id or 'UnknownID'}: {error_msg}")
+            phase_info = get_phase_info("data_import", 0)
+            update_cache_with_phase_info("failed", error_msg, 0, phase_info, error_type="MissingMappingError")
+            update_upload_session_status('failed', error_msg)
+            return {
+                "status": "error",
+                "dataset_name": dataset_name,
+                "s3_object_key": s3_object_key,
+                "error_message": error_msg,
+                "error_type": "MissingMappingError"
+            }
+        
+        # Always use mapping-aware processor with STREAMING_ENTITY_CENTRIC strategy
+        logger.info(f"Task {actual_task_id or 'UnknownID'}: Using MappingAwareProcessor with STREAMING_ENTITY_CENTRIC strategy for dataset-entity linking")
+        
+        # Phase 6: Data Import - Mapping-aware with STREAMING_ENTITY_CENTRIC
+        phase_info = get_phase_info("data_import", 10)
+        phase_info["execution_strategy"] = "streaming_entity_centric"
+        update_cache_with_phase_info("processing", f"Executing STREAMING_ENTITY_CENTRIC import with dataset-entity linking...", 45, phase_info)
+        
+        # Always call the mapping-aware import workflow with STREAMING_ENTITY_CENTRIC
+        result = run_mapping_aware_import_workflow(
+            s3_bucket_name=s3_bucket_name,
+            s3_object_key=s3_object_key, 
+            dataset_name=dataset_name,
+            institution=institution,
+            mapping_id=mapping_id,
+            base_uri=base_uri,
+            upload_session_id=upload_session_id,
+            csv_sources=None,  # Let it load from S3
+            update_progress=None,
+            task_context=None
+        )
+        
+        # Convert result to BulkUpdateStats format for compatibility
+        stats = BulkUpdateStats(stats={
+            "rows_processed": result.get("rows_processed", 0),
+            "resources_created": result.get("resources_created", 0), 
+            "triples_created": result.get("triples_created", 0),
+            "errors": 0 if result.get("status") == "success" else 1
+        })
         
         # Phase 6: Data Import - Completion
         phase_info = get_phase_info("data_import", 100)
@@ -1406,23 +1381,66 @@ def run_csv_directory_import_workflow(
             from arkumu.metadata.models import Organization
             organization = Organization.objects.get(code=institution)
             
-            aggregate_stats = bridge_service.import_csv_directory(
-                directory_path=temp_directory_path,
-                organization=organization,
-                user=None,  # TODO: Get user from session
-                update_strategy=update_strategy.value,
-                delimiter=delimiter,
-                has_quoted_fields=has_quoted_fields,
-                relationship_config_path=relationship_config_path,
-                file_columns=file_columns,
-                files_base_directory=temp_directory_path,
-                upload_service=None,
-                link_row_cells=link_row_cells,
-                link_to_first_column=link_to_first_column,
-                use_smart_updater=use_smart_updater,
-                use_polars=use_polars,
-                timestamp_column=timestamp_column
-            )
+            # ELIMINATE bridge_service.import_csv_directory - use NEW system for each file
+            logger.info(f"Task {actual_task_id or 'UnknownID'}: Using NEW system for directory import (processing {len(downloaded_files)} files individually)")
+            
+            aggregate_stats = {
+                "files_processed": 0,
+                "resources_created": 0,
+                "triples_created": 0,
+                "row_links_created": 0,
+                "files_uploaded": 0,
+                "upload_errors": 0,
+                "errors": 0
+            }
+            
+            # Process each file individually using the NEW mapping-aware system
+            for i, file_path in enumerate(downloaded_files):
+                try:
+                    filename = os.path.basename(file_path)
+                    logger.info(f"Task {actual_task_id or 'UnknownID'}: Processing file {i+1}/{len(downloaded_files)}: {filename}")
+                    
+                    # Upload file back to S3 temporarily for the NEW system to process
+                    temp_s3_key = f"temp_directory_import/{upload_session_id}/{filename}"
+                    bucket_service.base_s3_service.s3_client.upload_file(file_path, s3_bucket_name, temp_s3_key)
+                    
+                    # Call NEW system for this individual file
+                    result = run_mapping_aware_import_workflow(
+                        s3_bucket_name=s3_bucket_name,
+                        s3_object_key=temp_s3_key,
+                        dataset_name=f"{dataset_name}_{filename.replace('.csv', '')}",
+                        institution=institution,
+                        mapping_id="auto-generated",  # Auto-generate mapping for directory imports
+                        base_uri=base_uri,
+                        upload_session_id=upload_session_id,
+                        csv_sources=None,
+                        update_progress=None,
+                        task_context=None
+                    )
+                    
+                    # Aggregate results
+                    if result.get("status") == "success":
+                        aggregate_stats["files_processed"] += 1
+                        aggregate_stats["resources_created"] += result.get("resources_created", 0)
+                        aggregate_stats["triples_created"] += result.get("triples_created", 0)
+                    else:
+                        aggregate_stats["errors"] += 1
+                        
+                    # Clean up temp S3 file
+                    try:
+                        bucket_service.base_s3_service.s3_client.delete_object(Bucket=s3_bucket_name, Key=temp_s3_key)
+                    except Exception as cleanup_error:
+                        logger.warning(f"Failed to cleanup temp S3 file {temp_s3_key}: {cleanup_error}")
+                    
+                    # Update progress
+                    file_progress = int(100 * (i + 1) / len(downloaded_files))
+                    overall_progress = 50 + (35 * (i + 1) / len(downloaded_files))
+                    phase_info = get_directory_phase_info("processing", file_progress)
+                    update_cache_with_phase_info("processing", f"Processed {i+1}/{len(downloaded_files)} files with NEW system...", int(overall_progress), phase_info)
+                    
+                except Exception as file_error:
+                    logger.error(f"Task {actual_task_id or 'UnknownID'}: Error processing file {filename}: {file_error}")
+                    aggregate_stats["errors"] += 1
         finally:
             # Stop the progress thread
             processing_complete = True

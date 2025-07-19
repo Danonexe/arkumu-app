@@ -77,11 +77,21 @@ class ResourceManager:
                         "is_placeholder": False
                     }
                 )
+                self.is_part_of_prop, _ = Resource.objects.get_or_create(
+                    uri="http://purl.org/dc/terms/isPartOf",
+                    defaults={
+                        "resource_type": ResourceType.PROPERTY,
+                        "name": "isPartOf",
+                        "source": self.institution,
+                        "is_placeholder": False
+                    }
+                )
         except Exception as e:
             logger.error(f"Failed to initialize standard RDF properties: {e}", exc_info=True)
             self.has_part_prop = None
             self.rdf_value_prop = None
             self.dcterms_relation_prop = None
+            self.is_part_of_prop = None
     
     def generate_dataset_uri(self, dataset_name: str) -> str:
         """Generate URI for a dataset."""
@@ -661,3 +671,38 @@ class ResourceManager:
                 raise
         
         return triples_to_create 
+
+    def create_dataset_entity_links_bulk(self, entity_resources: List[Resource], dataset_resource: Resource) -> List[Triple]:
+        """
+        Create dataset-entity linking triples (entity → dcterms:isPartOf → dataset).
+        
+        Args:
+            entity_resources: List of entity resources to link to the dataset
+            dataset_resource: The dataset resource to link entities to
+            
+        Returns:
+            List of created triples
+        """
+        if not entity_resources or not dataset_resource or not self.is_part_of_prop:
+            return []
+        
+        dataset_entity_triples = []
+        for entity_resource in entity_resources:
+            dataset_entity_triples.append(
+                Triple(
+                    subject=entity_resource,
+                    predicate=self.is_part_of_prop,
+                    object=dataset_resource
+                )
+            )
+        
+        if dataset_entity_triples:
+            try:
+                Triple.objects.bulk_create(dataset_entity_triples, ignore_conflicts=True)
+                self.statistics.current_metrics.triples_created += len(dataset_entity_triples)
+                logger.debug(f"Created {len(dataset_entity_triples)} dataset-entity linking triples")
+            except Exception as e:
+                logger.error(f"Failed to create dataset-entity linking triples: {e}", exc_info=True)
+                raise
+        
+        return dataset_entity_triples
