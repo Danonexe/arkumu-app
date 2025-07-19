@@ -79,9 +79,6 @@ def ingest_file(request):
         user_instance = User.objects.get(pk=request.user.pk) if request.user.is_authenticated else None
 
         # Create an IngestSession record to track this CSV ingestion
-        import uuid
-        polling_task_id = str(uuid.uuid4())
-        
         ingest_session = IngestSession.objects.create(
             user=user_instance,
             dataset_name=dataset_name,
@@ -92,8 +89,13 @@ def ingest_file(request):
             delimiter=';',
             has_quoted_fields=True,
             base_uri="http://arkumu.org/data",
-            task_id=polling_task_id,
+            task_id="",  # Will be set to the session ID after creation
         )
+        
+        # Use the session ID as the polling task ID for consistent cache keys
+        polling_task_id = str(ingest_session.id)
+        ingest_session.task_id = polling_task_id
+        ingest_session.save()
         
         # Enqueue the Huey task with mapping support
         task_instance = run_csv_import_workflow(
@@ -107,7 +109,7 @@ def ingest_file(request):
             link_row_cells=link_row_cells,
             link_to_first_column=False,
             update_strategy=UpdateStrategy.UPDATE_VALUES,
-            task_id_for_cache=polling_task_id,
+            task_id_for_cache=polling_task_id,  # Pass the polling task ID
             upload_session_id=ingest_session.id,
             # New mapping parameters
             mapping_id=mapping_id if use_mapping else None,
@@ -119,8 +121,8 @@ def ingest_file(request):
         ingest_session.huey_task_id = str(task_instance.id)
         ingest_session.save()
         
-        # Store initial status for the HTMX poller
-        cache_key = f"task_status_{polling_task_id}"
+        # Store initial status for the HTMX poller using consistent cache key pattern
+        cache_key = f"task_state_{polling_task_id}"
         initial_task_info = {
             "status": "pending", 
             "message": f"CSV ingestion for '{os.path.basename(s3_object_key)}' has been queued.",
@@ -158,12 +160,14 @@ def reset_database(request):
         from django.db import transaction
         
         with transaction.atomic():
-            # Delete all triples first (due to foreign key constraints)
+            # Count records before deletion
             triple_count = Triple.objects.count()
+            resource_count = Resource.objects.count()
+            
+            # Delete all triples first (due to foreign key constraints)
             Triple.objects.all().delete()
             
             # Delete all resources
-            resource_count = Resource.objects.count()
             Resource.objects.all().delete()
             
         logger.info(f"Database reset completed: deleted {triple_count} triples and {resource_count} resources")
@@ -207,7 +211,7 @@ def task_status_view(request, task_id):
     Provides the status of a background task for HTMX polling.
     Reads the status from Django's cache.
     """
-    cache_key = f"task_status_{task_id}"
+    cache_key = f"task_state_{task_id}"
     task_info = cache.get(cache_key)
 
     logger.info(f"Task status check for {task_id}: cache_key={cache_key}, task_info={task_info}")
@@ -378,9 +382,6 @@ def start_directory_import(request):
         user_instance = User.objects.get(pk=request.user.pk) if request.user.is_authenticated else None
 
         # Create an IngestSession record to track this directory import
-        import uuid
-        polling_task_id = str(uuid.uuid4())
-        
         ingest_session = IngestSession.objects.create(
             user=user_instance,
             dataset_name=dataset_name,
@@ -391,8 +392,13 @@ def start_directory_import(request):
             delimiter=';',
             has_quoted_fields=True,
             base_uri="http://arkumu.org/data",
-            task_id=polling_task_id,
+            task_id="",  # Will be set to the session ID after creation
         )
+        
+        # Use the session ID as the polling task ID for consistent cache keys
+        polling_task_id = str(ingest_session.id)
+        ingest_session.task_id = polling_task_id
+        ingest_session.save()
         
         # Enqueue the directory import Huey task
         task_instance = run_csv_directory_import_workflow(
@@ -411,7 +417,7 @@ def start_directory_import(request):
             relationship_config_json=None,  # No relationship config by default
             file_columns=None,  # No specific file columns
             timestamp_column=None,  # No timestamp column
-            task_id_for_cache=polling_task_id,
+            task_id_for_cache=polling_task_id,  # Pass the polling task ID
             upload_session_id=ingest_session.id
         )
         
@@ -419,8 +425,8 @@ def start_directory_import(request):
         ingest_session.huey_task_id = str(task_instance.id)
         ingest_session.save()
         
-        # Store initial status for the HTMX poller
-        cache_key = f"task_status_{polling_task_id}"
+        # Store initial status for the HTMX poller using consistent cache key pattern
+        cache_key = f"task_state_{polling_task_id}"
         initial_task_info = {
             "status": "pending", 
             "message": f"Directory import for '{folder_name or s3_folder_path}' has been queued. Discovering CSV files...",

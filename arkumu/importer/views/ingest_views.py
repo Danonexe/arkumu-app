@@ -1631,27 +1631,55 @@ def start_import(request):
         
         # Queue mapping-aware import tasks for each selected file
         task_results = []
+        from arkumu.importer.models import ImportTask
+        import uuid
+        
         for file_path in selected_files:
             # Extract dataset name from file path (remove .csv extension)
             dataset_name = file_path.split('/')[-1].replace('.csv', '')
             
+            # Create unique task ID for this dataset
+            unique_task_id = str(uuid.uuid4())
+            
+            logger.info(f"Creating ImportTask for dataset '{dataset_name}' with task_id: {unique_task_id}")
+            
+            # Create ImportTask record
+            import_task = ImportTask.objects.create(
+                ingest_session=ingest_session,
+                dataset_name=dataset_name,
+                file_path=file_path,
+                task_id=unique_task_id,
+                status='pending'
+            )
+            
+            logger.info(f"Created ImportTask {import_task.id} for dataset '{dataset_name}'")
+            
             # Queue the mapping-aware import task
+            # The task will generate its own unique ID internally
             task_result = run_mapping_aware_import_workflow(
                 s3_bucket_name=bucket_name,
                 s3_object_key=file_path,
                 dataset_name=dataset_name,
                 institution=current_org['code'],
                 mapping_id=current_mapping['id'],
-                task_id_for_cache=f"{task_id}_{dataset_name}",
                 upload_session_id=ingest_session.id
             )
+            
+            # Update task with Huey task ID
+            import_task.huey_task_id = str(task_result.id) if hasattr(task_result, 'id') else ''
+            import_task.save()
+            
             task_results.append(task_result)
         
         logger.info(f"Started mapping-aware import for {len(selected_files)} files with mapping '{current_mapping['name']}' (ID: {current_mapping['id']})")
         
-        # Return progress display template for HTMX polling
-        return render(request, 'importer/partials/progress_display_polling.html', {
+        # Return multi-dataset progress display template for HTMX polling
+        return render(request, 'importer/partials/multi_dataset_progress.html', {
             'session': ingest_session,
+            'import_tasks': [],  # Will be populated by first poll
+            'completed_count': 0,
+            'processing_count': 0,
+            'failed_count': 0,
             'should_poll': True
         })
         
@@ -1702,7 +1730,6 @@ def start_import_session(request, session_pk):
                 dataset_name=dataset_name,
                 institution=session.organization.code,
                 mapping_id=session.mapping.id if session.mapping else None,
-                task_id_for_cache=f"{session.pk}_{dataset_name}",
                 upload_session_id=session.id
             )
             task_results.append(task_result)

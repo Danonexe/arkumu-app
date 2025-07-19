@@ -1,0 +1,83 @@
+{% load static %}
+<div id="multi-dataset-progress-{{ session.pk }}"
+     hx-get="{% url 'importer:import_progress' session_pk=session.pk %}"
+     hx-trigger="{% if should_poll %}every 2s{% else %}none{% endif %}"
+     hx-swap="outerHTML"
+     class="space-y-4">
+    
+    <div class="alert alert-info">
+        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <div>
+            <h3 class="font-bold">Importing {{ import_tasks|length }} datasets</h3>
+            <div class="text-sm">Organization: {{ session.organization.name }}</div>
+        </div>
+    </div>
+    
+    {% for task in import_tasks %}
+    <div class="border rounded-lg p-4 bg-base-200">
+        <div class="mb-2">
+            <div class="flex justify-between items-center">
+                <span class="font-medium text-sm">{{ task.dataset_name }}</span>
+                <div class="flex items-center gap-2">
+                    <span class="text-xs">{{ task.progress_data.percentage|default:0 }}%</span>
+                    {% if task.progress_data.status == 'processing' or task.progress_data.status == 'pending' %}
+                        <button class="btn btn-error btn-xs"
+                                hx-post="{% url 'importer:cancel_task_api' task.task_id %}"
+                                hx-confirm="Are you sure you want to cancel import of {{ task.dataset_name }}?"
+                                hx-target="#multi-dataset-progress-{{ session.pk }}"
+                                hx-swap="outerHTML">
+                            Cancel
+                        </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="w-full bg-neutral rounded-full h-2 mb-1">
+            <div class="h-2 rounded-full transition-all duration-300 ease-out
+                        {% if task.progress_data.status == 'completed' %}bg-success
+                        {% elif task.progress_data.status == 'failed' %}bg-error
+                        {% elif task.progress_data.status == 'cancelled' %}bg-warning
+                        {% elif task.progress_data.status == 'processing' %}bg-primary
+                        {% else %}bg-base-300{% endif %}"
+                 style="width: {{ task.progress_data.percentage|default:0 }}%"></div>
+        </div>
+        
+        <div class="flex justify-between text-xs text-base-content/70">
+            <span>{{ task.progress_data.message|default:"Waiting to start..." }}</span>
+            <span class="capitalize">{{ task.progress_data.status|default:"pending" }}</span>
+        </div>
+        
+        {% if task.progress_data.status == 'failed' %}
+        <div class="alert alert-error mt-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span class="text-xs">{{ task.progress_data.message }}</span>
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+    
+    <!-- Overall Summary -->
+    <div class="stats shadow w-full">
+        <div class="stat">
+            <div class="stat-title">Total Datasets</div>
+            <div class="stat-value text-primary">{{ import_tasks|length }}</div>
+        </div>
+        <div class="stat">
+            <div class="stat-title">Completed</div>
+            <div class="stat-value text-success">{{ completed_count }}</div>
+        </div>
+        <div class="stat">
+            <div class="stat-title">Processing</div>
+            <div class="stat-value text-warning">{{ processing_count }}</div>
+        </div>
+        <div class="stat">
+            <div class="stat-title">Failed</div>
+            <div class="stat-value text-error">{{ failed_count }}</div>
+        </div>
+    </div>
+</div>
