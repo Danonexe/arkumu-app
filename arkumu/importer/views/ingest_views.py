@@ -10,7 +10,7 @@ from django.views import View
 from arkumu.users.mixins import GeneralLoginRequiredMixin, general_login_required
 from arkumu.users.models import Organization
 from arkumu.importer.mixins.ingest_coordinator import IngestCoordinatorMixin
-from arkumu.importer.tasks.import_metadata import run_mapping_aware_import_workflow
+from arkumu.importer.tasks.import_metadata import run_mapping_aware_import_workflow, _initialize_mapping_schemas_sync, process_dataset_data
 
 logger = logging.getLogger(__name__)
 
@@ -1629,10 +1629,32 @@ def start_import(request):
         bucket_service = BucketService()
         bucket_name = bucket_service.get_organization_bucket(current_org['code'])
         
-        # Queue mapping-aware import tasks for each selected file
-        task_results = []
+        # Two-phase import workflow:
+        # Phase 1: Initialize mapping schemas (blueprint creation) - ONCE
+        # Phase 2: Process each dataset using the pre-created blueprints
+        
         from arkumu.importer.models import ImportTask
         import uuid
+        
+        logger.info(f"Phase 1: Initializing mapping schemas for mapping '{current_mapping['name']}' (ID: {current_mapping['id']})")
+        
+        # Phase 1: Create blueprints once for the entire mapping (synchronous)
+        schema_init_result = _initialize_mapping_schemas_sync(
+            mapping_id=current_mapping['id'],
+            institution=current_org['code'],
+            upload_session_id=ingest_session.id
+        )
+        
+        # Check if blueprint creation succeeded
+        if schema_init_result['status'] != 'success':
+            error_msg = f"Blueprint creation failed: {schema_init_result.get('error_message', 'Unknown error')}"
+            logger.error(error_msg)
+            return HttpResponse(f'<div class="alert alert-error">Error creating blueprints: {schema_init_result.get("error_message", "Unknown error")}</div>', status=500)
+        
+        logger.info(f"Phase 1 completed: Blueprints initialized for mapping {current_mapping['id']} - {schema_init_result['message']}")
+        
+        # Phase 2: Queue individual dataset processing tasks
+        task_results = []
         
         for file_path in selected_files:
             # Extract dataset name from file path (remove .csv extension)
@@ -1654,9 +1676,8 @@ def start_import(request):
             
             logger.info(f"Created ImportTask {import_task.id} for dataset '{dataset_name}'")
             
-            # Queue the mapping-aware import task
-            # The task will generate its own unique ID internally
-            task_result = run_mapping_aware_import_workflow(
+            # Phase 2: Queue dataset processing task (uses pre-created blueprints)
+            task_result = process_dataset_data(
                 s3_bucket_name=bucket_name,
                 s3_object_key=file_path,
                 dataset_name=dataset_name,
@@ -1710,7 +1731,7 @@ def start_import_session(request, session_pk):
             return HttpResponse('<div class="alert alert-error">Session already started or completed</div>', status=400)
         
         # Start the import process for this session
-        from arkumu.importer.tasks.import_metadata import run_mapping_aware_import_workflow
+        from arkumu.importer.tasks.import_metadata import run_mapping_aware_import_workflow, _initialize_mapping_schemas_sync, process_dataset_data
         from arkumu.storage.services.bucket_service import BucketService
         
         # Get S3 bucket for organization

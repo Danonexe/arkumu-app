@@ -232,8 +232,15 @@ class ResourceManager:
             # Truncate if necessary
             truncated_value = self._truncate_value_if_needed(value)
             
+            # Generate URI and hash for consistency with individual creation
+            canonical_uri = self.create_canonical_literal_uri(truncated_value, datatype)
+            import hashlib
+            value_hash = hashlib.sha256(truncated_value.encode('utf-8')).hexdigest()
+            
             value_resource = Resource(
+                uri=canonical_uri,
                 value=truncated_value,
+                value_hash=value_hash,
                 resource_type=ResourceType.LITERAL,
                 source=self.institution,
                 name=truncated_value[:100] if len(truncated_value) > 100 else truncated_value,
@@ -414,30 +421,27 @@ class ResourceManager:
                 )
                 
                 # Create value resource if needed
+                # Generate URI first to ensure uniqueness across different datatypes
+                canonical_uri = self.create_canonical_literal_uri(object_value, datatype)
+                
                 # Use hash-based uniqueness without source to enable deduplication across archives
                 # and prevent PostgreSQL btree index size limitations
                 import hashlib
                 value_hash = hashlib.sha256(object_value.encode('utf-8')).hexdigest()
                 
                 value_resource, created = Resource.objects.get_or_create(
-                    value_hash=value_hash,
-                    language=None,  # Add language support if needed
-                    datatype=datatype,
-                    name=object_value[:100],  # Truncate for name
+                    uri=canonical_uri,  # Use URI for primary uniqueness
                     defaults={
+                        "value_hash": value_hash,
+                        "language": None,  # Add language support if needed
+                        "datatype": datatype,
+                        "name": object_value[:100],  # Truncate for name
                         "resource_type": ResourceType.LITERAL,
                         "value": object_value,  # Store full value (no data loss)
                         "source": self.institution,  # First archive to create wins
                         "is_placeholder": False
                     }
                 )
-                
-                # Generate URI for the literal if it was just created
-                if created:
-                    # Use canonical literal URI generation
-                    canonical_uri = self.create_canonical_literal_uri(object_value, datatype)
-                    value_resource.uri = canonical_uri
-                    value_resource.save()
                 
                 # Create the triple
                 triple, created = Triple.objects.get_or_create(

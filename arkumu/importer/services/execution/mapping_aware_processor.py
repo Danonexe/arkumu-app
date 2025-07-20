@@ -11,6 +11,8 @@ from typing import Dict, Any, List, Optional, Union, Tuple, Set
 from dataclasses import dataclass
 from datetime import datetime
 import polars as pl
+import hashlib
+from django.core.cache import cache
 
 from arkumu.importer.services.mapping_consumer import ExecutionConfig, ColumnConfig, FKRelationship as MappingFKRelationship, ProcessingStrategy
 from .data_processor import DataProcessor
@@ -33,6 +35,7 @@ class ProcessingContext:
     entity_cache: Dict[str, Any]  # Cache for FK resolution
     processed_datasets: Set[str]  # Track which datasets have been processed
     log_details: bool = False  # Control detailed logging
+    blueprints: Optional[Dict[str, Any]] = None  # Schema blueprints for enhanced processing
 
 
 class MappingAwareProcessor:
@@ -84,6 +87,9 @@ class MappingAwareProcessor:
         # Processing state
         self.entity_cache = {}
         self.pending_relationships = []
+        
+        # Schema-first blueprint tracking
+        self.dataset_blueprints = {}
     
     def _update_progress(self, message: str, percentage: Optional[int] = None):
         """Send progress update via SSE and update model."""
@@ -115,7 +121,7 @@ class MappingAwareProcessor:
         Process datasets using execution configuration.
         
         Args:
-            execution_config: Complete execution configuration
+            execution_config: Execution configuration for processing
             csv_sources: Dictionary mapping dataset names to CSV data
             strategy: Processing strategy to use
             
@@ -135,6 +141,13 @@ class MappingAwareProcessor:
             entity_cache={},
             processed_datasets=set()
         )
+        
+        # Phase 1: Create complete schema blueprints FIRST (if not already loaded)
+        if not self.dataset_blueprints:
+            logger.info("📋 Creating schema blueprints (none loaded)")
+            self._create_complete_schema_blueprints(execution_config)
+        else:
+            logger.info(f"📋 Using existing schema blueprints ({len(self.dataset_blueprints)} datasets)")
         
         # Execute with streaming entity-centric strategy (only supported strategy)
         return self._process_streaming_entity_centric(context)
@@ -1187,3 +1200,242 @@ class MappingAwareProcessor:
             metrics.cells_processed += bulk_stats.cells_processed
         if hasattr(bulk_stats, 'errors'):
             metrics.errors += bulk_stats.errors
+    
+    def _generate_mapping_cache_key(self, execution_config: ExecutionConfig) -> str:
+        """Generate a stable cache key based on mapping configuration content."""
+        # Create a deterministic hash of the mapping configuration
+        # This includes datasets, columns, and FK relationships
+        # Note: Exclude institution to ensure same cache for same mapping across processors
+        config_data = {
+            'datasets': [],
+            'fk_relationships': []
+        }
+        
+        # Add dataset and column information
+        for dataset in execution_config.datasets:
+            dataset_data = {
+                'name': dataset.dataset_name,
+                'columns': []
+            }
+            for column in dataset.columns:
+                column_data = {
+                    'name': column.column_name,
+                    'type': column.column_type.value if hasattr(column.column_type, 'value') else str(column.column_type),
+                    'arkumu_type': column.arkumu_type
+                }
+                dataset_data['columns'].append(column_data)
+            config_data['datasets'].append(dataset_data)
+        
+        # Add FK relationships
+        for fk in execution_config.fk_relationships:
+            fk_data = {
+                'source_dataset': fk.source_dataset,
+                'source_column': fk.source_column,
+                'target_dataset': fk.target_dataset,
+                'target_column': fk.target_column
+            }
+            config_data['fk_relationships'].append(fk_data)
+        
+        # Generate Blake2b hash of the configuration (following resource_manager.py pattern)
+        # Use Blake2b with 8-byte digest for better performance than SHA256
+        import json
+        config_json = json.dumps(config_data, sort_keys=True)
+        config_hash = hashlib.blake2b(config_json.encode('utf-8'), digest_size=8).hexdigest()
+        
+        return config_hash
+    
+    def _create_complete_schema_blueprints(self, execution_config: ExecutionConfig):
+        """Create complete schema blueprints for ALL datasets before CSV processing."""
+        # Generate cache key based on mapping_id for stability across imports
+        # This ensures all dataset imports from the same mapping share the same blueprints
+        mapping_id = execution_config.mapping_id
+        blueprint_cache_key = f"schema_blueprints_mapping_{mapping_id}"
+        
+        # Try to load from cache first
+        cached_blueprints = cache.get(blueprint_cache_key)
+        
+        # Log cache key and result
+        logger.info(f"🔍 CACHE: Key mapping_{mapping_id} → {'HIT' if cached_blueprints else 'MISS'}")
+        
+        if cached_blueprints:
+            logger.info(f"🚀 CACHE HIT: Loading existing schema blueprints for mapping {mapping_id}")
+            self.dataset_blueprints = cached_blueprints
+            
+            # Log cache statistics
+            total_properties = sum(len(bp.get('property_resources', {})) for bp in self.dataset_blueprints.values())
+            total_fk_relationships = sum(len(bp.get('fk_relationships', [])) for bp in self.dataset_blueprints.values())
+            logger.info(f"   ✅ Loaded {len(self.dataset_blueprints)} cached schema blueprints")
+            logger.info(f"   📊 Total properties: {total_properties}")
+            logger.info(f"   🔗 Total FK relationships: {total_fk_relationships}")
+            return
+        
+        # Cache miss - create blueprints from scratch
+        logger.info("🏗️  SCHEMA-FIRST: Creating complete schema blueprints for all datasets")
+        
+        # Phase 1: Create all dataset and entity type resources
+        self._create_all_dataset_resources(execution_config.datasets)
+        
+        # Phase 2: Create property definitions for all columns
+        self._create_all_property_definitions(execution_config.datasets)
+        
+        # Phase 3: Map FK relationships between datasets
+        self._map_all_fk_relationships(execution_config.datasets)
+        
+        # Phase 4: Create schema metadata triples
+        self._create_all_schema_metadata_triples()
+        
+        # Cache the blueprints for future use (1 hour timeout like other caches)
+        try:
+            cache.set(blueprint_cache_key, self.dataset_blueprints, timeout=3600)
+            logger.info(f"💾 CACHE STORED: Schema blueprints cached for mapping {mapping_id} (1h timeout)")
+        except Exception as e:
+            logger.warning(f"Failed to cache schema blueprints: {e}")
+        
+        logger.info(f"   ✅ Created {len(self.dataset_blueprints)} complete schema blueprints")
+        total_properties = sum(len(bp['property_resources']) for bp in self.dataset_blueprints.values())
+        total_fk_relationships = sum(len(bp['fk_relationships']) for bp in self.dataset_blueprints.values())
+        logger.info(f"   📊 Total properties: {total_properties}")
+        logger.info(f"   🔗 Total FK relationships: {total_fk_relationships}")
+    
+    def _create_all_dataset_resources(self, datasets):
+        """Create dataset and entity type resources for all datasets."""
+        logger.info("   📁 Creating dataset and entity type resources...")
+        
+        for dataset_config in datasets:
+            # Create dataset resource (metadata container)
+            dataset_resource = self.resource_manager.create_dataset_resource(dataset_config.dataset_name)
+            
+            # Create entity type resource for this dataset
+            entity_type_resource = self._create_entity_type_resource(dataset_config)
+            
+            # Initialize blueprint
+            self.dataset_blueprints[dataset_config.dataset_name] = {
+                'dataset_name': dataset_config.dataset_name,
+                'dataset_resource': dataset_resource,
+                'entity_type_resource': entity_type_resource,
+                'property_resources': {},
+                'fk_relationships': [],
+                'created_at': datetime.now()
+            }
+            
+            logger.info(f"     📁 {dataset_config.dataset_name}: dataset + entity type created")
+    
+    def _create_entity_type_resource(self, dataset_config):
+        """Create entity type resource for a dataset."""
+        # Find primary entity column (first entity column)
+        entity_columns = [col for col in dataset_config.columns if col.column_type.value == 'entity']
+        
+        if entity_columns:
+            primary_entity_column = entity_columns[0]
+            entity_type_name = primary_entity_column.arkumu_type
+        else:
+            # Fallback: use dataset name as entity type
+            entity_type_name = f"entity_type_{dataset_config.dataset_name}"
+        
+        # Create entity type URI
+        entity_type_uri = self._generate_property_uri(entity_type_name)
+        
+        # Create or get entity type resource
+        entity_type_resource, created = Resource.objects.get_or_create(
+            uri=entity_type_uri,
+            defaults={
+                "resource_type": ResourceType.CLASS,
+                "name": entity_type_name,
+                "source": self.institution,
+                "is_placeholder": False
+            }
+        )
+        
+        return entity_type_resource
+    
+    def _create_all_property_definitions(self, datasets):
+        """Create property definitions for all columns in all datasets."""
+        logger.info("   🏷️  Creating property definitions for all columns...")
+        
+        for dataset_config in datasets:
+            blueprint = self.dataset_blueprints[dataset_config.dataset_name]
+            
+            for column in dataset_config.columns:
+                property_resource = self._create_property_resource(column)
+                blueprint['property_resources'][column.column_name] = property_resource
+            
+            logger.info(f"     🏷️  {dataset_config.dataset_name}: {len(blueprint['property_resources'])} properties created")
+    
+    def _create_property_resource(self, column):
+        """Create property resource for a column."""
+        # Generate property URI based on arkumu_type
+        property_uri = self._generate_property_uri(column.arkumu_type)
+        
+        # All columns define properties in the schema (rows will be created later as ResourceType.IRI)
+        resource_type = ResourceType.PROPERTY
+        
+        # Create or get property resource
+        property_resource, created = Resource.objects.get_or_create(
+            uri=property_uri,
+            defaults={
+                "resource_type": resource_type,
+                "name": column.arkumu_type,
+                "source": self.institution,
+                "is_placeholder": False
+            }
+        )
+        
+        return property_resource
+    
+    def _map_all_fk_relationships(self, datasets):
+        """Map FK relationships between all datasets."""
+        logger.info("   🔗 Mapping FK relationships between datasets...")
+        
+        total_fk_relationships = 0
+        
+        for dataset_config in datasets:
+            blueprint = self.dataset_blueprints[dataset_config.dataset_name]
+            
+            for column in dataset_config.columns:
+                # Check if column has FK configuration (not all ColumnConfig implementations may have this)
+                if hasattr(column, 'fk_config') and column.fk_config:
+                    fk_relationship = self._create_fk_relationship_definition(column, dataset_config.dataset_name)
+                    blueprint['fk_relationships'].append(fk_relationship)
+                    total_fk_relationships += 1
+            
+            if blueprint['fk_relationships']:
+                logger.info(f"     🔗 {dataset_config.dataset_name}: {len(blueprint['fk_relationships'])} FK relationships mapped")
+        
+        logger.info(f"   🔗 Total FK relationships mapped: {total_fk_relationships}")
+    
+    def _create_fk_relationship_definition(self, column, source_dataset):
+        """Create FK relationship definition."""
+        return {
+            'source_dataset': source_dataset,
+            'source_column': column.column_name,
+            'source_property': column.arkumu_type,
+            'target_dataset': column.fk_config.target_dataset,
+            'target_column': column.fk_config.target_column,
+            'relationship_type': column.arkumu_type,
+            'is_multi_value': column.column_type.value == 'multi_value',
+            'fk_config': column.fk_config
+        }
+    
+    def _create_all_schema_metadata_triples(self):
+        """Create schema metadata triples linking datasets to entity types and properties."""
+        logger.info("   📊 Creating schema metadata triples...")
+        
+        for blueprint in self.dataset_blueprints.values():
+            # Link dataset to entity type
+            schema_property_uri = self._generate_property_uri("defines_entity_type")
+            self.resource_manager.create_relationship_triple(
+                blueprint['dataset_resource'],
+                schema_property_uri,
+                blueprint['entity_type_resource']
+            )
+            
+            # Link entity type to all properties
+            for column_name, property_resource in blueprint['property_resources'].items():
+                property_schema_uri = self._generate_property_uri("defines_property")
+                self.resource_manager.create_relationship_triple(
+                    blueprint['entity_type_resource'],
+                    property_schema_uri,
+                    property_resource
+                )
+            
+            logger.info(f"     📊 {blueprint['dataset_name']}: schema metadata triples created")
