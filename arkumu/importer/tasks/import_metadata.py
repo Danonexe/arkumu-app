@@ -73,7 +73,8 @@ def run_mapping_aware_import_workflow(
     upload_session_id: Optional[UUID] = None,
     csv_sources: Optional[Dict[str, Any]] = None,
     update_progress: Optional[callable] = None,
-    task_context: Optional[Any] = None
+    task_context: Optional[Any] = None,
+    processing_strategy: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Mapping-aware Huey task that implements the full production integration workflow
@@ -253,7 +254,7 @@ def run_mapping_aware_import_workflow(
         from arkumu.importer.services.mapping_consumer.mapping_adapter import MappingAdapter
         from arkumu.importer.services.execution.mapping_aware_processor import MappingAwareProcessor
         from arkumu.importer.services.execution.statistics import ExecutionStatistics
-        from arkumu.importer.services.mapping_consumer.config_translator import ProcessingStrategy
+        from arkumu.importer.services.mapping_consumer.config_translator import ProcessingStrategy, ExecutionConfig
         
         # Ensure mapping exists
         try:
@@ -277,11 +278,15 @@ def run_mapping_aware_import_workflow(
         # Load and translate mapping using the automated system from test
         logger.info(f"Task {actual_task_id or 'UnknownID'}: Loading mapping: ID={mapping.id}, Name={mapping.name}")
         
+        # Load the complete execution config (all datasets for blueprint creation)
         execution_config = mapping_adapter.translate_to_execution_config(mapping_id)
         
         logger.info(f"Task {actual_task_id or 'UnknownID'}: Loaded execution config with {len(execution_config.datasets)} datasets")
-        logger.info(f"Task {actual_task_id or 'UnknownID'}: Total columns: {sum(len(ds.columns) for ds in execution_config.datasets)}")
-        logger.info(f"Task {actual_task_id or 'UnknownID'}: FK relationships: {len(execution_config.fk_relationships)}")
+        
+        # Verify the target dataset exists in the mapping
+        target_dataset_exists = any(ds.dataset_name == dataset_name for ds in execution_config.datasets)
+        if not target_dataset_exists:
+            raise ValueError(f"Dataset '{dataset_name}' not found in mapping configuration")
         
         phase_info = get_mapping_phase_info("mapping_load", 100)
         update_cache_with_phase_info("processing", "Mapping configuration loaded", 25, phase_info)
@@ -341,20 +346,9 @@ def run_mapping_aware_import_workflow(
             
             logger.info(f"Task {actual_task_id or 'UnknownID'}: Loaded {len(rows)} rows from S3 CSV")
             
-            # IMPORTANT: Ensure ALL datasets from mapping are represented in csv_sources
-            # This ensures dataset URIs are created even for datasets without CSV files
-            logger.info(f"Task {actual_task_id or 'UnknownID'}: Ensuring all {len(execution_config.datasets)} datasets from mapping are included...")
-            for dataset_config in execution_config.datasets:
-                if dataset_config.dataset_name not in csv_sources:
-                    # Add empty entry for datasets without CSV files
-                    csv_sources[dataset_config.dataset_name] = {
-                        'headers': [],
-                        'rows': [],
-                        'row_count': 0
-                    }
-                    logger.info(f"Task {actual_task_id or 'UnknownID'}: Added empty entry for dataset '{dataset_config.dataset_name}' (no CSV file)")
+            # Only provide CSV data for the target dataset - processor will naturally skip others
         
-        logger.info(f"Task {actual_task_id or 'UnknownID'}: CSV sources prepared with {len(csv_sources)} datasets")
+        logger.info(f"Task {actual_task_id or 'UnknownID'}: Providing CSV data for target dataset: '{dataset_name}'")
         
         phase_info = get_mapping_phase_info("data_preparation", 100)
         update_cache_with_phase_info("processing", "CSV data sources prepared", 45, phase_info)
@@ -366,7 +360,7 @@ def run_mapping_aware_import_workflow(
         
         # Phase 4: Initialize MappingAwareProcessor and execute
         phase_info = get_mapping_phase_info("mapping_aware_processing", 10)
-        update_cache_with_phase_info("processing", "Initializing MappingAwareProcessor...", 50, phase_info)
+        update_cache_with_phase_info("processing", "Initializing MappingAwareProcessor with schema-first blueprints...", 50, phase_info)
         
         # Initialize execution statistics
         execution_statistics = ExecutionStatistics()
@@ -403,9 +397,8 @@ def run_mapping_aware_import_workflow(
             logger.info(f"Task {actual_task_id} cancelled before intensive processing")
             raise CancelExecution(f"Task {actual_task_id} cancelled before intensive processing")
         
-        # IMPORTANT: Ensure ALL datasets from the mapping have their URIs created
-        # This is critical for GUI navigation even if some datasets have no CSV files
-        logger.info(f"Task {actual_task_id or 'UnknownID'}: Pre-creating dataset URIs for all {len(execution_config.datasets)} datasets in mapping...")
+        # FIXED: Pre-create URI only for the target dataset being processed
+        logger.info(f"Task {actual_task_id or 'UnknownID'}: Pre-creating dataset URI for target dataset: '{dataset_name}'")
         
         from arkumu.importer.services.execution.resource_manager import ResourceManager
         resource_manager = ResourceManager(
@@ -414,17 +407,15 @@ def run_mapping_aware_import_workflow(
             statistics=execution_statistics
         )
         
-        datasets_created = 0
-        for dataset_config in execution_config.datasets:
-            try:
-                dataset_resource = resource_manager.create_dataset_resource(dataset_config.dataset_name)
-                if dataset_resource:
-                    datasets_created += 1
-                    logger.debug(f"Task {actual_task_id or 'UnknownID'}: Created/verified dataset URI for '{dataset_config.dataset_name}'")
-            except Exception as e:
-                logger.warning(f"Task {actual_task_id or 'UnknownID'}: Failed to create dataset URI for '{dataset_config.dataset_name}': {e}")
-        
-        logger.info(f"Task {actual_task_id or 'UnknownID'}: Pre-created/verified {datasets_created} dataset URIs")
+        try:
+            dataset_resource = resource_manager.create_dataset_resource(dataset_name)
+            if dataset_resource:
+                logger.info(f"Task {actual_task_id or 'UnknownID'}: Successfully created/verified dataset URI for '{dataset_name}'")
+            else:
+                logger.warning(f"Task {actual_task_id or 'UnknownID'}: Failed to create dataset URI for '{dataset_name}'")
+        except Exception as e:
+            logger.error(f"Task {actual_task_id or 'UnknownID'}: Error creating dataset URI for '{dataset_name}': {e}")
+            raise
         
         # Execute the mapping-aware processing using STREAMING_ENTITY_CENTRIC strategy
         metrics = processor.process_with_execution_config(
@@ -1066,8 +1057,8 @@ def run_csv_import_workflow_with_mapping(
                 "gui_redirect": "/mappings/create"
             }
         
-        # Always use mapping-aware processor with STREAMING_ENTITY_CENTRIC strategy
-        logger.info(f"Task {actual_task_id or 'UnknownID'}: Using MappingAwareProcessor with STREAMING_ENTITY_CENTRIC strategy for dataset-entity linking")
+        # Always use mapping processor with STREAMING_ENTITY_CENTRIC strategy  
+        logger.info(f"Task {actual_task_id or 'UnknownID'}: Using MappingAwareProcessor with schema-first blueprints and STREAMING_ENTITY_CENTRIC strategy for dataset-entity linking")
         
         # Phase 6: Data Import - Mapping-aware with STREAMING_ENTITY_CENTRIC
         phase_info = get_phase_info("data_import", 10)
@@ -1285,6 +1276,455 @@ def run_csv_import_workflow(
         use_mapping=use_mapping,
         use_table_services=use_table_services
     )
+
+
+def _initialize_mapping_schemas_sync(
+    mapping_id: str,
+    institution: str,
+    base_uri: str = "http://arkumu.org/data",
+    upload_session_id: Optional[UUID] = None
+) -> Dict[str, Any]:
+    """
+    Synchronous blueprint creation for view calls.
+    
+    Creates complete schema blueprints for ALL datasets in a mapping synchronously.
+    This function can be called directly from views before queueing dataset processing tasks.
+    """
+    logger.info(f"🏗️  SYNC SCHEMA INITIALIZATION: Starting schema creation for mapping {mapping_id}")
+    
+    try:
+        # Load mapping and translate to execution config
+        from arkumu.metadata.models import Mapping
+        from arkumu.importer.services.mapping_consumer.mapping_adapter import MappingAdapter
+        from arkumu.importer.services.execution.mapping_aware_processor import MappingAwareProcessor
+        from arkumu.importer.services.execution.statistics import ExecutionStatistics
+        
+        try:
+            mapping = Mapping.objects.get(id=mapping_id)
+        except Mapping.DoesNotExist:
+            error_msg = f"Mapping with ID '{mapping_id}' not found"
+            logger.error(error_msg)
+            return {"status": "error", "error_message": error_msg, "error_type": "MappingNotFound"}
+        
+        # Load complete execution config (all datasets)
+        mapping_adapter = MappingAdapter()
+        execution_config = mapping_adapter.translate_to_execution_config(mapping_id)
+        
+        logger.info(f"🗺️  Loaded mapping '{mapping.name}' with {len(execution_config.datasets)} datasets")
+        
+        # Initialize processor for schema creation only
+        statistics = ExecutionStatistics()
+        processor = MappingAwareProcessor(
+            institution=institution,
+            base_uri=base_uri,
+            statistics=statistics
+        )
+        
+        # Create complete schema blueprints (this caches them by mapping_id)
+        processor._create_complete_schema_blueprints(execution_config)
+        
+        # Calculate schema statistics
+        total_properties = sum(len(bp.get('property_resources', {})) for bp in processor.dataset_blueprints.values())
+        total_datasets = len(processor.dataset_blueprints)
+        
+        success_message = (
+            f"Schema initialization completed for mapping '{mapping.name}'. "
+            f"Created schemas for {total_datasets} datasets with {total_properties} total properties."
+        )
+        
+        logger.info(f"✅ {success_message}")
+        
+        return {
+            "status": "success",
+            "mapping_id": mapping_id,
+            "mapping_name": mapping.name,
+            "datasets_schema_created": total_datasets,
+            "total_properties": total_properties,
+            "message": success_message
+        }
+        
+    except Exception as e:
+        error_msg = f"Schema initialization failed for mapping {mapping_id}: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        return {
+            "status": "error",
+            "mapping_id": mapping_id,
+            "error_message": error_msg,
+            "error_type": type(e).__name__
+        }
+
+
+@cancellable_task()
+@db_task(retries=1, retry_delay=60)
+def initialize_mapping_schemas(
+    mapping_id: str,
+    institution: str,
+    base_uri: str = "http://arkumu.org/data",
+    upload_session_id: Optional[UUID] = None
+) -> Dict[str, Any]:
+    """
+    Phase 1: Schema Initialization Task
+    
+    Creates complete schema blueprints for ALL datasets in a mapping.
+    This task runs ONCE per mapping and caches the results for subsequent data processing tasks.
+    
+    Args:
+        mapping_id: ID of the mapping configuration to use
+        institution: Institution identifier
+        base_uri: Base URI for generating resource URIs
+        upload_session_id: Optional IngestSession ID for progress tracking
+        
+    Returns:
+        Dictionary containing schema initialization results
+    """
+    logger.info(f"🏗️  SCHEMA INITIALIZATION: Starting schema creation for mapping {mapping_id}")
+    
+    try:
+        # Load mapping and translate to execution config
+        from arkumu.metadata.models import Mapping
+        from arkumu.importer.services.mapping_consumer.mapping_adapter import MappingAdapter
+        from arkumu.importer.services.execution.mapping_aware_processor import MappingAwareProcessor
+        from arkumu.importer.services.execution.statistics import ExecutionStatistics
+        
+        try:
+            mapping = Mapping.objects.get(id=mapping_id)
+        except Mapping.DoesNotExist:
+            error_msg = f"Mapping with ID '{mapping_id}' not found"
+            logger.error(error_msg)
+            return {"status": "error", "error_message": error_msg, "error_type": "MappingNotFound"}
+        
+        # Load complete execution config (all datasets)
+        mapping_adapter = MappingAdapter()
+        execution_config = mapping_adapter.translate_to_execution_config(mapping_id)
+        
+        logger.info(f"🗺️  Loaded mapping '{mapping.name}' with {len(execution_config.datasets)} datasets")
+        
+        # Initialize processor for schema creation only
+        statistics = ExecutionStatistics()
+        processor = MappingAwareProcessor(
+            institution=institution,
+            base_uri=base_uri,
+            statistics=statistics
+        )
+        
+        # Create complete schema blueprints (this caches them by mapping_id)
+        processor._create_complete_schema_blueprints(execution_config)
+        
+        # Calculate schema statistics
+        total_properties = sum(len(bp.get('property_resources', {})) for bp in processor.dataset_blueprints.values())
+        total_datasets = len(processor.dataset_blueprints)
+        
+        success_message = (
+            f"Schema initialization completed for mapping '{mapping.name}'. "
+            f"Created schemas for {total_datasets} datasets with {total_properties} total properties."
+        )
+        
+        logger.info(f"✅ {success_message}")
+        
+        return {
+            "status": "success",
+            "mapping_id": mapping_id,
+            "mapping_name": mapping.name,
+            "datasets_schema_created": total_datasets,
+            "total_properties": total_properties,
+            "message": success_message
+        }
+        
+    except Exception as e:
+        error_msg = f"Schema initialization failed for mapping {mapping_id}: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        return {
+            "status": "error",
+            "mapping_id": mapping_id,
+            "error_message": error_msg,
+            "error_type": type(e).__name__
+        }
+
+
+@cancellable_task()
+@db_task(retries=1, retry_delay=60)
+def process_dataset_data(
+    s3_bucket_name: str,
+    s3_object_key: str,
+    dataset_name: str,
+    institution: str,
+    mapping_id: str,
+    base_uri: str = "http://arkumu.org/data",
+    upload_session_id: Optional[UUID] = None,
+    task_context: Optional[Any] = None,
+    update_progress: Optional[Any] = None
+) -> Dict[str, Any]:
+    """
+    Phase 2: Data Processing Task
+    
+    Processes CSV data for ONE dataset only. Assumes schemas already exist from initialize_mapping_schemas.
+    This task runs ONCE per dataset and focuses purely on data processing.
+    
+    Args:
+        s3_bucket_name: Name of the S3 bucket where the CSV file is located
+        s3_object_key: The S3 object key (path) for the CSV file
+        dataset_name: Name of the dataset being imported
+        institution: Institution identifier
+        mapping_id: ID of the mapping configuration (schemas must already exist)
+        base_uri: Base URI for generating resource URIs
+        upload_session_id: Optional IngestSession ID for progress tracking
+        task_context: Optional task context
+        
+    Returns:
+        Dictionary containing data processing results
+    """
+    # Check if we have an ImportTask record for this dataset and session
+    actual_task_id = None
+    if upload_session_id:
+        from arkumu.importer.models import ImportTask
+        try:
+            import_task = ImportTask.objects.get(
+                ingest_session_id=upload_session_id,
+                dataset_name=dataset_name,
+                file_path=s3_object_key
+            )
+            actual_task_id = import_task.task_id
+            logger.info(f"Found ImportTask for dataset '{dataset_name}' with task_id: {actual_task_id}")
+        except ImportTask.DoesNotExist:
+            logger.warning(f"No ImportTask found for dataset '{dataset_name}' in session {upload_session_id}")
+    
+    if not actual_task_id:
+        actual_task_id = str(uuid.uuid4())
+    
+    cache_key = f"task_state_{actual_task_id}"
+    
+    def update_cache_with_phase_info(status: str, message: str, progress: int, 
+                                   phase_info: Optional[Dict] = None, 
+                                   details: Optional[Dict] = None, 
+                                   error_type: Optional[str] = None):
+        payload = {
+            "status": status,
+            "message": message,
+            "percentage": progress,
+            "event_type": "progress",
+            "timestamp": timezone.now().isoformat()
+        }
+        
+        if phase_info:
+            payload["phase_info"] = phase_info
+        if details:
+            payload["details"] = details
+        if error_type:
+            payload["error_type"] = error_type
+            
+        cache.set(cache_key, payload, timeout=3600)
+        logger.info(f"Task {actual_task_id}: {status} - {message}")
+    
+    def update_upload_session_status(status: str, message: Optional[str] = None, files_processed: int = 0, errors_count: int = 0, detailed_stats: Optional[Dict] = None):
+        if upload_session_id:
+            try:
+                session = IngestSession.objects.get(id=upload_session_id)
+                session.status = status
+                session.completed_at = timezone.now()
+                if message:
+                    session.error_message = message[:1024]
+                if status == 'completed':
+                    session.successful_rows = files_processed
+                    session.failed_rows = errors_count
+                    if detailed_stats:
+                        session.ingestion_stats = detailed_stats
+                elif status == 'failed':
+                    session.failed_rows = 1
+                session.save()
+            except IngestSession.DoesNotExist:
+                logger.error(f"IngestSession with ID {upload_session_id} not found")
+            except Exception as e:
+                logger.error(f"Error updating IngestSession {upload_session_id}: {e}")
+
+    logger.info(f"📊 DATA PROCESSING: Starting data processing for dataset '{dataset_name}' (mapping: {mapping_id})")
+    
+    try:
+        # Phase 1: Check schema cache
+        phase_info = {"current_phase": "schema_verification", "execution_strategy": "data_only"}
+        update_cache_with_phase_info("processing", "Verifying schemas exist...", 5, phase_info)
+        
+        # Verify schemas exist in cache
+        blueprint_cache_key = f"schema_blueprints_mapping_{mapping_id}"
+        cached_blueprints = cache.get(blueprint_cache_key)
+        
+        if not cached_blueprints:
+            error_msg = (
+                f"Schema blueprints not found for mapping {mapping_id}. "
+                f"Please run initialize_mapping_schemas first."
+            )
+            logger.error(error_msg)
+            update_cache_with_phase_info("failed", error_msg, 0, phase_info, error_type="SchemasNotInitialized")
+            return {
+                "status": "error",
+                "dataset_name": dataset_name,
+                "mapping_id": mapping_id,
+                "error_message": error_msg,
+                "error_type": "SchemasNotInitialized",
+                "recovery_suggestion": "Run initialize_mapping_schemas task before processing data"
+            }
+        
+        logger.info(f"✅ Schema blueprints found for mapping {mapping_id}")
+        
+        # Phase 2: Load mapping configuration
+        phase_info = {"current_phase": "mapping_load", "execution_strategy": "data_only"}
+        update_cache_with_phase_info("processing", "Loading mapping configuration...", 15, phase_info)
+        
+        from arkumu.metadata.models import Mapping
+        from arkumu.importer.services.mapping_consumer.mapping_adapter import MappingAdapter
+        from arkumu.importer.services.execution.mapping_aware_processor import MappingAwareProcessor
+        from arkumu.importer.services.execution.statistics import ExecutionStatistics
+        from arkumu.importer.services.mapping_consumer.config_translator import ProcessingStrategy
+        
+        try:
+            mapping = Mapping.objects.get(id=mapping_id)
+        except Mapping.DoesNotExist:
+            error_msg = f"Mapping with ID '{mapping_id}' not found"
+            logger.error(error_msg)
+            update_cache_with_phase_info("failed", error_msg, 0, phase_info, error_type="MappingNotFound")
+            return {"status": "error", "error_message": error_msg, "error_type": "MappingNotFound"}
+        
+        mapping_adapter = MappingAdapter()
+        execution_config = mapping_adapter.translate_to_execution_config(mapping_id)
+        
+        # Verify the target dataset exists in the mapping
+        target_dataset_exists = any(ds.dataset_name == dataset_name for ds in execution_config.datasets)
+        if not target_dataset_exists:
+            error_msg = f"Dataset '{dataset_name}' not found in mapping configuration"
+            logger.error(error_msg)
+            update_cache_with_phase_info("failed", error_msg, 0, phase_info, error_type="DatasetNotInMapping")
+            return {"status": "error", "error_message": error_msg, "error_type": "DatasetNotInMapping"}
+        
+        # Phase 3: Download and parse CSV
+        phase_info = {"current_phase": "data_preparation", "execution_strategy": "data_only"}
+        update_cache_with_phase_info("processing", "Downloading and parsing CSV data...", 25, phase_info)
+        
+        from arkumu.storage.services.bucket_service import BucketService
+        import csv
+        import io
+        
+        bucket_service = BucketService()
+        
+        try:
+            result = bucket_service.get_file_content(s3_bucket_name, s3_object_key)
+            
+            if isinstance(result, dict) and 'content' in result:
+                content = result['content']
+                if isinstance(content, bytes):
+                    content = content.decode('utf-8')
+            else:
+                raise Exception(f"Unexpected result format from get_file_content: {result}")
+        except Exception as s3_error:
+            error_msg = f"Failed to download CSV file '{s3_object_key}' from S3 bucket '{s3_bucket_name}'"
+            logger.error(f"S3 download failed: {s3_error}")
+            update_cache_with_phase_info("failed", error_msg, 0, phase_info, error_type="S3DownloadError")
+            return {"status": "error", "error_message": error_msg, "error_type": "S3DownloadError"}
+        
+        # Parse CSV
+        csv_reader = csv.DictReader(io.StringIO(content), delimiter=';')
+        rows = list(csv_reader)
+        
+        csv_sources = {dataset_name: {
+            'headers': csv_reader.fieldnames,
+            'rows': rows,
+            'row_count': len(rows)
+        }}
+        
+        logger.info(f"📥 Loaded {len(rows)} rows for dataset '{dataset_name}'")
+        
+        # Phase 4: Initialize processor with existing schemas
+        phase_info = {"current_phase": "data_processing", "execution_strategy": "data_only"}
+        update_cache_with_phase_info("processing", "Processing data with existing schemas...", 40, phase_info)
+        
+        # Initialize execution statistics
+        execution_statistics = ExecutionStatistics()
+        
+        # Get session for progress updates
+        session = None
+        channel_id = None
+        if upload_session_id:
+            try:
+                session = IngestSession.objects.get(id=upload_session_id)
+                from arkumu.importer.utils.progress import create_channel_id
+                channel_id = create_channel_id(session.pk)
+            except IngestSession.DoesNotExist:
+                logger.warning(f"IngestSession with ID {upload_session_id} not found")
+        
+        # Initialize processor
+        processor = MappingAwareProcessor(
+            institution=institution,
+            base_uri=base_uri,
+            statistics=execution_statistics,
+            channel_id=channel_id,
+            session=session
+        )
+        
+        # Load existing blueprints instead of creating them
+        processor.dataset_blueprints = cached_blueprints
+        logger.info(f"📋 Loaded {len(cached_blueprints)} existing schema blueprints")
+        
+        # Execute data processing only (schemas already exist)
+        from datetime import datetime, timezone as dt_timezone
+        start_time = datetime.now(dt_timezone.utc)
+        
+        # Process with streaming entity-centric strategy
+        metrics = processor.process_with_execution_config(
+            execution_config=execution_config,
+            csv_sources=csv_sources,
+            strategy=ProcessingStrategy.STREAMING_ENTITY_CENTRIC
+        )
+        
+        end_time = datetime.now(dt_timezone.utc)
+        processing_time = (end_time - start_time).total_seconds()
+        
+        # Phase 5: Finalization
+        phase_info = {"current_phase": "finalization", "execution_strategy": "data_only"}
+        update_cache_with_phase_info("processing", "Finalizing data processing...", 85, phase_info)
+        
+        # Verify processing completed successfully
+        if not hasattr(metrics, 'rows_processed') or metrics.rows_processed <= 0:
+            error_msg = f"No data was processed from '{dataset_name}'"
+            logger.error(error_msg)
+            update_cache_with_phase_info("failed", error_msg, 0, phase_info, error_type="NoDataProcessed")
+            return {"status": "error", "error_message": error_msg, "error_type": "NoDataProcessed"}
+        
+        # Get detailed metrics
+        detailed_metrics = metrics.to_dict()
+        
+        success_message = (
+            f"Data processing for '{dataset_name}' completed successfully. "
+            f"Processed: {metrics.rows_processed} rows in {processing_time:.2f}s. "
+            f"Created: {metrics.resources_created} resources, {metrics.triples_created} triples."
+        )
+        
+        logger.info(f"✅ {success_message}")
+        
+        phase_info = {"current_phase": "finalization", "execution_strategy": "data_only"}
+        update_cache_with_phase_info("completed", success_message, 100, phase_info, details=detailed_metrics)
+        update_upload_session_status('completed', success_message, 1, 0, detailed_metrics)
+        
+        return {
+            "status": "success",
+            "dataset_name": dataset_name,
+            "mapping_id": mapping_id,
+            "s3_object_key": s3_object_key,
+            **detailed_metrics
+        }
+        
+    except Exception as e:
+        error_msg = f"Data processing failed for '{dataset_name}': {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        
+        phase_info = {"current_phase": "error", "execution_strategy": "data_only"}
+        update_cache_with_phase_info("failed", error_msg, 0, phase_info, error_type=type(e).__name__)
+        update_upload_session_status('failed', error_msg)
+        
+        return {
+            "status": "error",
+            "dataset_name": dataset_name,
+            "mapping_id": mapping_id,
+            "error_message": error_msg,
+            "error_type": type(e).__name__
+        }
 
 
 @db_task(retries=1, retry_delay=60)
