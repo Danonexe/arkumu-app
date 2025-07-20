@@ -2,8 +2,10 @@ from django.db.models.signals import post_save, m2m_changed
 from django.dispatch import receiver
 from guardian.shortcuts import assign_perm, remove_perm
 from django.contrib.auth import get_user_model
+import logging
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 @receiver(post_save, sender='metadata.Resource')
 def assign_resource_permissions(sender, instance, created, **kwargs):
@@ -130,4 +132,58 @@ def share_object_with_user(obj, target_user, sharing_user, permission_level='vie
     
     # Mark as externally linked if sharing across organizations
     if target_user.organization != obj.organization:
-        check_external_linkage(obj) 
+        check_external_linkage(obj)
+
+
+@receiver(post_save, sender='metadata.Mapping')
+def create_mapping_blueprint(sender, instance, created, **kwargs):
+    """
+    Create blueprint structure when a mapping is saved.
+    
+    This ensures all dataset URIs exist for navigation even before data is imported.
+    """
+    # Only create blueprint for validated or active mappings
+    if instance.validation_status not in ['validated', 'active']:
+        logger.debug(f"Skipping blueprint creation for mapping '{instance.name}' - status: {instance.validation_status}")
+        return
+    
+    # Only process if mapping has configuration
+    if not instance.mapping_config:
+        logger.debug(f"Skipping blueprint creation for mapping '{instance.name}' - no mapping config")
+        return
+    
+    try:
+        logger.info(f"Creating blueprint structure for mapping '{instance.name}' (organization: {instance.organization_id})")
+        
+        # Load and translate the mapping to get all datasets
+        from arkumu.importer.services.mapping_consumer.mapping_adapter import MappingAdapter
+        from arkumu.importer.services.execution.resource_manager import ResourceManager
+        from arkumu.importer.services.execution.statistics import ExecutionStatistics
+        
+        mapping_adapter = MappingAdapter()
+        execution_config = mapping_adapter.translate_to_execution_config(instance.id)
+        
+        # Initialize resource manager
+        statistics = ExecutionStatistics()
+        resource_manager = ResourceManager(
+            institution=instance.organization_id.upper(),
+            base_uri="http://arkumu.org/data",
+            statistics=statistics
+        )
+        
+        # Create dataset URIs for ALL datasets in the mapping
+        created_count = 0
+        for dataset_config in execution_config.datasets:
+            try:
+                dataset_resource = resource_manager.create_dataset_resource(dataset_config.dataset_name)
+                if dataset_resource:
+                    created_count += 1
+                    logger.debug(f"Created/verified dataset URI for '{dataset_config.dataset_name}'")
+            except Exception as e:
+                logger.warning(f"Failed to create dataset URI for '{dataset_config.dataset_name}': {e}")
+        
+        logger.info(f"Blueprint creation complete for mapping '{instance.name}': {created_count}/{len(execution_config.datasets)} dataset URIs created/verified")
+        
+    except Exception as e:
+        logger.error(f"Failed to create blueprint for mapping '{instance.name}': {e}")
+        # Don't raise the exception to avoid disrupting the mapping save operation 

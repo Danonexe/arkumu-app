@@ -15,6 +15,7 @@ import polars as pl
 from arkumu.importer.services.mapping_consumer import ExecutionConfig, ColumnConfig, FKRelationship as MappingFKRelationship, ProcessingStrategy
 from .data_processor import DataProcessor
 from .resource_manager import ResourceManager
+from arkumu.metadata.models.resource import ResourceType, Resource
 from .statistics import ExecutionStatistics, ExecutionMetrics
 from arkumu.common.enums import UpdateStrategy
 from arkumu.metadata.services.mapping import FKConfig as BulkFKRelationship
@@ -78,13 +79,7 @@ class MappingAwareProcessor:
             statistics=statistics
         )
         
-        # Initialize the execution engine for actual data processing
-        from .execution_engine import MappingExecutionEngine
-        self.execution_engine = MappingExecutionEngine(
-            organization_id=institution,
-            base_uri=base_uri,
-            default_strategy=UpdateStrategy.UPDATE_VALUES
-        )
+        # No longer using execution engine - simplified to streaming entity-centric only
         
         # Processing state
         self.entity_cache = {}
@@ -141,83 +136,8 @@ class MappingAwareProcessor:
             processed_datasets=set()
         )
         
-        # Execute based on strategy
-        if strategy == ProcessingStrategy.ENTITY_CENTRIC:
-            return self._process_entity_centric(context)
-        elif strategy == ProcessingStrategy.STREAMING_ENTITY_CENTRIC:
-            return self._process_streaming_entity_centric(context)
-        elif strategy == ProcessingStrategy.MULTI_PHASE:
-            return self._process_multi_phase(context)
-        else:
-            raise ValueError(f"Unsupported processing strategy: {strategy}")
-    
-    def _process_entity_centric(self, context: ProcessingContext) -> ExecutionMetrics:
-        """Process using entity-centric approach with optimized bulk updater"""
-        
-        logger.info("Processing with entity-centric strategy using MappingExecutionEngine")
-        
-        # Count total records for progress tracking
-        self.total_records = sum(len(csv_data) for csv_data in context.all_csv_sources.values())
-        self._update_progress(f"Found {self.total_records} records to process", 5)
-        
-        # Process each dataset with the execution engine
-        for dataset_config in context.execution_config.datasets:
-            if dataset_config.dataset_name not in context.all_csv_sources:
-                logger.warning(f"No CSV data for dataset: {dataset_config.dataset_name}, creating dataset resource only")
-                self.statistics.increment_datasets_skipped()
-                
-                # IMPORTANT: Still create the dataset resource even for missing datasets
-                dataset_resource = self.resource_manager.create_dataset_resource(dataset_config.dataset_name)
-                logger.info(f"Created dataset resource for missing dataset '{dataset_config.dataset_name}'")
-                
-                # Check for orphaned FK references pointing to this skipped dataset
-                self._check_orphaned_fk_references(dataset_config.dataset_name, context)
-                context.processed_datasets.add(dataset_config.dataset_name)
-                continue
-            
-            csv_data = context.all_csv_sources[dataset_config.dataset_name]
-            
-            # Convert column configs to mapping format
-            mapping_config = self._create_mapping_config_from_dataset(dataset_config)
-            
-            # Use the execution engine for data processing
-            logger.info(f"Processing dataset '{dataset_config.dataset_name}' with mapping-aware execution engine")
-            
-            # Update progress for starting dataset
-            self._update_progress(f"Processing dataset '{dataset_config.dataset_name}'")
-            
-            try:
-                # Execute the import with mapping configuration
-                metrics = self.execution_engine.execute_simple_import(
-                    csv_data=csv_data,
-                    dataset_name=dataset_config.dataset_name,
-                    mapping_config=mapping_config
-                )
-                
-                # Update our statistics with the returned metrics
-                self.statistics.merge_metrics(metrics)
-                
-                # Update processed records count
-                self.processed_records += len(csv_data)
-                self._update_progress(f"Completed dataset '{dataset_config.dataset_name}'")
-                
-            except Exception as e:
-                logger.error(f"Error processing dataset {dataset_config.dataset_name}: {e}")
-                self.statistics.add_error(str(e), dataset_config.dataset_name)
-            
-            context.processed_datasets.add(dataset_config.dataset_name)
-        
-        # Handle FK relationships through mapping configuration
-        if context.execution_config.fk_relationships:
-            logger.info(f"FK relationships ({len(context.execution_config.fk_relationships)}) are handled by execution engine")
-        
-        # Log processing summary
-        self._log_processing_summary(context)
-        
-        # Final progress update
-        self._update_progress("Import complete!", 100)
-        
-        return self.statistics.current_metrics
+        # Execute with streaming entity-centric strategy (only supported strategy)
+        return self._process_streaming_entity_centric(context)
     
     def _process_streaming_entity_centric(self, context: ProcessingContext) -> ExecutionMetrics:
         """Process using streaming entity-centric approach"""
@@ -229,10 +149,17 @@ class MappingAwareProcessor:
         
         for dataset_config in context.execution_config.datasets:
             if dataset_config.dataset_name not in context.all_csv_sources:
-                logger.warning(f"Dataset {dataset_config.dataset_name} has no CSV data, skipping")
+                logger.warning(f"Dataset {dataset_config.dataset_name} has no CSV data, creating dataset resource only")
                 self.statistics.increment_datasets_skipped()
+                
+                # IMPORTANT: Still create the dataset resource even for missing datasets
+                # This ensures the dataset URI exists in the graph
+                dataset_resource = self.resource_manager.create_dataset_resource(dataset_config.dataset_name)
+                logger.info(f"Created dataset resource for missing dataset '{dataset_config.dataset_name}'")
+                
                 # Check for orphaned FK references pointing to this skipped dataset
                 self._check_orphaned_fk_references(dataset_config.dataset_name, context)
+                context.processed_datasets.add(dataset_config.dataset_name)
                 continue
             
             context.current_dataset = dataset_config.dataset_name
@@ -292,47 +219,6 @@ class MappingAwareProcessor:
         
         # Resolve relationships
         self._resolve_pending_relationships(context)
-        
-        # Log processing summary
-        self._log_processing_summary(context)
-        
-        return self.statistics.current_metrics
-    
-    def _process_multi_phase(self, context: ProcessingContext) -> ExecutionMetrics:
-        """Process using multi-phase approach"""
-        
-        logger.info("Processing with multi-phase strategy")
-        
-        # Phase 1: Create all entities (without relationships)
-        logger.info("Phase 1: Creating entities")
-        for dataset_config in context.execution_config.datasets:
-            if dataset_config.dataset_name not in context.all_csv_sources:
-                logger.warning(f"Dataset {dataset_config.dataset_name} has no CSV data, creating dataset resource only")
-                self.statistics.increment_datasets_skipped()
-                
-                # IMPORTANT: Still create the dataset resource even for missing datasets
-                dataset_resource = self.resource_manager.create_dataset_resource(dataset_config.dataset_name)
-                logger.info(f"Created dataset resource for missing dataset '{dataset_config.dataset_name}'")
-                
-                # Check for orphaned FK references pointing to this skipped dataset
-                self._check_orphaned_fk_references(dataset_config.dataset_name, context)
-                context.processed_datasets.add(dataset_config.dataset_name)
-                continue
-            
-            context.current_dataset = dataset_config.dataset_name
-            csv_data = context.all_csv_sources[dataset_config.dataset_name]
-            
-            # Process entities only (no relationships)
-            self._process_entities_only(dataset_config, csv_data, context)
-            context.processed_datasets.add(dataset_config.dataset_name)
-        
-        # Phase 2: Create FK relationships
-        logger.info("Phase 2: Creating FK relationships")
-        self._process_all_fk_relationships(context)
-        
-        # Phase 3: Process relationship contexts
-        logger.info("Phase 3: Processing relationship contexts")
-        self._process_all_relationship_contexts(context)
         
         # Log processing summary
         self._log_processing_summary(context)
@@ -1111,11 +997,19 @@ class MappingAwareProcessor:
             schema_property_uri = self._generate_property_uri("defines_entity_type")
             
             # Create schema triple linking dataset to entity type
-            self.resource_manager.create_property_triple(
+            entity_type_resource, _ = Resource.objects.get_or_create(
+                uri=entity_type_uri,
+                defaults={
+                    "resource_type": ResourceType.ENTITY,
+                    "name": entity_type_uri.split('/')[-1],
+                    "source": self.resource_manager.institution,
+                    "is_placeholder": False
+                }
+            )
+            self.resource_manager.create_relationship_triple(
                 dataset_resource,
                 schema_property_uri,
-                entity_type_uri,
-                "uri"
+                entity_type_resource
             )
             logger.info(f"   🏷️  Defined entity type '{primary_entity_column.arkumu_type}' for dataset '{skipped_dataset}'")
         
@@ -1128,17 +1022,25 @@ class MappingAwareProcessor:
                 
                 # Link dataset to property definition
                 schema_property_uri = self._generate_property_uri("defines_property")
-                self.resource_manager.create_property_triple(
+                property_def_resource, _ = Resource.objects.get_or_create(
+                    uri=property_def_uri,
+                    defaults={
+                        "resource_type": ResourceType.PROPERTY,
+                        "name": property_def_uri.split('/')[-1],
+                        "source": self.resource_manager.institution,
+                        "is_placeholder": False
+                    }
+                )
+                self.resource_manager.create_relationship_triple(
                     dataset_resource,
                     schema_property_uri,
-                    property_def_uri,
-                    "uri"
+                    property_def_resource
                 )
                 
                 # Add property metadata (type, cardinality, etc.)
                 type_uri = self._generate_property_uri("property_datatype")
                 self.resource_manager.create_property_triple(
-                    property_def_uri,
+                    property_def_resource,
                     type_uri,
                     column.datatype or "string",
                     "string"
@@ -1147,7 +1049,7 @@ class MappingAwareProcessor:
                 if column.is_multi_value:
                     cardinality_uri = self._generate_property_uri("property_cardinality")
                     self.resource_manager.create_property_triple(
-                        property_def_uri,
+                        property_def_resource,
                         cardinality_uri,
                         "multiple",
                         "string"

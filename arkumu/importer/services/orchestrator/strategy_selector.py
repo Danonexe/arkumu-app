@@ -15,11 +15,8 @@ logger = logging.getLogger(__name__)
 
 
 class ProcessingStrategy(Enum):
-    """Available processing strategies"""
-    ENTITY_CENTRIC = "entity_centric"
+    """Processing strategy - simplified to single approach"""
     STREAMING_ENTITY_CENTRIC = "streaming_entity_centric"
-    MULTI_PHASE = "multi_phase"
-    AUTO = "auto"
 
 
 @dataclass
@@ -72,29 +69,18 @@ class StrategySelector:
                               execution_config: ExecutionConfig,
                               csv_sources: Dict[str, Any]) -> ProcessingStrategy:
         """
-        Choose optimal processing strategy based on data characteristics.
+        Always returns STREAMING_ENTITY_CENTRIC (only available strategy).
         
         Args:
-            execution_config: Execution configuration
-            csv_sources: CSV data sources
+            execution_config: Execution configuration (for compatibility)
+            csv_sources: CSV data sources (for compatibility)
             
         Returns:
             Recommended ProcessingStrategy
         """
-        # Analyze dataset characteristics
-        characteristics = self._analyze_dataset_characteristics(execution_config, csv_sources)
-        
-        # Analyze all strategies
-        strategy_analyses = self._analyze_all_strategies_internal(execution_config, characteristics)
-        
-        # Select best strategy
-        best_strategy = max(strategy_analyses, key=lambda x: x.feasibility_score)
-        best_strategy.recommended = True
-        
-        logger.info(f"Selected strategy: {best_strategy.strategy.value} "
-                   f"(feasibility: {best_strategy.feasibility_score:.2f})")
-        
-        return best_strategy.strategy
+        # Always return the only available strategy
+        logger.info("Using STREAMING_ENTITY_CENTRIC strategy (only available option)")
+        return ProcessingStrategy.STREAMING_ENTITY_CENTRIC
     
     def analyze_all_strategies(self,
                              execution_config: ExecutionConfig,

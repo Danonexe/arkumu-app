@@ -256,7 +256,22 @@ def run_mapping_aware_import_workflow(
         from arkumu.importer.services.mapping_consumer.config_translator import ProcessingStrategy
         
         # Ensure mapping exists
-        mapping = Mapping.objects.get(id=mapping_id)
+        try:
+            mapping = Mapping.objects.get(id=mapping_id)
+        except Mapping.DoesNotExist:
+            error_msg = f"Mapping with ID '{mapping_id}' not found. Please create a mapping using the Mapping Generator at /mappings/create before importing."
+            logger.error(f"Task {actual_task_id or 'UnknownID'}: {error_msg}")
+            phase_info = get_mapping_phase_info("mapping_load", 0)
+            update_cache_with_phase_info("failed", error_msg, 0, phase_info, error_type="MappingNotFound")
+            update_upload_session_status('failed', error_msg)
+            return {
+                "status": "error",
+                "dataset_name": dataset_name,
+                "s3_object_key": s3_object_key,
+                "error_message": error_msg,
+                "error_type": "MappingNotFound",
+                "recovery_suggestion": "Create a mapping using the Mapping Generator GUI at /mappings/create"
+            }
         mapping_adapter = MappingAdapter()
         
         # Load and translate mapping using the automated system from test
@@ -285,14 +300,33 @@ def run_mapping_aware_import_workflow(
             logger.info(f"Task {actual_task_id or 'UnknownID'}: Loading CSV data from S3 object {s3_bucket_name}/{s3_object_key}")
             
             # Get file content directly using BucketService (same as tests)
-            result = bucket_service.get_file_content(s3_bucket_name, s3_object_key)
-            
-            if isinstance(result, dict) and 'content' in result:
-                content = result['content']
-                if isinstance(content, bytes):
-                    content = content.decode('utf-8')
-            else:
-                raise Exception(f"Unexpected result format from get_file_content: {result}")
+            try:
+                result = bucket_service.get_file_content(s3_bucket_name, s3_object_key)
+                
+                if isinstance(result, dict) and 'content' in result:
+                    content = result['content']
+                    if isinstance(content, bytes):
+                        content = content.decode('utf-8')
+                else:
+                    raise Exception(f"Unexpected result format from get_file_content: {result}")
+            except Exception as s3_error:
+                error_msg = (
+                    f"Failed to download CSV file '{s3_object_key}' from S3 bucket '{s3_bucket_name}'. "
+                    f"Please verify the file exists and you have access permissions."
+                )
+                logger.error(f"Task {actual_task_id or 'UnknownID'}: S3 download failed: {s3_error}")
+                phase_info = get_mapping_phase_info("data_preparation", 0)
+                update_cache_with_phase_info("failed", error_msg, 0, phase_info, error_type="S3DownloadError")
+                update_upload_session_status('failed', error_msg)
+                return {
+                    "status": "error",
+                    "dataset_name": dataset_name,
+                    "s3_object_key": s3_object_key,
+                    "error_message": error_msg,
+                    "error_type": "S3DownloadError",
+                    "recovery_suggestion": "Check if the file exists in S3 and verify access permissions",
+                    "technical_details": str(s3_error)
+                }
             
             # Parse CSV with semicolon delimiter (same as tests)
             csv_reader = csv.DictReader(io.StringIO(content), delimiter=';')
@@ -306,6 +340,19 @@ def run_mapping_aware_import_workflow(
             }}
             
             logger.info(f"Task {actual_task_id or 'UnknownID'}: Loaded {len(rows)} rows from S3 CSV")
+            
+            # IMPORTANT: Ensure ALL datasets from mapping are represented in csv_sources
+            # This ensures dataset URIs are created even for datasets without CSV files
+            logger.info(f"Task {actual_task_id or 'UnknownID'}: Ensuring all {len(execution_config.datasets)} datasets from mapping are included...")
+            for dataset_config in execution_config.datasets:
+                if dataset_config.dataset_name not in csv_sources:
+                    # Add empty entry for datasets without CSV files
+                    csv_sources[dataset_config.dataset_name] = {
+                        'headers': [],
+                        'rows': [],
+                        'row_count': 0
+                    }
+                    logger.info(f"Task {actual_task_id or 'UnknownID'}: Added empty entry for dataset '{dataset_config.dataset_name}' (no CSV file)")
         
         logger.info(f"Task {actual_task_id or 'UnknownID'}: CSV sources prepared with {len(csv_sources)} datasets")
         
@@ -356,6 +403,29 @@ def run_mapping_aware_import_workflow(
             logger.info(f"Task {actual_task_id} cancelled before intensive processing")
             raise CancelExecution(f"Task {actual_task_id} cancelled before intensive processing")
         
+        # IMPORTANT: Ensure ALL datasets from the mapping have their URIs created
+        # This is critical for GUI navigation even if some datasets have no CSV files
+        logger.info(f"Task {actual_task_id or 'UnknownID'}: Pre-creating dataset URIs for all {len(execution_config.datasets)} datasets in mapping...")
+        
+        from arkumu.importer.services.execution.resource_manager import ResourceManager
+        resource_manager = ResourceManager(
+            institution=institution,
+            base_uri=base_uri,
+            statistics=execution_statistics
+        )
+        
+        datasets_created = 0
+        for dataset_config in execution_config.datasets:
+            try:
+                dataset_resource = resource_manager.create_dataset_resource(dataset_config.dataset_name)
+                if dataset_resource:
+                    datasets_created += 1
+                    logger.debug(f"Task {actual_task_id or 'UnknownID'}: Created/verified dataset URI for '{dataset_config.dataset_name}'")
+            except Exception as e:
+                logger.warning(f"Task {actual_task_id or 'UnknownID'}: Failed to create dataset URI for '{dataset_config.dataset_name}': {e}")
+        
+        logger.info(f"Task {actual_task_id or 'UnknownID'}: Pre-created/verified {datasets_created} dataset URIs")
+        
         # Execute the mapping-aware processing using STREAMING_ENTITY_CENTRIC strategy
         metrics = processor.process_with_execution_config(
             execution_config=execution_config,
@@ -374,8 +444,29 @@ def run_mapping_aware_import_workflow(
         update_cache_with_phase_info("processing", "Finalizing mapping-aware import...", 85, phase_info)
         
         # Verify processing completed successfully
-        if not isinstance(metrics, type(metrics)) or metrics.rows_processed <= 0:
-            raise ValueError("No rows were processed by MappingAwareProcessor")
+        if not hasattr(metrics, 'rows_processed') or metrics.rows_processed <= 0:
+            error_msg = (
+                f"Import completed but no data was processed from '{dataset_name}'. "
+                f"This could indicate an empty CSV file, mismatched mapping configuration, "
+                f"or data format issues."
+            )
+            logger.error(f"Task {actual_task_id or 'UnknownID'}: No data processed: {error_msg}")
+            phase_info = get_mapping_phase_info("mapping_aware_processing", 100)
+            update_cache_with_phase_info("failed", error_msg, 0, phase_info, error_type="NoDataProcessed")
+            update_upload_session_status('failed', error_msg)
+            return {
+                "status": "error",
+                "dataset_name": dataset_name,
+                "s3_object_key": s3_object_key,
+                "error_message": error_msg,
+                "error_type": "NoDataProcessed",
+                "recovery_suggestion": "Check if CSV file contains data and mapping configuration matches the file structure",
+                "debugging_steps": [
+                    "Verify CSV file is not empty",
+                    "Check mapping configuration matches CSV headers",
+                    "Review import logs for data validation errors"
+                ]
+            }
         
         # Get all detailed metrics from ExecutionMetrics
         detailed_metrics = metrics.to_dict()
@@ -433,22 +524,63 @@ def run_mapping_aware_import_workflow(
         }
         
     except Exception as e:
-        error_message = f"Error in mapping-aware import for dataset '{dataset_name}' from S3 object {s3_bucket_name}/{s3_object_key}: {str(e)}"
+        # Enhanced error handling with specific error types and recovery suggestions
+        error_type = type(e).__name__
+        error_str = str(e)
+        
+        if "is not a valid UUID" in error_str:
+            # Extract the problematic URI from the error message
+            uri_match = error_str.split('"')[1] if '"' in error_str else "property URI"
+            error_message = (
+                f"Mapping configuration error for '{dataset_name}': Invalid UUID format detected. "
+                f"The system found a URI ('{uri_match}') where a UUID was expected. "
+                f"This usually indicates a mapping configuration issue."
+            )
+            recovery_suggestion = "Update the mapping configuration to use proper UUID values instead of URIs for property definitions"
+            error_type = "MappingConfigurationError"
+        elif "ValidationError" in error_type and "property" in error_str.lower():
+            error_message = (
+                f"Property validation error in mapping for '{dataset_name}'. "
+                f"The mapping contains invalid property definitions that don't match the expected format."
+            )
+            recovery_suggestion = "Review and update the mapping configuration using the Mapping Generator to fix property definitions"
+            error_type = "PropertyValidationError"
+        elif "permission" in error_str.lower() or "access" in error_str.lower():
+            error_message = f"Access denied while importing '{dataset_name}'. Please check S3 permissions and file access rights."
+            recovery_suggestion = "Verify S3 bucket permissions and ensure the file is accessible"
+        elif "connection" in error_str.lower() or "network" in error_str.lower():
+            error_message = f"Network error during import of '{dataset_name}'. Please check your connection and try again."
+            recovery_suggestion = "Check network connectivity and retry the import"
+        elif "memory" in error_str.lower() or "out of memory" in error_str.lower():
+            error_message = f"Insufficient memory to process '{dataset_name}'. The file may be too large for current resources."
+            recovery_suggestion = "Try importing a smaller file or contact system administrator for resource allocation"
+        elif "timeout" in error_str.lower():
+            error_message = f"Import of '{dataset_name}' timed out. The file may be too large or complex."
+            recovery_suggestion = "Try splitting the data into smaller files or contact support"
+        else:
+            error_message = f"Unexpected error importing '{dataset_name}': {str(e)}"
+            recovery_suggestion = "Please contact support with the error details below"
+        
         logger.error(
             f"Task {actual_task_id or 'UnknownID'}: Mapping-aware import failed: {e}",
             exc_info=True
         )
         
         phase_info = get_mapping_phase_info("initialization", 0)
-        update_cache_with_phase_info("failed", error_message, 0, phase_info, error_type=type(e).__name__)
+        update_cache_with_phase_info("failed", error_message, 0, phase_info, error_type=error_type)
         update_upload_session_status('failed', error_message)
         
         return {
             "status": "error",
             "dataset_name": dataset_name,
             "s3_object_key": s3_object_key,
-            "error_message": str(e),
-            "error_type": type(e).__name__
+            "error_message": error_message,
+            "error_type": error_type,
+            "recovery_suggestion": recovery_suggestion,
+            "technical_details": str(e),
+            "contact_support": True if "unexpected error" in error_message.lower() else False,
+            "gui_redirect": "/mappings/" + mapping_id + "/edit" if "mapping" in error_message.lower() and mapping_id else None,
+            "user_action_required": "mapping" in error_message.lower() or "configuration" in error_message.lower()
         }
     
     finally:
@@ -745,7 +877,26 @@ def run_csv_import_workflow_with_mapping(
                 update_cache_with_phase_info("processing", f"Loading mapping configuration...", 25, phase_info)
                 
                 # Load the mapping
-                mapping = Mapping.objects.get(id=mapping_id)
+                try:
+                    mapping = Mapping.objects.get(id=mapping_id)
+                except Mapping.DoesNotExist:
+                    error_msg = (
+                        f"Mapping with ID '{mapping_id}' not found. "
+                        f"Please create the mapping using the Mapping Generator before importing."
+                    )
+                    logger.error(f"Task {actual_task_id or 'UnknownID'}: {error_msg}")
+                    phase_info = get_phase_info("mapping_validation", 0)
+                    update_cache_with_phase_info("failed", error_msg, 0, phase_info, error_type="MappingNotFound")
+                    update_upload_session_status('failed', error_msg)
+                    return {
+                        "status": "error",
+                        "dataset_name": dataset_name,
+                        "s3_object_key": s3_object_key,
+                        "error_message": error_msg,
+                        "error_type": "MappingNotFound",
+                        "recovery_suggestion": "Create a mapping using the Mapping Generator GUI",
+                        "gui_redirect": "/mappings/create"
+                    }
                 adapter = MappingAdapter()
                 
                 # Validate mapping if validation mode is enabled
@@ -816,17 +967,28 @@ def run_csv_import_workflow_with_mapping(
                 
                 if not match_result.successful_matches:
                     if validation_mode:
-                        error_msg = f"File {os.path.basename(temp_local_path)} does not match any dataset in mapping"
+                        error_msg = (
+                            f"CSV file '{os.path.basename(temp_local_path)}' structure does not match any dataset "
+                            f"in the selected mapping. The file headers or format may not align with the mapping configuration."
+                        )
                         logger.error(f"Task {actual_task_id or 'UnknownID'}: {error_msg}")
                         phase_info = get_phase_info("file_validation", 100)
-                        update_cache_with_phase_info("failed", error_msg, 0, phase_info, error_type="FileValidationError")
+                        update_cache_with_phase_info("failed", error_msg, 0, phase_info, error_type="FileStructureMismatch")
                         update_upload_session_status('failed', error_msg)
                         return {
                             "status": "error",
                             "dataset_name": dataset_name,
                             "s3_object_key": s3_object_key,
                             "error_message": error_msg,
-                            "error_type": "FileValidationError"
+                            "error_type": "FileStructureMismatch",
+                            "recovery_suggestion": "Update the mapping to match your CSV file structure or modify the CSV to match the mapping",
+                            "debugging_steps": [
+                                "Compare CSV headers with mapping dataset definitions",
+                                "Check for extra/missing columns in CSV",
+                                "Verify CSV delimiter and format settings",
+                                "Update mapping using the Mapping Generator if needed"
+                            ],
+                            "gui_redirect": f"/mappings/{mapping_id}/edit"
                         }
                     else:
                         logger.warning(f"Task {actual_task_id or 'UnknownID'}: File validation failed, proceeding with entity-based import")
@@ -885,17 +1047,23 @@ def run_csv_import_workflow_with_mapping(
         
         # Ensure we have a valid mapping_id for STREAMING_ENTITY_CENTRIC strategy
         if not mapping_id:
-            error_msg = f"mapping_id is required for STREAMING_ENTITY_CENTRIC import with dataset-entity linking"
+            error_msg = (
+                f"A mapping is required for importing dataset '{dataset_name}'. "
+                f"Please create a mapping using the Mapping Generator before importing this CSV file."
+            )
             logger.error(f"Task {actual_task_id or 'UnknownID'}: {error_msg}")
             phase_info = get_phase_info("data_import", 0)
-            update_cache_with_phase_info("failed", error_msg, 0, phase_info, error_type="MissingMappingError")
+            update_cache_with_phase_info("failed", error_msg, 0, phase_info, error_type="MappingRequired")
             update_upload_session_status('failed', error_msg)
             return {
                 "status": "error",
                 "dataset_name": dataset_name,
                 "s3_object_key": s3_object_key,
                 "error_message": error_msg,
-                "error_type": "MissingMappingError"
+                "error_type": "MappingRequired",
+                "recovery_suggestion": "Create a mapping for this dataset using the Mapping Generator GUI at /mappings/create",
+                "user_action_required": True,
+                "gui_redirect": "/mappings/create"
             }
         
         # Always use mapping-aware processor with STREAMING_ENTITY_CENTRIC strategy
@@ -997,21 +1165,66 @@ def run_csv_import_workflow_with_mapping(
         }
         
     except Exception as e:
-        error_message = f"Error importing dataset '{dataset_name}' from S3 object {s3_bucket_name}/{s3_object_key}: {str(e)}"
+        # Enhanced error handling with detailed categorization
+        error_type = type(e).__name__
+        error_str = str(e)
+        
+        # Categorize common import errors with user-friendly messages
+        if "is not a valid UUID" in error_str:
+            # Extract the problematic URI from the error message
+            uri_match = error_str.split('"')[1] if '"' in error_str else "property URI"
+            error_message = (
+                f"Mapping configuration error for '{dataset_name}': Invalid UUID format detected. "
+                f"The system found a URI ('{uri_match}') where a UUID was expected. "
+                f"This usually indicates a mapping configuration issue."
+            )
+            recovery_suggestion = "Update the mapping configuration to use proper UUID values instead of URIs for property definitions"
+            error_type = "MappingConfigurationError"
+        elif "ValidationError" in error_type and "property" in error_str.lower():
+            error_message = (
+                f"Property validation error in mapping for '{dataset_name}'. "
+                f"The mapping contains invalid property definitions that don't match the expected format."
+            )
+            recovery_suggestion = "Review and update the mapping configuration using the Mapping Generator to fix property definitions"
+            error_type = "PropertyValidationError"
+        elif "S3" in error_str or "bucket" in error_str.lower():
+            error_message = f"S3 storage error while importing '{dataset_name}'. File may not exist or access is denied."
+            recovery_suggestion = "Check if the file exists in S3 and verify access permissions"
+        elif "CSV" in error_str or "delimiter" in error_str.lower() or "encoding" in error_str.lower():
+            error_message = f"CSV format error in '{dataset_name}'. The file format may be invalid or corrupted."
+            recovery_suggestion = "Verify CSV file format, encoding (UTF-8), and delimiter settings"
+        elif "mapping" in error_str.lower():
+            error_message = f"Mapping configuration error for '{dataset_name}'. The mapping may be invalid or incompatible."
+            recovery_suggestion = "Review and update the mapping configuration using the Mapping Generator"
+        elif "database" in error_str.lower() or "connection" in error_str.lower():
+            error_message = f"Database error during import of '{dataset_name}'. System may be temporarily unavailable."
+            recovery_suggestion = "Wait a moment and try again. If the problem persists, contact support"
+        else:
+            error_message = f"Import failed for '{dataset_name}': {str(e)}"
+            recovery_suggestion = "Please contact support with the error details below"
+        
         logger.error(
             f"Task {actual_task_id or 'UnknownID'}: Error during CSV import workflow for dataset '{dataset_name}' from S3 object '{s3_bucket_name}/{s3_object_key}': {e}",
             exc_info=True
         )
+        
         # Use generic error phase info if no specific phase is available
         phase_info = get_phase_info("initialization", 0)
-        update_cache_with_phase_info("failed", error_message, 0, phase_info, error_type=type(e).__name__)
+        update_cache_with_phase_info("failed", error_message, 0, phase_info, error_type=error_type)
         update_upload_session_status('failed', error_message)
+        
         return {
             "status": "error",
             "dataset_name": dataset_name,
             "s3_object_key": s3_object_key,
-            "error_message": str(e),
-            "error_type": type(e).__name__
+            "error_message": error_message,
+            "error_type": error_type,
+            "recovery_suggestion": recovery_suggestion,
+            "technical_details": str(e),
+            "timestamp": timezone.now().isoformat(),
+            "support_needed": "mapping" not in error_message.lower() and "csv" not in error_message.lower(),
+            "gui_redirect": f"/mappings/{mapping_id}/edit" if "mapping" in error_message.lower() and mapping_id else None,
+            "user_action_required": "mapping" in error_message.lower() or "configuration" in error_message.lower()
         }
     finally:
         # Clean up the temporary file created by this task

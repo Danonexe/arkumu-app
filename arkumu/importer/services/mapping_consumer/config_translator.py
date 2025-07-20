@@ -23,11 +23,8 @@ class ColumnType(Enum):
 
 
 class ProcessingStrategy(Enum):
-    """Available processing strategies"""
-    ENTITY_CENTRIC = "entity_centric"
+    """Processing strategy - simplified to single approach"""
     STREAMING_ENTITY_CENTRIC = "streaming_entity_centric"
-    MULTI_PHASE = "multi_phase"
-    AUTO = "auto"
 
 
 @dataclass
@@ -116,7 +113,7 @@ class ExecutionConfig:
     
     # Core configuration
     datasets: List[DatasetConfig] = field(default_factory=list)
-    processing_strategy: ProcessingStrategy = ProcessingStrategy.AUTO
+    processing_strategy: ProcessingStrategy = ProcessingStrategy.STREAMING_ENTITY_CENTRIC
     column_configurations: Dict[str, ColumnConfig] = field(default_factory=dict)
     fk_relationships: List[FKRelationship] = field(default_factory=list)
     relationship_contexts: List[RelationshipContext] = field(default_factory=list)
@@ -392,8 +389,8 @@ class ConfigTranslator:
         try:
             execution_config.processing_strategy = ProcessingStrategy(strategy_name)
         except ValueError:
-            logger.warning(f"Unknown processing strategy '{strategy_name}', using AUTO")
-            execution_config.processing_strategy = ProcessingStrategy.AUTO
+            logger.warning(f"Unknown processing strategy '{strategy_name}', using STREAMING_ENTITY_CENTRIC")
+            execution_config.processing_strategy = ProcessingStrategy.STREAMING_ENTITY_CENTRIC
     
     def _build_dataset_configurations(self, execution_config: ExecutionConfig):
         """Build dataset configurations from column configurations"""
