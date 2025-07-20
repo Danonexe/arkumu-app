@@ -1341,7 +1341,7 @@ def service_powered_csv_import(request):
             temp_s3_key = f"temp_bulk_editor/{organization}/{dataset_name}.csv"
             bucket_service.base_s3_service.s3_client.upload_file(temp_path, bucket_name, temp_s3_key)
             
-            # Use the NEW mapping-aware import system instead of old bridge_service
+            # Use the NEW two-phase mapping-aware import system
             import_result = run_mapping_aware_import_workflow(
                 s3_bucket_name=bucket_name,
                 s3_object_key=temp_s3_key,
@@ -1352,7 +1352,8 @@ def service_powered_csv_import(request):
                 upload_session_id=None,  # No session for bulk editor
                 csv_sources=None,
                 update_progress=None,
-                task_context=None
+                task_context=None,
+                processing_strategy='enhanced_blueprint_creation'  # Use two-phase architecture
             )
             
             # Clean up temp S3 file

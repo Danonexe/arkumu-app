@@ -97,7 +97,7 @@ services:
     build:
       context: .
       dockerfile: ./compose/local/django/Dockerfile
-    image: lacos_local_huey
+    image: arkumu_local_huey
     container_name: arkumu_local_huey
     depends_on:
       - django

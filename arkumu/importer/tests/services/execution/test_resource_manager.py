@@ -649,15 +649,25 @@ class TestCanonicalLiteralURIs:
             "http://www.w3.org/2001/XMLSchema#string"
         )
         
-        # Verify canonical URI was set on the value resource after creation
-        # The URI should be set via value_resource.uri = canonical_uri
-        # Check that the resource's save() method was called (indicating URI was set)
-        mock_value.save.assert_called_once()
+        # Verify canonical URI was included in the get_or_create call
+        # With the new implementation, URI is provided as the first parameter to get_or_create
+        call_args = mock_resource_get_or_create.call_args_list[1]  # Second call is for value resource
         
-        # Check that the assigned URI is in canonical format
-        # The URI would be assigned like: mock_value.uri = canonical_uri
-        assert mock_value.uri.startswith(f"{resource_manager.base_uri}/literals/")
-        assert len(mock_value.uri.split("/")[-1]) == 16
+        # Check that URI was passed as first positional argument to get_or_create
+        if len(call_args[0]) > 0:
+            # URI passed as positional argument
+            passed_uri = call_args[0][0]
+            assert passed_uri.startswith(f"{resource_manager.base_uri}/literals/")
+            assert len(passed_uri.split("/")[-1]) == 16  # Blake2b 8-byte hash = 16 hex chars
+        else:
+            # URI passed as keyword argument  
+            assert 'uri' in call_args[1]
+            passed_uri = call_args[1]['uri']
+            assert passed_uri.startswith(f"{resource_manager.base_uri}/literals/")
+            assert len(passed_uri.split("/")[-1]) == 16
+        
+        # The result should be the mock triple
+        assert result is not None
     
     def test_literal_uri_deduplication_across_contexts(self, resource_manager):
         """Test that same literal gets same URI across different contexts"""

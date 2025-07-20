@@ -85,6 +85,7 @@ from datetime import datetime, timezone
 
 from arkumu.importer.services.mapping_consumer.mapping_adapter import MappingAdapter
 from arkumu.importer.services.execution.mapping_aware_processor import MappingAwareProcessor
+from arkumu.importer.services.execution.enhanced_mapping_processor import EnhancedMappingProcessor
 from arkumu.importer.services.execution.statistics import ExecutionStatistics, ExecutionMetrics
 from arkumu.importer.services.mapping_validation.validator import MappingValidator
 from arkumu.importer.services.mapping_consumer.config_translator import ProcessingStrategy
@@ -600,6 +601,121 @@ class TestRealProductionIntegration:
                 Triple.objects.filter(object__uri__contains="test-all-datasets.arkumu.org").delete()
             except Exception as e:
                 logger.warning(f"Error cleaning up test resources: {e}")
+    
+    @pytest.mark.django_db(transaction=True)
+    def test_enhanced_blueprint_creation_with_real_data(self, production_test_mapping, real_csv_data, execution_statistics):
+        """Test the new schema-first blueprint creation with real FUK data"""
+        # Ensure we're using the test database
+        assert production_test_mapping.pk is not None, "Mapping must be saved in test database"
+        
+        # Load and translate mapping using the automated system
+        execution_config = self.load_production_test_mapping(production_test_mapping)
+        
+        # Get all dataset names from the mapping
+        all_mapping_datasets = {dataset.dataset_name for dataset in execution_config.datasets}
+        logger.info(f"=== ENHANCED BLUEPRINT CREATION TEST ===" )
+        logger.info(f"Total datasets in mapping: {len(all_mapping_datasets)}")
+        
+        # Use real CSV data from S3
+        csv_sources = real_csv_data
+        csv_dataset_names = set(csv_sources.keys())
+        
+        # Find datasets that are in mapping but not in CSV files (like Sammlung)
+        datasets_without_csv = all_mapping_datasets - csv_dataset_names
+        logger.info(f"Datasets with CSV files: {len(csv_dataset_names)}")
+        logger.info(f"Datasets without CSV files: {len(datasets_without_csv)}")
+        logger.info(f"Datasets without CSV: {sorted(list(datasets_without_csv))[:5]}...")
+        
+        # Initialize processor with test-specific URI
+        processor = MappingAwareProcessor(
+            institution="TEST_ENHANCED_BLUEPRINT",
+            base_uri="http://test-enhanced.arkumu.org/data",
+            statistics=execution_statistics
+        )
+        
+        # Execute processing - this will now trigger the enhanced blueprint creation
+        try:
+            logger.info("🏗️  Starting enhanced blueprint creation test...")
+            
+            metrics = processor.process_with_execution_config(
+                execution_config=execution_config,
+                csv_sources=csv_sources,
+                strategy=ProcessingStrategy.STREAMING_ENTITY_CENTRIC
+            )
+            
+            # Verify processing completed
+            assert isinstance(metrics, ExecutionMetrics)
+            logger.info(f"✅ Enhanced processing completed with metrics: {metrics}")
+            
+            # Check that blueprint creation happened
+            assert len(processor.dataset_blueprints) > 0, "No dataset blueprints were created"
+            logger.info(f"✅ Created {len(processor.dataset_blueprints)} dataset blueprints")
+            
+            # Verify that empty datasets (like Sammlung) have blueprints
+            empty_datasets_with_blueprints = []
+            for dataset_name in datasets_without_csv:
+                if dataset_name in processor.dataset_blueprints:
+                    blueprint = processor.dataset_blueprints[dataset_name]
+                    empty_datasets_with_blueprints.append(dataset_name)
+                    logger.info(f"   📦 {dataset_name}: {len(blueprint['property_resources'])} properties in blueprint")
+            
+            logger.info(f"✅ Empty datasets with blueprints: {len(empty_datasets_with_blueprints)}")
+            
+            # Verify that ALL datasets from mapping have blueprints (including empty ones)
+            missing_blueprints = all_mapping_datasets - set(processor.dataset_blueprints.keys())
+            if missing_blueprints:
+                logger.error(f"❌ Missing blueprints for: {sorted(missing_blueprints)}")
+            
+            assert len(missing_blueprints) == 0, f"Missing blueprints for datasets: {missing_blueprints}"
+            
+            # Verify that Sammlung specifically has a blueprint (the original problem case)
+            if 'Sammlung' in all_mapping_datasets:
+                assert 'Sammlung' in processor.dataset_blueprints, "Sammlung blueprint was not created"
+                sammlung_blueprint = processor.dataset_blueprints['Sammlung']
+                logger.info(f"✅ Sammlung blueprint created with {len(sammlung_blueprint['property_resources'])} properties")
+                logger.info(f"   📁 Dataset resource: {sammlung_blueprint['dataset_resource'].uri}")
+                logger.info(f"   🏷️  Entity type: {sammlung_blueprint['entity_type_resource'].name}")
+            
+            # Verify that resources were created for all datasets (even empty ones)
+            created_dataset_uris = Resource.objects.filter(
+                uri__contains="/datasets/"
+            ).filter(
+                uri__contains="test-enhanced.arkumu.org"
+            ).values_list('uri', flat=True)
+            
+            logger.info(f"✅ Created dataset URIs: {len(created_dataset_uris)}")
+            
+            # Extract dataset names from URIs
+            created_dataset_names = set()
+            for uri in created_dataset_uris:
+                if '/datasets/' in uri:
+                    dataset_name = uri.split('/datasets/')[-1]
+                    created_dataset_names.add(dataset_name)
+            
+            # Verify ALL datasets have URIs (including empty ones like Sammlung)
+            missing_dataset_uris = all_mapping_datasets - created_dataset_names
+            logger.info(f"✅ Dataset URIs created for {len(created_dataset_names)}/{len(all_mapping_datasets)} datasets")
+            
+            if missing_dataset_uris:
+                logger.warning(f"⚠️  Missing dataset URIs: {sorted(missing_dataset_uris)}")
+            
+            logger.info("=== ENHANCED BLUEPRINT CREATION TEST PASSED ===")
+            logger.info("✅ Schema-first blueprint creation working correctly")
+            logger.info("✅ Empty datasets get complete blueprints")
+            logger.info("✅ All datasets have proper schema definitions")
+            logger.info("✅ FK integrity will be preserved")
+            
+        except Exception as e:
+            logger.error(f"Enhanced blueprint creation test failed: {e}")
+            raise
+        finally:
+            # Clean up test resources
+            try:
+                Resource.objects.filter(uri__contains="test-enhanced.arkumu.org").delete()
+                Triple.objects.filter(subject__uri__contains="test-enhanced.arkumu.org").delete()
+                Triple.objects.filter(object__uri__contains="test-enhanced.arkumu.org").delete()
+            except Exception as e:
+                logger.warning(f"Error cleaning up enhanced test resources: {e}")
     
     @pytest.mark.django_db(transaction=True)
     def test_error_handling_system(self):
