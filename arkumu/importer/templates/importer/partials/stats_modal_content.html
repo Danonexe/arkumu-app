@@ -1,0 +1,30 @@
+<!-- Session Info -->
+<div class="mb-6 p-4 bg-base-200 rounded-lg">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+        <div>
+            <span class="font-semibold">Dataset:</span>
+            <span>{{ session.dataset_name }}</span>
+        </div>
+        <div>
+            <span class="font-semibold">Organization:</span>
+            <span>{{ session.organization }}</span>
+        </div>
+        <div>
+            <span class="font-semibold">Date:</span>
+            <span>{{ session.created_at|date:"M d, Y H:i" }}</span>
+        </div>
+        <div>
+            <span class="font-semibold">Status:</span>
+            <span class="badge badge-sm
+                {% if session.status == 'completed' %}badge-success
+                {% elif session.status == 'failed' %}badge-error
+                {% elif session.status == 'processing' %}badge-info
+                {% else %}badge-ghost{% endif %}">
+                {{ session.status }}
+            </span>
+        </div>
+    </div>
+</div>
+
+<!-- Use the detailed stats panel component -->
+{% include 'importer/partials/detailed_stats_panel.html' with session=session show_expanded=True %}

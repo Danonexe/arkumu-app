@@ -53,6 +53,11 @@
         </div>
     </div>
     
+    <!-- Live Statistics Panel - Show during processing -->
+    {% if progress_data.status == 'processing' %}
+        {% include 'importer/partials/live_stats_panel.html' %}
+    {% endif %}
+    
     <!-- Success Message -->
     {% if progress_data.status == 'completed' %}
         <div class="alert alert-success">
@@ -102,4 +107,9 @@
             </div>
         </div>
     </div>
+
+    <!-- Detailed Statistics Panel - Show only when import is completed -->
+    {% if progress_data.status == 'completed' %}
+        {% include 'importer/partials/detailed_stats_panel.html' with show_expanded=False %}
+    {% endif %}
 </div>

@@ -1,0 +1,250 @@
+<!-- Detailed Statistics Panel -->
+<div class="collapse collapse-arrow bg-base-100 border border-base-300 mb-4">
+    <input type="checkbox" name="stats-accordion" {% if show_expanded %}checked{% endif %}>
+    <div class="collapse-title text-lg font-medium flex items-center gap-2">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+        </svg>
+        Import Statistics
+        {% if session.ingestion_stats.duration_seconds %}
+            <span class="badge badge-outline">{{ session.ingestion_stats.duration_seconds|floatformat:1 }}s</span>
+        {% endif %}
+    </div>
+    <div class="collapse-content">
+        {% if session.ingestion_stats %}
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
+                
+                <!-- Data Processing Stats -->
+                <div class="stats shadow">
+                    <div class="stat">
+                        <div class="stat-figure text-primary">
+                            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                            </svg>
+                        </div>
+                        <div class="stat-title">Data Processed</div>
+                        <div class="stat-value text-primary">{{ session.ingestion_stats.rows_processed|default:"-" }}</div>
+                        <div class="stat-desc">rows processed</div>
+                    </div>
+                </div>
+
+                <!-- Resources Stats -->
+                <div class="stats shadow">
+                    <div class="stat">
+                        <div class="stat-figure text-success">
+                            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 9a2 2 0 00-2 2v2a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2M5 9V7a2 2 0 012-2h10a2 2 0 012 2v2M5 9h14"/>
+                            </svg>
+                        </div>
+                        <div class="stat-title">Resources</div>
+                        <div class="stat-value text-success">{{ session.ingestion_stats.resources_created|default:"-" }}</div>
+                        <div class="stat-desc">created</div>
+                    </div>
+                </div>
+
+                <!-- Triples Stats -->
+                <div class="stats shadow">
+                    <div class="stat">
+                        <div class="stat-figure text-info">
+                            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+                            </svg>
+                        </div>
+                        <div class="stat-title">Triples</div>
+                        <div class="stat-value text-info">{{ session.ingestion_stats.triples_created|default:"-" }}</div>
+                        <div class="stat-desc">created</div>
+                    </div>
+                </div>
+
+                <!-- Errors/Warnings -->
+                {% if session.ingestion_stats.errors or session.ingestion_stats.warnings %}
+                <div class="stats shadow">
+                    <div class="stat">
+                        <div class="stat-figure text-warning">
+                            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L5.232 15.5c-.77.833.192 2.5 1.732 2.5z"/>
+                            </svg>
+                        </div>
+                        <div class="stat-title">Issues</div>
+                        <div class="stat-value text-warning">
+                            {{ session.ingestion_stats.errors|default:0|add:session.ingestion_stats.warnings|default:0 }}
+                        </div>
+                        <div class="stat-desc">
+                            {{ session.ingestion_stats.errors|default:0 }} errors, 
+                            {{ session.ingestion_stats.warnings|default:0 }} warnings
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Entities Processed -->
+                {% if session.ingestion_stats.entities_processed %}
+                <div class="stats shadow">
+                    <div class="stat">
+                        <div class="stat-figure text-secondary">
+                            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                            </svg>
+                        </div>
+                        <div class="stat-title">Entities</div>
+                        <div class="stat-value text-secondary">{{ session.ingestion_stats.entities_processed }}</div>
+                        <div class="stat-desc">processed</div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- FK Relationships -->
+                {% if session.ingestion_stats.fk_relationships_created %}
+                <div class="stats shadow">
+                    <div class="stat">
+                        <div class="stat-figure text-accent">
+                            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z"/>
+                            </svg>
+                        </div>
+                        <div class="stat-title">Relationships</div>
+                        <div class="stat-value text-accent">{{ session.ingestion_stats.fk_relationships_created }}</div>
+                        <div class="stat-desc">created</div>
+                    </div>
+                </div>
+                {% endif %}
+
+            </div>
+
+            <!-- Detailed breakdown table -->
+            <div class="mt-6">
+                <h4 class="text-lg font-semibold mb-3">Detailed Breakdown</h4>
+                <div class="overflow-x-auto">
+                    <table class="table table-sm">
+                        <tbody>
+                            {% if session.ingestion_stats.cells_processed %}
+                            <tr>
+                                <td class="font-medium">Cells Processed</td>
+                                <td>{{ session.ingestion_stats.cells_processed|floatformat:0 }}</td>
+                            </tr>
+                            {% endif %}
+                            {% if session.ingestion_stats.columns_processed %}
+                            <tr>
+                                <td class="font-medium">Columns Processed</td>
+                                <td>{{ session.ingestion_stats.columns_processed }}</td>
+                            </tr>
+                            {% endif %}
+                            {% if session.ingestion_stats.resources_updated %}
+                            <tr>
+                                <td class="font-medium">Resources Updated</td>
+                                <td>{{ session.ingestion_stats.resources_updated }}</td>
+                            </tr>
+                            {% endif %}
+                            {% if session.ingestion_stats.resources_skipped %}
+                            <tr>
+                                <td class="font-medium">Resources Skipped</td>
+                                <td>{{ session.ingestion_stats.resources_skipped }}</td>
+                            </tr>
+                            {% endif %}
+                            {% if session.ingestion_stats.triples_updated %}
+                            <tr>
+                                <td class="font-medium">Triples Updated</td>
+                                <td>{{ session.ingestion_stats.triples_updated }}</td>
+                            </tr>
+                            {% endif %}
+                            {% if session.ingestion_stats.values_truncated %}
+                            <tr>
+                                <td class="font-medium">Values Truncated</td>
+                                <td>{{ session.ingestion_stats.values_truncated }}</td>
+                            </tr>
+                            {% endif %}
+                            {% if session.ingestion_stats.external_ontology_lookups %}
+                            <tr>
+                                <td class="font-medium">External Ontology Lookups</td>
+                                <td>{{ session.ingestion_stats.external_ontology_lookups }}</td>
+                            </tr>
+                            {% endif %}
+                            {% if session.ingestion_stats.external_ontology_matches %}
+                            <tr>
+                                <td class="font-medium">External Ontology Matches</td>
+                                <td>{{ session.ingestion_stats.external_ontology_matches }}</td>
+                            </tr>
+                            {% endif %}
+                            {% if session.ingestion_stats.multi_value_cells_split %}
+                            <tr>
+                                <td class="font-medium">Multi-value Cells Split</td>
+                                <td>{{ session.ingestion_stats.multi_value_cells_split }}</td>
+                            </tr>
+                            {% endif %}
+                            {% if session.ingestion_stats.multi_value_items_created %}
+                            <tr>
+                                <td class="font-medium">Multi-value Items Created</td>
+                                <td>{{ session.ingestion_stats.multi_value_items_created }}</td>
+                            </tr>
+                            {% endif %}
+                            {% if session.ingestion_stats.properties_created %}
+                            <tr>
+                                <td class="font-medium">Properties Created</td>
+                                <td>{{ session.ingestion_stats.properties_created }}</td>
+                            </tr>
+                            {% endif %}
+                            {% if session.ingestion_stats.stub_entities_created %}
+                            <tr>
+                                <td class="font-medium">Stub Entities Created</td>
+                                <td>{{ session.ingestion_stats.stub_entities_created }}</td>
+                            </tr>
+                            {% endif %}
+                            {% if session.ingestion_stats.cross_dataset_links %}
+                            <tr>
+                                <td class="font-medium">Cross-dataset Links</td>
+                                <td>{{ session.ingestion_stats.cross_dataset_links }}</td>
+                            </tr>
+                            {% endif %}
+                            {% if session.ingestion_stats.fk_dependencies_resolved %}
+                            <tr>
+                                <td class="font-medium">FK Dependencies Resolved</td>
+                                <td>{{ session.ingestion_stats.fk_dependencies_resolved }}</td>
+                            </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Import Configuration -->
+            {% if session.ingestion_stats.mapping_name or session.ingestion_stats.execution_strategy %}
+            <div class="mt-6">
+                <h4 class="text-lg font-semibold mb-3">Import Configuration</h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {% if session.ingestion_stats.mapping_name %}
+                    <div class="alert alert-info">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        <div>
+                            <h3 class="font-bold">Mapping</h3>
+                            <div class="text-sm">{{ session.ingestion_stats.mapping_name }}</div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% if session.ingestion_stats.execution_strategy %}
+                    <div class="alert alert-info">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        </svg>
+                        <div>
+                            <h3 class="font-bold">Strategy</h3>
+                            <div class="text-sm capitalize">{{ session.ingestion_stats.execution_strategy }}</div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+        {% else %}
+            <div class="alert alert-warning">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <span>No detailed statistics available for this import session.</span>
+            </div>
+        {% endif %}
+    </div>
+</div>

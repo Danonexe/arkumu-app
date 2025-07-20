@@ -17,6 +17,7 @@ urlpatterns = [
     path('dashboard/', dashboard_views.metadata_dashboard, name='metadata_dashboard'),
     path('dashboard/all-uploads/', dashboard_views.all_upload_sessions, name='all_upload_sessions'),
     path('dashboard/all-ingests/', dashboard_views.all_ingest_sessions, name='all_ingest_sessions'),
+    path('dashboard/ingest-stats/<uuid:session_id>/', dashboard_views.ingest_session_stats, name='ingest_session_stats'),
     
     # Data Explorer (unified resource and triple browsing)
     path('data-explorer/', DataExplorerView.as_view(), name='data_explorer'),

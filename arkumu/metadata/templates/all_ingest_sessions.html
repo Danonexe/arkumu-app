@@ -8,50 +8,169 @@
         <a href="{% url 'metadata:metadata_dashboard' %}" class="btn btn-sm btn-outline">&larr; Back to Metadata Dashboard</a>
     </div>
 
-    {% if ingest_sessions %}
+    <!-- Summary Statistics -->
+    {% if total_stats %}
+    <div class="stats shadow mb-6 w-full">
+        <div class="stat">
+            <div class="stat-figure text-primary">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                </svg>
+            </div>
+            <div class="stat-title">Import Sessions</div>
+            <div class="stat-value text-primary">{{ total_stats.total_sessions }}</div>
+            <div class="stat-desc">{{ total_stats.total_datasets }} datasets total</div>
+        </div>
+        
+        <div class="stat">
+            <div class="stat-figure text-success">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+            </div>
+            <div class="stat-title">Completed</div>
+            <div class="stat-value text-success">{{ total_stats.completed_sessions }}</div>
+            <div class="stat-desc">{{ total_stats.failed_sessions }} failed, {{ total_stats.processing_sessions }} processing</div>
+        </div>
+
+        <div class="stat">
+            <div class="stat-figure text-info">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2-2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                </svg>
+            </div>
+            <div class="stat-title">Total Rows</div>
+            <div class="stat-value text-info">{{ total_stats.total_rows_processed|floatformat:0 }}</div>
+            <div class="stat-desc">across all imports</div>
+        </div>
+
+        <div class="stat">
+            <div class="stat-figure text-accent">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 9a2 2 0 00-2 2v2a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2M5 9V7a2 2 0 012-2h10a2 2 0 012 2v2M5 9h14"/>
+                </svg>
+            </div>
+            <div class="stat-title">Resources</div>
+            <div class="stat-value text-accent">{{ total_stats.total_resources_created|floatformat:0 }}</div>
+            <div class="stat-desc">{{ total_stats.total_triples_created|floatformat:0 }} triples created</div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if enhanced_sessions %}
     <div class="overflow-x-auto bg-base-100 shadow-xl rounded-lg">
+        <div class="p-4 border-b border-base-300 bg-base-50">
+            <div class="flex items-center gap-2 text-sm text-base-content/70">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 9a2 2 0 00-2 2v2a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2M5 9V7a2 2 0 012-2h10a2 2 0 012 2v2M5 9h14"/>
+                </svg>
+                <span>Each session shows all datasets imported together. Click any session row to view detailed statistics.</span>
+                <div class="ml-auto flex items-center gap-1 text-xs">
+                    <span class="badge badge-ghost badge-sm">HTMX Powered</span>
+                </div>
+            </div>
+        </div>
         <table class="table table-zebra w-full">
             <thead>
                 <tr>
                     <th>Date</th>
-                    <th>Dataset Name</th>
+                    <th>Datasets</th>
                     <th>Organization</th>
-                    <th>S3 Object Key</th>
+                    <th>Import Type</th>
                     <th>Progress</th>
-                    <th>Success Rate</th>
                     <th>Status</th>
-                    <th>Completed At</th>
+                    <th>Statistics</th>
+                    <th>Completed</th>
                 </tr>
             </thead>
             <tbody>
-                {% for session in ingest_sessions %}
-                <tr>
-                    <td>{{ session.created_at|date:"M d, Y H:i" }}</td>
-                    <td>{{ session.dataset_name|truncatechars:30 }}</td>
-                    <td>{{ session.organization|truncatechars:25 }}</td>
-                    <td class="text-xs">{{ session.s3_object_key|truncatechars:40 }}</td>
+                {% for item in enhanced_sessions %}
+                {% with session=item.session datasets=item.datasets %}
+                <tr class="{% if session.ingestion_stats %}cursor-pointer hover:bg-base-200{% endif %}" 
+                    {% if session.ingestion_stats %}
+                    hx-get="{% url 'metadata:ingest_session_stats' session.pk %}"
+                    hx-target="#stats-modal-content"
+                    hx-swap="innerHTML"
+                    hx-trigger="click"
+                    onclick="document.getElementById('stats-modal').showModal()"
+                    {% endif %}>
+                    
+                    <!-- Date -->
+                    <td class="text-sm">{{ session.created_at|date:"M d, Y" }}<br>
+                        <span class="text-xs text-base-content/60">{{ session.created_at|date:"H:i" }}</span>
+                    </td>
+                    
+                    <!-- Datasets -->
+                    <td>
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="badge badge-outline badge-sm">
+                                {{ item.dataset_count }} dataset{{ item.dataset_count|pluralize }}
+                            </span>
+                            {% if item.is_multi_dataset %}
+                            <span class="badge badge-info badge-xs">Multi</span>
+                            {% endif %}
+                        </div>
+                        
+                        {% if item.dataset_count <= 3 %}
+                            <!-- Show all datasets if 3 or fewer -->
+                            {% for dataset in datasets %}
+                            <div class="text-sm font-medium mb-1">
+                                📄 {{ dataset.name|truncatechars:35 }}
+                                {% if dataset.status != session.status %}
+                                <span class="badge badge-xs 
+                                    {% if dataset.status == 'completed' %}badge-success
+                                    {% elif dataset.status == 'failed' %}badge-error
+                                    {% elif dataset.status == 'processing' %}badge-info
+                                    {% else %}badge-ghost{% endif %}">
+                                    {{ dataset.status }}
+                                </span>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <!-- Show first 2 and count for more -->
+                            {% for dataset in datasets|slice:":2" %}
+                            <div class="text-sm font-medium mb-1">
+                                📄 {{ dataset.name|truncatechars:35 }}
+                            </div>
+                            {% endfor %}
+                            <div class="text-xs text-base-content/60">
+                                ... and {{ item.dataset_count|add:"-2" }} more datasets
+                            </div>
+                        {% endif %}
+                    </td>
+                    
+                    <!-- Organization -->
+                    <td class="text-sm">{{ session.organization|truncatechars:20 }}</td>
+                    
+                    <!-- Import Type -->
+                    <td>
+                        {% if session.mapping %}
+                        <div class="badge badge-success badge-sm">Mapping</div>
+                        <div class="text-xs text-base-content/60 mt-1">{{ session.mapping.name|truncatechars:20 }}</div>
+                        {% else %}
+                        <div class="badge badge-ghost badge-sm">Basic</div>
+                        {% endif %}
+                    </td>
+                    
+                    <!-- Progress -->
                     <td>
                         {% if session.total_rows > 0 %}
-                            <div class="text-xs">
-                                {{ session.processed_rows }}/{{ session.total_rows }}
-                                <div class="progress w-16 h-2">
-                                    <div class="progress-bar bg-primary" style="width: {% widthratio session.processed_rows session.total_rows 100 %}%"></div>
-                                </div>
+                            <div class="text-xs mb-1">
+                                {{ session.processed_rows|floatformat:0 }}/{{ session.total_rows|floatformat:0 }}
+                            </div>
+                            <div class="w-full bg-neutral rounded-full h-2">
+                                <div class="bg-primary h-2 rounded-full" style="width: {% widthratio session.processed_rows session.total_rows 100 %}%"></div>
+                            </div>
+                            <div class="text-xs text-base-content/60 mt-1">
+                                {% widthratio session.processed_rows session.total_rows 100 %}%
                             </div>
                         {% else %}
-                            -
+                            <span class="text-xs text-base-content/40">-</span>
                         {% endif %}
                     </td>
-                    <td>
-                        {% if session.processed_rows > 0 %}
-                            <span class="text-xs">
-                                {{ session.successful_rows }}/{{ session.processed_rows }}
-                                ({% widthratio session.successful_rows session.processed_rows 100 %}%)
-                            </span>
-                        {% else %}
-                            -
-                        {% endif %}
-                    </td>
+                    
+                    <!-- Status -->
                     <td>
                         <span class="badge 
                             {% if session.status == 'completed' %}badge-success
@@ -60,9 +179,59 @@
                             {% else %}badge-ghost{% endif %}">
                             {{ session.status }} 
                         </span>
+                        {% if session.duration %}
+                        <div class="text-xs text-base-content/60 mt-1">
+                            {{ session.duration }}
+                        </div>
+                        {% endif %}
                     </td>
-                    <td>{{ session.completed_at|date:"M d, Y H:i"|default:"-" }}</td>
+                    
+                    <!-- Statistics -->
+                    <td>
+                        {% if session.ingestion_stats %}
+                            <div class="grid grid-cols-2 gap-1 text-xs">
+                                {% if session.ingestion_stats.rows_processed %}
+                                <div class="text-center">
+                                    <div class="font-semibold text-primary">{{ session.ingestion_stats.rows_processed|floatformat:0 }}</div>
+                                    <div class="text-base-content/60">rows</div>
+                                </div>
+                                {% endif %}
+                                {% if session.ingestion_stats.resources_created %}
+                                <div class="text-center">
+                                    <div class="font-semibold text-success">{{ session.ingestion_stats.resources_created|floatformat:0 }}</div>
+                                    <div class="text-base-content/60">resources</div>
+                                </div>
+                                {% endif %}
+                                {% if session.ingestion_stats.triples_created %}
+                                <div class="text-center">
+                                    <div class="font-semibold text-info">{{ session.ingestion_stats.triples_created|floatformat:0 }}</div>
+                                    <div class="text-base-content/60">triples</div>
+                                </div>
+                                {% endif %}
+                                {% if session.ingestion_stats.errors or session.ingestion_stats.warnings %}
+                                <div class="text-center">
+                                    <div class="font-semibold text-warning">{{ session.ingestion_stats.errors|default:0 }}/{{ session.ingestion_stats.warnings|default:0 }}</div>
+                                    <div class="text-base-content/60">err/warn</div>
+                                </div>
+                                {% endif %}
+                            </div>
+                            <div class="text-xs text-base-content/50 mt-2 italic text-center">Click for details</div>
+                        {% else %}
+                            <span class="text-base-content/40 text-xs">No stats</span>
+                        {% endif %}
+                    </td>
+                    
+                    <!-- Completed At -->
+                    <td class="text-sm">
+                        {% if session.completed_at %}
+                            {{ session.completed_at|date:"M d" }}<br>
+                            <span class="text-xs text-base-content/60">{{ session.completed_at|date:"H:i" }}</span>
+                        {% else %}
+                            <span class="text-xs text-base-content/40">-</span>
+                        {% endif %}
+                    </td>
                 </tr>
+                {% endwith %}
                 {% endfor %}
             </tbody>
         </table>
@@ -74,4 +243,31 @@
     </div>
     {% endif %}
 </div>
+
+<!-- Single Reusable Stats Modal -->
+<dialog id="stats-modal" class="modal">
+    <div class="modal-box w-11/12 max-w-5xl">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="font-bold text-lg">Detailed Import Statistics</h3>
+            <form method="dialog">
+                <button class="btn btn-sm btn-circle btn-ghost">✕</button>
+            </form>
+        </div>
+        
+        <!-- Content will be loaded here via HTMX -->
+        <div id="stats-modal-content">
+            <div class="flex items-center justify-center p-8">
+                <span class="loading loading-spinner loading-lg"></span>
+                <span class="ml-2">Loading statistics...</span>
+            </div>
+        </div>
+        
+        <div class="modal-action">
+            <form method="dialog">
+                <button class="btn">Close</button>
+            </form>
+        </div>
+    </div>
+</dialog>
+
 {% endblock %} 
