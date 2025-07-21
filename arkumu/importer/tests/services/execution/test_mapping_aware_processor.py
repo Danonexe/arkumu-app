@@ -453,6 +453,43 @@ class TestMappingAwareProcessor:
         https_uri = "https://example.org/types/person"
         uri = processor._generate_type_uri(https_uri)
         assert uri == https_uri
+
+    def test_create_rdf_type_relationship(self, test_organization_code, test_base_uri, execution_statistics):
+        """Test that entities get linked to their types via rdf:type"""
+        from arkumu.metadata.models.triples import Triple
+        
+        processor = MappingAwareProcessor(
+            institution=test_organization_code,
+            base_uri=test_base_uri,
+            statistics=execution_statistics
+        )
+        
+        # Create a mock blueprint with entity type
+        mock_entity_type = create_mock_resource(
+            resource_id=1, 
+            uri="http://test.org/types/test-type"
+        )
+        processor.dataset_blueprints["test_dataset"] = {
+            "entity_type_resource": mock_entity_type
+        }
+        
+        # Create a mock entity
+        mock_entity = create_mock_resource(
+            resource_id=2,
+            uri="http://test.org/entities/test_dataset/E001"
+        )
+        
+        # Mock the resource manager's create_relationship_triple method
+        with patch.object(processor.resource_manager, 'create_relationship_triple') as mock_create_triple:
+            # Call the method
+            processor._create_rdf_type_relationship(mock_entity, "test_dataset")
+            
+            # Verify rdf:type relationship was created
+            mock_create_triple.assert_called_once_with(
+                mock_entity,
+                "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+                mock_entity_type
+            )
     
     def test_generate_external_ontology_uri(self, test_organization_code, test_base_uri, 
                                           execution_statistics):

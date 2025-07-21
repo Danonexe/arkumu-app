@@ -274,6 +274,9 @@ class MappingAwareProcessor:
             context.entity_cache[entity_uri] = entity_resource
             chunk_entities.append(entity_resource)
             
+            # Link entity to its type via rdf:type
+            self._create_rdf_type_relationship(entity_resource, dataset_name)
+            
             # Process regular columns
             self._process_regular_columns(entity_resource, row_data, column_groups['regular'], context)
             
@@ -341,6 +344,9 @@ class MappingAwareProcessor:
             context.entity_cache[entity_uri] = entity_resource
             dataset_entities.append(entity_resource)
             
+            # Link entity to its type via rdf:type
+            self._create_rdf_type_relationship(entity_resource, dataset_name)
+            
             # Process regular columns
             self._process_regular_columns(entity_resource, row_data, column_groups['regular'], context)
             
@@ -395,6 +401,9 @@ class MappingAwareProcessor:
             entity_uri = self._generate_entity_uri(dataset_name, row_data, dataset_config)
             entity_resource = self.resource_manager.create_entity_resource(entity_uri, dataset_name)
             context.entity_cache[entity_uri] = entity_resource
+            
+            # Link entity to its type via rdf:type
+            self._create_rdf_type_relationship(entity_resource, dataset_name)
             
             # Process only non-relationship columns
             self._process_regular_columns(entity_resource, row_data, column_groups['regular'], context)
@@ -766,6 +775,9 @@ class MappingAwareProcessor:
             f"{rel_context.dataset_name}_junction"
         )
         
+        # Link junction entity to its type via rdf:type
+        self._create_rdf_type_relationship(junction_entity, f"{rel_context.dataset_name}_junction")
+        
         # Add context properties
         for context_column in rel_context.context_columns:
             value = row_data.get(context_column)
@@ -912,6 +924,16 @@ class MappingAwareProcessor:
         from arkumu.common.uri_utils import mint_uri, slugify_uri_part
         safe_arkumu_type = slugify_uri_part(arkumu_type)
         return mint_uri(self.base_uri, self.institution, "properties", safe_arkumu_type)
+
+    def _create_rdf_type_relationship(self, entity_resource, dataset_name: str):
+        """Create rdf:type relationship linking entity to its type from blueprint."""
+        if dataset_name in self.dataset_blueprints:
+            entity_type_resource = self.dataset_blueprints[dataset_name]['entity_type_resource']
+            self.resource_manager.create_relationship_triple(
+                entity_resource,
+                "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+                entity_type_resource
+            )
     
     def _generate_external_ontology_uri(self, column: ColumnConfig, value: str) -> Optional[str]:
         """Generate external ontology URI"""
@@ -952,6 +974,9 @@ class MappingAwareProcessor:
             target_dataset,
             is_stub=True
         )
+        
+        # Link stub entity to its type via rdf:type
+        self._create_rdf_type_relationship(stub_entity, target_dataset)
         
         # If this is a stub dataset, add metadata from the mapping structure
         if hasattr(context, 'stub_datasets') and target_dataset in context.stub_datasets:
