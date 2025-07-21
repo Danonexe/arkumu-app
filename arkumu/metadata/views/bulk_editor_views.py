@@ -1307,8 +1307,12 @@ def service_powered_csv_import(request):
         from arkumu.storage.services.bucket_service import BucketService
         # REMOVED: from arkumu.common.import_service_bridge import bridge_service  # OLD SYSTEM ELIMINATED
         from arkumu.importer.tasks.import_metadata import run_mapping_aware_import_workflow  # NEW SYSTEM
+        from arkumu.importer.models.ingest_sessions import IngestSession
+        from arkumu.importer.models.import_task import ImportTask
+        from django.contrib.auth import get_user_model
         import tempfile
         import os
+        import uuid
         
         # Parse the file ID to get organization and S3 key
         logger.info(f"Starting service-powered import for: {s3_file_id}")
@@ -1341,7 +1345,36 @@ def service_powered_csv_import(request):
             temp_s3_key = f"temp_bulk_editor/{organization}/{dataset_name}.csv"
             bucket_service.base_s3_service.s3_client.upload_file(temp_path, bucket_name, temp_s3_key)
             
-            # Use the NEW two-phase mapping-aware import system
+            # Create IngestSession for proper progress tracking
+            User = get_user_model()
+            user_instance = User.objects.get(pk=request.user.pk) if request.user.is_authenticated else None
+            
+            ingest_session = IngestSession.objects.create(
+                user=user_instance,
+                dataset_name=f"Bulk Editor: {dataset_name}",
+                organization=organization,
+                s3_bucket=bucket_name,
+                s3_object_key=temp_s3_key,
+                mapping_strategy="auto-generated",
+                status='pending'
+            )
+            
+            logger.info(f"Created IngestSession {ingest_session.id} for bulk editor import")
+            
+            # Create ImportTask record for progress tracking
+            unique_task_id = str(uuid.uuid4())
+            
+            import_task = ImportTask.objects.create(
+                ingest_session=ingest_session,
+                dataset_name=dataset_name,
+                file_path=temp_s3_key,
+                task_id=unique_task_id,
+                status='pending'
+            )
+            
+            logger.info(f"Created ImportTask {import_task.id} with task_id: {unique_task_id}")
+            
+            # Use the NEW two-phase mapping-aware import system with proper session tracking
             import_result = run_mapping_aware_import_workflow(
                 s3_bucket_name=bucket_name,
                 s3_object_key=temp_s3_key,
@@ -1349,7 +1382,7 @@ def service_powered_csv_import(request):
                 institution=organization,
                 mapping_id="auto-generated",  # Auto-generate mapping for bulk editor
                 base_uri="http://arkumu.org/data",
-                upload_session_id=None,  # No session for bulk editor
+                upload_session_id=str(ingest_session.id),  # Provide session for tracking
                 csv_sources=None,
                 update_progress=None,
                 task_context=None,
