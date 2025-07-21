@@ -37,6 +37,14 @@ class MappingExtractor:
         
         result = list(datasets)
         logger.debug(f"Extracted {len(result)} datasets from mapping: {result}")
+        
+        # Add specific logging for German character dataset
+        german_datasets = [d for d in result if "Informationsträger" in d]
+        if german_datasets:
+            logger.info(f"🔍 GERMAN DATASETS FOUND in mapping: {german_datasets}")
+        else:
+            logger.info(f"⚠️ NO GERMAN DATASETS found in mapping. All datasets: {result}")
+            
         return result
     
     @staticmethod

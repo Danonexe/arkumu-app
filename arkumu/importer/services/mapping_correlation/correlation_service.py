@@ -12,6 +12,7 @@ from pathlib import Path
 
 from arkumu.metadata.services.data_analysis.s3_direct_data_analyzer import S3DirectDataAnalyzer
 from arkumu.importer.services.mapping_validation.validator import MappingValidator
+from arkumu.common.uri_utils import slugify_uri_part
 
 from .data_models import (
     FileAnalysis, 
@@ -195,6 +196,7 @@ class MappingFileCorrelationService:
             total_files, matched_files, total_datasets, matched_datasets
         )
     
+    
     def _analyze_files(self, file_paths: List[str]) -> List[FileAnalysis]:
         """Analyze CSV files using existing S3DirectDataAnalyzer."""
         file_analyses = []
@@ -243,6 +245,10 @@ class MappingFileCorrelationService:
                     )
                     file_analyses.append(file_analysis)
                     self.logger.debug(f"Analyzed file: {file_path} ({len(columns)} columns)")
+                    
+                    # Add specific logging for German character files
+                    if "informations" in file_analysis.file_name.lower() or "träger" in file_analysis.file_name.lower():
+                        self.logger.info(f"🔍 GERMAN FILE ANALYZED: '{file_analysis.file_name}' from path '{file_path}'")
                 
             except Exception as e:
                 self.logger.error(f"Failed to analyze file {file_path}: {str(e)}")

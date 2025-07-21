@@ -28,16 +28,11 @@
                 <!-- Resource Type -->
                 <td class="text-center">
                     <div class="flex flex-col items-center gap-1">
-                        <div class="badge badge-sm font-semibold
-                            {% if resource.resource_type == 'IRI' %}badge-info
-                            {% elif resource.resource_type == 'CLASS' %}badge-secondary
-                            {% elif resource.resource_type == 'PROPERTY' %}badge-accent
-                            {% elif resource.resource_type == 'LITERAL' %}badge-success
-                            {% endif %}">
+                        <span class="font-semibold text-sm">
                             {{ resource.get_resource_type_display }}
-                        </div>
+                        </span>
                         {% if resource.is_placeholder %}
-                            <div class="badge badge-warning badge-xs">Placeholder</div>
+                            <span class="text-xs text-warning">Placeholder</span>
                         {% endif %}
                     </div>
                 </td>

@@ -7,6 +7,14 @@
 <div class="max-w-6xl mx-auto p-6">
     <h2 class="text-2xl font-bold mb-6">Blueprint Structure: {{ mapping.name }}</h2>
     
+    <!-- Debug Section -->
+    <div class="card bg-base-100 shadow-xl mb-6">
+        <div class="card-body">
+            <h3 class="card-title">DEBUG: Raw Mermaid Code</h3>
+            <pre class="bg-gray-100 p-4 text-xs overflow-x-auto"><code>{{ mermaid_graph }}</code></pre>
+        </div>
+    </div>
+
     <!-- Dataset Graph -->
     <div class="card bg-base-100 shadow-xl mb-6">
         <div class="card-body">
@@ -58,11 +66,40 @@
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
 <script>
+    // Enable detailed error logging
+    mermaid.parseError = function(err, hash) {
+        console.error('Mermaid Parse Error:', err);
+        console.error('Error details:', hash);
+        console.error('Full error object:', err);
+        
+        // Show error in the UI
+        document.querySelectorAll('.mermaid').forEach(el => {
+            el.innerHTML = `<div style="color: red; font-family: monospace; white-space: pre;">
+MERMAID SYNTAX ERROR:
+${err.message || err}
+
+Error location: ${hash ? JSON.stringify(hash) : 'Unknown'}
+</div>`;
+        });
+    };
+    
     mermaid.initialize({ 
         startOnLoad: true,
-        theme: 'neutral'
+        theme: 'neutral',
+        flowchart: {
+            curve: 'basis',
+            padding: 15,
+            nodeSpacing: 50,
+            rankSpacing: 50
+        },
+        securityLevel: 'loose',
+        logLevel: 'debug'
     });
+    
+    // Additional debugging
+    console.log('Mermaid version:', mermaid.version);
+    console.log('Raw mermaid content:', document.querySelector('.mermaid').textContent);
 </script>
 {% endblock %}
