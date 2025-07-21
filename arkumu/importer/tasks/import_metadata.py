@@ -241,6 +241,14 @@ def run_mapping_aware_import_workflow(
         phase_info = get_mapping_phase_info("initialization", 100)
         update_cache_with_phase_info("processing", f"Starting mapping-aware import for {dataset_name}...", 5, phase_info)
         
+        # Update ImportTask status to 'processing' in database
+        if upload_session_id and import_task:
+            from django.utils import timezone
+            import_task.status = 'processing'
+            import_task.started_at = timezone.now()
+            import_task.save()
+            logger.info(f"Updated ImportTask {import_task.id} status to 'processing' for dataset '{dataset_name}'")
+        
         # Check for cancellation early
         from huey.exceptions import CancelExecution
         if cache.get(f"task_cancel_{actual_task_id}", False):
@@ -520,6 +528,15 @@ def run_mapping_aware_import_workflow(
         update_cache_with_phase_info("completed", success_message, 100, phase_info, details=final_metrics)
         update_upload_session_status('completed', success_message, 1, 0, final_metrics)
         
+        # Update ImportTask status to 'completed' in database
+        if upload_session_id and import_task:
+            from django.utils import timezone
+            import_task.status = 'completed'
+            import_task.completed_at = timezone.now()
+            import_task.rows_processed = metrics.rows_processed
+            import_task.save()
+            logger.info(f"Updated ImportTask {import_task.id} status to 'completed' for dataset '{dataset_name}'")
+        
         return {
             "status": "success",
             "dataset_name": dataset_name,
@@ -535,6 +552,12 @@ def run_mapping_aware_import_workflow(
         phase_info = get_mapping_phase_info("initialization", 0)
         update_cache_with_phase_info("cancelled", cancel_message, 0, phase_info, error_type="CancelExecution")
         update_upload_session_status('cancelled', cancel_message)
+        
+        # Update ImportTask status to 'cancelled' in database
+        if upload_session_id and 'import_task' in locals():
+            import_task.status = 'cancelled'
+            import_task.save()
+            logger.info(f"Updated ImportTask {import_task.id} status to 'cancelled' for dataset '{dataset_name}'")
         
         return {
             "status": "cancelled",
@@ -589,6 +612,13 @@ def run_mapping_aware_import_workflow(
         phase_info = get_mapping_phase_info("initialization", 0)
         update_cache_with_phase_info("failed", error_message, 0, phase_info, error_type=error_type)
         update_upload_session_status('failed', error_message)
+        
+        # Update ImportTask status to 'failed' in database
+        if upload_session_id and 'import_task' in locals():
+            import_task.status = 'failed'
+            import_task.error_message = error_message[:1024]  # Truncate to fit field
+            import_task.save()
+            logger.info(f"Updated ImportTask {import_task.id} status to 'failed' for dataset '{dataset_name}'")
         
         return {
             "status": "error",
@@ -1756,6 +1786,24 @@ def process_dataset_data(
         update_cache_with_phase_info("completed", success_message, 100, phase_info, details=detailed_metrics)
         update_upload_session_status('completed', success_message, 1, 0, detailed_metrics)
         
+        # Update ImportTask status to 'completed' in database
+        if upload_session_id:
+            from arkumu.importer.models import ImportTask
+            try:
+                import_task = ImportTask.objects.get(
+                    ingest_session_id=upload_session_id,
+                    dataset_name=dataset_name,
+                    file_path=s3_object_key
+                )
+                from django.utils import timezone
+                import_task.status = 'completed'
+                import_task.completed_at = timezone.now()
+                import_task.rows_processed = metrics.rows_processed
+                import_task.save()
+                logger.info(f"Updated ImportTask {import_task.id} status to 'completed' for dataset '{dataset_name}'")
+            except ImportTask.DoesNotExist:
+                logger.warning(f"ImportTask not found for completion update - dataset '{dataset_name}' in session {upload_session_id}")
+        
         return {
             "status": "success",
             "dataset_name": dataset_name,
@@ -1771,6 +1819,22 @@ def process_dataset_data(
         phase_info = {"current_phase": "error", "execution_strategy": "data_only"}
         update_cache_with_phase_info("failed", error_msg, 0, phase_info, error_type=type(e).__name__)
         update_upload_session_status('failed', error_msg)
+        
+        # Update ImportTask status to 'failed' in database
+        if upload_session_id:
+            from arkumu.importer.models import ImportTask
+            try:
+                import_task = ImportTask.objects.get(
+                    ingest_session_id=upload_session_id,
+                    dataset_name=dataset_name,
+                    file_path=s3_object_key
+                )
+                import_task.status = 'failed'
+                import_task.error_message = error_msg[:1024]  # Truncate to fit field
+                import_task.save()
+                logger.info(f"Updated ImportTask {import_task.id} status to 'failed' for dataset '{dataset_name}'")
+            except ImportTask.DoesNotExist:
+                logger.warning(f"ImportTask not found for failure update - dataset '{dataset_name}' in session {upload_session_id}")
         
         return {
             "status": "error",
