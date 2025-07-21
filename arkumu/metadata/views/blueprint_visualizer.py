@@ -34,13 +34,29 @@ def blueprint_visualizer(request, mapping_id):
             
             # Extract columns from workspace_columns for this dataset
             columns = []
+            
+            # First, detect the prefix by examining column keys
+            prefix = None
+            for col_key in workspace_columns.keys():
+                if f"::{original_dataset_id}::" in col_key:
+                    prefix = col_key.split("::")[0]
+                    break
+            
+            # If no prefix found, try without namespace
+            if prefix is None:
+                for col_key in workspace_columns.keys():
+                    if original_dataset_id in col_key and "::" in col_key:
+                        prefix = col_key.split("::")[0]
+                        break
+            
+            # Extract columns using detected prefix
             for col_key, col_config in workspace_columns.items():
-                if col_key.startswith(f"{original_dataset_id}::"):
-                    col_name = col_key.split("::", 1)[1]
+                if prefix and col_key.startswith(f"{prefix}::{original_dataset_id}::"):
+                    col_name = col_key.split("::", 2)[2]  # Split on :: and take the 3rd part
                     column_info = {
                         'name': col_name,
-                        'arkumu_type': col_config.get('arkumu_type', 'text'),
-                        'is_anchor': col_config.get('anchor', False),
+                        'arkumu_type': col_config.get('type', 'text'),  # Fixed: use 'type' not 'arkumu_type'
+                        'is_anchor': col_config.get('is_anchor', False),  # Fixed: use 'is_anchor' not 'anchor'
                         'property': col_config.get('property', '')
                     }
                     columns.append(column_info)
@@ -91,7 +107,8 @@ def blueprint_visualizer(request, mapping_id):
         clean_entity_type = entity_type.replace('"', "'").replace('\n', ' ')
         anchor_display = f" ({len(anchor_columns)} anchors)" if anchor_columns else ""
         
-        node_label = f"{clean_dataset_name}\\n{clean_entity_type}\\n{column_count} columns{anchor_display}"
+        # Create multi-line label using proper HTML format
+        node_label = f"{clean_dataset_name}<br>{clean_entity_type}<br>{column_count} columns{anchor_display}"
         
         # Use traditional Mermaid syntax for maximum compatibility
         if dataset_shape == "rounded":
