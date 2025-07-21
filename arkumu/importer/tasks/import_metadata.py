@@ -304,24 +304,30 @@ def run_mapping_aware_import_workflow(
             
             bucket_service = BucketService()
             
-            logger.info(f"Task {actual_task_id or 'UnknownID'}: Loading CSV data from S3 object {s3_bucket_name}/{s3_object_key}")
+            logger.info(f"Task {actual_task_id or 'UnknownID'}: 📁 Loading CSV data from S3 object {s3_bucket_name}/{s3_object_key}")
+            logger.info(f"Task {actual_task_id or 'UnknownID'}: 🔍 BucketService initialized: {bucket_service}")
             
             # Get file content directly using BucketService (same as tests)
             try:
+                logger.info(f"Task {actual_task_id or 'UnknownID'}: 📥 Attempting to get file content from S3...")
                 result = bucket_service.get_file_content(s3_bucket_name, s3_object_key)
+                logger.info(f"Task {actual_task_id or 'UnknownID'}: 📥 S3 get_file_content result type: {type(result)}, keys: {result.keys() if isinstance(result, dict) else 'N/A'}")
                 
                 if isinstance(result, dict) and 'content' in result:
                     content = result['content']
                     if isinstance(content, bytes):
                         content = content.decode('utf-8')
+                    logger.info(f"Task {actual_task_id or 'UnknownID'}: ✅ Successfully extracted content, size: {len(content) if content else 0} bytes")
                 else:
+                    logger.error(f"Task {actual_task_id or 'UnknownID'}: ❌ Unexpected result format from get_file_content: {result}")
                     raise Exception(f"Unexpected result format from get_file_content: {result}")
             except Exception as s3_error:
                 error_msg = (
                     f"Failed to download CSV file '{s3_object_key}' from S3 bucket '{s3_bucket_name}'. "
                     f"Please verify the file exists and you have access permissions."
                 )
-                logger.error(f"Task {actual_task_id or 'UnknownID'}: S3 download failed: {s3_error}")
+                logger.error(f"Task {actual_task_id or 'UnknownID'}: ❌ S3 download failed: {s3_error}")
+                logger.error(f"Task {actual_task_id or 'UnknownID'}: 📊 S3 Error Details - Type: {type(s3_error).__name__}, Message: {str(s3_error)}")
                 phase_info = get_mapping_phase_info("data_preparation", 0)
                 update_cache_with_phase_info("failed", error_msg, 0, phase_info, error_type="S3DownloadError")
                 update_upload_session_status('failed', error_msg)
@@ -336,17 +342,31 @@ def run_mapping_aware_import_workflow(
                 }
             
             # Parse CSV with semicolon delimiter (same as tests)
-            csv_reader = csv.DictReader(io.StringIO(content), delimiter=';')
-            rows = list(csv_reader)
-            
-            # Create csv_sources dict in the same format as test fixture
-            csv_sources = {dataset_name: {
-                'headers': csv_reader.fieldnames,
-                'rows': rows,
-                'row_count': len(rows)
-            }}
-            
-            logger.info(f"Task {actual_task_id or 'UnknownID'}: Loaded {len(rows)} rows from S3 CSV")
+            logger.info(f"Task {actual_task_id or 'UnknownID'}: 📊 Starting CSV parsing, content preview: {content[:200] if content else 'EMPTY'}...")
+            try:
+                csv_reader = csv.DictReader(io.StringIO(content), delimiter=';')
+                rows = list(csv_reader)
+                
+                logger.info(f"Task {actual_task_id or 'UnknownID'}: 📋 CSV headers: {csv_reader.fieldnames}")
+                logger.info(f"Task {actual_task_id or 'UnknownID'}: ✅ Successfully parsed {len(rows)} rows from S3 CSV")
+                
+                if len(rows) > 0:
+                    logger.info(f"Task {actual_task_id or 'UnknownID'}: 📊 Sample row data: {dict(list(rows[0].items())[:3])}...")
+                else:
+                    logger.warning(f"Task {actual_task_id or 'UnknownID'}: ⚠️  CSV file appears to be empty or has no data rows")
+                
+                # Create csv_sources dict in the same format as test fixture
+                csv_sources = {dataset_name: {
+                    'headers': csv_reader.fieldnames,
+                    'rows': rows,
+                    'row_count': len(rows)
+                }}
+                
+                logger.info(f"Task {actual_task_id or 'UnknownID'}: 📦 Created csv_sources dict with {len(rows)} rows for dataset '{dataset_name}'")
+            except Exception as csv_error:
+                logger.error(f"Task {actual_task_id or 'UnknownID'}: ❌ CSV parsing failed: {csv_error}")
+                logger.error(f"Task {actual_task_id or 'UnknownID'}: 📊 Content that failed to parse: {content[:500]}...")
+                raise
             
             # Only provide CSV data for the target dataset - processor will naturally skip others
         
@@ -420,6 +440,13 @@ def run_mapping_aware_import_workflow(
             raise
         
         # Execute the mapping-aware processing using STREAMING_ENTITY_CENTRIC strategy
+        logger.info(f"Task {actual_task_id or 'UnknownID'}: 🔄 HANDOFF TO PROCESSOR - About to pass csv_sources to MappingAwareProcessor")
+        logger.info(f"Task {actual_task_id or 'UnknownID'}: 📊 csv_sources structure: {list(csv_sources.keys()) if csv_sources else 'None'}")
+        if csv_sources:
+            for ds_name, ds_data in csv_sources.items():
+                logger.info(f"Task {actual_task_id or 'UnknownID'}: 📋 Dataset '{ds_name}': {ds_data.get('row_count', 0)} rows, headers: {ds_data.get('headers', [])}")
+        logger.info(f"Task {actual_task_id or 'UnknownID'}: 🎯 Target dataset for processing: '{dataset_name}'")
+        
         metrics = processor.process_with_execution_config(
             execution_config=execution_config,
             csv_sources=csv_sources,
@@ -1607,32 +1634,49 @@ def process_dataset_data(
         
         bucket_service = BucketService()
         
+        logger.info(f"📁 Attempting to load CSV data from S3: {s3_bucket_name}/{s3_object_key}")
         try:
             result = bucket_service.get_file_content(s3_bucket_name, s3_object_key)
+            logger.info(f"📥 S3 get_file_content result: type={type(result)}, keys={result.keys() if isinstance(result, dict) else 'N/A'}")
             
             if isinstance(result, dict) and 'content' in result:
                 content = result['content']
                 if isinstance(content, bytes):
                     content = content.decode('utf-8')
+                logger.info(f"✅ Successfully got file content, size: {len(content) if content else 0} bytes")
             else:
+                logger.error(f"❌ Unexpected result format from get_file_content: {result}")
                 raise Exception(f"Unexpected result format from get_file_content: {result}")
         except Exception as s3_error:
             error_msg = f"Failed to download CSV file '{s3_object_key}' from S3 bucket '{s3_bucket_name}'"
-            logger.error(f"S3 download failed: {s3_error}")
+            logger.error(f"❌ S3 download failed: {s3_error}")
+            logger.error(f"📊 S3 Error Details - Type: {type(s3_error).__name__}, Message: {str(s3_error)}")
             update_cache_with_phase_info("failed", error_msg, 0, phase_info, error_type="S3DownloadError")
             return {"status": "error", "error_message": error_msg, "error_type": "S3DownloadError"}
         
         # Parse CSV
-        csv_reader = csv.DictReader(io.StringIO(content), delimiter=';')
-        rows = list(csv_reader)
-        
-        csv_sources = {dataset_name: {
-            'headers': csv_reader.fieldnames,
-            'rows': rows,
-            'row_count': len(rows)
-        }}
-        
-        logger.info(f"📥 Loaded {len(rows)} rows for dataset '{dataset_name}'")
+        logger.info(f"📊 Starting CSV parsing for dataset '{dataset_name}', content preview: {content[:200] if content else 'EMPTY'}...")
+        try:
+            csv_reader = csv.DictReader(io.StringIO(content), delimiter=';')
+            rows = list(csv_reader)
+            
+            logger.info(f"📋 CSV headers for '{dataset_name}': {csv_reader.fieldnames}")
+            logger.info(f"📥 Loaded {len(rows)} rows for dataset '{dataset_name}'")
+            
+            if len(rows) > 0:
+                logger.info(f"📊 Sample row data for '{dataset_name}': {dict(list(rows[0].items())[:3])}...")
+            else:
+                logger.warning(f"⚠️  Dataset '{dataset_name}' CSV file appears to be empty or has no data rows")
+            
+            csv_sources = {dataset_name: {
+                'headers': csv_reader.fieldnames,
+                'rows': rows,
+                'row_count': len(rows)
+            }}
+        except Exception as csv_error:
+            logger.error(f"❌ CSV parsing failed for dataset '{dataset_name}': {csv_error}")
+            logger.error(f"📊 Content that failed to parse: {content[:500]}...")
+            raise
         
         # Phase 4: Initialize processor with existing schemas
         phase_info = {"current_phase": "data_processing", "execution_strategy": "data_only"}
@@ -1670,6 +1714,13 @@ def process_dataset_data(
         start_time = datetime.now(dt_timezone.utc)
         
         # Process with streaming entity-centric strategy
+        logger.info(f"🔄 DATA-ONLY HANDOFF TO PROCESSOR - About to pass csv_sources to MappingAwareProcessor")
+        logger.info(f"📊 csv_sources structure: {list(csv_sources.keys()) if csv_sources else 'None'}")
+        if csv_sources:
+            for ds_name, ds_data in csv_sources.items():
+                logger.info(f"📋 Dataset '{ds_name}': {ds_data.get('row_count', 0)} rows, headers: {ds_data.get('headers', [])}")
+        logger.info(f"🎯 Target dataset for processing: '{dataset_name}'")
+        
         metrics = processor.process_with_execution_config(
             execution_config=execution_config,
             csv_sources=csv_sources,
