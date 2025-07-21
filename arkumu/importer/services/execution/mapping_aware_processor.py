@@ -840,15 +840,23 @@ class MappingAwareProcessor:
             entity_type_name = primary_entity_column.arkumu_type
         else:
             # Fallback: use dataset name as entity type
-            entity_type_name = f"entity_type_{dataset_config.dataset_name}"
+            entity_type_name = dataset_config.dataset_name
         
         # Create entity type URI and resource
         entity_type_uri = self._generate_type_uri(entity_type_name)
+        
+        # Generate clean name for display (same logic as URI generation)
+        if entity_type_name.startswith('http://') or entity_type_name.startswith('https://'):
+            clean_name = entity_type_name
+        else:
+            # Remove entity-type- prefix if present (same as URI generation)
+            clean_name = entity_type_name.replace('entity-type-', '').replace('entity_type_', '')
+        
         entity_type_resource, created = Resource.objects.get_or_create(
             uri=entity_type_uri,
             defaults={
                 "resource_type": ResourceType.CLASS,
-                "name": entity_type_name,
+                "name": clean_name,
                 "source": self.institution,
                 "is_placeholder": False
             }
@@ -1120,14 +1128,14 @@ class MappingAwareProcessor:
             primary_entity_column = entity_columns[0]  # Use first entity column as primary
             
             # Create metadata schema entries for the entity type
-            entity_type_uri = self._generate_type_uri(f"entity_type_{skipped_dataset}")
+            entity_type_uri = self._generate_type_uri(skipped_dataset)
             schema_property_uri = self._generate_property_uri("defines_entity_type")
             
             # Create schema triple linking dataset to entity type
             entity_type_resource, _ = Resource.objects.get_or_create(
                 uri=entity_type_uri,
                 defaults={
-                    "resource_type": ResourceType.ENTITY,
+                    "resource_type": ResourceType.CLASS,
                     "name": entity_type_uri.split('/')[-1],
                     "source": self.resource_manager.institution,
                     "is_placeholder": False
@@ -1444,17 +1452,24 @@ class MappingAwareProcessor:
             entity_type_name = primary_entity_column.arkumu_type
         else:
             # Fallback: use dataset name as entity type
-            entity_type_name = f"entity_type_{dataset_config.dataset_name}"
+            entity_type_name = dataset_config.dataset_name
         
         # Create entity type URI
         entity_type_uri = self._generate_type_uri(entity_type_name)
+        
+        # Generate clean name for display (same logic as URI generation)
+        if entity_type_name.startswith('http://') or entity_type_name.startswith('https://'):
+            clean_name = entity_type_name
+        else:
+            # Remove entity-type- prefix if present (same as URI generation)
+            clean_name = entity_type_name.replace('entity-type-', '').replace('entity_type_', '')
         
         # Create or get entity type resource
         entity_type_resource, created = Resource.objects.get_or_create(
             uri=entity_type_uri,
             defaults={
                 "resource_type": ResourceType.CLASS,
-                "name": entity_type_name,
+                "name": clean_name,
                 "source": self.institution,
                 "is_placeholder": False
             }

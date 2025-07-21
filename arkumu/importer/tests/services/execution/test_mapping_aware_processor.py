@@ -490,6 +490,47 @@ class TestMappingAwareProcessor:
                 "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
                 mock_entity_type
             )
+
+    def test_entity_type_names_are_clean(self, test_organization_code, test_base_uri, execution_statistics):
+        """Test that entity type names don't have verbose prefixes"""
+        from arkumu.importer.services.mapping_consumer import DatasetConfig, ColumnConfig, ColumnType
+        
+        processor = MappingAwareProcessor(
+            institution=test_organization_code,
+            base_uri=test_base_uri,
+            statistics=execution_statistics
+        )
+        
+        # Create a mock column with entity type
+        mock_entity_column = Mock()
+        mock_entity_column.column_type.value = 'entity'
+        mock_entity_column.arkumu_type = "entity-type-11-kreuz-digitaleobjekte-proj"
+        
+        # Create a dataset config with entity-type- prefix in arkumu_type
+        dataset_config = Mock()
+        dataset_config.dataset_name = "test_dataset"
+        dataset_config.columns = [mock_entity_column]
+        
+        # Mock Resource.objects.get_or_create
+        with patch('arkumu.metadata.models.Resource.objects.get_or_create') as mock_get_or_create:
+            mock_resource = create_mock_resource(
+                resource_id=1,
+                uri="http://test.org/types/11-kreuz-digitaleobjekte-proj"
+            )
+            mock_get_or_create.return_value = (mock_resource, True)
+            
+            # Call the method
+            entity_type_resource = processor._create_entity_type_resource(dataset_config)
+            
+            # Verify the name passed to get_or_create is clean
+            mock_get_or_create.assert_called_once()
+            call_args = mock_get_or_create.call_args
+            defaults = call_args[1]['defaults']  # kwargs['defaults']
+            
+            # The name should be clean (without entity-type- prefix)
+            assert defaults['name'] == "11-kreuz-digitaleobjekte-proj"
+            assert "entity-type-" not in defaults['name']
+            assert "entity_type_" not in defaults['name']
     
     def test_generate_external_ontology_uri(self, test_organization_code, test_base_uri, 
                                           execution_statistics):
