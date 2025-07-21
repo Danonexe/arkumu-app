@@ -416,6 +416,43 @@ class TestMappingAwareProcessor:
         https_uri = "https://example.org/property/name"
         uri = processor._generate_property_uri(https_uri)
         assert uri == https_uri
+
+    def test_generate_type_uri(self, test_organization_code, test_base_uri, execution_statistics):
+        """Test type URI generation for entity types"""
+        processor = MappingAwareProcessor(
+            institution=test_organization_code,
+            base_uri=test_base_uri,
+            statistics=execution_statistics
+        )
+        
+        # Test with simple type name
+        uri = processor._generate_type_uri("kreuz-projekte-informationstraege")
+        assert uri.startswith(test_base_uri)
+        assert "types" in uri
+        assert "kreuz-projekte-informationstraege" in uri
+        assert "properties" not in uri  # Should NOT be in properties namespace
+        
+        # Test with entity-type- prefix removal
+        uri = processor._generate_type_uri("entity-type-09-kreuz-projekte-informationstraege")
+        assert "09-kreuz-projekte-informationstraege" in uri
+        assert "entity-type-" not in uri  # Prefix should be removed
+        assert "types" in uri
+        
+        # Test with entity_type_ prefix removal
+        uri = processor._generate_type_uri("entity_type_dataset_name")
+        assert "dataset-name" in uri  # Underscores become dashes in URI slugification
+        assert "entity_type_" not in uri  # Prefix should be removed
+        assert "types" in uri
+        
+        # Test with full URI
+        full_uri = "http://example.org/types/artwork"
+        uri = processor._generate_type_uri(full_uri)
+        assert uri == full_uri
+        
+        # Test with HTTPS URI
+        https_uri = "https://example.org/types/person"
+        uri = processor._generate_type_uri(https_uri)
+        assert uri == https_uri
     
     def test_generate_external_ontology_uri(self, test_organization_code, test_base_uri, 
                                           execution_statistics):

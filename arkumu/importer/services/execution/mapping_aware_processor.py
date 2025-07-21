@@ -831,7 +831,7 @@ class MappingAwareProcessor:
             entity_type_name = f"entity_type_{dataset_config.dataset_name}"
         
         # Create entity type URI and resource
-        entity_type_uri = self._generate_property_uri(entity_type_name)
+        entity_type_uri = self._generate_type_uri(entity_type_name)
         entity_type_resource, created = Resource.objects.get_or_create(
             uri=entity_type_uri,
             defaults={
@@ -888,6 +888,20 @@ class MappingAwareProcessor:
         
         logger.info(f"   ✅ Schema metadata created for empty dataset '{dataset_config.dataset_name}'")
     
+    def _generate_type_uri(self, type_name: str) -> str:
+        """Generate type URI for entity types"""
+        # Check if it's already a full URI
+        if type_name.startswith('http://') or type_name.startswith('https://'):
+            return type_name
+        
+        # Remove entity-type- prefix if present (redundant in /types/ namespace)
+        clean_name = type_name.replace('entity-type-', '').replace('entity_type_', '')
+        
+        # Use centralized URI generation from common utilities
+        from arkumu.common.uri_utils import mint_uri, slugify_uri_part
+        safe_type_name = slugify_uri_part(clean_name)
+        return mint_uri(self.base_uri, self.institution, "types", safe_type_name)
+
     def _generate_property_uri(self, arkumu_type: str) -> str:
         """Generate property URI from arkumu_type using centralized URI generation"""
         # Check if it's already a full URI
@@ -1081,7 +1095,7 @@ class MappingAwareProcessor:
             primary_entity_column = entity_columns[0]  # Use first entity column as primary
             
             # Create metadata schema entries for the entity type
-            entity_type_uri = self._generate_property_uri(f"entity_type_{skipped_dataset}")
+            entity_type_uri = self._generate_type_uri(f"entity_type_{skipped_dataset}")
             schema_property_uri = self._generate_property_uri("defines_entity_type")
             
             # Create schema triple linking dataset to entity type
@@ -1408,7 +1422,7 @@ class MappingAwareProcessor:
             entity_type_name = f"entity_type_{dataset_config.dataset_name}"
         
         # Create entity type URI
-        entity_type_uri = self._generate_property_uri(entity_type_name)
+        entity_type_uri = self._generate_type_uri(entity_type_name)
         
         # Create or get entity type resource
         entity_type_resource, created = Resource.objects.get_or_create(
