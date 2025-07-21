@@ -531,6 +531,58 @@ class TestMappingAwareProcessor:
             assert defaults['name'] == "11-kreuz-digitaleobjekte-proj"
             assert "entity-type-" not in defaults['name']
             assert "entity_type_" not in defaults['name']
+
+    def test_property_names_are_clean(self, test_organization_code, test_base_uri, execution_statistics):
+        """Test that property names use clean arkumu_type values"""
+        
+        processor = MappingAwareProcessor(
+            institution=test_organization_code,
+            base_uri=test_base_uri,
+            statistics=execution_statistics
+        )
+        
+        # Create a mock column with a typical arkumu_type
+        mock_column = Mock()
+        mock_column.arkumu_type = "title"  # Clean arkumu_type
+        
+        # Mock Resource.objects.get_or_create
+        with patch('arkumu.metadata.models.Resource.objects.get_or_create') as mock_get_or_create:
+            mock_resource = create_mock_resource(
+                resource_id=1,
+                uri="http://test.org/properties/title"
+            )
+            mock_get_or_create.return_value = (mock_resource, True)
+            
+            # Call the method
+            property_resource = processor._create_property_resource(mock_column)
+            
+            # Verify the name passed to get_or_create uses arkumu_type directly
+            mock_get_or_create.assert_called_once()
+            call_args = mock_get_or_create.call_args
+            defaults = call_args[1]['defaults']  # kwargs['defaults']
+            
+            # The name should be the clean arkumu_type
+            assert defaults['name'] == "title"
+            
+        # Test with a potentially problematic arkumu_type
+        mock_column.arkumu_type = "creator_name"
+        
+        with patch('arkumu.metadata.models.Resource.objects.get_or_create') as mock_get_or_create2:
+            mock_resource2 = create_mock_resource(
+                resource_id=2,
+                uri="http://test.org/properties/creator-name" 
+            )
+            mock_get_or_create2.return_value = (mock_resource2, True)
+            
+            # Call the method
+            property_resource = processor._create_property_resource(mock_column)
+            
+            # Verify the name uses arkumu_type as-is (no cleaning needed for properties)
+            call_args = mock_get_or_create2.call_args
+            defaults = call_args[1]['defaults']
+            
+            # Properties use arkumu_type directly - this is actually correct behavior
+            assert defaults['name'] == "creator_name"
     
     def test_generate_external_ontology_uri(self, test_organization_code, test_base_uri, 
                                           execution_statistics):
