@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Database Structure - {{ ingest_session.dataset_name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto p-6">
+    <h2 class="text-2xl font-bold mb-6">Database Structure from Import</h2>
+    
+    <!-- Ingest Session Info -->
+    <div class="card bg-base-100 shadow-xl mb-6">
+        <div class="card-body">
+            <h3 class="card-title">Import Session Details</h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <p class="text-sm text-gray-600">Dataset Name</p>
+                    <p class="font-medium">{{ ingest_session.dataset_name }}</p>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-600">Mapping Used</p>
+                    <p class="font-medium">{{ ingest_session.mapping.name|default:"Direct Import" }}</p>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-600">Status</p>
+                    <span class="badge badge-{{ ingest_session.status|default:'pending' }}">{{ ingest_session.status|title }}</span>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-600">Total Rows</p>
+                    <p class="font-medium">{{ ingest_session.total_rows|default:0 }}</p>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-600">Resources Created</p>
+                    <p class="font-medium">{{ resource_count }}</p>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-600">Triples Created</p>
+                    <p class="font-medium">{{ triple_count }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Resource Types Summary -->
+    <div class="card bg-base-100 shadow-xl mb-6">
+        <div class="card-body">
+            <h3 class="card-title">Resource Types Created</h3>
+            <div class="overflow-x-auto">
+                <table class="table table-zebra">
+                    <thead>
+                        <tr>
+                            <th>Resource Type</th>
+                            <th>Count</th>
+                            <th>Example URIs</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for type_info in resource_types %}
+                        <tr>
+                            <td>
+                                <span class="badge badge-primary">{{ type_info.resource_type }}</span>
+                            </td>
+                            <td>{{ type_info.count }}</td>
+                            <td>
+                                <div class="text-xs">
+                                    {% for uri in type_info.examples|slice:":3" %}
+                                    <div class="truncate max-w-md">{{ uri }}</div>
+                                    {% endfor %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Triple Patterns -->
+    <div class="card bg-base-100 shadow-xl mb-6">
+        <div class="card-body">
+            <h3 class="card-title">Triple Patterns (Subject → Predicate → Object)</h3>
+            <div class="overflow-x-auto">
+                <table class="table table-zebra table-sm">
+                    <thead>
+                        <tr>
+                            <th>Pattern</th>
+                            <th>Count</th>
+                            <th>Example</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for pattern in triple_patterns %}
+                        <tr>
+                            <td class="font-mono text-xs">
+                                {{ pattern.subject_type }} → {{ pattern.predicate }} → {{ pattern.object_type }}
+                            </td>
+                            <td>{{ pattern.count }}</td>
+                            <td class="text-xs">
+                                {% if pattern.example %}
+                                <details>
+                                    <summary>View example</summary>
+                                    <div class="mt-2 p-2 bg-base-200 rounded">
+                                        <div><strong>S:</strong> {{ pattern.example.subject }}</div>
+                                        <div><strong>P:</strong> {{ pattern.example.predicate }}</div>
+                                        <div><strong>O:</strong> {{ pattern.example.object }}</div>
+                                    </div>
+                                </details>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Entity Classes Created -->
+    {% if entity_classes %}
+    <div class="card bg-base-100 shadow-xl mb-6">
+        <div class="card-body">
+            <h3 class="card-title">Entity Classes</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {% for class in entity_classes %}
+                <div class="card bg-base-200">
+                    <div class="card-body p-4">
+                        <h4 class="font-medium">{{ class.label|default:class.uri }}</h4>
+                        <p class="text-sm text-gray-600">Instances: {{ class.instance_count }}</p>
+                        <p class="text-xs text-gray-500 truncate">{{ class.uri }}</p>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Sample Data -->
+    <div class="card bg-base-100 shadow-xl">
+        <div class="card-body">
+            <h3 class="card-title">Sample Resources</h3>
+            <div class="overflow-x-auto">
+                <table class="table table-zebra table-xs">
+                    <thead>
+                        <tr>
+                            <th>URI</th>
+                            <th>Type</th>
+                            <th>Value</th>
+                            <th>Properties</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for resource in sample_resources %}
+                        <tr>
+                            <td class="font-mono truncate max-w-xs">{{ resource.uri }}</td>
+                            <td><span class="badge badge-ghost badge-xs">{{ resource.resource_type }}</span></td>
+                            <td>{{ resource.value|truncatechars:50 }}</td>
+                            <td>
+                                <button class="btn btn-xs" onclick="showProperties('{{ resource.id }}')">
+                                    View {{ resource.property_count }} properties
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function showProperties(resourceId) {
+    // Placeholder for showing properties
+    console.log('Show properties for resource:', resourceId);
+}
+</script>
+{% endblock %}

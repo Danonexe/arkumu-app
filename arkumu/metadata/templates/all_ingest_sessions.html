@@ -216,6 +216,18 @@
                                 {% endif %}
                             </div>
                             <div class="text-xs text-base-content/50 mt-2 italic text-center">Click for details</div>
+                            {% if session.status == 'completed' %}
+                            <div class="mt-2">
+                                <a href="{% url 'metadata:database_structure_visualizer' session.pk %}" 
+                                   class="btn btn-xs btn-primary"
+                                   target="_blank">
+                                    <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/>
+                                    </svg>
+                                    View DB Structure
+                                </a>
+                            </div>
+                            {% endif %}
                         {% else %}
                             <span class="text-base-content/40 text-xs">No stats</span>
                         {% endif %}
