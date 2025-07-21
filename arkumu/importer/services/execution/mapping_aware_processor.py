@@ -188,13 +188,17 @@ class MappingAwareProcessor:
             # Check if dataset is empty
             total_rows = df.height
             if total_rows == 0:
-                logger.warning(f"Dataset {dataset_config.dataset_name} is empty, creating dataset resource only")
+                logger.warning(f"Dataset {dataset_config.dataset_name} is empty, creating dataset resource with schema metadata")
                 self.statistics.increment_datasets_skipped()
                 
                 # IMPORTANT: Still create the dataset resource even for empty datasets
                 # This ensures the dataset URI exists in the graph
                 dataset_resource = self.resource_manager.create_dataset_resource(dataset_config.dataset_name)
                 logger.info(f"Created dataset resource for empty dataset '{dataset_config.dataset_name}'")
+                
+                # IMPORTANT: Create schema metadata triples for empty datasets
+                # This ensures the dataset is properly connected to its column structure from the mapping
+                self._create_schema_metadata_for_empty_dataset(dataset_config, dataset_resource, context)
                 
                 # Check for orphaned FK references pointing to this empty dataset
                 self._check_orphaned_fk_references(dataset_config.dataset_name, context)
@@ -812,6 +816,77 @@ class MappingAwareProcessor:
             return [value] if value else []
         
         return [v.strip() for v in value.split(separator) if v.strip()]
+    
+    def _create_schema_metadata_for_empty_dataset(self, dataset_config, dataset_resource, context: ProcessingContext):
+        """Create schema metadata triples for empty datasets based on mapping configuration."""
+        logger.info(f"   📊 Creating schema metadata for empty dataset '{dataset_config.dataset_name}'")
+        
+        # 1. Create entity type resource and link to dataset
+        entity_columns = [col for col in dataset_config.columns if col.column_type.value == 'entity']
+        if entity_columns:
+            primary_entity_column = entity_columns[0]
+            entity_type_name = primary_entity_column.arkumu_type
+        else:
+            # Fallback: use dataset name as entity type
+            entity_type_name = f"entity_type_{dataset_config.dataset_name}"
+        
+        # Create entity type URI and resource
+        entity_type_uri = self._generate_property_uri(entity_type_name)
+        entity_type_resource, created = Resource.objects.get_or_create(
+            uri=entity_type_uri,
+            defaults={
+                "resource_type": ResourceType.CLASS,
+                "name": entity_type_name,
+                "source": self.institution,
+                "is_placeholder": False
+            }
+        )
+        
+        # Link dataset to entity type
+        schema_property_uri = self._generate_property_uri("defines_entity_type")
+        self.resource_manager.create_relationship_triple(
+            dataset_resource,
+            schema_property_uri,
+            entity_type_resource
+        )
+        logger.info(f"     🏷️  Linked dataset to entity type '{entity_type_name}'")
+        
+        # 2. Create property resources for all columns and link to entity type
+        property_count = 0
+        for column in dataset_config.columns:
+            # Generate property URI based on arkumu_type
+            property_uri = self._generate_property_uri(column.arkumu_type)
+            
+            # Create property resource
+            property_resource, created = Resource.objects.get_or_create(
+                uri=property_uri,
+                defaults={
+                    "resource_type": ResourceType.PROPERTY,
+                    "name": column.arkumu_type,
+                    "source": self.institution,
+                    "is_placeholder": False
+                }
+            )
+            
+            # Link entity type to property
+            property_schema_uri = self._generate_property_uri("defines_property")
+            self.resource_manager.create_relationship_triple(
+                entity_type_resource,
+                property_schema_uri,
+                property_resource
+            )
+            property_count += 1
+        
+        logger.info(f"     📊 Created schema metadata: 1 entity type, {property_count} properties")
+        
+        # 3. Add FK relationships from blueprint if they exist
+        if hasattr(self, 'dataset_blueprints') and dataset_config.dataset_name in self.dataset_blueprints:
+            blueprint = self.dataset_blueprints[dataset_config.dataset_name]
+            fk_count = len(blueprint.get('fk_relationships', []))
+            if fk_count > 0:
+                logger.info(f"     🔗 FK relationships from blueprint: {fk_count}")
+        
+        logger.info(f"   ✅ Schema metadata created for empty dataset '{dataset_config.dataset_name}'")
     
     def _generate_property_uri(self, arkumu_type: str) -> str:
         """Generate property URI from arkumu_type using centralized URI generation"""
