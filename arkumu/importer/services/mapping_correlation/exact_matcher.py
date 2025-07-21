@@ -9,6 +9,7 @@ import logging
 from typing import Dict, List, Optional, Set, Any
 from pathlib import Path
 
+from arkumu.common.uri_utils import slugify_uri_part, normalize_string_nfc
 from .data_models import FileAnalysis
 
 logger = logging.getLogger(__name__)
@@ -31,12 +32,107 @@ class ExactMatcher:
         """
         file_name = Path(file_path).stem  # Remove .csv extension
         
-        # Exact string comparison only
-        if file_name in expected_datasets:
-            logger.debug(f"Exact match found: '{file_name}' -> dataset '{file_name}'")
-            return file_name
+        # Add detailed logging for German character debugging
+        if "informations" in file_name.lower() or "träger" in file_name.lower():
+            logger.info(f"🔍 GERMAN CHARACTER DEBUG - Processing file: '{file_name}'")
+            logger.info(f"📂 Full file path: {file_path}")
+            logger.info(f"📋 Expected datasets: {expected_datasets}")
+            
+            # Check for exact German character dataset match
+            german_dataset = "09_Kreuz_Projekte_Informationsträger"
+            if german_dataset in expected_datasets:
+                logger.info(f"🎯 FOUND German dataset in expected: '{german_dataset}'")
+                logger.info(f"🔍 File name bytes: {file_name.encode('utf-8')}")
+                logger.info(f"🔍 Dataset bytes: {german_dataset.encode('utf-8')}")
+                logger.info(f"🔍 String comparison: '{file_name}' == '{german_dataset}' ? {file_name == german_dataset}")
+                logger.info(f"🔍 Length comparison: {len(file_name)} vs {len(german_dataset)}")
+                
+                # Also check if file_name is in the expected_datasets list directly
+                logger.info(f"🔍 'in' check: '{file_name}' in expected_datasets ? {file_name in expected_datasets}")
+                
+                # Check position in list
+                try:
+                    idx = expected_datasets.index(file_name)
+                    logger.info(f"🔍 File name found at index {idx} in expected_datasets")
+                except ValueError:
+                    logger.info(f"🔍 File name NOT found in expected_datasets list")
+                    # Check each dataset individually
+                    for i, ds in enumerate(expected_datasets):
+                        if "informations" in ds.lower():
+                            logger.info(f"🔍 Dataset {i}: '{ds}' == '{file_name}' ? {ds == file_name}")
+                            logger.info(f"🔍 Dataset {i} bytes: {ds.encode('utf-8')}")
         
-        logger.debug(f"No exact match for file '{file_name}' in datasets: {expected_datasets}")
+        # First try exact string comparison with Unicode normalization
+        normalized_file_name = normalize_string_nfc(file_name)
+        
+        # Check if normalized file name matches any normalized dataset
+        for dataset_name in expected_datasets:
+            normalized_dataset = normalize_string_nfc(dataset_name)
+            
+            # Enhanced debug logging for German characters
+            if "informations" in file_name.lower() or "Informationsträger" in dataset_name:
+                logger.info(f"🔍 UNICODE NORMALIZATION - File: '{file_name}' -> Normalized: '{normalized_file_name}'")
+                logger.info(f"🔍 UNICODE NORMALIZATION - Dataset: '{dataset_name}' -> Normalized: '{normalized_dataset}'")
+                logger.info(f"🔍 UNICODE COMPARISON - '{normalized_file_name}' == '{normalized_dataset}' ? {normalized_file_name == normalized_dataset}")
+                logger.info(f"🔍 File bytes: {normalized_file_name.encode('utf-8')}")
+                logger.info(f"🔍 Dataset bytes: {normalized_dataset.encode('utf-8')}")
+            
+            if normalized_file_name == normalized_dataset:
+                logger.debug(f"Exact match found: '{file_name}' -> dataset '{dataset_name}'")
+                if "informations" in file_name.lower():
+                    logger.info(f"✅ GERMAN CHARACTER SUCCESS - Unicode normalized exact match: '{file_name}' -> '{dataset_name}'")
+                return dataset_name
+        
+        # Then try matching with slugified dataset names (using existing URI utils)
+        # The file name might be slugified but the dataset name in the config is not
+        for dataset_name in expected_datasets:
+            slugified_dataset = slugify_uri_part(dataset_name).replace('-', '_')
+            
+            # Extra logging for German character dataset
+            if "Informationsträger" in dataset_name:
+                logger.info(f"🔄 GERMAN CHARACTER SLUGIFY - Original: '{dataset_name}' -> Slugified: '{slugified_dataset}' -> Comparing with file: '{file_name}'")
+            
+            if file_name == slugified_dataset:
+                logger.debug(f"Slugified match found: '{file_name}' -> dataset '{dataset_name}' (slugified: '{slugified_dataset}')")
+                if "informations" in file_name.lower():
+                    logger.info(f"✅ GERMAN CHARACTER SUCCESS - Slugified match: '{file_name}' -> '{dataset_name}'")
+                return dataset_name
+        
+        # REVERSE matching: Try matching when file name has German chars but dataset is sanitized
+        # Slugify the file name and compare to datasets
+        for dataset_name in expected_datasets:
+            slugified_filename = slugify_uri_part(file_name).replace('-', '_')
+            
+            # Extra logging for German character dataset
+            if "informations" in file_name.lower() or "Informationsträger" in dataset_name:
+                logger.info(f"🔄 REVERSE GERMAN CHARACTER MATCH - File: '{file_name}' -> Slugified: '{slugified_filename}' -> Comparing with dataset: '{dataset_name}'")
+            
+            if slugified_filename == dataset_name:
+                logger.info(f"✅ REVERSE GERMAN CHARACTER SUCCESS - File '{file_name}' (slugified: '{slugified_filename}') matches dataset '{dataset_name}'")
+                return dataset_name
+        
+        # Additional fallback attempts for German characters
+        if "informations" in file_name.lower():
+            logger.info(f"🔧 GERMAN CHARACTER FALLBACK - Trying additional patterns for: '{file_name}'")
+            for dataset_name in expected_datasets:
+                if "Informationsträger" in dataset_name:
+                    # Try various possible transformations
+                    patterns = [
+                        dataset_name.lower(),
+                        dataset_name.lower().replace('ä', 'ae').replace('ö', 'oe').replace('ü', 'ue').replace('ß', 'ss'),
+                        slugify_uri_part(dataset_name),
+                        slugify_uri_part(dataset_name).replace('-', '_'),
+                    ]
+                    
+                    for pattern in patterns:
+                        logger.info(f"🔄 Trying pattern: '{pattern}' == '{file_name}' ? {pattern == file_name}")
+                        if pattern == file_name:
+                            logger.info(f"✅ GERMAN CHARACTER FALLBACK SUCCESS: '{file_name}' -> '{dataset_name}' (pattern: '{pattern}')")
+                            return dataset_name
+        
+        if "informations" in file_name.lower():
+            logger.error(f"❌ GERMAN CHARACTER FAILURE - No match found for: '{file_name}' in {len(expected_datasets)} datasets")
+        logger.debug(f"No match for file '{file_name}' in datasets: {expected_datasets}")
         return None
     
     @staticmethod
@@ -53,13 +149,14 @@ class ExactMatcher:
             Dictionary mapping file_path -> dataset_name for exact matches only
         """
         matches = {}
-        dataset_set = set(datasets)
         
         for file_analysis in files:
-            file_name = Path(file_analysis.file_path).stem
-            if file_name in dataset_set:
-                matches[file_analysis.file_path] = file_name
-                logger.debug(f"Matched '{file_analysis.file_path}' to dataset '{file_name}'")
+            matched_dataset = ExactMatcher.match_filename_to_dataset(
+                file_analysis.file_path, datasets
+            )
+            if matched_dataset:
+                matches[file_analysis.file_path] = matched_dataset
+                logger.debug(f"Matched '{file_analysis.file_path}' to dataset '{matched_dataset}'")
         
         logger.info(f"Found {len(matches)} exact matches out of {len(files)} files")
         return matches
@@ -98,12 +195,11 @@ class ExactMatcher:
         Returns:
             List of file paths that don't match any dataset
         """
-        dataset_set = set(expected_datasets)
         unmatched = []
         
         for file_path in file_paths:
-            file_name = Path(file_path).stem
-            if file_name not in dataset_set:
+            matched_dataset = ExactMatcher.match_filename_to_dataset(file_path, expected_datasets)
+            if not matched_dataset:
                 unmatched.append(file_path)
         
         if unmatched:

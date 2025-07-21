@@ -46,6 +46,7 @@ except ImportError:
 from arkumu.importer.services.orchestrator.import_orchestrator import ImportOrchestrator
 from arkumu.common.enums import UpdateStrategy
 from arkumu.common.data_types import BulkUpdateStats
+from arkumu.common.uri_utils import normalize_string_nfc
 # REMOVED: from arkumu.common.import_service_bridge import bridge_service  # OLD SYSTEM ELIMINATED
 from arkumu.storage.services.bucket_service import BucketService # Added to download S3 file
 
@@ -283,8 +284,9 @@ def run_mapping_aware_import_workflow(
         
         logger.info(f"Task {actual_task_id or 'UnknownID'}: Loaded execution config with {len(execution_config.datasets)} datasets")
         
-        # Verify the target dataset exists in the mapping
-        target_dataset_exists = any(ds.dataset_name == dataset_name for ds in execution_config.datasets)
+        # Verify the target dataset exists in the mapping (with Unicode normalization)
+        normalized_dataset_name = normalize_string_nfc(dataset_name)
+        target_dataset_exists = any(normalize_string_nfc(ds.dataset_name) == normalized_dataset_name for ds in execution_config.datasets)
         if not target_dataset_exists:
             raise ValueError(f"Dataset '{dataset_name}' not found in mapping configuration")
         
@@ -1586,8 +1588,9 @@ def process_dataset_data(
         mapping_adapter = MappingAdapter()
         execution_config = mapping_adapter.translate_to_execution_config(mapping_id)
         
-        # Verify the target dataset exists in the mapping
-        target_dataset_exists = any(ds.dataset_name == dataset_name for ds in execution_config.datasets)
+        # Verify the target dataset exists in the mapping (with Unicode normalization)
+        normalized_dataset_name = normalize_string_nfc(dataset_name)
+        target_dataset_exists = any(normalize_string_nfc(ds.dataset_name) == normalized_dataset_name for ds in execution_config.datasets)
         if not target_dataset_exists:
             error_msg = f"Dataset '{dataset_name}' not found in mapping configuration"
             logger.error(error_msg)
