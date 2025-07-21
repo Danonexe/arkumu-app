@@ -160,20 +160,22 @@ class MappingAwareProcessor:
         # For now, use chunked processing with smaller batches
         chunk_size = 1000
         
-        for dataset_config in context.execution_config.datasets:
-            if dataset_config.dataset_name not in context.all_csv_sources:
-                logger.warning(f"Dataset {dataset_config.dataset_name} has no CSV data, creating dataset resource only")
-                self.statistics.increment_datasets_skipped()
-                
-                # IMPORTANT: Still create the dataset resource even for missing datasets
-                # This ensures the dataset URI exists in the graph
-                dataset_resource = self.resource_manager.create_dataset_resource(dataset_config.dataset_name)
-                logger.info(f"Created dataset resource for missing dataset '{dataset_config.dataset_name}'")
-                
-                # Check for orphaned FK references pointing to this skipped dataset
-                self._check_orphaned_fk_references(dataset_config.dataset_name, context)
-                context.processed_datasets.add(dataset_config.dataset_name)
+        # FIXED: Only process datasets that are actually present in CSV sources
+        # This prevents false warnings about missing datasets that aren't being processed
+        for dataset_name in context.all_csv_sources.keys():
+            # Find the corresponding dataset configuration
+            dataset_config = None
+            for config in context.execution_config.datasets:
+                if config.dataset_name == dataset_name:
+                    dataset_config = config
+                    break
+            
+            if not dataset_config:
+                logger.warning(f"CSV data provided for '{dataset_name}' but no mapping configuration found")
                 continue
+                
+            logger.info(f"🔍 PROCESSING: Dataset '{dataset_name}' (has CSV data)")
+            logger.info(f"📊 Available csv_sources: {list(context.all_csv_sources.keys())}")
             
             context.current_dataset = dataset_config.dataset_name
             csv_data = context.all_csv_sources[dataset_config.dataset_name]
@@ -1153,7 +1155,7 @@ class MappingAwareProcessor:
             if column.column_type.value in ['regular', 'anchor', 'multi_value']:
                 # Create property definition in the metadata schema
                 property_uri = self._generate_property_uri(column.arkumu_type)
-                property_def_uri = self._generate_property_uri(f"property_def_{column.arkumu_type}")
+                property_def_uri = self._generate_property_uri(column.arkumu_type)
                 
                 # Link dataset to property definition
                 schema_property_uri = self._generate_property_uri("defines_property")
