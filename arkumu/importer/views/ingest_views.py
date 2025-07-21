@@ -1677,20 +1677,30 @@ def start_import(request):
             logger.info(f"Created ImportTask {import_task.id} for dataset '{dataset_name}'")
             
             # Phase 2: Queue dataset processing task (uses pre-created blueprints)
-            task_result = process_dataset_data(
-                s3_bucket_name=bucket_name,
-                s3_object_key=file_path,
-                dataset_name=dataset_name,
-                institution=current_org['code'],
-                mapping_id=current_mapping['id'],
-                upload_session_id=ingest_session.id
-            )
+            # Use transaction.on_commit to ensure ImportTask is committed before queuing task
+            from django.db import transaction
             
-            # Update task with Huey task ID
-            import_task.huey_task_id = str(task_result.id) if hasattr(task_result, 'id') else ''
+            def queue_task(bucket=bucket_name, obj_key=file_path, ds_name=dataset_name, 
+                          inst=current_org['code'], map_id=current_mapping['id'], 
+                          session_id=ingest_session.id):
+                return process_dataset_data(
+                    s3_bucket_name=bucket,
+                    s3_object_key=obj_key,
+                    dataset_name=ds_name,
+                    institution=inst,
+                    mapping_id=map_id,
+                    upload_session_id=session_id
+                )
+            
+            transaction.on_commit(queue_task)
+            task_result = None  # Will be set after commit
+            
+            # Update task with Huey task ID (will be set after commit)
+            # Note: task_result is None since task is queued on commit
+            import_task.huey_task_id = ''  # Will be updated by the actual Huey task
             import_task.save()
             
-            task_results.append(task_result)
+            task_results.append(import_task.task_id)  # Use our task_id instead
         
         logger.info(f"Started mapping-aware import for {len(selected_files)} files with mapping '{current_mapping['name']}' (ID: {current_mapping['id']})")
         

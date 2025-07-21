@@ -310,7 +310,13 @@ class ResourceManager:
                 )
         
         if structural_triples:
+            # # Count before bulk create
+            # count_before = Triple.objects.count()
             Triple.objects.bulk_create(structural_triples, ignore_conflicts=True)
+            # # Count after and update metrics with actual created count
+            # count_after = Triple.objects.count()
+            # actually_created = count_after - count_before
+            # self.statistics.current_metrics.triples_created += actually_created
             self.statistics.current_metrics.triples_created += len(structural_triples)
         
         return structural_triples
@@ -331,7 +337,13 @@ class ResourceManager:
         ]
         
         if value_triples:
+            # # Count before bulk create
+            # count_before = Triple.objects.count()
             Triple.objects.bulk_create(value_triples, ignore_conflicts=True)
+            # # Count after and update metrics with actual created count
+            # count_after = Triple.objects.count()
+            # actually_created = count_after - count_before
+            # self.statistics.current_metrics.triples_created += actually_created
             self.statistics.current_metrics.triples_created += len(value_triples)
         
         return value_triples
@@ -663,11 +675,17 @@ class ResourceManager:
         
         if triples_to_create:
             try:
+                # # Count before bulk create
+                # count_before = Triple.objects.count()
                 Triple.objects.bulk_create(
                     triples_to_create,
                     ignore_conflicts=True,
                     batch_size=500
                 )
+                # # Count after and update metrics with actual created count
+                # count_after = Triple.objects.count()
+                # actually_created = count_after - count_before
+                # self.statistics.current_metrics.triples_created += actually_created
                 self.statistics.current_metrics.triples_created += len(triples_to_create)
                 logger.debug(f"Successfully created {len(triples_to_create)} property triples")
             except Exception as e:
@@ -702,7 +720,13 @@ class ResourceManager:
         
         if dataset_entity_triples:
             try:
+                # # Count before bulk create
+                # count_before = Triple.objects.count()
                 Triple.objects.bulk_create(dataset_entity_triples, ignore_conflicts=True)
+                # # Count after and update metrics with actual created count
+                # count_after = Triple.objects.count()
+                # actually_created = count_after - count_before
+                # self.statistics.current_metrics.triples_created += actually_created
                 self.statistics.current_metrics.triples_created += len(dataset_entity_triples)
                 logger.debug(f"Created {len(dataset_entity_triples)} dataset-entity linking triples")
             except Exception as e:

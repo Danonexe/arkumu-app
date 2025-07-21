@@ -53,7 +53,7 @@ from arkumu.storage.services.bucket_service import BucketService # Added to down
 # Django cache
 from django.core.cache import cache
 from arkumu.importer.models import IngestSession # Import IngestSession instead of UploadSession
-from django.utils import timezone # To set completion time
+from django.utils import timezone
 from arkumu.importer.services.task_manager import get_task_manager, cancellable_task, CancellationReason
 from huey.exceptions import CancelExecution
 
@@ -1795,7 +1795,6 @@ def process_dataset_data(
                     dataset_name=dataset_name,
                     file_path=s3_object_key
                 )
-                from django.utils import timezone
                 import_task.status = 'completed'
                 import_task.completed_at = timezone.now()
                 import_task.rows_processed = metrics.rows_processed
