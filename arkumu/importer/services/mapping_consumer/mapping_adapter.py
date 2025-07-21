@@ -15,6 +15,7 @@ from .config_translator import ConfigTranslator, ExecutionConfig
 from arkumu.importer.services.mapping_validation.validator import MappingValidator
 from dataclasses import dataclass, field
 from typing import Dict, Any, List
+from arkumu.common.uri_utils import normalize_string_nfc
 
 @dataclass
 class ValidationResult:
@@ -132,7 +133,7 @@ class MappingAdapter:
             # Extract basic statistics
             workspace_columns = config.get('workspace_columns', {})
             # Support both old 'selected_datasets' and new 'workspace_datasets'
-            selected_datasets = config.get('workspace_datasets', config.get('selected_datasets', []))
+            selected_datasets = [normalize_string_nfc(ds) for ds in config.get('workspace_datasets', config.get('selected_datasets', []))]
             fk_relationships = config.get('fk_relationships', {})
             external_ontologies = config.get('external_ontologies', {})
             
@@ -156,14 +157,14 @@ class MappingAdapter:
                         parts = key.split('::')
                         if len(parts) >= 2:
                             # Extract dataset name from "org::dataset::column" format
-                            dataset_name = parts[1]
+                            dataset_name = normalize_string_nfc(parts[1])
                             dataset_names.add(dataset_name)
                         else:
                             # Fallback to first part
-                            dataset_names.add(parts[0])
+                            dataset_names.add(normalize_string_nfc(parts[0]))
                     else:
                         # Direct dataset name
-                        dataset_names.add(key)
+                        dataset_names.add(normalize_string_nfc(key))
                 datasets = list(dataset_names)
             
             return MappingInfo(

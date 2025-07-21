@@ -9,6 +9,8 @@ from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
 from enum import Enum
 
+from arkumu.common.uri_utils import normalize_string_nfc
+
 logger = logging.getLogger(__name__)
 
 
@@ -223,7 +225,7 @@ class ConfigTranslator:
             for qualified_key, config in workspace_columns.items():
                 parts = qualified_key.split("::")
                 if len(parts) >= 3:
-                    org, dataset, column = parts[0], parts[1], "::".join(parts[2:])
+                    org, dataset, column = normalize_string_nfc(parts[0]), normalize_string_nfc(parts[1]), normalize_string_nfc("::".join(parts[2:]))
                     if dataset not in normalized:
                         normalized[dataset] = {}
                     normalized[dataset][column] = config
@@ -243,16 +245,21 @@ class ConfigTranslator:
         normalized_columns = self._normalize_workspace_columns(workspace_columns)
         
         for dataset_name, columns in normalized_columns.items():
-            if dataset_name not in selected_datasets:
+            # Normalize dataset name for consistent comparison
+            normalized_dataset_name = normalize_string_nfc(dataset_name)
+            
+            # Check if normalized dataset name is in selected datasets (also normalize those)
+            normalized_selected = [normalize_string_nfc(ds) for ds in selected_datasets]
+            if normalized_dataset_name not in normalized_selected:
                 logger.debug(f"Skipping dataset {dataset_name} - not in selected datasets")
                 continue
                 
             for column_name, column_config in columns.items():
-                # Create column configuration
+                # Create column configuration with normalized dataset name
                 col_config = ColumnConfig(
-                    column_name=column_name,
-                    dataset_name=dataset_name,
-                    arkumu_type=column_config.get('arkumu_type', column_name),
+                    column_name=normalize_string_nfc(column_name),
+                    dataset_name=normalized_dataset_name,
+                    arkumu_type=normalize_string_nfc(column_config.get('arkumu_type', column_name)),
                     datatype=column_config.get('datatype', 'http://www.w3.org/2001/XMLSchema#string'),
                     is_anchor=column_config.get('is_anchor', False),
                     is_multi_value=column_config.get('is_multi_value', False),
@@ -285,10 +292,10 @@ class ConfigTranslator:
         
         for fk_id, fk_config in fk_relationships.items():
             fk_relationship = FKRelationship(
-                source_column=fk_config.get('source_column', ''),
-                source_dataset=fk_config.get('source_dataset', ''),
-                target_column=fk_config.get('target_column', ''),
-                target_dataset=fk_config.get('target_dataset', ''),
+                source_column=normalize_string_nfc(fk_config.get('source_column', '')),
+                source_dataset=normalize_string_nfc(fk_config.get('source_dataset', '')),
+                target_column=normalize_string_nfc(fk_config.get('target_column', '')),
+                target_dataset=normalize_string_nfc(fk_config.get('target_dataset', '')),
                 relationship_type=fk_config.get('relationship_type', 'relatedTo'),
                 direction=fk_config.get('direction', 'outgoing'),
                 is_multi_value=fk_config.get('is_multi_value', False),
@@ -310,11 +317,11 @@ class ConfigTranslator:
         for context_id, context_config in relationship_contexts.items():
             rel_context = RelationshipContext(
                 context_id=context_id,
-                primary_fk=context_config.get('primary_fk', ''),
-                secondary_fk=context_config.get('secondary_fk', ''),
-                context_columns=context_config.get('context_columns', []),
+                primary_fk=normalize_string_nfc(context_config.get('primary_fk', '')),
+                secondary_fk=normalize_string_nfc(context_config.get('secondary_fk', '')),
+                context_columns=[normalize_string_nfc(col) for col in context_config.get('context_columns', [])],
                 context_type=context_config.get('context_type', 'junction'),
-                dataset_name=context_config.get('dataset_name', '')
+                dataset_name=normalize_string_nfc(context_config.get('dataset_name', ''))
             )
             
             execution_config.relationship_contexts.append(rel_context)
@@ -343,15 +350,15 @@ class ConfigTranslator:
         """Create a single external ontology configuration"""
         # Parse dataset and column from ontology_id format: "org::dataset::column"
         parts = ontology_id.split('::')
-        dataset_name = parts[1] if len(parts) >= 2 else ''
-        column_name = parts[2] if len(parts) >= 3 else ''
+        dataset_name = normalize_string_nfc(parts[1]) if len(parts) >= 2 else ''
+        column_name = normalize_string_nfc(parts[2]) if len(parts) >= 3 else ''
         
         ext_ontology = ExternalOntology(
             column_name=column_name,
             dataset_name=dataset_name,
             ontology_type=ontology_config.get('ontology_type', ''),
             uri_template=ontology_config.get('uri_template', ''),
-            identifier_column=ontology_config.get('identifier_column'),
+            identifier_column=normalize_string_nfc(ontology_config.get('identifier_column') or ''),
             validation_enabled=ontology_config.get('validation_enabled', True)
         )
         
@@ -406,6 +413,8 @@ class ConfigTranslator:
         
         # Create dataset configurations
         for dataset_name, columns in dataset_columns.items():
+            # Normalize dataset name
+            dataset_name = normalize_string_nfc(dataset_name)
             # Find anchor columns (primary keys)
             anchor_columns = [col.column_name for col in columns if col.is_anchor]
             
