@@ -13,98 +13,109 @@
             <h3 class="card-title">Import Session Details</h3>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                    <p class="text-sm text-gray-600">Dataset Name</p>
-                    <p class="font-medium">{{ ingest_session.dataset_name }}</p>
+                    <p class="text-sm text-base-content/60">Session ID</p>
+                    <p class="font-medium font-mono text-sm">{{ ingest_session.id }}</p>
                 </div>
                 <div>
-                    <p class="text-sm text-gray-600">Mapping Used</p>
-                    <p class="font-medium">{{ ingest_session.mapping.name|default:"Direct Import" }}</p>
+                    <p class="text-sm text-base-content/60">Organization</p>
+                    <p class="font-medium">{{ ingest_session.organization.name }} ({{ ingest_session.organization.code }})</p>
                 </div>
                 <div>
-                    <p class="text-sm text-gray-600">Status</p>
-                    <span class="badge badge-{{ ingest_session.status|default:'pending' }}">{{ ingest_session.status|title }}</span>
+                    <p class="text-sm text-base-content/60">Mapping Used</p>
+                    <p class="font-medium">{{ ingest_session.mapping.name|default:"Basic Import (No Mapping)" }}</p>
                 </div>
                 <div>
-                    <p class="text-sm text-gray-600">Total Rows</p>
-                    <p class="font-medium">{{ ingest_session.total_rows|default:0 }}</p>
+                    <p class="text-sm text-base-content/60">Status</p>
+                    <span class="badge 
+                        {% if ingest_session.status == 'completed' %}badge-success
+                        {% elif ingest_session.status == 'failed' %}badge-error
+                        {% elif ingest_session.status == 'processing' %}badge-info
+                        {% else %}badge-ghost{% endif %}">
+                        {{ ingest_session.status|title }}
+                    </span>
                 </div>
                 <div>
-                    <p class="text-sm text-gray-600">Resources Created</p>
-                    <p class="font-medium">{{ resource_count }}</p>
+                    <p class="text-sm text-base-content/60">File Count</p>
+                    <p class="font-medium">{{ ingest_session.file_paths|length }} file{{ ingest_session.file_paths|length|pluralize }}</p>
                 </div>
                 <div>
-                    <p class="text-sm text-gray-600">Triples Created</p>
-                    <p class="font-medium">{{ triple_count }}</p>
+                    <p class="text-sm text-base-content/60">Import Date</p>
+                    <p class="font-medium">{{ ingest_session.created_at|date:"M d, Y H:i" }}</p>
                 </div>
             </div>
-        </div>
-    </div>
-
-    <!-- Resource Types Summary -->
-    <div class="card bg-base-100 shadow-xl mb-6">
-        <div class="card-body">
-            <h3 class="card-title">Resource Types Created</h3>
+            
+            <!-- Statistics Summary -->
+            {% if ingest_session.ingestion_stats %}
+            <div class="divider">Processing Results</div>
+            <div class="stats shadow w-full">
+                <div class="stat">
+                    <div class="stat-title">Rows Processed</div>
+                    <div class="stat-value">{{ ingest_session.ingestion_stats.rows_processed|floatformat:0|default:"0" }}</div>
+                    <div class="stat-desc">from {{ ingest_session.total_rows|default:"unknown" }} total</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-title">Resources Created</div>
+                    <div class="stat-value text-primary">{{ resource_count }}</div>
+                    <div class="stat-desc">database entities</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-title">Triples Created</div>
+                    <div class="stat-value text-info">{{ triple_count }}</div>
+                    <div class="stat-desc">relationships</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-title">Issues</div>
+                    <div class="stat-value {% if ingest_session.ingestion_stats.errors %}text-error{% else %}text-success{% endif %}">
+                        {{ ingest_session.ingestion_stats.errors|default:"0" }}
+                    </div>
+                    <div class="stat-desc">
+                        errors, {{ ingest_session.ingestion_stats.warnings|default:"0" }} warnings
+                    </div>
+                </div>
+                {% if ingest_session.skipped_datasets > 0 %}
+                <div class="stat">
+                    <div class="stat-title">Skipped Datasets</div>
+                    <div class="stat-value text-warning">{{ ingest_session.skipped_datasets }}</div>
+                    <div class="stat-desc">empty or no data</div>
+                </div>
+                {% endif %}
+            </div>
+            
+            <!-- Dataset Status Breakdown -->
+            {% if import_tasks %}
+            <div class="divider">Dataset Import Status</div>
             <div class="overflow-x-auto">
-                <table class="table table-zebra">
+                <table class="table table-sm">
                     <thead>
                         <tr>
-                            <th>Resource Type</th>
-                            <th>Count</th>
-                            <th>Example URIs</th>
+                            <th>Dataset</th>
+                            <th>Status</th>
+                            <th>Rows</th>
+                            <th>Details</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for type_info in resource_types %}
+                        {% for task in import_tasks %}
                         <tr>
+                            <td class="font-medium">{{ task.dataset_name }}</td>
                             <td>
-                                <span class="badge badge-primary">{{ type_info.resource_type }}</span>
+                                <span class="badge badge-sm
+                                    {% if task.status == 'completed' %}badge-success
+                                    {% elif task.status == 'failed' %}badge-error
+                                    {% elif task.status == 'processing' %}badge-info
+                                    {% elif task.status == 'skipped' %}badge-warning
+                                    {% else %}badge-ghost{% endif %}">
+                                    {{ task.status }}
+                                </span>
                             </td>
-                            <td>{{ type_info.count }}</td>
+                            <td>{{ task.rows_processed|default:"-" }}</td>
                             <td>
-                                <div class="text-xs">
-                                    {% for uri in type_info.examples|slice:":3" %}
-                                    <div class="truncate max-w-md">{{ uri }}</div>
-                                    {% endfor %}
-                                </div>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
-    <!-- Triple Patterns -->
-    <div class="card bg-base-100 shadow-xl mb-6">
-        <div class="card-body">
-            <h3 class="card-title">Triple Patterns (Subject → Predicate → Object)</h3>
-            <div class="overflow-x-auto">
-                <table class="table table-zebra table-sm">
-                    <thead>
-                        <tr>
-                            <th>Pattern</th>
-                            <th>Count</th>
-                            <th>Example</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for pattern in triple_patterns %}
-                        <tr>
-                            <td class="font-mono text-xs">
-                                {{ pattern.subject_type }} → {{ pattern.predicate }} → {{ pattern.object_type }}
-                            </td>
-                            <td>{{ pattern.count }}</td>
-                            <td class="text-xs">
-                                {% if pattern.example %}
-                                <details>
-                                    <summary>View example</summary>
-                                    <div class="mt-2 p-2 bg-base-200 rounded">
-                                        <div><strong>S:</strong> {{ pattern.example.subject }}</div>
-                                        <div><strong>P:</strong> {{ pattern.example.predicate }}</div>
-                                        <div><strong>O:</strong> {{ pattern.example.object }}</div>
-                                    </div>
-                                </details>
+                                {% if task.status == 'skipped' %}
+                                <div class="text-warning text-xs">{{ task.error_message|default:"Dataset was empty"|truncatechars:50 }}</div>
+                                {% elif task.error_message %}
+                                <div class="text-error text-xs">{{ task.error_message|truncatechars:50 }}</div>
+                                {% elif task.status == 'completed' %}
+                                <div class="text-success text-xs">Successfully imported</div>
                                 {% endif %}
                             </td>
                         </tr>
@@ -112,67 +123,44 @@
                     </tbody>
                 </table>
             </div>
-        </div>
-    </div>
-
-    <!-- Entity Classes Created -->
-    {% if entity_classes %}
-    <div class="card bg-base-100 shadow-xl mb-6">
-        <div class="card-body">
-            <h3 class="card-title">Entity Classes</h3>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {% for class in entity_classes %}
-                <div class="card bg-base-200">
-                    <div class="card-body p-4">
-                        <h4 class="font-medium">{{ class.label|default:class.uri }}</h4>
-                        <p class="text-sm text-gray-600">Instances: {{ class.instance_count }}</p>
-                        <p class="text-xs text-gray-500 truncate">{{ class.uri }}</p>
-                    </div>
+            {% endif %}
+            {% endif %}
+            
+            <!-- Resource Types Breakdown -->
+            {% if resource_count > 0 and resource_types %}
+            <div class="divider">Resource Types Created</div>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {% for type_info in resource_types %}
+                <div class="stat bg-base-200 rounded-lg">
+                    <div class="stat-title text-xs">{{ type_info.resource_type }}</div>
+                    <div class="stat-value text-lg">{{ type_info.count }}</div>
+                    <div class="stat-desc">resource{{ type_info.count|pluralize }}</div>
                 </div>
                 {% endfor %}
             </div>
-        </div>
-    </div>
-    {% endif %}
-
-    <!-- Sample Data -->
-    <div class="card bg-base-100 shadow-xl">
-        <div class="card-body">
-            <h3 class="card-title">Sample Resources</h3>
-            <div class="overflow-x-auto">
-                <table class="table table-zebra table-xs">
-                    <thead>
-                        <tr>
-                            <th>URI</th>
-                            <th>Type</th>
-                            <th>Value</th>
-                            <th>Properties</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for resource in sample_resources %}
-                        <tr>
-                            <td class="font-mono truncate max-w-xs">{{ resource.uri }}</td>
-                            <td><span class="badge badge-ghost badge-xs">{{ resource.resource_type }}</span></td>
-                            <td>{{ resource.value|truncatechars:50 }}</td>
-                            <td>
-                                <button class="btn btn-xs" onclick="showProperties('{{ resource.id }}')">
-                                    View {{ resource.property_count }} properties
-                                </button>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+            {% elif resource_count == 0 %}
+            <div class="divider">Import Status</div>
+            <div class="alert alert-info">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <div>
+                    <h3 class="font-bold">No Database Resources Found</h3>
+                    <div class="text-sm">
+                        This could mean:
+                        <ul class="list-disc ml-4 mt-1">
+                            <li>The import is still processing</li>
+                            <li>The import failed before creating resources</li>
+                            <li>Resources were created outside the expected time window</li>
+                            <li>This was a mapping validation only (no actual import)</li>
+                        </ul>
+                    </div>
+                </div>
             </div>
+            {% endif %}
         </div>
     </div>
-</div>
 
-<script>
-function showProperties(resourceId) {
-    // Placeholder for showing properties
-    console.log('Show properties for resource:', resourceId);
-}
-</script>
+
+</div>
 {% endblock %}

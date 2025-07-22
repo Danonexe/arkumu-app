@@ -1764,16 +1764,54 @@ def process_dataset_data(
         phase_info = {"current_phase": "finalization", "execution_strategy": "data_only"}
         update_cache_with_phase_info("processing", "Finalizing data processing...", 85, phase_info)
         
-        # Verify processing completed successfully
-        if not hasattr(metrics, 'rows_processed') or metrics.rows_processed <= 0:
-            error_msg = f"No data was processed from '{dataset_name}'"
+        # Get detailed metrics
+        detailed_metrics = metrics.to_dict()
+        
+        # Check if dataset was skipped (empty or no data)
+        datasets_skipped = detailed_metrics.get('datasets_skipped', 0)
+        if (not hasattr(metrics, 'rows_processed') or metrics.rows_processed <= 0) and datasets_skipped > 0:
+            # Dataset was skipped (empty file or no rows)
+            skip_message = f"Dataset '{dataset_name}' was skipped (contained no rows)"
+            logger.info(f"📋 {skip_message}")
+            
+            phase_info = {"current_phase": "finalization", "execution_strategy": "data_only"}
+            update_cache_with_phase_info("completed", skip_message, 100, phase_info, details=detailed_metrics)
+            update_upload_session_status('completed', skip_message, 0, 0, detailed_metrics)
+            
+            # Update ImportTask status to 'skipped' in database
+            if upload_session_id:
+                from arkumu.importer.models import ImportTask
+                try:
+                    import_task = ImportTask.objects.get(
+                        ingest_session_id=upload_session_id,
+                        dataset_name=dataset_name,
+                        file_path=s3_object_key
+                    )
+                    import_task.status = 'skipped'
+                    import_task.completed_at = timezone.now()
+                    import_task.rows_processed = 0
+                    import_task.error_message = "Dataset contained no rows"
+                    import_task.save()
+                    logger.info(f"Updated ImportTask {import_task.id} status to 'skipped' for dataset '{dataset_name}'")
+                except ImportTask.DoesNotExist:
+                    logger.warning(f"ImportTask not found for skip update - dataset '{dataset_name}' in session {upload_session_id}")
+            
+            return {
+                "status": "success",
+                "dataset_name": dataset_name,
+                "mapping_id": mapping_id,
+                "s3_object_key": s3_object_key,
+                "skipped": True,
+                **detailed_metrics
+            }
+        elif not hasattr(metrics, 'rows_processed') or metrics.rows_processed <= 0:
+            # No data processed and not marked as skipped - this is an error
+            error_msg = f"No data was processed from '{dataset_name}' and dataset was not marked as skipped"
             logger.error(error_msg)
             update_cache_with_phase_info("failed", error_msg, 0, phase_info, error_type="NoDataProcessed")
             return {"status": "error", "error_message": error_msg, "error_type": "NoDataProcessed"}
         
-        # Get detailed metrics
-        detailed_metrics = metrics.to_dict()
-        
+        # Normal successful processing
         success_message = (
             f"Data processing for '{dataset_name}' completed successfully. "
             f"Processed: {metrics.rows_processed} rows in {processing_time:.2f}s. "

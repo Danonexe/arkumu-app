@@ -51,6 +51,7 @@ class ImportTask(models.Model):
             ('completed', 'Completed'),
             ('failed', 'Failed'),
             ('cancelled', 'Cancelled'),
+            ('skipped', 'Skipped'),
         ],
         default='pending'
     )

@@ -77,6 +77,22 @@
                 </div>
                 {% endif %}
 
+                <!-- Skipped Datasets -->
+                {% if session.ingestion_stats.datasets_skipped or session.skipped_datasets %}
+                <div class="stats shadow">
+                    <div class="stat">
+                        <div class="stat-figure text-warning">
+                            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+                            </svg>
+                        </div>
+                        <div class="stat-title">Skipped Datasets</div>
+                        <div class="stat-value text-warning">{{ session.ingestion_stats.datasets_skipped|default:session.skipped_datasets|default:0 }}</div>
+                        <div class="stat-desc">empty or no data</div>
+                    </div>
+                </div>
+                {% endif %}
+
                 <!-- Entities Processed -->
                 {% if session.ingestion_stats.entities_processed %}
                 <div class="stats shadow">
