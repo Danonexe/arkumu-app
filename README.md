@@ -100,6 +100,10 @@ This pattern is common in junction/linking tables that not only connect two enti
 
 Each column shows sample data from your file to help you understand what's in that column. Use these examples to decide which annotations make sense.
 
+## Technical Documentation
+
+- [URL Creation and Import Process](URL_CREATION_AND_IMPORT_PROCESS.md) - Detailed explanation of how URIs are generated and data is imported
+
 ## Development
 
 For detailed development instructions, testing, deployment, and other advanced features, see the [Cookiecutter Django documentation](https://cookiecutter-django.readthedocs.io/).
