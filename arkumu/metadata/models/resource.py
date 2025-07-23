@@ -3,7 +3,7 @@ from django.utils.translation import gettext_lazy as _
 from django.contrib.postgres.indexes import GinIndex
 from arkumu.metadata.models.base import UUIDModel
 from arkumu.common.uri_utils import normalize_string_nfc
-import hashlib
+from arkumu.common.hash_utils import generate_value_hash
 
 
 class ResourceType(models.TextChoices):
@@ -186,8 +186,9 @@ class Resource(UUIDModel):
             # Note: 'source' removed to allow literal deduplication across archives
             # Hash used to prevent PostgreSQL btree index size limitations
             # Provenance is maintained through the subject URIs in triples
+            # Name field excluded as it's just truncated display version
             models.UniqueConstraint(
-                fields=['value_hash', 'language', 'datatype', 'name'],
+                fields=['value_hash', 'language', 'datatype'],
                 condition=models.Q(resource_type='LITERAL'),
                 name='unique_literal_value_hash'
             )
@@ -274,16 +275,17 @@ class Resource(UUIDModel):
         self.datatype = value
     
     def save(self, *args, **kwargs):
-        """Auto-generate hash for literal values and normalize text before saving."""
-        if self.resource_type == ResourceType.LITERAL and self.value:
-            # Normalize text to NFC for consistent Unicode representation
+        """Normalize text and generate hash if needed. Bulk operations handle this manually."""
+        # Normalize text fields for consistent storage
+        if self.value:
             self.value = normalize_string_nfc(self.value)
-            # Auto-generate hash after normalization
-            self.value_hash = hashlib.sha256(self.value.encode('utf-8')).hexdigest()
-        
-        # Also normalize name field for all resource types
+            
         if self.name:
             self.name = normalize_string_nfc(self.name)
+            
+        # Generate hash for literals if not already set (fallback for individual saves)
+        if self.resource_type == ResourceType.LITERAL and self.value and not self.value_hash:
+            self.value_hash = generate_value_hash(self.value)
             
         super().save(*args, **kwargs)
     
