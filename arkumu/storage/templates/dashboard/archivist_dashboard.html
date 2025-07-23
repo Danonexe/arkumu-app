@@ -140,15 +140,13 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
                     </svg>
                     S3 Files Browser
+                    {% if selected_org_slug %}
+                        <span class="text-sm font-normal text-base-content/70">({{ selected_org_slug|title }})</span>
+                    {% endif %}
                 </h2>
                 
                 <!-- Reset Result Display -->
                 <div id="reset-db-result" class="mb-4"></div>
-            
-                <!-- Organization Selection -->
-                <div id="browser-org-selector" class="form-control max-w-md mb-6">
-                    {% include 'dashboard/partials/browser_org_selector.html' %}
-                </div>
             
                 <!-- File Browser Content -->
                 <div id="file-browser-content" class="min-h-[300px]">

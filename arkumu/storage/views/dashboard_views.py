@@ -32,7 +32,7 @@ class ArchivistDashboardView(GeneralLoginRequiredMixin, BaseCoordinatorMixin, CS
     """
     
     def render_organization_selectors(self, bucket_service, organizations, selected_org_slug):
-        """Render both organization selectors and file browser content for OOB updates."""
+        """Render organization selector and file browser content for OOB updates."""
         context = {
             'organizations': organizations,
             'selected_org_slug': selected_org_slug
@@ -40,10 +40,6 @@ class ArchivistDashboardView(GeneralLoginRequiredMixin, BaseCoordinatorMixin, CS
         
         upload_selector = render_to_string(
             'dashboard/partials/upload_org_selector.html', 
-            context
-        )
-        browser_selector = render_to_string(
-            'dashboard/partials/browser_org_selector.html', 
             context
         )
         
@@ -79,7 +75,6 @@ class ArchivistDashboardView(GeneralLoginRequiredMixin, BaseCoordinatorMixin, CS
         
         return {
             'upload-org-selector': upload_selector,
-            'browser-org-selector': browser_selector,
             'file-browser-content': file_browser_content
         }
     
