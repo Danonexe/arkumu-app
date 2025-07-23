@@ -18,7 +18,6 @@ class UploadFormHandler {
         // Form elements
         this.form = document.getElementById('streaming-upload-form');
         this.fileInput = document.getElementById('file-input');
-        this.folderModeCheckbox = document.getElementById('folder-mode');
         this.baseFolderSelect = document.getElementById('base-folder');
         this.organizationInput = document.getElementById('organization');
         this.uploadButton = document.getElementById('upload-button');
@@ -43,19 +42,12 @@ class UploadFormHandler {
     }
 
     bindEvents() {
-        // Folder mode toggle
-        if (this.folderModeCheckbox) {
-            this.folderModeCheckbox.addEventListener('change', (e) => {
-                this.handleFolderModeChange(e.target.checked);
-            });
-        }
-
-        // File selection
-        if (this.fileInput) {
-            this.fileInput.addEventListener('change', (e) => {
+        // File selection - use event delegation for dynamic elements
+        document.addEventListener('change', (e) => {
+            if (e.target && e.target.id === 'file-input') {
                 this.handleFileSelection(e.target.files);
-            });
-        }
+            }
+        });
 
         // Upload button
         if (this.uploadButton) {
@@ -64,26 +56,23 @@ class UploadFormHandler {
                 this.handleUploadClick();
             });
         }
+        
+        // Listen for HTMX after swap events to refresh file input reference
+        document.addEventListener('htmx:afterSwap', (e) => {
+            if (e.detail.target.id === 'upload-input-container') {
+                this.refreshFileInput();
+            }
+        });
     }
-
-    handleFolderModeChange(isFolderMode) {
-        const helpText = this.fileInput.nextElementSibling;
-        
-        if (isFolderMode) {
-            this.fileInput.setAttribute('webkitdirectory', '');
-            this.fileInput.setAttribute('directory', '');
-            helpText.textContent = 'Select a folder to preserve its structure';
-        } else {
-            this.fileInput.removeAttribute('webkitdirectory');
-            this.fileInput.removeAttribute('directory');
-            helpText.textContent = 'You can select multiple files at once';
-        }
-        
-        // Clear current selection when switching modes
-        this.fileInput.value = '';
+    
+    refreshFileInput() {
+        // Update file input reference after HTMX swap
+        this.fileInput = document.getElementById('file-input');
+        // Clear selection state
         this.selectedFiles = [];
         this.updateFileSelectionDisplay();
     }
+
 
     handleFileSelection(files) {
         console.log('Files selected:', files.length);
@@ -156,8 +145,8 @@ class UploadFormHandler {
             const baseFolder = this.baseFolderSelect ? this.baseFolderSelect.value : '';
             const organization = this.organizationInput ? this.organizationInput.value : '';
             
-            // Check if we're in folder mode
-            const isFolderMode = this.folderModeCheckbox && this.folderModeCheckbox.checked;
+            // Check if we're in folder mode by examining file input attributes
+            const isFolderMode = this.fileInput && this.fileInput.hasAttribute('webkitdirectory');
             
             // For folder mode, we need to preserve individual file paths
             let folderName = '';
@@ -378,19 +367,17 @@ class UploadFormHandler {
         this.resultsContainer.classList.remove('hidden');
         
         if (this.resultFilesCount) {
-            this.resultFilesCount.textContent = summary.completedFiles || 0;
+            // Use server-provided count for accurate results
+            this.resultFilesCount.textContent = summary.total_uploaded_files || summary.completedFiles || 0;
         }
         
         if (this.resultTotalSize) {
-            // Calculate total size from uploaded files
-            const totalSize = this.selectedFiles
-                .slice(0, summary.completedFiles)
-                .reduce((sum, file) => sum + file.size, 0);
-            this.resultTotalSize.textContent = formatFileSize(totalSize);
+            // Use server-provided formatted size for accuracy
+            this.resultTotalSize.textContent = summary.total_size_formatted || formatFileSize(summary.total_size_bytes || 0);
         }
         
         if (this.resultDuration) {
-            this.resultDuration.textContent = formatDuration(summary.duration || 0);
+            this.resultDuration.textContent = formatDuration(summary.duration_seconds || summary.duration || 0);
         }
     }
 

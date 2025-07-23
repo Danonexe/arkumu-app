@@ -34,5 +34,37 @@ TEMPLATES[0]["OPTIONS"]["debug"] = True  # type: ignore[index]
 # ------------------------------------------------------------------------------
 # https://docs.djangoproject.com/en/dev/ref/settings/#media-url
 MEDIA_URL = "http://media.testserver"
+# DATABASE CONFIGURATION FOR TESTS
+# ------------------------------------------------------------------------------
+# Override the DATABASE_URL-based configuration from base.py
+# Use separate test database to avoid contaminating development data
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": "test_arkumu",
+        "USER": "debug", 
+        "PASSWORD": "debug",
+        "HOST": "postgres",
+        "PORT": "5432",
+        "OPTIONS": {"options": "-c search_path=digikunst,public"},
+        "ATOMIC_REQUESTS": True,
+    }
+}
+
 # Your stuff...
 # ------------------------------------------------------------------------------
+
+# Huey Configuration for Tests
+# ------------------------------------------------------------------------------
+HUEY = {
+    'huey_class': 'huey.MemoryHuey',  # Use in-memory Huey for tests
+    'name': 'arkumu-test',
+    'results': True,
+    'store_none': False,
+    'immediate': True,  # Run tasks synchronously in tests
+    'utc': True,
+    'blocking': True,
+    'connection': {
+        'host': 'localhost',
+    }
+}
