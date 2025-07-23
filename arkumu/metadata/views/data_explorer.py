@@ -27,7 +27,7 @@ class DataExplorerView(ListView):
         
         # Debug mode - show all resources in development
         if settings.DEBUG and self.request.GET.get('debug') == 'true':
-            return self.apply_filters(queryset).order_by('-created_at')
+            return self.apply_sorting(self.apply_filters(queryset))
         
         # Apply access control based on user permissions
         if not self.request.user.is_authenticated:
@@ -46,8 +46,8 @@ class DataExplorerView(ListView):
             )
         # Staff/admin users see all resources (no additional filtering)
         
-        # Apply filters
-        return self.apply_filters(queryset).order_by('-created_at')
+        # Apply filters and sorting
+        return self.apply_sorting(self.apply_filters(queryset))
     
     def _get_accessible_organizations(self):
         """Get list of organizations accessible to current user."""
@@ -139,6 +139,57 @@ class DataExplorerView(ListView):
         
         return queryset
     
+    def apply_sorting(self, queryset):
+        """Apply sorting based on request parameters"""
+        sort_by = self.request.GET.get('sort', 'created')
+        sort_order = self.request.GET.get('order', 'desc')
+        
+        # Define valid sortable fields with their Django field names
+        valid_sorts = {
+            'type': 'resource_type',
+            'resource': 'name',  # Fallback to uri if name is null
+            'organization': 'organization__name',
+            'created': 'created_at',
+            'updated': 'updated_at',
+            'subject_count': 'subject_count',
+            'predicate_count': 'predicate_count', 
+            'object_count': 'object_count',
+            'total_triples': None  # Will be handled specially
+        }
+        
+        # Default sort
+        if sort_by not in valid_sorts:
+            sort_by = 'created'
+            sort_order = 'desc'
+        
+        # Handle special sorting cases
+        if sort_by == 'total_triples':
+            # Sort by total triple usage (sum of all three counts)
+            from django.db.models import F
+            queryset = queryset.annotate(
+                total_usage=F('subject_count') + F('predicate_count') + F('object_count')
+            )
+            field = 'total_usage'
+        elif sort_by == 'resource':
+            # Sort by name, but fallback to uri for resources without names
+            from django.db.models import Case, When, Value
+            queryset = queryset.annotate(
+                sort_name=Case(
+                    When(name__isnull=False, then=F('name')),
+                    When(name='', then=F('uri')),
+                    default=F('uri')
+                )
+            )
+            field = 'sort_name'
+        else:
+            field = valid_sorts[sort_by]
+        
+        # Apply ordering
+        if sort_order == 'desc':
+            field = f'-{field}'
+            
+        return queryset.order_by(field)
+    
     def get_context_data(self, **kwargs):
         if not hasattr(self, 'kwargs'):
             self.kwargs = {}
@@ -174,6 +225,12 @@ class DataExplorerView(ListView):
             'organization': self.request.GET.getlist('organization'),
             'triple_usage': self.request.GET.get('triple_usage'),
             'externally_linked': self.request.GET.get('externally_linked'),
+        }
+        
+        # Current sorting for template
+        context['current_sort'] = {
+            'sort': self.request.GET.get('sort', 'created'),
+            'order': self.request.GET.get('order', 'desc'),
         }
         
         return context
@@ -233,6 +290,18 @@ class ResourceDetailView(DetailView):
         context['subject_count'] = resource.subject_triples.count()
         context['predicate_count'] = resource.predicate_triples.count()
         context['object_count'] = resource.object_triples.count()
+        
+        # For literals, get organization usage breakdown
+        if resource.resource_type == ResourceType.LITERAL:
+            from django.db.models import Count
+            from arkumu.users.models import Organization
+            
+            context['literal_org_usage'] = (
+                Organization.objects
+                .filter(triple__object=resource)
+                .annotate(usage_count=Count('triple'))
+                .order_by('-usage_count', 'name')
+            )
         
         return context
 
