@@ -56,7 +56,7 @@ class ResourceRelationshipService:
                     'uri': resource.uri,
                     'type': resource.resource_type,
                     'name': resource.name,
-                    'organization': resource.source,
+                    'organization': resource.organization.code if resource.organization else None,
                     'id': str(resource.id)
                 },
                 'relationships': relationships,
@@ -100,7 +100,7 @@ class ResourceRelationshipService:
             'uri': resource.uri,
             'name': resource.name,
             'type': resource.resource_type,
-            'organization': resource.source,
+            'organization': resource.organization.code if resource.organization else None,
             'depth': current_depth
         })
         
