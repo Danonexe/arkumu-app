@@ -1,9 +1,9 @@
-<div class="p-6">
-    <div class="flex justify-between items-start mb-6">
-        <div>
-            <h3 class="text-2xl font-bold mb-2">Resource Details</h3>
-            <div class="flex items-center gap-2">
-                <div class="badge badge-lg
+<div class="p-8">
+    <div class="flex justify-between items-start mb-8">
+        <div class="flex-1 pr-4">
+            <h3 class="text-3xl font-bold mb-4">Resource Details</h3>
+            <div class="flex items-center gap-3 flex-wrap">
+                <div class="badge badge-lg px-4 py-3 text-sm font-medium
                     {% if resource.resource_type == 'IRI' %}badge-info
                     {% elif resource.resource_type == 'CLASS' %}badge-secondary
                     {% elif resource.resource_type == 'PROPERTY' %}badge-accent
@@ -12,14 +12,14 @@
                     {{ resource.get_resource_type_display }}
                 </div>
                 {% if resource.is_placeholder %}
-                    <div class="badge badge-warning">Placeholder</div>
+                    <div class="badge badge-warning px-3 py-2">Placeholder</div>
                 {% endif %}
                 {% if resource.is_externally_linked %}
-                    <div class="badge badge-info">Externally Linked</div>
+                    <div class="badge badge-info px-3 py-2">Externally Linked</div>
                 {% endif %}
             </div>
         </div>
-        <button class="btn btn-circle btn-ghost" onclick="document.getElementById('resource-modal').close()">
+        <button class="btn btn-circle btn-ghost btn-lg" onclick="document.getElementById('resource-modal').close()">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
             </svg>
@@ -27,57 +27,81 @@
     </div>
     
     <!-- Resource Information -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+    <div class="grid grid-cols-1 {% if resource.resource_type == 'LITERAL' and literal_org_usage %}lg:grid-cols-3 md:grid-cols-2{% else %}md:grid-cols-2{% endif %} gap-6 mb-8">
         <div class="card bg-base-100 shadow-sm">
-            <div class="card-body">
-                <h4 class="card-title text-lg">Basic Information</h4>
+            <div class="card-body p-6">
+                <h4 class="card-title text-xl mb-4">Basic Information</h4>
                 {% if resource.resource_type == 'LITERAL' %}
-                    <div class="space-y-2">
+                    <div class="space-y-4">
                         <div>
-                            <strong>Value:</strong>
-                            <code class="ml-2 bg-gray-100 px-2 py-1 rounded">{{ resource.value }}</code>
+                            <strong class="text-base block mb-2">Value:</strong>
+                            <code class="bg-gray-100 px-3 py-2 rounded text-sm block break-all">{{ resource.value }}</code>
                         </div>
                         {% if resource.language %}
-                            <div><strong>Language:</strong> {{ resource.language }}</div>
+                            <div><strong class="text-base">Language:</strong> <span class="ml-2">{{ resource.language }}</span></div>
                         {% endif %}
                         {% if resource.datatype %}
-                            <div><strong>Datatype:</strong> <code>{{ resource.datatype }}</code></div>
+                            <div><strong class="text-base">Datatype:</strong> <code class="ml-2 bg-gray-100 px-2 py-1 rounded text-sm">{{ resource.datatype }}</code></div>
                         {% endif %}
                     </div>
                 {% else %}
-                    <div class="space-y-2">
+                    <div class="space-y-4">
                         {% if resource.uri %}
                             <div>
-                                <strong>URI:</strong>
-                                <a href="{{ resource.uri }}" target="_blank" class="link link-primary break-all">{{ resource.uri }}</a>
+                                <strong class="text-base block mb-2">URI:</strong>
+                                <a href="{{ resource.uri }}" target="_blank" class="link link-primary break-all text-sm">{{ resource.uri }}</a>
                             </div>
                         {% endif %}
                         {% if resource.name %}
-                            <div><strong>Name:</strong> {{ resource.name }}</div>
+                            <div><strong class="text-base">Name:</strong> <span class="ml-2">{{ resource.name }}</span></div>
                         {% endif %}
                     </div>
                 {% endif %}
                 {% if resource.organization %}
-                    <div><strong>Organization:</strong> <code>{{ resource.organization.code }}</code></div>
+                    <div class="mt-4 pt-4 border-t border-gray-200">
+                        <strong class="text-base">Organization:</strong> 
+                        <code class="ml-2 bg-blue-50 text-blue-800 px-2 py-1 rounded text-sm">{{ resource.organization.code }}</code>
+                    </div>
                 {% endif %}
             </div>
         </div>
         
+        <!-- Literal Source Organizations (only for literals) -->
+        {% if resource.resource_type == 'LITERAL' and literal_org_usage %}
         <div class="card bg-base-100 shadow-sm">
-            <div class="card-body">
-                <h4 class="card-title text-lg">Triple Usage</h4>
-                <div class="stats stats-vertical">
-                    <div class="stat">
-                        <div class="stat-title">As Subject</div>
-                        <div class="stat-value text-lg">{{ subject_count }}</div>
+            <div class="card-body p-6">
+                <h4 class="card-title text-xl mb-4">Source Organizations</h4>
+                <div class="flex flex-wrap gap-2">
+                    {% for org in literal_org_usage %}
+                    <div class="badge badge-outline px-3 py-2 text-sm" title="{{ org.name }} - {{ org.usage_count }} triple{{ org.usage_count|pluralize }}">
+                        {{ org.code }}
                     </div>
-                    <div class="stat">
-                        <div class="stat-title">As Predicate</div>
-                        <div class="stat-value text-lg">{{ predicate_count }}</div>
+                    {% endfor %}
+                </div>
+                {% if literal_org_usage %}
+                <div class="text-xs text-gray-500 mt-3">
+                    {{ literal_org_usage|length }} organization{{ literal_org_usage|length|pluralize }}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+        
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body p-6">
+                <h4 class="card-title text-xl mb-4">Triple Usage</h4>
+                <div class="stats stats-vertical w-full">
+                    <div class="stat px-4 py-3">
+                        <div class="stat-title text-base mb-2">As Subject</div>
+                        <div class="stat-value text-2xl text-primary">{{ subject_count }}</div>
                     </div>
-                    <div class="stat">
-                        <div class="stat-title">As Object</div>
-                        <div class="stat-value text-lg">{{ object_count }}</div>
+                    <div class="stat px-4 py-3">
+                        <div class="stat-title text-base mb-2">As Predicate</div>
+                        <div class="stat-value text-2xl text-secondary">{{ predicate_count }}</div>
+                    </div>
+                    <div class="stat px-4 py-3">
+                        <div class="stat-title text-base mb-2">As Object</div>
+                        <div class="stat-value text-2xl text-accent">{{ object_count }}</div>
                     </div>
                 </div>
             </div>
