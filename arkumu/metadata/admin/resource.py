@@ -145,6 +145,7 @@ class ResourceAdmin(admin.ModelAdmin):
         'triple_relationships',
         'public_access_info',
         'literal_info',
+        'literal_source_breakdown',
     ]
     
     fieldsets = (
@@ -168,7 +169,7 @@ class ResourceAdmin(admin.ModelAdmin):
             'classes': ('collapse',),
         }),
         (_('Literal Properties'), {
-            'fields': ('datatype', 'language', 'literal_info'),
+            'fields': ('datatype', 'language', 'literal_info', 'literal_source_breakdown'),
             'classes': ('collapse',),
             'description': 'Properties specific to literal resources.',
         }),
@@ -480,6 +481,43 @@ class ResourceAdmin(admin.ModelAdmin):
         html += '</div>'
         return mark_safe(html)
     literal_info.short_description = _('Literal Information')
+    
+    def literal_source_breakdown(self, obj):
+        """Display which organizations are using this literal."""
+        if obj.resource_type != ResourceType.LITERAL:
+            return format_html('<em style="color: #6c757d;">Not a literal resource</em>')
+        
+        if not obj.pk:
+            return '-'
+        
+        # Get all triples where this literal is used as object
+        from django.db.models import Count
+        from arkumu.users.models import Organization
+        
+        org_usage = (
+            Organization.objects
+            .filter(triple_set__object=obj)
+            .annotate(usage_count=Count('triple_set'))
+            .order_by('-usage_count', 'name')
+        )
+        
+        if not org_usage:
+            return format_html('<em style="color: #6c757d;">No organization usage found</em>')
+        
+        html = '<div style="line-height: 1.8;">'
+        html += '<strong>Used by Organizations:</strong><br>'
+        
+        for org in org_usage:
+            org_url = reverse('admin:users_organization_change', args=[org.pk])
+            triple_url = reverse('admin:metadata_triple_changelist') + f'?object__id__exact={obj.pk}&source__id__exact={org.pk}'
+            html += f'  • <a href="{org_url}">{org.name}</a>: <a href="{triple_url}" title="View triples">{org.usage_count} triple{"s" if org.usage_count != 1 else ""}</a><br>'
+        
+        total_triples = sum(org.usage_count for org in org_usage)
+        html += f'<br><strong>Total Usage:</strong> {total_triples} triple{"s" if total_triples != 1 else ""} across {len(org_usage)} organization{"s" if len(org_usage) != 1 else ""}'
+        
+        html += '</div>'
+        return mark_safe(html)
+    literal_source_breakdown.short_description = _('Source Organizations')
     
     actions = [
         'approve_public_access',
