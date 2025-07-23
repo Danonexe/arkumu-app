@@ -16,9 +16,6 @@ def database_structure_visualizer(request, session_id):
     import datetime
     from django.utils import timezone
     
-    # Get resources from this organization created around the same time as the session
-    organization_code = ingest_session.organization.code
-    
     # Define a time window around the session (more flexible approach)
     session_start = ingest_session.created_at
     session_end = ingest_session.completed_at or timezone.now()
@@ -29,15 +26,15 @@ def database_structure_visualizer(request, session_id):
     end_time = session_end + time_buffer
     
     resources = Resource.objects.filter(
-        source=organization_code,
+        organization=ingest_session.organization,
         created_at__range=(start_time, end_time)
     ).order_by('-created_at')
     
     # Count resources and triples
     resource_count = resources.count()
     triple_count = Triple.objects.filter(
-        Q(subject__source=organization_code, subject__created_at__range=(start_time, end_time)) |
-        Q(object__source=organization_code, object__created_at__range=(start_time, end_time))
+        Q(subject__organization=ingest_session.organization, subject__created_at__range=(start_time, end_time)) |
+        Q(object__organization=ingest_session.organization, object__created_at__range=(start_time, end_time))
     ).distinct().count()
     
     # Get resource type breakdown
