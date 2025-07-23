@@ -1,6 +1,7 @@
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from arkumu.metadata.models.base import UUIDModel
+from arkumu.common.uri_utils import normalize_string_nfc
 import hashlib
 
 
@@ -79,7 +80,14 @@ class Resource(UUIDModel):
         default=ResourceType.IRI,
         help_text="Type of the resource (IRI, Class, Property, or Literal)"
     )
-    source = models.CharField(max_length=255, blank=True, help_text="Source or origin of this resource (e.g., the institution like 'FUK')")
+    # DEPRECATED: Provenance now tracked at Triple level
+    # Kept for backward compatibility during transition
+    source = models.CharField(
+        max_length=255, 
+        blank=True,
+        null=True,
+        help_text="DEPRECATED: Source tracking moved to Triple model. This field will be removed in future."
+    )
     
     # Organization for permissions (links to the User organization model)
     organization = models.ForeignKey(
@@ -270,9 +278,17 @@ class Resource(UUIDModel):
         self.datatype = value
     
     def save(self, *args, **kwargs):
-        """Auto-generate hash for literal values before saving."""
+        """Auto-generate hash for literal values and normalize text before saving."""
         if self.resource_type == ResourceType.LITERAL and self.value:
+            # Normalize text to NFC for consistent Unicode representation
+            self.value = normalize_string_nfc(self.value)
+            # Auto-generate hash after normalization
             self.value_hash = hashlib.sha256(self.value.encode('utf-8')).hexdigest()
+        
+        # Also normalize name field for all resource types
+        if self.name:
+            self.name = normalize_string_nfc(self.name)
+            
         super().save(*args, **kwargs)
     
     @property
