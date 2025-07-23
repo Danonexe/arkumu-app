@@ -121,10 +121,9 @@ class ResourceManager:
         Returns:
             Canonical URI for the literal
         """
-        import hashlib
-        
-        # Use Blake2b with 8-byte digest for better collision resistance and performance
-        value_hash = hashlib.blake2b(value.encode('utf-8'), digest_size=8).hexdigest()
+        # Use centralized hash function for URI generation
+        from arkumu.common.hash_utils import generate_uri_hash
+        value_hash = generate_uri_hash(value, digest_size=8)
         
         if strategy == LiteralURIStrategy.SEMANTIC and datatype:
             # Extract simple type name from URI for semantic URIs
@@ -135,7 +134,7 @@ class ResourceManager:
             return f"{self.base_uri}/literals/{value_hash}"
         else:
             # Legacy contextual URIs (existing behavior with Blake2b)
-            legacy_hash = hashlib.blake2b(value.encode('utf-8'), digest_size=4).hexdigest()
+            legacy_hash = generate_uri_hash(value, digest_size=4)
             value_identifier = f"{slugify_uri_part(value[:50])}-{legacy_hash}"
             return mint_uri(self.base_uri, self.institution, "values", value_identifier)
     
@@ -230,16 +229,17 @@ class ResourceManager:
                 
             # Generate URI and hash using full value (no truncation for storage)
             canonical_uri = self.create_canonical_literal_uri(value, datatype)
-            import hashlib
-            value_hash = hashlib.sha256(value.encode('utf-8')).hexdigest()
+            from arkumu.common.hash_utils import generate_value_hash_and_normalize
+            value_hash, normalized_value = generate_value_hash_and_normalize(value)
             
             value_resource = Resource(
                 uri=canonical_uri,
-                value=value,  # Store full value - no data loss
+                value=normalized_value,  # Store normalized value for consistent searching
                 value_hash=value_hash,
                 resource_type=ResourceType.LITERAL,
-                name=value[:100] if len(value) > 100 else value,  # Only truncate display name
+                name=normalized_value[:100] if len(normalized_value) > 100 else normalized_value,  # Only truncate display name
                 datatype=datatype,
+                language="de",  # Default to German language
                 organization=None  # Literals have no organization
             )
             value_resources_to_create.append(value_resource)
@@ -418,18 +418,18 @@ class ResourceManager:
                 
                 # Use hash-based uniqueness without source to enable deduplication across archives
                 # and prevent PostgreSQL btree index size limitations
-                import hashlib
-                value_hash = hashlib.sha256(object_value.encode('utf-8')).hexdigest()
+                from arkumu.common.hash_utils import generate_value_hash_and_normalize
+                value_hash, normalized_value = generate_value_hash_and_normalize(object_value)
                 
                 value_resource, created = Resource.objects.get_or_create(
                     uri=canonical_uri,  # Use URI for primary uniqueness
                     defaults={
                         "value_hash": value_hash,
-                        "language": None,  # Add language support if needed
+                        "language": "de",  # Default to German language
                         "datatype": datatype,
-                        "name": object_value[:100],  # Truncate for name
+                        "name": normalized_value[:100],  # Truncate for name
                         "resource_type": ResourceType.LITERAL,
-                        "value": object_value,  # Store full value (no data loss)
+                        "value": normalized_value,  # Store normalized value for consistent searching
                         "is_placeholder": False,
                         "organization": None  # Literals have no organization
                     }
@@ -614,11 +614,19 @@ class ResourceManager:
             if not value or not value.strip():
                 continue
                 
+            # Generate hash manually since bulk_create doesn't call save()
+            from arkumu.common.hash_utils import generate_value_hash_and_normalize
+            
+            # Normalize once and get both hash and normalized value
+            value_hash, normalized_value = generate_value_hash_and_normalize(value)
+                
             value_resource = Resource(
-                value=value,  # Store full value - no data loss
+                value=normalized_value,  # Store normalized value since bulk_create doesn't call save()
+                value_hash=value_hash,  # Set hash manually for bulk_create
                 resource_type=ResourceType.LITERAL,
-                name=value[:100] if len(value) > 100 else value,  # Only truncate display name
+                name=normalized_value[:100] if len(normalized_value) > 100 else normalized_value,  # Only truncate display name
                 datatype="http://www.w3.org/2001/XMLSchema#string",
+                language="de",  # Default to German language
                 organization=None  # Literals have no organization
             )
             value_resources_to_create.append(value_resource)
