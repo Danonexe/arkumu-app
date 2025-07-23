@@ -1,5 +1,6 @@
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+from django.contrib.postgres.indexes import GinIndex
 from arkumu.metadata.models.base import UUIDModel
 from arkumu.common.uri_utils import normalize_string_nfc
 import hashlib
@@ -44,7 +45,7 @@ class ResourceManager(models.Manager):
         # Add organization data
         if user.organization:
             queryset = queryset.union(
-                self.filter(source=user.organization.code)
+                self.filter(organization=user.organization)
             )
         
         # Add public resources
@@ -60,9 +61,9 @@ class ResourceManager(models.Manager):
         
         return queryset
     
-    def for_organization(self, organization_code):
+    def for_organization(self, organization):
         """Return resources for a specific organization."""
-        return self.filter(source=organization_code)
+        return self.filter(organization=organization)
 
 
 class Resource(UUIDModel):
@@ -79,14 +80,6 @@ class Resource(UUIDModel):
         choices=ResourceType.choices,
         default=ResourceType.IRI,
         help_text="Type of the resource (IRI, Class, Property, or Literal)"
-    )
-    # DEPRECATED: Provenance now tracked at Triple level
-    # Kept for backward compatibility during transition
-    source = models.CharField(
-        max_length=255, 
-        blank=True,
-        null=True,
-        help_text="DEPRECATED: Source tracking moved to Triple model. This field will be removed in future."
     )
     
     # Organization for permissions (links to the User organization model)
@@ -204,14 +197,17 @@ class Resource(UUIDModel):
         indexes = [
             models.Index(fields=['name'], name='name_idx'),
             # Removed value_idx - using value_hash index instead to avoid PostgreSQL btree size limits
-            models.Index(fields=['source', 'name'], name='source_name_idx'),
-            models.Index(fields=['source', 'uri']),
-            models.Index(fields=['source', 'resource_type']),
             models.Index(fields=['uri'], name='uri_pattern_idx', opclasses=['varchar_pattern_ops']),
             models.Index(fields=['organization']),
             # New indexes for public access queries
             models.Index(fields=['public_access_level', 'is_public_approved']),
-            models.Index(fields=['source', 'public_access_level']),
+            # Trigram GIN index for fast text search on literal values
+            GinIndex(
+                fields=['value'],
+                name='resource_value_search_idx',
+                condition=models.Q(resource_type='LITERAL'),
+                opclasses=['gin_trgm_ops']
+            ),
         ]
         
         # Add object-level permissions for django-guardian
@@ -403,8 +399,8 @@ class Resource(UUIDModel):
             return True
             
         # Users can link within their own organization
-        if (self.source == user.organization.code and
-            target_resource.source == user.organization.code):
+        if (self.organization == user.organization and
+            target_resource.organization == user.organization):
             return True
             
         return False

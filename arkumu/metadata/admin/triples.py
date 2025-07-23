@@ -39,31 +39,25 @@ class ResourceTypeInTripleFilter(SimpleListFilter):
 
 
 class SourceFilter(SimpleListFilter):
-    """Filter triples by source consistency."""
+    """Filter triples by organization consistency and triple source."""
     title = _('source consistency')
     parameter_name = 'source_consistency'
     
     def lookups(self, request, model_admin):
         return (
-            ('same_source', _('All Same Source')),
-            ('mixed_source', _('Mixed Sources')),
+            ('same_org', _('All Same Organization')),
             ('cross_org', _('Cross-Organization')),
+            ('derived_triples', _('System-Derived Triples')),
+            ('archival_triples', _('Archival Triples')),
         )
     
     def queryset(self, request, queryset):
-        if self.value() == 'same_source':
-            # Triples where all resources have the same source
+        if self.value() == 'same_org':
+            # Triples where all resources have the same organization
             return queryset.filter(
-                subject__source=models.F('object__source'),
-                predicate__source=models.F('object__source')
-            ).exclude(subject__source='')
-        if self.value() == 'mixed_source':
-            # Triples with different sources
-            return queryset.exclude(
-                subject__source=models.F('object__source')
-            ) | queryset.exclude(
-                predicate__source=models.F('object__source')
-            )
+                subject__organization=models.F('object__organization'),
+                predicate__organization=models.F('object__organization')
+            ).exclude(subject__organization__isnull=True)
         if self.value() == 'cross_org':
             # Triples crossing organization boundaries
             return queryset.filter(
@@ -72,6 +66,12 @@ class SourceFilter(SimpleListFilter):
                 subject__organization__isnull=True,
                 object__organization__isnull=True
             )
+        if self.value() == 'derived_triples':
+            # System-derived triples (no source)
+            return queryset.filter(source__isnull=True, is_derived=True)
+        if self.value() == 'archival_triples':
+            # Archival triples (have source)
+            return queryset.filter(source__isnull=False, is_derived=False)
         return queryset
 
 
@@ -107,7 +107,6 @@ class TripleAdmin(admin.ModelAdmin):
         SourceFilter,
         'created_at',
         ('subject__organization', admin.RelatedOnlyFieldListFilter),
-        ('subject__source', admin.AllValuesFieldListFilter),
         ('predicate__resource_type', admin.ChoicesFieldListFilter),
         ('object__resource_type', admin.ChoicesFieldListFilter),
     ]

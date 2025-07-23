@@ -165,8 +165,12 @@ def create_mapping_blueprint(sender, instance, created, **kwargs):
         
         # Initialize resource manager
         statistics = ExecutionStatistics()
+        # Get the organization object instead of just the code
+        from arkumu.users.models import Organization
+        organization = Organization.objects.get(code=instance.organization_id.upper())
+        
         resource_manager = ResourceManager(
-            institution=instance.organization_id.upper(),
+            organization=organization,
             base_uri="http://arkumu.org/data",
             statistics=statistics
         )

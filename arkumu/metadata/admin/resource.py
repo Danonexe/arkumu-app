@@ -110,7 +110,6 @@ class ResourceAdmin(admin.ModelAdmin):
     list_display = [
         'display_value',
         'resource_type_badge',
-        'source_link',
         'organization_link',
         'public_access_badge',
         'triple_usage_display',
@@ -127,7 +126,6 @@ class ResourceAdmin(admin.ModelAdmin):
         'is_public',
         'is_externally_linked',
         HasTriplesFilter,
-        'source',
         'organization',
         'created_at',
         ('public_approved_by', admin.RelatedOnlyFieldListFilter),
@@ -137,7 +135,6 @@ class ResourceAdmin(admin.ModelAdmin):
         'uri',
         'name',
         'value',
-        'source',
     ]
     
     readonly_fields = [
@@ -154,9 +151,9 @@ class ResourceAdmin(admin.ModelAdmin):
         (None, {
             'fields': ('resource_type', 'uri', 'name', 'value', 'resource_display')
         }),
-        (_('Organization & Source'), {
-            'fields': ('organization', 'source'),
-            'description': 'Organization ownership and source tracking.',
+        (_('Organization'), {
+            'fields': ('organization',),
+            'description': 'Organization ownership.',
         }),
         (_('Public Access Control'), {
             'fields': (
@@ -261,13 +258,6 @@ class ResourceAdmin(admin.ModelAdmin):
     resource_type_badge.short_description = _('Type')
     resource_type_badge.admin_order_field = 'resource_type'
     
-    def source_link(self, obj):
-        """Display source with potential link."""
-        if obj.source:
-            return format_html('<code>{}</code>', obj.source)
-        return '-'
-    source_link.short_description = _('Source')
-    source_link.admin_order_field = 'source'
     
     def organization_link(self, obj):
         """Display organization as a link."""
