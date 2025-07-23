@@ -29,10 +29,10 @@
     </div>
     {% endif %}
     
-    {% if resource.source %}
+    {% if resource.organization %}
     <div>
-        <label class="label label-text-alt">Source</label>
-        <div class="badge badge-info">{{ resource.source }}</div>
+        <label class="label label-text-alt">Organization</label>
+        <div class="badge badge-info">{{ resource.organization.code }}</div>
     </div>
     {% endif %}
     

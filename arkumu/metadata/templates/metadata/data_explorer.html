@@ -115,19 +115,19 @@
                         </div>
                     </div>
                     
-                    <!-- Sources -->
+                    <!-- Organizations -->
                     <div class="collapse collapse-arrow bg-base-200 mb-4 rounded-lg">
                         <input type="checkbox">
-                        <div class="collapse-title text-sm font-semibold">Sources</div>
+                        <div class="collapse-title text-sm font-semibold">Organizations</div>
                         <div class="collapse-content max-h-32 overflow-y-auto">
-                            {% for source in filter_options.sources %}
+                            {% for organization in filter_options.organizations %}
                             <label class="label cursor-pointer">
-                                <span class="label-text text-sm">{{ source }}</span>
+                                <span class="label-text text-sm">{{ organization }}</span>
                                 <input type="checkbox" 
-                                       name="source" 
-                                       value="{{ source }}"
+                                       name="organization" 
+                                       value="{{ organization }}"
                                        class="checkbox checkbox-primary checkbox-sm"
-                                       {% if source in current_filters.source %}checked{% endif %}>
+                                       {% if organization in current_filters.organization %}checked{% endif %}>
                             </label>
                             {% endfor %}
                         </div>

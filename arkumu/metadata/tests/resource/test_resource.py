@@ -1,18 +1,20 @@
 import pytest
 from django.core.exceptions import ValidationError
 from arkumu.metadata.models.resource import Resource, ResourceType
+from arkumu.users.models import Organization
 
 @pytest.mark.django_db
 def test_create_resource(db):
     """Test creating a resource."""
+    test_org = Organization.objects.create(name="Test Org", code="test")
     resource = Resource.objects.create(
         uri="http://example.org/resource/1",
-        source="test",
+        organization=test_org,
         resource_type=ResourceType.IRI
     )
     assert resource.id is not None
     assert resource.uri == "http://example.org/resource/1"
-    assert resource.source == "test"
+    assert resource.organization.code == "test"
     assert resource.resource_type == ResourceType.IRI
     assert resource.value is None
     
@@ -20,7 +22,6 @@ def test_create_resource(db):
 def test_create_literal_resource(db):
     """Test creating a literal resource."""
     resource = Resource.objects.create(
-        source="test",
         resource_type=ResourceType.LITERAL,
         value="Test Value",
         datatype="xsd:string",
@@ -31,46 +32,53 @@ def test_create_literal_resource(db):
     assert resource.value == "Test Value"
     assert resource.datatype == "xsd:string"
     assert resource.language == "en"
+    # Literals don't have organization since they get provenance from triples
+    assert resource.organization is None
 
 @pytest.mark.django_db
 def test_update_resource(db):
     """Test updating a resource."""
+    original_org = Organization.objects.create(name="Original Org", code="original")
+    updated_org = Organization.objects.create(name="Updated Org", code="updated")
     resource = Resource.objects.create(
         uri="http://example.org/resource/2",
-        source="original",
+        organization=original_org,
         resource_type=ResourceType.IRI
     )
     
-    resource.source = "updated"
+    resource.organization = updated_org
     resource.save()
     
     updated_resource = Resource.objects.get(id=resource.id)
-    assert updated_resource.source == "updated"
+    assert updated_resource.organization.code == "updated"
 
 @pytest.mark.django_db
-def test_source_field_compatibility(db):
-    """Test the compatibility with alternative field names."""
+def test_organization_field(db):
+    """Test the organization field functionality."""
+    fuk_org = Organization.objects.create(name="Folkwang Universität der Künste", code="FUK")
     resource = Resource.objects.create(
         uri="http://example.org/resource/source-field-test",
-        source="FUK",
+        organization=fuk_org,
         resource_type=ResourceType.IRI
     )
     
-    assert resource.source == "FUK"
+    assert resource.organization.code == "FUK"
     
-    # Test updating just the source
-    resource.source = "Updated_FUK"
+    # Test updating the organization
+    updated_org = Organization.objects.create(name="Updated FUK", code="Updated_FUK")
+    resource.organization = updated_org
     resource.save()
     
     updated = Resource.objects.get(id=resource.id)
-    assert updated.source == "Updated_FUK"
+    assert updated.organization.code == "Updated_FUK"
 
 @pytest.mark.django_db
 def test_delete_resource(db):
     """Test deleting a resource."""
+    test_org = Organization.objects.create(name="Test Org", code="test")
     resource = Resource.objects.create(
         uri="http://example.org/resource/3",
-        source="test",
+        organization=test_org,
         resource_type=ResourceType.IRI
     )
     
@@ -83,9 +91,10 @@ def test_delete_resource(db):
 @pytest.mark.django_db
 def test_resource_str_non_literal(db):
     """Test string representation of a non-literal resource."""
+    test_org = Organization.objects.create(name="Test Org", code="test")
     resource = Resource.objects.create(
         uri="http://example.org/resource/4",
-        source="test",
+        organization=test_org,
         resource_type=ResourceType.IRI
     )
     assert str(resource) == "http://example.org/resource/4"
@@ -122,25 +131,28 @@ def test_resource_str_literal_with_language(db):
 @pytest.mark.django_db
 def test_unique_uri_constraint(db):
     """Test that URIs must be unique."""
+    test_org = Organization.objects.create(name="Test Org", code="test")
+    another_org = Organization.objects.create(name="Another Org", code="another")
     Resource.objects.create(
         uri="http://example.org/resource/unique",
-        source="test",
+        organization=test_org,
         resource_type=ResourceType.IRI
     )
     
     with pytest.raises(Exception):
         Resource.objects.create(
             uri="http://example.org/resource/unique",
-            source="another test",
+            organization=another_org,
             resource_type=ResourceType.IRI
         )
 
 @pytest.mark.django_db
 def test_class_resource_creation(db):
     """Test creating a class resource."""
+    test_org = Organization.objects.create(name="Test Org", code="test")
     resource = Resource.objects.create(
         uri="http://example.org/class/Person",
-        source="test",
+        organization=test_org,
         resource_type=ResourceType.CLASS
     )
     assert resource.id is not None
@@ -150,9 +162,10 @@ def test_class_resource_creation(db):
 @pytest.mark.django_db
 def test_property_resource_creation(db):
     """Test creating a property resource."""
+    test_org = Organization.objects.create(name="Test Org", code="test")
     resource = Resource.objects.create(
         uri="http://example.org/property/hasName",
-        source="test",
+        organization=test_org,
         resource_type=ResourceType.PROPERTY
     )
     assert resource.id is not None

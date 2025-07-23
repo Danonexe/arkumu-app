@@ -49,14 +49,14 @@ class DataExplorerView(ListView):
         # Apply filters
         return self.apply_filters(queryset).order_by('-created_at')
     
-    def _get_accessible_sources(self):
-        """Get list of sources accessible to current user."""
+    def _get_accessible_organizations(self):
+        """Get list of organizations accessible to current user."""
         # Start with all resources
         queryset = Resource.objects.all()
         
-        # Debug mode - show all sources in development
+        # Debug mode - show all organizations in development
         if settings.DEBUG and self.request.GET.get('debug') == 'true':
-            return queryset.values_list('source', flat=True).distinct().order_by('source')
+            return queryset.select_related('organization').values_list('organization__name', flat=True).distinct().order_by('organization__name')
         
         # Apply access control based on user permissions
         if not self.request.user.is_authenticated:
@@ -75,7 +75,7 @@ class DataExplorerView(ListView):
             )
         # Staff/admin users see all resources (no additional filtering)
         
-        return queryset.values_list('source', flat=True).distinct().order_by('source')
+        return queryset.select_related('organization').values_list('organization__name', flat=True).distinct().order_by('organization__name')
     
     def apply_filters(self, queryset):
         """Apply various filters based on request parameters"""
@@ -85,8 +85,7 @@ class DataExplorerView(ListView):
             queryset = queryset.filter(
                 Q(uri__icontains=search) |
                 Q(name__icontains=search) |
-                Q(value__icontains=search) |
-                Q(source__icontains=search)
+                Q(value__icontains=search)
             )
         
         # Resource type filter
@@ -103,10 +102,10 @@ class DataExplorerView(ListView):
         elif type_group == 'placeholders':
             queryset = queryset.filter(is_placeholder=True)
         
-        # Source filter
-        sources = self.request.GET.getlist('source')
-        if sources:
-            queryset = queryset.filter(source__in=sources)
+        # Organization filter
+        organizations = self.request.GET.getlist('organization')
+        if organizations:
+            queryset = queryset.filter(organization__name__in=organizations)
         
         # Triple usage filter
         triple_usage = self.request.GET.get('triple_usage')
@@ -164,7 +163,7 @@ class DataExplorerView(ListView):
                 {'value': 'as_object', 'label': 'Used as Object'},
                 {'value': 'no_triples', 'label': 'No Triple References'},
             ],
-            'sources': self._get_accessible_sources(),
+            'organizations': self._get_accessible_organizations(),
         }
         
         # Current filters for template
@@ -172,7 +171,7 @@ class DataExplorerView(ListView):
             'search': self.request.GET.get('search', ''),
             'resource_type': self.request.GET.getlist('resource_type'),
             'type_group': self.request.GET.get('type_group'),
-            'source': self.request.GET.getlist('source'),
+            'organization': self.request.GET.getlist('organization'),
             'triple_usage': self.request.GET.get('triple_usage'),
             'externally_linked': self.request.GET.get('externally_linked'),
         }

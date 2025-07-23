@@ -24,9 +24,9 @@
                 {% endif %}
                 <div class="text-sm opacity-70 mt-2 mb-1">Type:</div>
                 <div class="badge badge-outline">{{ resource.get_resource_type_display }}</div>
-                {% if resource.source %}
-                    <div class="text-sm opacity-70 mt-2 mb-1">Source:</div>
-                    <div class="badge badge-primary">{{ resource.source }}</div>
+                {% if resource.organization %}
+                    <div class="text-sm opacity-70 mt-2 mb-1">Organization:</div>
+                    <div class="badge badge-primary">{{ resource.organization.code }}</div>
                 {% endif %}
             </div>
             

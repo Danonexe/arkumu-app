@@ -17,7 +17,7 @@
             <tr>
                 <th class="text-left w-32">Type</th>
                 <th class="text-left">Resource</th>
-                <th class="text-left w-20">Source</th>
+                <th class="text-left w-20">Organization</th>
                 <th class="text-left w-24">Triples</th>
                 <th class="text-center w-32">Actions</th>
             </tr>
@@ -60,10 +60,10 @@
                     {% endif %}
                 </td>
                 
-                <!-- Source -->
+                <!-- Organization -->
                 <td>
-                    {% if resource.source %}
-                        <code class="bg-base-300 px-2 py-1 rounded text-sm">{{ resource.source }}</code>
+                    {% if resource.organization %}
+                        <code class="bg-base-300 px-2 py-1 rounded text-sm">{{ resource.organization.code }}</code>
                     {% else %}
                         <span class="text-base-content/50">-</span>
                     {% endif %}

@@ -144,7 +144,7 @@ def _find_matching_resources_in_db(pattern_type, pattern_value, search_fields):
             'name': resource.name,
             'value': resource.value,
             'type': resource.get_resource_type_display(),
-            'source': resource.source,
+            'source': resource.organization.code if resource.organization else None,
             'datatype': resource.datatype,
             'language': resource.language,
             'is_placeholder': resource.is_placeholder,
@@ -488,7 +488,9 @@ def execute_dataset_transformation(request):
                                 Triple.objects.create(
                                     subject=resource,
                                     predicate=rdf_type_predicate,
-                                    object=type_resource
+                                    object=type_resource,
+                                    source=None,  # User-created, not from import
+                                    is_derived=True
                                 )
                                 created_triples += 1
                                 

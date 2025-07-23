@@ -149,7 +149,7 @@
                 <div class="space-y-1">
                     {% for institution in institutions|slice:":4" %}
                     <div class="flex justify-between text-xs">
-                        <span class="truncate w-20">{{ institution.source|truncatechars:15 }}</span>
+                        <span class="truncate w-20">{{ institution.organization__name|truncatechars:15|default:"No Organization" }}</span>
                         <span class="font-semibold">{{ institution.count }}</span>
                     </div>
                     {% empty %}

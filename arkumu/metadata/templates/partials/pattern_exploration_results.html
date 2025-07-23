@@ -62,7 +62,7 @@
                     <div class="flex flex-wrap gap-1 mt-2">
                         <span class="text-xs">Fields searched:</span>
                         {% for field in search_fields %}
-                            <span class="badge badge-xs {% if field == 'uri' %}badge-primary{% elif field == 'name' %}badge-info{% elif field == 'value' %}badge-success{% elif field == 'source' %}badge-warning{% else %}badge-ghost{% endif %}">
+                            <span class="badge badge-xs {% if field == 'uri' %}badge-primary{% elif field == 'name' %}badge-info{% elif field == 'value' %}badge-success{% elif field == 'organization' %}badge-warning{% else %}badge-ghost{% endif %}">
                                 {{ field|capfirst }}
                             </span>
                         {% endfor %}
@@ -80,7 +80,7 @@
                         <th>Resource</th>
                         <th>Matched Field</th>
                         <th>Type</th>
-                        <th>Source</th>
+                        <th>Organization</th>
                         <th>Details</th>
                     </tr>
                 </thead>
@@ -102,7 +102,7 @@
                             </td>
                             <td class="text-xs">
                                 <div class="flex flex-col gap-1">
-                                    <span class="badge badge-xs {% if resource.matched_field == 'uri' %}badge-primary{% elif resource.matched_field == 'name' %}badge-info{% elif resource.matched_field == 'value' %}badge-success{% elif resource.matched_field == 'source' %}badge-warning{% else %}badge-ghost{% endif %}">
+                                    <span class="badge badge-xs {% if resource.matched_field == 'uri' %}badge-primary{% elif resource.matched_field == 'name' %}badge-info{% elif resource.matched_field == 'value' %}badge-success{% elif resource.matched_field == 'organization' %}badge-warning{% else %}badge-ghost{% endif %}">
                                         {{ resource.matched_field|capfirst }}
                                     </span>
                                     {% if resource.matched_value %}
@@ -121,8 +121,8 @@
                                 {% endif %}
                             </td>
                             <td class="text-xs">
-                                {% if resource.source %}
-                                    <span class="badge badge-xs badge-ghost">{{ resource.source|truncatechars:15 }}</span>
+                                {% if resource.organization %}
+                                    <span class="badge badge-xs badge-ghost">{{ resource.organization.code|truncatechars:15 }}</span>
                                 {% else %}
                                     <span class="text-base-content/40">-</span>
                                 {% endif %}
@@ -174,7 +174,7 @@
                         <div class="flex gap-1 mt-1">
                             {% for resource in matching_resources %}
                                 {% if forloop.counter <= 10 %}
-                                    <span class="badge badge-xs {% if resource.matched_field == 'uri' %}badge-primary{% elif resource.matched_field == 'name' %}badge-info{% elif resource.matched_field == 'value' %}badge-success{% elif resource.matched_field == 'source' %}badge-warning{% else %}badge-ghost{% endif %}">
+                                    <span class="badge badge-xs {% if resource.matched_field == 'uri' %}badge-primary{% elif resource.matched_field == 'name' %}badge-info{% elif resource.matched_field == 'value' %}badge-success{% elif resource.matched_field == 'organization' %}badge-warning{% else %}badge-ghost{% endif %}">
                                         {{ resource.matched_field|first|upper }}
                                     </span>
                                 {% endif %}

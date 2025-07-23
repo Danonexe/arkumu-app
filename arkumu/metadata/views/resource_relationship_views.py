@@ -77,7 +77,7 @@ class ResourceRelationshipExplorerView(GeneralLoginRequiredMixin, CSVMappingTemp
                 'resource': resource,
                 'relationships': relationships,
                 'related_resources': related_resources,
-                'organization_id': organization or resource.source,
+                'organization_id': organization or (resource.organization.code if resource.organization else None),
                 'max_depth_options': [1, 2, 3],
                 'current_depth': 1,
             })
@@ -105,7 +105,7 @@ class ResourceRelationshipExplorerView(GeneralLoginRequiredMixin, CSVMappingTemp
             # Check both organization field and source field
             if resource.organization_id == user.organization.id:
                 return True
-            if resource.source == user.organization.code:
+            if resource.organization and resource.organization.code == user.organization.code:
                 return True
         
         # Users can access public resources
@@ -206,7 +206,7 @@ class RelatedResourcesHTMXView(GeneralLoginRequiredMixin, CSVMappingTemplateHelp
             'resource': resource,
             'related_resources': page_obj,
             'paginator': paginator,
-            'organization_id': organization or resource.source,
+            'organization_id': organization or (resource.organization.code if resource.organization else None),
             'csrf_token': get_token(request),
         }
         
@@ -231,7 +231,7 @@ class RelatedResourcesHTMXView(GeneralLoginRequiredMixin, CSVMappingTemplateHelp
             # Check both organization field and source field
             if resource.organization_id == user.organization.id:
                 return True
-            if resource.source == user.organization.code:
+            if resource.organization and resource.organization.code == user.organization.code:
                 return True
         
         # Users can access public resources
@@ -317,7 +317,7 @@ class RelationshipChainHTMXView(GeneralLoginRequiredMixin, CSVMappingTemplateHel
             'source': resource,
             'target': target_resource,
             'chain': chain,
-            'organization_id': organization or resource.source,
+            'organization_id': organization or (resource.organization.code if resource.organization else None),
             'csrf_token': get_token(request),
         }
         
@@ -342,7 +342,7 @@ class RelationshipChainHTMXView(GeneralLoginRequiredMixin, CSVMappingTemplateHel
             # Check both organization field and source field
             if resource.organization_id == user.organization.id:
                 return True
-            if resource.source == user.organization.code:
+            if resource.organization and resource.organization.code == user.organization.code:
                 return True
         
         # Users can access public resources

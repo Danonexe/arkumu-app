@@ -31,7 +31,7 @@ def metadata_dashboard(request):
     recent_ingests = IngestSession.objects.all().order_by('-created_at')[:5]
     
     # Get institutions with resource counts
-    institutions = Resource.objects.values('source').annotate(
+    institutions = Resource.objects.values('organization__name').annotate(
         count=Count('id')
     ).order_by('-count')[:10]
     

@@ -62,7 +62,9 @@ def get_or_create_resource(
 def create_triple_if_not_exists(
     subject: Resource,
     predicate: Resource,
-    object: Resource
+    object: Resource,
+    source = None,
+    is_derived: bool = True
 ) -> Tuple[Triple, bool]:
     """
     Create a triple only if it doesn't already exist.
@@ -71,6 +73,8 @@ def create_triple_if_not_exists(
         subject: Subject resource
         predicate: Predicate resource
         object: Object resource
+        source: Organization instance for provenance tracking (None for derived triples)
+        is_derived: Whether this is a system-generated triple (default True)
         
     Returns:
         Tuple of (triple, created) where created is True if a new triple was created
@@ -80,16 +84,22 @@ def create_triple_if_not_exists(
     return Triple.objects.get_or_create(
         subject=subject,
         predicate=predicate,
-        object=object
+        object=object,
+        defaults={
+            'source': source,
+            'is_derived': is_derived
+        }
     )
 
 
-def bulk_create_triples(triples_data: List[Dict[str, Resource]]) -> int:
+def bulk_create_triples(triples_data: List[Dict[str, Resource]], source = None, is_derived: bool = True) -> int:
     """
     Bulk create triples with deduplication.
     
     Args:
         triples_data: List of dicts with subject, predicate, object keys
+        source: Organization instance for provenance tracking (None for derived triples)
+        is_derived: Whether these are system-generated triples (default True)
         
     Returns:
         Number of new triples created
@@ -121,7 +131,9 @@ def bulk_create_triples(triples_data: List[Dict[str, Resource]]) -> int:
             new_triples.append(Triple(
                 subject=subject,
                 predicate=predicate,
-                object=object
+                object=object,
+                source=source,
+                is_derived=is_derived
             ))
     
     # Bulk create new triples

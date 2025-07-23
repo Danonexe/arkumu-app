@@ -18,7 +18,7 @@
                     </span>
                     {{ resource.name|default:"Unnamed Resource" }}
                 </h2>
-                <span class="text-sm">Institution: {{ resource.source }}</span>
+                <span class="text-sm">Organization: {% if resource.organization %}{{ resource.organization.code }}{% else %}-{% endif %}</span>
             </div>
             
             <div class="divider"></div>
