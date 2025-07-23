@@ -80,9 +80,11 @@ class BaseStorageService:
             if not BaseStorageService._global_buckets_checked:
                 logger.info("===> BaseStorageService: Ensuring system buckets exist (GLOBAL first time check)...")
                 
-                logger.info(f"===> BaseStorageService: Checking ingest bucket: {self.ingest_bucket}")
-                ingest_bucket_exists = self.ensure_bucket_exists(self.ingest_bucket)
-                logger.info(f"===> BaseStorageService: Ingest bucket '{self.ingest_bucket}' exists result: {ingest_bucket_exists}")
+                # Ingest bucket creation removed - buckets should be created manually or on-demand
+                # logger.info(f"===> BaseStorageService: Checking ingest bucket: {self.ingest_bucket}")
+                # ingest_bucket_exists = self.ensure_bucket_exists(self.ingest_bucket)
+                # logger.info(f"===> BaseStorageService: Ingest bucket '{self.ingest_bucket}' exists result: {ingest_bucket_exists}")
+                ingest_bucket_exists = False
                 
                 logger.info(f"===> BaseStorageService: Checking production bucket: {self.production_bucket}")
                 production_bucket_exists = self.ensure_bucket_exists(self.production_bucket)
@@ -91,12 +93,14 @@ class BaseStorageService:
                 BaseStorageService._global_buckets_checked = True
                 logger.info("===> BaseStorageService: System buckets GLOBAL check complete. _global_buckets_checked set to True.")
                 
-                if ingest_bucket_exists:
-                    logger.info(f"===> BaseStorageService: Ensuring CORS for ingest bucket: {self.ingest_bucket}")
-                    cors_result = self.ensure_cors_enabled(self.ingest_bucket)
-                    logger.info(f"===> BaseStorageService: CORS configuration for '{self.ingest_bucket}' result: {cors_result.get('success')}")
-                else:
-                    logger.warning(f"===> BaseStorageService: Skipping CORS for ingest bucket '{self.ingest_bucket}' as it does not exist or failed to be ensured.")
+                # CORS configuration for ingest bucket removed since bucket is not auto-created
+                # if ingest_bucket_exists:
+                #     logger.info(f"===> BaseStorageService: Ensuring CORS for ingest bucket: {self.ingest_bucket}")
+                #     cors_result = self.ensure_cors_enabled(self.ingest_bucket)
+                #     logger.info(f"===> BaseStorageService: CORS configuration for '{self.ingest_bucket}' result: {cors_result.get('success')}")
+                # else:
+                #     logger.warning(f"===> BaseStorageService: Skipping CORS for ingest bucket '{self.ingest_bucket}' as it does not exist or failed to be ensured.")
+                logger.info(f"===> BaseStorageService: Ingest bucket '{self.ingest_bucket}' creation disabled - create manually if needed")
             else:
                 logger.info("===> BaseStorageService: System buckets GLOBAL check already performed.")
         

@@ -76,12 +76,27 @@ def streaming_upload_form(request):
     # Handle POST request with file uploads
     logger.info(f"Processing streaming upload for user: {request.user.username}")
     
-    # Get folder name
+    # Get folder name - construct from base_folder for HTMX requests
     folder_name = request.POST.get('folder_name', '').strip()
+    base_folder = request.POST.get('base_folder', '').strip()
+    
+    # For HTMX requests, use base_folder as folder_name if folder_name is empty
+    if not folder_name and base_folder:
+        folder_name = base_folder
+    
     if not folder_name:
+        error_msg = 'Base folder selection is required'
+        if request.headers.get('HX-Request'):
+            return HttpResponse(f'''
+                <div id="upload-status" hx-swap-oob="innerHTML">
+                    <div class="alert alert-error">
+                        <span>{error_msg}</span>
+                    </div>
+                </div>
+            ''')
         return JsonResponse({
             'success': False,
-            'error': 'Folder name is required'
+            'error': error_msg
         }, status=400)
     
     # Check if we should preserve folder structure
@@ -93,9 +108,18 @@ def streaming_upload_form(request):
     # Get uploaded files
     files = request.FILES.getlist('files')
     if not files:
+        error_msg = 'No files were uploaded'
+        if request.headers.get('HX-Request'):
+            return HttpResponse(f'''
+                <div id="upload-status" hx-swap-oob="innerHTML">
+                    <div class="alert alert-error">
+                        <span>{error_msg}</span>
+                    </div>
+                </div>
+            ''')
         return JsonResponse({
             'success': False,
-            'error': 'No files were uploaded'
+            'error': error_msg
         }, status=400)
     
     # Create upload session to track this upload
@@ -200,11 +224,75 @@ def streaming_upload_form(request):
         result['upload_session_id'] = str(upload_session.id)
         result['upload_session_status'] = upload_session.status
         
+        # Calculate actual file count and total size for display
+        successful_files = result.get('results', [])
+        total_uploaded_files = len(successful_files)
+        total_size = sum(file_result.get('file_size', 0) for file_result in successful_files)
+        
+        # Add display information
+        result['total_uploaded_files'] = total_uploaded_files
+        result['total_size_bytes'] = total_size
+        result['total_size_formatted'] = format_file_size(total_size)
+        
+        # Check if this is an HTMX request
+        if request.headers.get('HX-Request'):
+            # Return HTML with out-of-band swaps for HTMX
+            from django.template.loader import render_to_string
+            
+            if result.get('success', False):
+                # Success: show results
+                upload_results_html = render_to_string(
+                    'dashboard/partials/upload_results.html',
+                    {
+                        'success': True,
+                        'files_count': total_uploaded_files,
+                        'total_size': result['total_size_formatted'],
+                        'duration': result['duration']
+                    },
+                    request=request
+                )
+                
+                # Hide progress and show results
+                response_html = f'''
+                    <div id="upload-progress" hx-swap-oob="outerHTML" class="mt-4 hidden"></div>
+                    <div id="upload-status" hx-swap-oob="innerHTML">
+                        <div class="alert alert-success">
+                            <span>Upload completed successfully!</span>
+                        </div>
+                    </div>
+                    {upload_results_html}
+                '''
+                
+                return HttpResponse(response_html)
+            else:
+                # Error: show error message
+                error_html = f'''
+                    <div id="upload-progress" hx-swap-oob="outerHTML" class="mt-4 hidden"></div>
+                    <div id="upload-status" hx-swap-oob="innerHTML">
+                        <div class="alert alert-error">
+                            <span>Upload failed: {result.get('error', 'Unknown error')}</span>
+                        </div>
+                    </div>
+                '''
+                return HttpResponse(error_html)
+        
+        # Non-HTMX request: return JSON as before
         return JsonResponse(result)
     
     except Exception as e:
         logger.exception(f"Error in streaming upload: {str(e)}")
         upload_session.mark_failed(str(e))
+        
+        if request.headers.get('HX-Request'):
+            return HttpResponse(f'''
+                <div id="upload-progress" hx-swap-oob="outerHTML" class="mt-4 hidden"></div>
+                <div id="upload-status" hx-swap-oob="innerHTML">
+                    <div class="alert alert-error">
+                        <span>Upload failed: {str(e)}</span>
+                    </div>
+                </div>
+            ''')
+        
         return JsonResponse({
             'success': False,
             'error': str(e),

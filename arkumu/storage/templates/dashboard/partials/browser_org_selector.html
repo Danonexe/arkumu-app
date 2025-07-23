@@ -1,0 +1,19 @@
+<label class="label">
+    <span class="label-text">Select an organization to browse S3 files</span>
+</label>
+<select id="organization-select" class="select select-bordered w-full"
+        hx-get="/storage/dashboard/"
+        hx-target="body"
+        hx-trigger="change"
+        hx-include="this"
+        name="organization">
+    <option value="">Choose organization...</option>
+    {% for org in organizations %}
+        <option value="{{ org.code }}" {% if org.code == selected_org_slug %}selected{% endif %}>
+            {{ org.name }}{% if org.is_active %} ✓{% endif %}
+        </option>
+    {% endfor %}
+</select>
+<div class="label">
+    <span class="label-text-alt">✓ indicates S3 bucket already exists</span>
+</div>

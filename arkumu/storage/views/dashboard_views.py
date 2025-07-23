@@ -5,8 +5,10 @@ from django.views import View
 from arkumu.storage.services.bucket_service import BucketService
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.http import require_http_methods
+from django.template.loader import render_to_string
 from arkumu.users.mixins import GeneralLoginRequiredMixin, general_login_required
 from arkumu.common.mixins.base_coordinator import BaseCoordinatorMixin
+from arkumu.metadata.views.csv_mapping.mixins.template_helpers import CSVMappingTemplateHelperMixin
 
 logger = logging.getLogger(__name__)
 
@@ -21,13 +23,65 @@ def storage_dashboard(request):
     return redirect('storage:archivist_dashboard')
 
 
-class ArchivistDashboardView(GeneralLoginRequiredMixin, BaseCoordinatorMixin, View):
+class ArchivistDashboardView(GeneralLoginRequiredMixin, BaseCoordinatorMixin, CSVMappingTemplateHelperMixin, View):
     """
     Dashboard for archivists to manage organization buckets.
     
     Now uses BaseCoordinatorMixin for cross-view session persistence with 
     CSV mapping editor and Metadata Ingestion.
     """
+    
+    def render_organization_selectors(self, bucket_service, organizations, selected_org_slug):
+        """Render both organization selectors and file browser content for OOB updates."""
+        context = {
+            'organizations': organizations,
+            'selected_org_slug': selected_org_slug
+        }
+        
+        upload_selector = render_to_string(
+            'dashboard/partials/upload_org_selector.html', 
+            context
+        )
+        browser_selector = render_to_string(
+            'dashboard/partials/browser_org_selector.html', 
+            context
+        )
+        
+        # Render file browser content
+        if selected_org_slug:
+            # Use the same method as the working organization browser
+            bucket_name = bucket_service.get_organization_bucket(selected_org_slug)
+            contents = bucket_service.list_bucket_contents(bucket_name, '')
+            
+            logger.info(f"Dashboard view: Loading files for {selected_org_slug}, bucket: {bucket_name}, found {len(contents)} items")
+            
+            file_browser_context = {
+                'organization': selected_org_slug,
+                'bucket_name': bucket_name,
+                'contents': contents,
+                'selected_org_slug': selected_org_slug,
+                'prefix': ''
+            }
+            file_browser_content = render_to_string(
+                'dashboard/organization_files_partial.html',
+                file_browser_context
+            )
+        else:
+            # Empty state
+            file_browser_content = '''
+                <div class="alert alert-info">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>Select an organization to browse its S3 files and folders</span>
+                </div>
+            '''
+        
+        return {
+            'upload-org-selector': upload_selector,
+            'browser-org-selector': browser_selector,
+            'file-browser-content': file_browser_content
+        }
     
     def get(self, request):
         """Handle GET requests for the archivist dashboard."""
@@ -87,6 +141,35 @@ class ArchivistDashboardView(GeneralLoginRequiredMixin, BaseCoordinatorMixin, Vi
                     logger.error(f"Error loading organization structure for {selected_org_slug}: {str(e)}")
             
             logger.info("Preparing to render archivist_dashboard.html")
+            
+            # Check if this is an HTMX organization change request
+            if request.headers.get('HX-Request') and org_param:
+                # For HTMX organization changes, return OOB updates to sync both selectors
+                logger.info(f"HTMX organization change detected: {org_param}")
+                
+                # Render the full page content first
+                main_response = render(request, "dashboard/archivist_dashboard.html", {
+                    "organizations": organizations,
+                    "organization_count": organization_count,
+                    "total_files_display": total_files_display,
+                    "storage_used_display": storage_used_display,
+                    "organization_structure": organization_structure,
+                    "selected_org_data": selected_org_data, 
+                    "selected_org_slug": selected_org_slug
+                })
+                
+                # Get the rendered HTML content
+                main_html = main_response.content.decode('utf-8')
+                
+                # Add OOB updates for organization selectors and file browser
+                oob_updates = self.render_organization_selectors(bucket_service, organizations, selected_org_slug)
+                response_html = self.build_oob_response(main_html, oob_updates)
+                
+                # Return response with out-of-band updates
+                response = HttpResponse(response_html)
+                return response
+            
+            # Regular non-HTMX request
             return render(request, "dashboard/archivist_dashboard.html", {
                 "organizations": organizations,
                 "organization_count": organization_count,
@@ -246,4 +329,34 @@ def view_organization_bucket(request):
         return JsonResponse({
             "success": False,
             "error": str(e)
-        }, status=500) 
+        }, status=500)
+
+
+@general_login_required
+def upload_mode_toggle(request):
+    """
+    HTMX endpoint for toggling upload mode using out-of-band swaps.
+    Returns HTML fragments that replace the upload input area - no JavaScript needed!
+    """
+    from django.template.loader import render_to_string
+    
+    mode = request.GET.get('mode', 'files')
+    
+    # Prepare context for template
+    context = {
+        'mode': mode,
+        'is_folder_mode': mode == 'folder',
+    }
+    
+    # Render the upload input template
+    upload_input_html = render_to_string(
+        'dashboard/partials/upload_input.html',
+        context,
+        request=request
+    )
+    
+    # Return with out-of-band swap
+    return HttpResponse(upload_input_html)
+
+
+ 

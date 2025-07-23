@@ -1,0 +1,32 @@
+<div class="form-control mb-4" id="upload-input-section" hx-swap-oob="true">
+    <label class="label">
+        <span class="label-text">
+            {% if is_folder_mode %}
+                Select Folder
+            {% else %}
+                Select Files
+            {% endif %}
+        </span>
+    </label>
+    <input type="file" 
+           id="file-input" 
+           name="files" 
+           {% if is_folder_mode %}
+               webkitdirectory
+               directory
+           {% else %}
+               multiple
+           {% endif %}
+           class="file-input file-input-bordered file-input-sm w-full" 
+           required />
+    {% if is_folder_mode %}
+        <input type="hidden" name="preserve_folder_structure" value="true" />
+    {% endif %}
+    <div class="text-xs text-gray-500 mt-1">
+        {% if is_folder_mode %}
+            Select a folder to upload all files within it
+        {% else %}
+            You can select multiple files to upload to S3 at once
+        {% endif %}
+    </div>
+</div>

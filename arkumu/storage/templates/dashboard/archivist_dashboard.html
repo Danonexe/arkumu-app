@@ -14,7 +14,7 @@
     </div>
     
     <!-- Main Content Area with Upload Form and Browser -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
         <!-- Upload Form (Smaller) -->
         <div class="card bg-base-100 shadow-xl">
             <div class="card-body">
@@ -26,28 +26,17 @@
                 </h2>
                 
                 <!-- Embedded Upload Form -->
-                <form id="streaming-upload-form" enctype="multipart/form-data">
+                <form id="streaming-upload-form" 
+                      enctype="multipart/form-data"
+                      hx-post="/storage/upload/streaming/"
+                      hx-swap="none"
+                      hx-trigger="submit"
+                      hx-indicator="#upload-progress">
+                    {% csrf_token %}
                     
                     <!-- Organization selection -->
-                    <div class="form-control mb-4">
-                        <label class="label">
-                            <span class="label-text">Organization</span> 
-                        </label>
-                        <select id="organization" name="organization" class="select select-bordered w-full select-sm"
-                                hx-get="/storage/dashboard/"
-                                hx-target="body"
-                                hx-trigger="change"
-                                hx-include="this">
-                            <option value="">Choose organization...</option>
-                            {% for org in organizations %}
-                                <option value="{{ org.code }}" {% if org.code == selected_org_slug %}selected{% endif %}>
-                                    {{ org.name }}{% if org.is_active %} ✓{% endif %}
-                                </option>
-                            {% endfor %}
-                        </select>
-                        <div class="label">
-                            <span class="label-text-alt">✓ indicates S3 bucket already exists</span>
-                        </div>
+                    <div id="upload-org-selector" class="form-control mb-4">
+                        {% include 'dashboard/partials/upload_org_selector.html' %}
                     </div>
                     
                     <!-- Base folder selection (data or metadata) -->
@@ -65,19 +54,35 @@
                         </div>
                     </div>
                     
-                    <!-- Folder mode toggle -->
+                    <!-- Upload Mode Switcher -->
                     <div class="form-control mb-4">
-                        <label class="label cursor-pointer">
-                            <span class="label-text">Preserve folder structure</span>
-                            <input type="checkbox" id="folder-mode" class="checkbox checkbox-primary checkbox-sm" />
+                        <label class="label">
+                            <span class="label-text font-semibold">Upload Mode</span>
                         </label>
-                        <div class="text-xs text-gray-500 mt-1">
-                            Enable to upload folders and preserve their structure in S3
+                        <div class="flex gap-2 mb-3">
+                            <button type="button" 
+                                    class="btn btn-outline btn-sm flex-1 btn-active" 
+                                    id="files-mode-btn"
+                                    hx-get="/storage/dashboard/upload-mode/"
+                                    hx-vals='{"mode": "files"}'
+                                    hx-swap="none"
+                                    hx-on:click="this.classList.add('btn-active'); document.getElementById('folder-mode-btn').classList.remove('btn-active')">
+                                📄 Upload Files
+                            </button>
+                            <button type="button" 
+                                    class="btn btn-outline btn-sm flex-1" 
+                                    id="folder-mode-btn"
+                                    hx-get="/storage/dashboard/upload-mode/"
+                                    hx-vals='{"mode": "folder"}'
+                                    hx-swap="none"
+                                    hx-on:click="this.classList.add('btn-active'); document.getElementById('files-mode-btn').classList.remove('btn-active')">
+                                📁 Upload Folder
+                            </button>
                         </div>
                     </div>
                     
-                    <!-- File input -->
-                    <div class="form-control mb-4">
+                    <!-- File Upload Input -->
+                    <div class="form-control mb-4" id="upload-input-section">
                         <label class="label">
                             <span class="label-text">Select Files</span>
                         </label>
@@ -95,12 +100,12 @@
                     </div>
                     
                     <div class="form-control">
-                        <button type="button" id="upload-button" class="btn btn-primary btn-sm">Upload to S3</button>
+                        <button type="submit" id="upload-button" class="btn btn-primary btn-sm">Upload to S3</button>
                     </div>
                 </form>
                 
                 <!-- Progress section -->
-                <div id="upload-progress" class="mt-4 hidden">
+                <div id="upload-progress" class="mt-4 htmx-indicator">
                     <div class="flex justify-between mb-1 text-sm">
                         <span id="progress-text">Uploading to S3...</span>
                         <span id="progress-percentage">0%</span>
@@ -128,7 +133,7 @@
         </div>
 
         <!-- Organization Browser (Larger, spans 2 columns) -->
-        <div class="card bg-base-100 shadow-xl lg:col-span-2">
+        <div class="card bg-base-100 shadow-xl md:col-span-2">
             <div class="card-body">
                 <h2 class="card-title mb-4">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -141,36 +146,23 @@
                 <div id="reset-db-result" class="mb-4"></div>
             
                 <!-- Organization Selection -->
-                <div class="form-control max-w-md mb-6">
-                    <label class="label">
-                        <span class="label-text">Select an organization to browse S3 files</span>
-                    </label>
-                    <select id="organization-select" class="select select-bordered w-full"
-                            hx-get="/storage/dashboard/"
-                            hx-target="body"
-                            hx-trigger="change"
-                            hx-include="this"
-                            name="organization">
-                        <option value="">Choose organization...</option>
-                        {% for org in organizations %}
-                            <option value="{{ org.code }}" {% if org.code == selected_org_slug %}selected{% endif %}>
-                                {{ org.name }}{% if org.is_active %} ✓{% endif %}
-                            </option>
-                        {% endfor %}
-                    </select>
-                    <div class="label">
-                        <span class="label-text-alt">✓ indicates S3 bucket already exists</span>
-                    </div>
+                <div id="browser-org-selector" class="form-control max-w-md mb-6">
+                    {% include 'dashboard/partials/browser_org_selector.html' %}
                 </div>
             
                 <!-- File Browser Content -->
                 <div id="file-browser-content" class="min-h-[300px]">
-                    <div class="alert alert-info">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <span>Select an organization to browse its S3 files and folders</span>
-                    </div>
+                    {% if selected_org_slug %}
+                        <!-- Load organization files directly when organization is selected -->
+                        {% include 'dashboard/organization_files_partial.html' %}
+                    {% else %}
+                        <div class="alert alert-info">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <span>Select an organization to browse its S3 files and folders</span>
+                        </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -193,70 +185,6 @@
     </form>
 </dialog>
 
-<script>
-// Utility functions needed by the upload handlers
-function formatFileSize(bytes) {
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-}
-
-function formatDuration(seconds) {
-    if (seconds < 60) return seconds.toFixed(1) + 's';
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return minutes + 'm ' + remainingSeconds.toFixed(1) + 's';
-}
-
-// Initialize when DOM is ready
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('🚀 Initializing dashboard upload system...');
-    
-    // Initialize the upload form handler
-    const uploadHandler = new UploadFormHandler();
-    console.log('✅ UploadFormHandler initialized');
-    
-    // Handle file browser loading after page swaps (from browser organization select)
-    document.addEventListener('htmx:afterSwap', function(evt) {
-        // Check if this was a page reload triggered by browser organization select
-        const browserOrgSelect = document.getElementById('organization-select');
-        if (browserOrgSelect && browserOrgSelect.value && evt.detail.target === document.body) {
-            console.log('🔄 Loading files after page swap for organization:', browserOrgSelect.value);
-            htmx.ajax('GET', '/storage/organizations/browse/?organization=' + browserOrgSelect.value, {
-                target: '#file-browser-content'
-            });
-        }
-    });
-    
-    // Auto-trigger file browser if organization is already selected (from session persistence)
-    const browserOrgSelect = document.getElementById('organization-select');
-    if (browserOrgSelect && browserOrgSelect.value) {
-        console.log('🚀 Auto-loading files for organization:', browserOrgSelect.value);
-        htmx.ajax('GET', '/storage/organizations/browse/?organization=' + browserOrgSelect.value, {
-            target: '#file-browser-content'
-        });
-    }
-    
-    // Override the upload completion handler to refresh file browser
-    const originalHandleUploadComplete = uploadHandler.handleUploadComplete;
-    uploadHandler.handleUploadComplete = function(summary) {
-        // Call original handler first
-        originalHandleUploadComplete.call(this, summary);
-        
-        // Then refresh file browser if upload was successful
-        if (summary.success && browserOrgSelect && browserOrgSelect.value) {
-            console.log('🔄 Refreshing file browser after successful upload');
-            setTimeout(() => {
-                htmx.ajax('GET', '/storage/organizations/browse/?organization=' + browserOrgSelect.value, {
-                    target: '#file-browser-content'
-                });
-            }, 1500); // Delay to ensure upload is fully complete
-        }
-    };
-    
-    console.log('✅ Dashboard upload system ready!');
-});
-</script>
+<!-- Pure HTMX solution handles organization selector synchronization via out-of-band swaps -->
+<!-- File browser loading will be handled by HTMX triggers on organization change -->
 {% endblock %}

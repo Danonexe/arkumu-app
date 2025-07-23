@@ -1,0 +1,12 @@
+<div id="upload-results" hx-swap-oob="outerHTML" class="mt-4">
+    <div class="alert alert-success">
+        <div>
+            <h3 class="font-bold">Upload Complete!</h3>
+            <div class="text-sm">
+                <span id="result-files-count">{{ files_count }}</span> files uploaded to S3
+                (<span id="result-total-size">{{ total_size }}</span>)
+                in <span id="result-duration">{{ duration }}s</span>
+            </div>
+        </div>
+    </div>
+</div>
