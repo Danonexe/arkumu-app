@@ -1836,7 +1836,7 @@ def import_selected_mappings(request):
     HTMX endpoint to import selected mapping files.
     
     Processes selected mapping files and creates Mapping objects.
-    Returns success/error status with imported mapping names.
+    Returns HTMX response with success/error message and OOB updates.
     """
     if request.method != 'POST':
         return HttpResponse('Method not allowed', status=405)
@@ -1847,11 +1847,10 @@ def import_selected_mappings(request):
         current_org = view_instance.get_current_organization(request)
         
         if not current_org:
-            return JsonResponse({
-                'success': False,
-                'error': 'No organization selected',
-                'results': {}
-            }, status=400)
+            return HttpResponse(
+                '<div class="alert alert-error">No organization selected</div>',
+                content_type='text/html'
+            )
         
         organization_id = current_org['code']  # Use organization code for S3 paths
         
@@ -1859,11 +1858,10 @@ def import_selected_mappings(request):
         selected_files = request.POST.getlist('selected_files')
         
         if not selected_files:
-            return JsonResponse({
-                'success': False,
-                'error': 'No files selected for import',
-                'results': {}
-            }, status=400)
+            return HttpResponse(
+                '<div class="alert alert-error">No files selected for import</div>',
+                content_type='text/html'
+            )
         
         # Initialize mapping import service
         from arkumu.metadata.services.mapping.mapping_import_service import MappingImportService
@@ -1876,30 +1874,59 @@ def import_selected_mappings(request):
             created_by=request.user
         )
         
-        # Format results for response
-        response_data = {
-            'success': True,
-            'results': import_results,
-            'imported_count': len(import_results['successful_imports']),
-            'failed_count': len(import_results['failed_imports']),
-            'total_count': import_results['total_files']
-        }
+        # Build success/error message
+        imported_count = len(import_results['successful_imports'])
+        failed_count = len(import_results['failed_imports'])
         
-        # Add success message
         if import_results['successful_imports']:
             success_names = [imp['mapping_name'] for imp in import_results['successful_imports']]
-            response_data['message'] = f"Successfully imported {len(success_names)} mapping(s): {', '.join(success_names)}"
+            message = f"Successfully imported {imported_count} mapping(s): {', '.join(success_names)}"
+            alert_class = "alert-success"
         else:
-            response_data['message'] = "No mappings were successfully imported"
+            message = "No mappings were successfully imported"
+            alert_class = "alert-warning"
         
-        logger.info(f"Mapping import completed: {len(import_results['successful_imports'])} successful, {len(import_results['failed_imports'])} failed")
+        if failed_count > 0:
+            message += f" ({failed_count} failed)"
         
-        return JsonResponse(response_data)
+        logger.info(f"Mapping import completed: {imported_count} successful, {failed_count} failed")
+        
+        # Main response content
+        main_html = f'<div class="alert {alert_class}">{message}</div>'
+        
+        # Render updated mapping dropdown content
+        from django.template.loader import render_to_string
+        # We need to call the actual list_mappings_dropdown view to get the updated content
+        dropdown_html = render_to_string(
+            'importer/partials/mapping_dropdown_list.html',
+            {
+                'organization_id': organization_id,
+                # Add any other context needed for the dropdown
+            },
+            request=request
+        )
+        
+        # Build OOB response to update mapping dropdown
+        oob_updates = {
+            'mapping-dropdown-list': dropdown_html
+        }
+        
+        # Build response with OOB updates
+        oob_html = ""
+        for target_id, content in oob_updates.items():
+            oob_html += f'<div id="{target_id}" hx-swap-oob="innerHTML">{content}</div>'
+        
+        response_html = f'{main_html}{oob_html}'
+        
+        # Create response with HX-Trigger to close modal
+        response = HttpResponse(response_html, content_type='text/html')
+        response['HX-Trigger'] = 'closeImportModal'
+        
+        return response
         
     except Exception as e:
         logger.error(f"Error importing selected mappings: {e}", exc_info=True)
-        return JsonResponse({
-            'success': False,
-            'error': str(e),
-            'results': {}
-        }, status=500)
+        return HttpResponse(
+            f'<div class="alert alert-error">Error importing mappings: {str(e)}</div>',
+            content_type='text/html'
+        )

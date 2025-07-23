@@ -146,7 +146,6 @@ class SchemaFirstProcessor:
             defaults={
                 "resource_type": ResourceType.CLASS,
                 "name": entity_type_name,
-                "source": self.institution,
                 "is_placeholder": False
             }
         )
@@ -180,7 +179,6 @@ class SchemaFirstProcessor:
             defaults={
                 "resource_type": resource_type,
                 "name": column.arkumu_type,
-                "source": self.institution,
                 "is_placeholder": False
             }
         )

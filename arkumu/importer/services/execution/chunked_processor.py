@@ -53,18 +53,19 @@ class ChunkedProcessor:
     """
     
     def __init__(self,
-                 institution: str,
+                 organization,
                  base_uri: str,
                  streaming_config: Optional[StreamingConfig] = None):
         """
         Initialize chunked processor.
         
         Args:
-            institution: Institution identifier
+            organization: Organization object for ownership tracking
             base_uri: Base URI for resource generation
             streaming_config: Configuration for streaming behavior
         """
-        self.institution = institution
+        self.organization = organization
+        self.institution = organization.code if organization else "default"
         self.base_uri = base_uri
         self.streaming_config = streaming_config or StreamingConfig()
         
@@ -73,7 +74,7 @@ class ChunkedProcessor:
         
         # Initialize mapping-aware processor
         self.mapping_processor = MappingAwareProcessor(
-            institution=institution,
+            organization=organization,
             base_uri=base_uri,
             statistics=self.statistics
         )

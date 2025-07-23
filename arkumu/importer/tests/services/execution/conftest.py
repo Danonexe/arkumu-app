@@ -118,10 +118,20 @@ def data_processor():
 
 
 @pytest.fixture
-def resource_manager(test_organization_code, test_base_uri, execution_statistics):
+def test_organization(db):
+    """Create a test organization."""
+    from arkumu.users.models import Organization
+    return Organization.objects.create(
+        code='TEST_ORG',
+        name='Test Organization'
+    )
+
+
+@pytest.fixture
+def resource_manager(test_organization, test_base_uri, execution_statistics):
     """ResourceManager instance for testing"""
     return ResourceManager(
-        institution=test_organization_code,
+        organization=test_organization,
         base_uri=test_base_uri,
         statistics=execution_statistics
     )
@@ -138,10 +148,10 @@ def update_analyzer(resource_manager):
 
 
 @pytest.fixture
-def execution_engine(test_organization_code, test_base_uri):
+def execution_engine(test_organization, test_base_uri):
     """MappingExecutionEngine instance for testing"""
     return MappingExecutionEngine(
-        organization_id=test_organization_code,
+        organization_id=test_organization.code,
         base_uri=test_base_uri,
         default_strategy=UpdateStrategy.UPDATE_VALUES,
         batch_size=50  # Smaller batch for testing
@@ -161,10 +171,10 @@ def streaming_config():
 
 
 @pytest.fixture
-def chunked_processor(test_organization_code, test_base_uri, streaming_config):
+def chunked_processor(test_organization, test_base_uri, streaming_config):
     """ChunkedProcessor instance for testing"""
     return ChunkedProcessor(
-        institution=test_organization_code,
+        organization=test_organization,
         base_uri=test_base_uri,
         streaming_config=streaming_config
     )
@@ -320,7 +330,7 @@ def execution_config_simple():
         ],
         fk_relationships=[],
         relationship_contexts=[],
-        processing_strategy=ProcessingStrategy.ENTITY_CENTRIC
+        processing_strategy=ProcessingStrategy.STREAMING_ENTITY_CENTRIC
     )
 
 

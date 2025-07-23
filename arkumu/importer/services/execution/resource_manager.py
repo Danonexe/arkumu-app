@@ -12,8 +12,6 @@ from arkumu.metadata.models.resource import ResourceType
 from arkumu.metadata.models.triples import Triple
 from arkumu.common.uri_utils import mint_uri, slugify_uri_part
 from arkumu.common.enums import LiteralURIStrategy
-# Define MAX_INDEXED_VALUE_SIZE locally since bulk_data_analyzer was removed
-MAX_INDEXED_VALUE_SIZE = 1000  # Maximum size for indexed values in bytes
 from .statistics import ExecutionStatistics
 
 logger = logging.getLogger(__name__)
@@ -28,18 +26,19 @@ class ResourceManager:
     """
     
     def __init__(self, 
-                 institution: str,
+                 organization,
                  base_uri: str,
                  statistics: Optional[ExecutionStatistics] = None):
         """
         Initialize the resource manager.
         
         Args:
-            institution: Institution code for URI generation
+            organization: Organization object for ownership tracking
             base_uri: Base URI for resource generation
             statistics: Optional statistics tracker
         """
-        self.institution = slugify_uri_part(str(institution)) if institution else "default"
+        self.organization = organization
+        self.institution = slugify_uri_part(str(organization.code)) if organization else "default"
         self.base_uri = base_uri
         self.statistics = statistics or ExecutionStatistics()
         
@@ -55,8 +54,8 @@ class ResourceManager:
                     defaults={
                         "resource_type": ResourceType.PROPERTY,
                         "name": "hasPart",
-                        "source": self.institution,
-                        "is_placeholder": False
+                        "is_placeholder": False,
+                        "organization": self.organization
                     }
                 )
                 self.rdf_value_prop, _ = Resource.objects.get_or_create(
@@ -64,8 +63,8 @@ class ResourceManager:
                     defaults={
                         "resource_type": ResourceType.PROPERTY,
                         "name": "value",
-                        "source": self.institution,
-                        "is_placeholder": False
+                        "is_placeholder": False,
+                        "organization": self.organization
                     }
                 )
                 self.dcterms_relation_prop, _ = Resource.objects.get_or_create(
@@ -73,8 +72,8 @@ class ResourceManager:
                     defaults={
                         "resource_type": ResourceType.PROPERTY,
                         "name": "relation",
-                        "source": self.institution,
-                        "is_placeholder": False
+                        "is_placeholder": False,
+                        "organization": self.organization
                     }
                 )
                 self.is_part_of_prop, _ = Resource.objects.get_or_create(
@@ -82,8 +81,8 @@ class ResourceManager:
                     defaults={
                         "resource_type": ResourceType.PROPERTY,
                         "name": "isPartOf",
-                        "source": self.institution,
-                        "is_placeholder": False
+                        "is_placeholder": False,
+                        "organization": self.organization
                     }
                 )
         except Exception as e:
@@ -154,7 +153,7 @@ class ResourceManager:
                 defaults={
                     "resource_type": ResourceType.IRI,
                     "name": dataset_name,
-                    "source": self.institution
+                    "organization": self.organization
                 }
             )
             
@@ -182,7 +181,7 @@ class ResourceManager:
                 defaults={
                     "resource_type": ResourceType.IRI,
                     "name": column_name,
-                    "source": self.institution
+                    "organization": self.organization
                 }
             )
             if created:
@@ -202,7 +201,7 @@ class ResourceManager:
                 defaults={
                     "resource_type": ResourceType.IRI,
                     "name": f"Row {row_id}",
-                    "source": self.institution
+                    "organization": self.organization
                 }
             )
             if created:
@@ -229,22 +228,19 @@ class ResourceManager:
             if not value or not value.strip():
                 continue
                 
-            # Truncate if necessary
-            truncated_value = self._truncate_value_if_needed(value)
-            
-            # Generate URI and hash for consistency with individual creation
-            canonical_uri = self.create_canonical_literal_uri(truncated_value, datatype)
+            # Generate URI and hash using full value (no truncation for storage)
+            canonical_uri = self.create_canonical_literal_uri(value, datatype)
             import hashlib
-            value_hash = hashlib.sha256(truncated_value.encode('utf-8')).hexdigest()
+            value_hash = hashlib.sha256(value.encode('utf-8')).hexdigest()
             
             value_resource = Resource(
                 uri=canonical_uri,
-                value=truncated_value,
+                value=value,  # Store full value - no data loss
                 value_hash=value_hash,
                 resource_type=ResourceType.LITERAL,
-                source=self.institution,
-                name=truncated_value[:100] if len(truncated_value) > 100 else truncated_value,
-                datatype=datatype
+                name=value[:100] if len(value) > 100 else value,  # Only truncate display name
+                datatype=datatype,
+                organization=None  # Literals have no organization
             )
             value_resources_to_create.append(value_resource)
             value_map[value] = value_resource
@@ -259,25 +255,6 @@ class ResourceManager:
         
         return value_map
     
-    def _truncate_value_if_needed(self, value: str) -> str:
-        """Truncate value if it exceeds the maximum size."""
-        try:
-            original_byte_size = len(value.encode('utf-8'))
-            if original_byte_size > MAX_INDEXED_VALUE_SIZE:
-                temp_val = value
-                while len(temp_val.encode('utf-8')) > MAX_INDEXED_VALUE_SIZE:
-                    temp_val = temp_val[:-1]
-                truncated_value = temp_val + "..."
-                self.statistics.current_metrics.values_truncated += 1
-                logger.warning(
-                    f"Value truncated: Original byte size: {original_byte_size}, "
-                    f"new byte size: {len(truncated_value.encode('utf-8'))}"
-                )
-                return truncated_value
-        except UnicodeEncodeError:
-            logger.warning("Could not encode value to check size")
-        
-        return value
     
     def create_structural_triples_bulk(self, 
                                      dataset_resource: Resource,
@@ -299,14 +276,16 @@ class ResourceManager:
         # Dataset → hasPart → Column
         for column_resource in column_resources.values():
             structural_triples.append(
-                Triple(subject=dataset_resource, predicate=self.has_part_prop, object=column_resource)
+                Triple(subject=dataset_resource, predicate=self.has_part_prop, object=column_resource, 
+                      source=self.organization, is_derived=False)
             )
         
         # Dataset → hasPart → Row (if row topology is enabled)
         if row_resources:
             for row_resource in row_resources.values():
                 structural_triples.append(
-                    Triple(subject=dataset_resource, predicate=self.has_part_prop, object=row_resource)
+                    Triple(subject=dataset_resource, predicate=self.has_part_prop, object=row_resource,
+                          source=self.organization, is_derived=False)
                 )
         
         if structural_triples:
@@ -332,7 +311,8 @@ class ResourceManager:
             List of created triples
         """
         value_triples = [
-            Triple(subject=cell_resource, predicate=self.rdf_value_prop, object=value_resource)
+            Triple(subject=cell_resource, predicate=self.rdf_value_prop, object=value_resource,
+                  source=self.organization, is_derived=False)
             for cell_resource, value_resource in cell_value_pairs
         ]
         
@@ -377,8 +357,8 @@ class ResourceManager:
                     defaults={
                         "resource_type": ResourceType.IRI,
                         "name": entity_id[:100] if len(entity_id) > 100 else entity_id,
-                        "source": self.institution,
-                        "is_placeholder": is_stub
+                        "is_placeholder": is_stub,
+                        "organization": self.organization
                     }
                 )
                 
@@ -402,8 +382,8 @@ class ResourceManager:
                     defaults={
                         "resource_type": ResourceType.IRI,
                         "name": external_uri.split('/')[-1],
-                        "source": ontology_type,
-                        "is_placeholder": False
+                        "is_placeholder": False,
+                        "organization": None  # External resources have no organization
                     }
                 )
                 
@@ -427,8 +407,8 @@ class ResourceManager:
                     defaults={
                         "resource_type": ResourceType.PROPERTY,
                         "name": property_uri.split('/')[-1],
-                        "source": self.institution,
-                        "is_placeholder": False
+                        "is_placeholder": False,
+                        "organization": self.organization
                     }
                 )
                 
@@ -450,8 +430,8 @@ class ResourceManager:
                         "name": object_value[:100],  # Truncate for name
                         "resource_type": ResourceType.LITERAL,
                         "value": object_value,  # Store full value (no data loss)
-                        "source": self.institution,  # First archive to create wins
-                        "is_placeholder": False
+                        "is_placeholder": False,
+                        "organization": None  # Literals have no organization
                     }
                 )
                 
@@ -459,7 +439,9 @@ class ResourceManager:
                 triple, created = Triple.objects.get_or_create(
                     subject=subject_resource,
                     predicate=property_resource,
-                    object=value_resource
+                    object=value_resource,
+                    source=self.organization,
+                    defaults={"is_derived": False}
                 )
                 
                 if created and self.statistics:
@@ -482,8 +464,8 @@ class ResourceManager:
                     defaults={
                         "resource_type": ResourceType.PROPERTY,
                         "name": property_uri.split('/')[-1],
-                        "source": self.institution,
-                        "is_placeholder": False
+                        "is_placeholder": False,
+                        "organization": self.organization
                     }
                 )
                 
@@ -491,7 +473,9 @@ class ResourceManager:
                 triple, created = Triple.objects.get_or_create(
                     subject=subject_resource,
                     predicate=property_resource,
-                    object=object_resource
+                    object=object_resource,
+                    source=self.organization,
+                    defaults={"is_derived": False}
                 )
                 
                 if created and self.statistics:
@@ -529,9 +513,9 @@ class ResourceManager:
             entity_resource = Resource(
                 uri=entity_uri,
                 resource_type=ResourceType.IRI,
-                source=self.institution,
                 name=entity_id[:100] if len(entity_id) > 100 else entity_id,  # Truncate name to fit DB constraint
-                is_placeholder=False
+                is_placeholder=False,
+                organization=self.organization
             )
             entity_resources_to_create.append(entity_resource)
             entity_uri_map[entity_uri] = entity_resource
@@ -600,8 +584,8 @@ class ResourceManager:
                 uri=property_uri,
                 resource_type=ResourceType.PROPERTY,
                 name=property_uri.split('/')[-1],
-                source=self.institution,
-                is_placeholder=False
+                is_placeholder=False,
+                organization=self.organization
             )
             property_resources_to_create.append(property_resource)
             property_resources[property_uri] = property_resource
@@ -630,15 +614,12 @@ class ResourceManager:
             if not value or not value.strip():
                 continue
                 
-            # Truncate if necessary
-            truncated_value = self._truncate_value_if_needed(value)
-            
             value_resource = Resource(
-                value=truncated_value,
+                value=value,  # Store full value - no data loss
                 resource_type=ResourceType.LITERAL,
-                source=self.institution,
-                name=truncated_value[:100] if len(truncated_value) > 100 else truncated_value,
-                datatype="http://www.w3.org/2001/XMLSchema#string"
+                name=value[:100] if len(value) > 100 else value,  # Only truncate display name
+                datatype="http://www.w3.org/2001/XMLSchema#string",
+                organization=None  # Literals have no organization
             )
             value_resources_to_create.append(value_resource)
             value_resources[value] = value_resource
@@ -669,7 +650,9 @@ class ResourceManager:
                 triple = Triple(
                     subject=entity_resource,
                     predicate=property_resource,
-                    object=value_resource
+                    object=value_resource,
+                    source=self.organization,
+                    is_derived=False
                 )
                 triples_to_create.append(triple)
         
@@ -714,7 +697,9 @@ class ResourceManager:
                 Triple(
                     subject=entity_resource,
                     predicate=self.is_part_of_prop,
-                    object=dataset_resource
+                    object=dataset_resource,
+                    source=self.organization,
+                    is_derived=False
                 )
             )
         

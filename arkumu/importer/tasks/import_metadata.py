@@ -395,24 +395,35 @@ def run_mapping_aware_import_workflow(
         # Initialize execution statistics
         execution_statistics = ExecutionStatistics()
         
-        # Get session for progress updates
+        # Get session and organization for progress updates
         session = None
         channel_id = None
+        organization = None
         if upload_session_id:
             try:
                 session = IngestSession.objects.get(id=upload_session_id)
+                organization = session.organization
                 from arkumu.importer.utils.progress import create_channel_id
                 channel_id = create_channel_id(session.pk)
             except IngestSession.DoesNotExist:
                 logger.warning(f"Task {actual_task_id or 'UnknownID'}: IngestSession with ID {upload_session_id} not found")
         
-        # Initialize processor with session and channel_id for progress updates
+        # Fallback: resolve organization from institution string if session not available
+        if not organization:
+            from arkumu.users.models import Organization
+            try:
+                organization = Organization.objects.get(code=institution)
+            except Organization.DoesNotExist:
+                logger.error(f"Organization with code '{institution}' not found")
+                raise ValueError(f"Organization with code '{institution}' not found")
+        
+        # Initialize processor with organization and session for progress updates
         processor = MappingAwareProcessor(
-            institution=institution,
+            organization=organization,
             base_uri=base_uri,
             statistics=execution_statistics,
-            channel_id=channel_id,
-            session=session
+            ingest_session=session,
+            channel_id=channel_id
         )
         
         # Track processing time like in the test
@@ -1371,10 +1382,18 @@ def _initialize_mapping_schemas_sync(
         
         logger.info(f"🗺️  Loaded mapping '{mapping.name}' with {len(execution_config.datasets)} datasets")
         
+        # Resolve organization from institution string
+        from arkumu.users.models import Organization
+        try:
+            organization = Organization.objects.get(code=institution)
+        except Organization.DoesNotExist:
+            logger.error(f"Organization with code '{institution}' not found")
+            return {"status": "error", "error_message": f"Organization with code '{institution}' not found", "error_type": "OrganizationNotFound"}
+        
         # Initialize processor for schema creation only
         statistics = ExecutionStatistics()
         processor = MappingAwareProcessor(
-            institution=institution,
+            organization=organization,
             base_uri=base_uri,
             statistics=statistics
         )
@@ -1458,10 +1477,18 @@ def initialize_mapping_schemas(
         
         logger.info(f"🗺️  Loaded mapping '{mapping.name}' with {len(execution_config.datasets)} datasets")
         
+        # Resolve organization from institution string
+        from arkumu.users.models import Organization
+        try:
+            organization = Organization.objects.get(code=institution)
+        except Organization.DoesNotExist:
+            logger.error(f"Organization with code '{institution}' not found")
+            return {"status": "error", "error_message": f"Organization with code '{institution}' not found", "error_type": "OrganizationNotFound"}
+        
         # Initialize processor for schema creation only
         statistics = ExecutionStatistics()
         processor = MappingAwareProcessor(
-            institution=institution,
+            organization=organization,
             base_uri=base_uri,
             statistics=statistics
         )
@@ -1715,24 +1742,35 @@ def process_dataset_data(
         # Initialize execution statistics
         execution_statistics = ExecutionStatistics()
         
-        # Get session for progress updates
+        # Get session and organization for progress updates
         session = None
         channel_id = None
+        organization = None
         if upload_session_id:
             try:
                 session = IngestSession.objects.get(id=upload_session_id)
+                organization = session.organization
                 from arkumu.importer.utils.progress import create_channel_id
                 channel_id = create_channel_id(session.pk)
             except IngestSession.DoesNotExist:
                 logger.warning(f"IngestSession with ID {upload_session_id} not found")
         
+        # Fallback: resolve organization from institution string if session not available
+        if not organization:
+            from arkumu.users.models import Organization
+            try:
+                organization = Organization.objects.get(code=institution)
+            except Organization.DoesNotExist:
+                logger.error(f"Organization with code '{institution}' not found")
+                raise ValueError(f"Organization with code '{institution}' not found")
+        
         # Initialize processor
         processor = MappingAwareProcessor(
-            institution=institution,
+            organization=organization,
             base_uri=base_uri,
             statistics=execution_statistics,
-            channel_id=channel_id,
-            session=session
+            ingest_session=session,
+            channel_id=channel_id
         )
         
         # Load existing blueprints instead of creating them

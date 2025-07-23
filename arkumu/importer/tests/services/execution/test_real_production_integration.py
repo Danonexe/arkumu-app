@@ -231,8 +231,10 @@ class TestRealProductionIntegration:
         assert execution_config is not None, "No execution config loaded"
         
         # Initialize processor with test-specific URI to ensure test isolation
+        from arkumu.users.models import Organization
+        self.org = Organization.objects.create(code="TEST_FUK", name="Test FUK Organization")
         self.processor = MappingAwareProcessor(
-            institution="TEST_FUK",
+            organization=self.org,
             base_uri="http://test.arkumu.org/data",
             statistics=execution_statistics
         )
@@ -403,8 +405,10 @@ class TestRealProductionIntegration:
                 logger.info(f"CSV rows sample: {csv_data['rows'][:2] if csv_data['rows'] else 'empty'}")
         
         # Initialize processor with test-specific URI to ensure test isolation
+        from arkumu.users.models import Organization
+        self.org = Organization.objects.create(code="TEST_FUK_LINKING", name="Test FUK Linking Organization")
         self.processor = MappingAwareProcessor(
-            institution="TEST_FUK_LINKING",
+            organization=self.org,
             base_uri="http://test-linking.arkumu.org/data",
             statistics=execution_statistics
         )
@@ -538,8 +542,10 @@ class TestRealProductionIntegration:
         assert 'Sammlung' in empty_datasets, "Sammlung should have an empty CSV file"
         
         # Initialize processor with test-specific URI
+        from arkumu.users.models import Organization
+        self.org = Organization.objects.create(code="TEST_ALL_DATASETS", name="Test All Datasets Organization")
         self.processor = MappingAwareProcessor(
-            institution="TEST_ALL_DATASETS",
+            organization=self.org,
             base_uri="http://test-all-datasets.arkumu.org/data",
             statistics=execution_statistics
         )
@@ -627,8 +633,10 @@ class TestRealProductionIntegration:
         logger.info(f"Datasets without CSV: {sorted(list(datasets_without_csv))[:5]}...")
         
         # Initialize processor with test-specific URI
+        from arkumu.users.models import Organization
+        org = Organization.objects.create(code="TEST_ENHANCED_BLUEPRINT", name="Test Enhanced Blueprint Organization")
         processor = MappingAwareProcessor(
-            institution="TEST_ENHANCED_BLUEPRINT",
+            organization=org,
             base_uri="http://test-enhanced.arkumu.org/data",
             statistics=execution_statistics
         )
@@ -959,10 +967,10 @@ class TestRealProductionIntegration:
         # Clean up database resources created during test
         try:
             # Delete all resources created with test URIs
-            Resource.objects.filter(uri__contains="test.arkumu.org").delete()
+            Resource.objects.filter(uri__contains="test-linking.arkumu.org").delete()
             # Delete any related triples
-            Triple.objects.filter(subject__uri__contains="test.arkumu.org").delete()
-            Triple.objects.filter(object__uri__contains="test.arkumu.org").delete()
+            Triple.objects.filter(subject__uri__contains="test-linking.arkumu.org").delete()
+            Triple.objects.filter(object__uri__contains="test-linking.arkumu.org").delete()
             # Clean up any test organizations
             try:
                 from arkumu.metadata.models.organizations import Organization

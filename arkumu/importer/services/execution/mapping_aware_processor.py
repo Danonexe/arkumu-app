@@ -51,33 +51,34 @@ class MappingAwareProcessor:
     """
     
     def __init__(self,
-                 institution: str,
+                 organization,
                  base_uri: str,
                  statistics: ExecutionStatistics,
-                 channel_id: Optional[str] = None,
-                 session = None):
+                 ingest_session = None,
+                 channel_id: Optional[str] = None):
         """
         Initialize mapping-aware processor.
         
         Args:
-            institution: Institution identifier
+            organization: Organization object for ownership tracking
             base_uri: Base URI for resource generation
             statistics: Statistics tracker
+            ingest_session: IngestSession instance for progress tracking
             channel_id: SSE channel ID for progress updates
-            session: IngestSession instance for progress tracking
         """
-        self.institution = institution
+        self.organization = organization
+        self.institution = organization.code if organization else "default"
         self.base_uri = base_uri
         self.statistics = statistics
         self.channel_id = channel_id
-        self.session = session
+        self.session = ingest_session
         self.total_records = 0
         self.processed_records = 0
         
         # Initialize component processors
         self.data_processor = DataProcessor()
         self.resource_manager = ResourceManager(
-            institution=institution,
+            organization=organization,
             base_uri=base_uri,
             statistics=statistics
         )
@@ -215,6 +216,8 @@ class MappingAwareProcessor:
             dataset_resource = self.resource_manager.create_dataset_resource(dataset_name)
             
             # Process in chunks
+            logger.info(f"🚀 Starting entity processing for {dataset_name}: {total_rows} rows in chunks of {chunk_size}")
+            
             for chunk_start in range(0, total_rows, chunk_size):
                 chunk_end = min(chunk_start + chunk_size, total_rows)
                 chunk_df = df[chunk_start:chunk_end]
@@ -222,9 +225,16 @@ class MappingAwareProcessor:
                 # Convert chunk back to list format
                 chunk_data = chunk_df.to_dicts()
                 
+                # Log chunk progress
+                chunk_num = (chunk_start // chunk_size) + 1
+                total_chunks = (total_rows + chunk_size - 1) // chunk_size
+                logger.info(f"⚡ Processing chunk {chunk_num}/{total_chunks} for {dataset_name}: rows {chunk_start + 1}-{chunk_end}")
+                
                 # Process entities in this chunk and collect them
                 chunk_entities = self._process_dataset_chunk_with_entities(dataset_config, chunk_data, context)
                 dataset_entities.extend(chunk_entities)
+                
+                logger.info(f"✅ Chunk {chunk_num}/{total_chunks} completed: {len(chunk_entities)} entities created ({len(dataset_entities)} total)")
             
             # Create dataset-entity linking triples for ALL entities in the dataset
             logger.info(f"Creating dataset-entity links for {dataset_name} ({len(dataset_entities)} entities)")
@@ -266,9 +276,16 @@ class MappingAwareProcessor:
         
         # Track entities created for this chunk
         chunk_entities = []
+        total_chunk_rows = df.height
         
         # Process each row as a complete entity
-        for row_data in df.iter_rows(named=True):
+        logger.debug(f"🔄 Processing {total_chunk_rows} entities in chunk for {dataset_name}")
+        
+        for row_idx, row_data in enumerate(df.iter_rows(named=True), 1):
+            # Log slow processing every 10 entities for detailed debugging
+            if row_idx % 10 == 0 and total_chunk_rows > 50:
+                logger.debug(f"🐌 Processing entity {row_idx}/{total_chunk_rows} for {dataset_name} (checking for slowdowns)")
+            
             entity_uri = self._generate_entity_uri(dataset_name, row_data, dataset_config)
             
             # Create the main entity
@@ -296,6 +313,10 @@ class MappingAwareProcessor:
             
             # Track row processing
             self.statistics.current_metrics.rows_processed += 1
+            
+            # Log progress every 100 entities within chunk
+            if row_idx % 100 == 0:
+                logger.info(f"📊 Processed {row_idx}/{total_chunk_rows} entities in current chunk for {dataset_name}")
         
         logger.debug(f"Processed chunk for {dataset_name}: created {len(chunk_entities)} entities")
         return chunk_entities
@@ -859,8 +880,8 @@ class MappingAwareProcessor:
             defaults={
                 "resource_type": ResourceType.CLASS,
                 "name": clean_name,
-                "source": self.institution,
-                "is_placeholder": False
+                "is_placeholder": False,
+                "organization": self.organization
             }
         )
         
@@ -885,8 +906,8 @@ class MappingAwareProcessor:
                 defaults={
                     "resource_type": ResourceType.PROPERTY,
                     "name": column.arkumu_type,
-                    "source": self.institution,
-                    "is_placeholder": False
+                    "is_placeholder": False,
+                    "organization": self.organization
                 }
             )
             
@@ -1139,7 +1160,6 @@ class MappingAwareProcessor:
                 defaults={
                     "resource_type": ResourceType.CLASS,
                     "name": entity_type_uri.split('/')[-1],
-                    "source": self.resource_manager.institution,
                     "is_placeholder": False
                 }
             )
@@ -1164,8 +1184,8 @@ class MappingAwareProcessor:
                     defaults={
                         "resource_type": ResourceType.PROPERTY,
                         "name": property_def_uri.split('/')[-1],
-                        "source": self.resource_manager.institution,
-                        "is_placeholder": False
+                        "is_placeholder": False,
+                        "organization": self.organization
                     }
                 )
                 self.resource_manager.create_relationship_triple(
@@ -1472,8 +1492,8 @@ class MappingAwareProcessor:
             defaults={
                 "resource_type": ResourceType.CLASS,
                 "name": clean_name,
-                "source": self.institution,
-                "is_placeholder": False
+                "is_placeholder": False,
+                "organization": self.organization
             }
         )
         
@@ -1506,8 +1526,8 @@ class MappingAwareProcessor:
             defaults={
                 "resource_type": resource_type,
                 "name": column.arkumu_type,
-                "source": self.institution,
-                "is_placeholder": False
+                "is_placeholder": False,
+                "organization": self.organization
             }
         )
         

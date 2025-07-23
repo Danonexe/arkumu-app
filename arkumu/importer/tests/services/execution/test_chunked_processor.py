@@ -91,15 +91,16 @@ class TestChunkInfo:
 class TestChunkedProcessor:
     """Test suite for ChunkedProcessor"""
     
-    def test_initialization(self, test_organization_code, test_base_uri, streaming_config):
+    def test_initialization(self, test_organization, test_base_uri, streaming_config):
         """Test ChunkedProcessor initialization"""
         processor = ChunkedProcessor(
-            institution=test_organization_code,
+            organization=test_organization,
             base_uri=test_base_uri,
             streaming_config=streaming_config
         )
         
-        assert processor.institution == test_organization_code
+        assert processor.institution == test_organization.code
+        assert processor.organization == test_organization
         assert processor.base_uri == test_base_uri
         assert processor.streaming_config is streaming_config
         

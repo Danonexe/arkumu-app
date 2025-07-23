@@ -56,7 +56,7 @@
             <div class="flex items-center gap-2">
                 <button type="button" 
                         class="btn btn-sm btn-ghost"
-                        onclick="document.getElementById('import-mappings-modal').close()">
+                        onclick="import_mappings_modal.close()">
                     Cancel
                 </button>
                 <button type="submit" 
@@ -74,6 +74,15 @@
     
     <!-- Results Container -->
     <div id="import-results" class="mt-4"></div>
+    
+    <!-- Close Button for Success State -->
+    <div class="flex justify-end mt-4" id="close-button-container" style="display: none;">
+        <button type="button" 
+                class="btn btn-sm btn-primary"
+                onclick="import_mappings_modal.close()">
+            Close
+        </button>
+    </div>
 </div>
 
 <script>
@@ -152,12 +161,15 @@ document.addEventListener('htmx:afterRequest', function(event) {
                     </div>
                 `;
                 
+                // Show close button
+                document.getElementById('close-button-container').style.display = 'flex';
+                
                 // Trigger mapping dropdown refresh
                 htmx.trigger('#mapping-dropdown-list', 'load');
                 
                 // Close modal after 2 seconds
                 setTimeout(() => {
-                    document.getElementById('import-mappings-modal').close();
+                    import_mappings_modal.close();
                 }, 2000);
             } else {
                 // Show error message
@@ -204,7 +216,7 @@ document.addEventListener('htmx:afterRequest', function(event) {
     </div>
     <button type="button" 
             class="btn btn-sm btn-ghost mt-4"
-            onclick="document.getElementById('import-mappings-modal').close()">
+            onclick="import_mappings_modal.close()">
         Close
     </button>
 </div>
@@ -222,7 +234,7 @@ document.addEventListener('htmx:afterRequest', function(event) {
     </div>
     <button type="button" 
             class="btn btn-sm btn-ghost"
-            onclick="document.getElementById('import-mappings-modal').close()">
+            onclick="import_mappings_modal.close()">
         Close
     </button>
 </div>

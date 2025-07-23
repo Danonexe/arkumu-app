@@ -35,32 +35,32 @@ def create_mock_resource(resource_id=1, uri="test://resource"):
 class TestMappingAwareProcessor:
     """Test suite for MappingAwareProcessor"""
     
-    def test_initialization(self, test_organization_code, test_base_uri, execution_statistics):
+    def test_initialization(self, test_organization, test_base_uri, execution_statistics):
         """Test MappingAwareProcessor initialization"""
         processor = MappingAwareProcessor(
-            institution=test_organization_code,
+            organization=test_organization,
             base_uri=test_base_uri,
             statistics=execution_statistics
         )
         
-        assert processor.institution == test_organization_code
+        assert processor.organization == test_organization
+        assert processor.institution == test_organization.code
         assert processor.base_uri == test_base_uri
         assert processor.statistics is execution_statistics
         
         # Verify component initialization
         assert processor.data_processor is not None
         assert processor.resource_manager is not None
-        assert processor.execution_engine is not None
         
         # Verify processing state
         assert processor.entity_cache == {}
         assert processor.pending_relationships == []
     
-    def test_processing_context_creation(self, test_organization_code, test_base_uri, 
+    def test_processing_context_creation(self, test_organization, test_base_uri, 
                                        execution_statistics, execution_config_simple):
         """Test ProcessingContext creation"""
         processor = MappingAwareProcessor(
-            institution=test_organization_code,
+            organization=test_organization,
             base_uri=test_base_uri,
             statistics=execution_statistics
         )
@@ -84,7 +84,7 @@ class TestMappingAwareProcessor:
     @patch('arkumu.metadata.models.Resource.objects')
     @patch('arkumu.metadata.models.triples.Triple.objects')
     def test_process_with_entity_centric_strategy(self, mock_triple_objects, mock_resource_objects,
-                                                test_organization_code, test_base_uri, 
+                                                test_organization, test_base_uri, 
                                                 execution_statistics, execution_config_simple):
         """Test processing with entity-centric strategy"""
         # Mock database operations
@@ -95,7 +95,7 @@ class TestMappingAwareProcessor:
         mock_triple_objects.bulk_create.return_value = []
         
         processor = MappingAwareProcessor(
-            institution=test_organization_code,
+            organization=test_organization,
             base_uri=test_base_uri,
             statistics=execution_statistics
         )
@@ -110,18 +110,18 @@ class TestMappingAwareProcessor:
         metrics = processor.process_with_execution_config(
             execution_config=execution_config_simple,
             csv_sources=csv_sources,
-            strategy=ProcessingStrategy.ENTITY_CENTRIC
+            strategy=ProcessingStrategy.STREAMING_ENTITY_CENTRIC
         )
         
         assert isinstance(metrics, ExecutionMetrics)
         assert "test_dataset" in processor.entity_cache or len(processor.entity_cache) >= 0
     
-    def test_process_with_streaming_entity_centric_strategy(self, test_organization_code, 
+    def test_process_with_streaming_entity_centric_strategy(self, test_organization, 
                                                           test_base_uri, execution_statistics, 
                                                           execution_config_simple):
         """Test processing with streaming entity-centric strategy"""
         processor = MappingAwareProcessor(
-            institution=test_organization_code,
+            organization=test_organization,
             base_uri=test_base_uri,
             statistics=execution_statistics
         )
@@ -145,11 +145,11 @@ class TestMappingAwareProcessor:
             assert isinstance(metrics, ExecutionMetrics)
             mock_process.assert_called_once()
     
-    def test_process_with_multi_phase_strategy(self, test_organization_code, test_base_uri, 
+    def test_process_with_multi_phase_strategy(self, test_organization, test_base_uri, 
                                              execution_statistics, execution_config_simple):
         """Test processing with multi-phase strategy"""
         processor = MappingAwareProcessor(
-            institution=test_organization_code,
+            organization=test_organization,
             base_uri=test_base_uri,
             statistics=execution_statistics
         )
@@ -166,17 +166,17 @@ class TestMappingAwareProcessor:
             metrics = processor.process_with_execution_config(
                 execution_config=execution_config_simple,
                 csv_sources=csv_sources,
-                strategy=ProcessingStrategy.MULTI_PHASE
+                strategy=ProcessingStrategy.STREAMING_ENTITY_CENTRIC
             )
             
             assert isinstance(metrics, ExecutionMetrics)
             mock_process.assert_called_once()
     
-    def test_process_with_unsupported_strategy(self, test_organization_code, test_base_uri, 
+    def test_process_with_unsupported_strategy(self, test_organization, test_base_uri, 
                                              execution_statistics, execution_config_simple):
         """Test processing with unsupported strategy raises error"""
         processor = MappingAwareProcessor(
-            institution=test_organization_code,
+            organization=test_organization,
             base_uri=test_base_uri,
             statistics=execution_statistics
         )
@@ -190,10 +190,10 @@ class TestMappingAwareProcessor:
                 strategy="INVALID_STRATEGY"
             )
     
-    def test_group_columns_by_type(self, test_organization_code, test_base_uri, execution_statistics):
+    def test_group_columns_by_type(self, test_organization, test_base_uri, execution_statistics):
         """Test grouping columns by their types"""
         processor = MappingAwareProcessor(
-            institution=test_organization_code,
+            organization=test_organization,
             base_uri=test_base_uri,
             statistics=execution_statistics
         )
@@ -281,11 +281,11 @@ class TestMappingAwareProcessor:
         
         assert len(groups["relationship_context"]) == 0
     
-    def test_generate_entity_uri_with_anchor_columns(self, test_organization_code, test_base_uri, 
+    def test_generate_entity_uri_with_anchor_columns(self, test_organization, test_base_uri, 
                                                    execution_statistics):
         """Test entity URI generation using anchor columns"""
         processor = MappingAwareProcessor(
-            institution=test_organization_code,
+            organization=test_organization,
             base_uri=test_base_uri,
             statistics=execution_statistics
         )
@@ -309,11 +309,11 @@ class TestMappingAwareProcessor:
         assert "test-dataset" in uri
         assert "p001" in uri
     
-    def test_generate_entity_uri_with_multiple_anchor_columns(self, test_organization_code, 
+    def test_generate_entity_uri_with_multiple_anchor_columns(self, test_organization, 
                                                             test_base_uri, execution_statistics):
         """Test entity URI generation with multiple anchor columns"""
         processor = MappingAwareProcessor(
-            institution=test_organization_code,
+            organization=test_organization,
             base_uri=test_base_uri,
             statistics=execution_statistics
         )
@@ -336,11 +336,11 @@ class TestMappingAwareProcessor:
         
         assert "a001-b002" in uri or ("a001" in uri and "b002" in uri)
     
-    def test_generate_entity_uri_fallback_to_row_id(self, test_organization_code, test_base_uri, 
+    def test_generate_entity_uri_fallback_to_row_id(self, test_organization, test_base_uri, 
                                                   execution_statistics):
         """Test entity URI generation fallback to row ID"""
         processor = MappingAwareProcessor(
-            institution=test_organization_code,
+            organization=test_organization,
             base_uri=test_base_uri,
             statistics=execution_statistics
         )
@@ -361,10 +361,10 @@ class TestMappingAwareProcessor:
         assert "test-dataset" in uri
         assert "6" in uri  # row_id + 1
     
-    def test_split_multi_value(self, test_organization_code, test_base_uri, execution_statistics):
+    def test_split_multi_value(self, test_organization, test_base_uri, execution_statistics):
         """Test multi-value splitting"""
         processor = MappingAwareProcessor(
-            institution=test_organization_code,
+            organization=test_organization,
             base_uri=test_base_uri,
             statistics=execution_statistics
         )
@@ -393,10 +393,10 @@ class TestMappingAwareProcessor:
         result = processor._split_multi_value("single_value", "")
         assert result == ["single_value"]
     
-    def test_generate_property_uri(self, test_organization_code, test_base_uri, execution_statistics):
+    def test_generate_property_uri(self, test_organization, test_base_uri, execution_statistics):
         """Test property URI generation"""
         processor = MappingAwareProcessor(
-            institution=test_organization_code,
+            organization=test_organization,
             base_uri=test_base_uri,
             statistics=execution_statistics
         )
@@ -417,10 +417,10 @@ class TestMappingAwareProcessor:
         uri = processor._generate_property_uri(https_uri)
         assert uri == https_uri
 
-    def test_generate_type_uri(self, test_organization_code, test_base_uri, execution_statistics):
+    def test_generate_type_uri(self, test_organization, test_base_uri, execution_statistics):
         """Test type URI generation for entity types"""
         processor = MappingAwareProcessor(
-            institution=test_organization_code,
+            organization=test_organization,
             base_uri=test_base_uri,
             statistics=execution_statistics
         )
@@ -454,12 +454,12 @@ class TestMappingAwareProcessor:
         uri = processor._generate_type_uri(https_uri)
         assert uri == https_uri
 
-    def test_create_rdf_type_relationship(self, test_organization_code, test_base_uri, execution_statistics):
+    def test_create_rdf_type_relationship(self, test_organization, test_base_uri, execution_statistics):
         """Test that entities get linked to their types via rdf:type"""
         from arkumu.metadata.models.triples import Triple
         
         processor = MappingAwareProcessor(
-            institution=test_organization_code,
+            organization=test_organization,
             base_uri=test_base_uri,
             statistics=execution_statistics
         )
@@ -491,12 +491,12 @@ class TestMappingAwareProcessor:
                 mock_entity_type
             )
 
-    def test_entity_type_names_are_clean(self, test_organization_code, test_base_uri, execution_statistics):
+    def test_entity_type_names_are_clean(self, test_organization, test_base_uri, execution_statistics):
         """Test that entity type names don't have verbose prefixes"""
         from arkumu.importer.services.mapping_consumer import DatasetConfig, ColumnConfig, ColumnType
         
         processor = MappingAwareProcessor(
-            institution=test_organization_code,
+            organization=test_organization,
             base_uri=test_base_uri,
             statistics=execution_statistics
         )
@@ -532,11 +532,11 @@ class TestMappingAwareProcessor:
             assert "entity-type-" not in defaults['name']
             assert "entity_type_" not in defaults['name']
 
-    def test_property_names_are_clean(self, test_organization_code, test_base_uri, execution_statistics):
+    def test_property_names_are_clean(self, test_organization, test_base_uri, execution_statistics):
         """Test that property names use clean arkumu_type values"""
         
         processor = MappingAwareProcessor(
-            institution=test_organization_code,
+            organization=test_organization,
             base_uri=test_base_uri,
             statistics=execution_statistics
         )
@@ -584,11 +584,11 @@ class TestMappingAwareProcessor:
             # Properties use arkumu_type directly - this is actually correct behavior
             assert defaults['name'] == "creator_name"
     
-    def test_generate_external_ontology_uri(self, test_organization_code, test_base_uri, 
+    def test_generate_external_ontology_uri(self, test_organization, test_base_uri, 
                                           execution_statistics):
         """Test external ontology URI generation"""
         processor = MappingAwareProcessor(
-            institution=test_organization_code,
+            organization=test_organization,
             base_uri=test_base_uri,
             statistics=execution_statistics
         )
@@ -612,11 +612,11 @@ class TestMappingAwareProcessor:
         uri = processor._generate_external_ontology_uri(column, "any_value")
         assert uri is None
     
-    def test_create_mapping_config_from_dataset(self, test_organization_code, test_base_uri, 
+    def test_create_mapping_config_from_dataset(self, test_organization, test_base_uri, 
                                                execution_statistics):
         """Test mapping config creation from dataset config"""
         processor = MappingAwareProcessor(
-            institution=test_organization_code,
+            organization=test_organization,
             base_uri=test_base_uri,
             statistics=execution_statistics
         )
@@ -664,7 +664,7 @@ class TestMappingAwareProcessor:
         assert skills_config["multi_value_separator"] == ","
     
     @patch('arkumu.metadata.models.Resource.objects.get_or_create')
-    def test_process_regular_columns(self, mock_get_or_create, test_organization_code, 
+    def test_process_regular_columns(self, mock_get_or_create, test_organization, 
                                    test_base_uri, execution_statistics):
         """Test processing of regular columns"""
         # Mock resource creation
@@ -672,7 +672,7 @@ class TestMappingAwareProcessor:
         mock_get_or_create.return_value = (mock_resource, True)
         
         processor = MappingAwareProcessor(
-            institution=test_organization_code,
+            organization=test_organization,
             base_uri=test_base_uri,
             statistics=execution_statistics
         )
@@ -701,14 +701,14 @@ class TestMappingAwareProcessor:
         assert mock_get_or_create.call_count >= 2  # name and age
     
     @patch('arkumu.metadata.models.Resource.objects.get_or_create')
-    def test_process_anchor_columns(self, mock_get_or_create, test_organization_code, 
+    def test_process_anchor_columns(self, mock_get_or_create, test_organization, 
                                   test_base_uri, execution_statistics):
         """Test processing of anchor columns"""
         mock_resource = Mock(id=1)
         mock_get_or_create.return_value = (mock_resource, True)
         
         processor = MappingAwareProcessor(
-            institution=test_organization_code,
+            organization=test_organization,
             base_uri=test_base_uri,
             statistics=execution_statistics
         )
@@ -728,14 +728,14 @@ class TestMappingAwareProcessor:
         mock_get_or_create.assert_called()
     
     @patch('arkumu.metadata.models.Resource.objects.get_or_create')
-    def test_process_multi_value_columns(self, mock_get_or_create, test_organization_code, 
+    def test_process_multi_value_columns(self, mock_get_or_create, test_organization, 
                                        test_base_uri, execution_statistics):
         """Test processing of multi-value columns"""
         mock_resource = Mock(id=1)
         mock_get_or_create.return_value = (mock_resource, True)
         
         processor = MappingAwareProcessor(
-            institution=test_organization_code,
+            organization=test_organization,
             base_uri=test_base_uri,
             statistics=execution_statistics
         )
@@ -759,10 +759,10 @@ class TestMappingAwareProcessor:
         # Should create multiple property triples (one for each value)
         assert mock_get_or_create.call_count >= 3  # At least 3 values
     
-    def test_queue_fk_relationships(self, test_organization_code, test_base_uri, execution_statistics):
+    def test_queue_fk_relationships(self, test_organization, test_base_uri, execution_statistics):
         """Test queuing of FK relationships"""
         processor = MappingAwareProcessor(
-            institution=test_organization_code,
+            organization=test_organization,
             base_uri=test_base_uri,
             statistics=execution_statistics
         )
@@ -794,11 +794,11 @@ class TestMappingAwareProcessor:
         assert relationship["source_entity_uri"] == entity_uri
         assert relationship["target_value"] == "D001"
     
-    def test_queue_fk_relationships_multi_value(self, test_organization_code, test_base_uri, 
+    def test_queue_fk_relationships_multi_value(self, test_organization, test_base_uri, 
                                               execution_statistics):
         """Test queuing of multi-value FK relationships"""
         processor = MappingAwareProcessor(
-            institution=test_organization_code,
+            organization=test_organization,
             base_uri=test_base_uri,
             statistics=execution_statistics
         )
@@ -832,14 +832,14 @@ class TestMappingAwareProcessor:
         assert "D003" in values
     
     @patch('arkumu.metadata.models.Resource.objects.get_or_create')
-    def test_process_external_ontology_columns(self, mock_get_or_create, test_organization_code, 
+    def test_process_external_ontology_columns(self, mock_get_or_create, test_organization, 
                                              test_base_uri, execution_statistics):
         """Test processing of external ontology columns"""
         mock_resource = Mock(id=1)
         mock_get_or_create.return_value = (mock_resource, True)
         
         processor = MappingAwareProcessor(
-            institution=test_organization_code,
+            organization=test_organization,
             base_uri=test_base_uri,
             statistics=execution_statistics
         )
@@ -873,7 +873,7 @@ class TestMappingAwareProcessorIntegration:
     @patch('arkumu.metadata.models.Resource.objects')
     @patch('arkumu.metadata.models.triples.Triple.objects')
     def test_end_to_end_processing(self, mock_triple_objects, mock_resource_objects,
-                                 test_organization_code, test_base_uri):
+                                 test_organization, test_base_uri):
         """Test end-to-end processing with complex mapping configuration"""
         # Mock database operations
         mock_resource = create_mock_resource()
@@ -932,7 +932,7 @@ class TestMappingAwareProcessorIntegration:
             ],
             fk_relationships=[],
             relationship_contexts=[],
-            processing_strategy=ProcessingStrategy.ENTITY_CENTRIC
+            processing_strategy=ProcessingStrategy.STREAMING_ENTITY_CENTRIC
         )
         
         csv_sources = {
@@ -951,7 +951,7 @@ class TestMappingAwareProcessorIntegration:
         }
         
         processor = MappingAwareProcessor(
-            institution=test_organization_code,
+            organization=test_organization,
             base_uri=test_base_uri,
             statistics=ExecutionStatistics()
         )
@@ -959,7 +959,7 @@ class TestMappingAwareProcessorIntegration:
         metrics = processor.process_with_execution_config(
             execution_config=execution_config,
             csv_sources=csv_sources,
-            strategy=ProcessingStrategy.ENTITY_CENTRIC
+            strategy=ProcessingStrategy.STREAMING_ENTITY_CENTRIC
         )
         
         # Verify processing completed
@@ -977,7 +977,7 @@ class TestMappingAwareProcessorPerformance:
     @patch('arkumu.metadata.models.Resource.objects')
     @patch('arkumu.metadata.models.triples.Triple.objects')
     def test_large_dataset_processing_performance(self, mock_triple_objects, mock_resource_objects,
-                                                 test_organization_code, test_base_uri, 
+                                                 test_organization, test_base_uri, 
                                                  performance_test_data):
         """Test processing performance with large dataset"""
         # Mock database operations
@@ -1027,13 +1027,13 @@ class TestMappingAwareProcessorPerformance:
             ],
             fk_relationships=[],
             relationship_contexts=[],
-            processing_strategy=ProcessingStrategy.ENTITY_CENTRIC
+            processing_strategy=ProcessingStrategy.STREAMING_ENTITY_CENTRIC
         )
         
         csv_sources = {"performance_test": test_data}
         
         processor = MappingAwareProcessor(
-            institution=test_organization_code,
+            organization=test_organization,
             base_uri=test_base_uri,
             statistics=ExecutionStatistics()
         )
@@ -1044,7 +1044,7 @@ class TestMappingAwareProcessorPerformance:
         metrics = processor.process_with_execution_config(
             execution_config=execution_config,
             csv_sources=csv_sources,
-            strategy=ProcessingStrategy.ENTITY_CENTRIC
+            strategy=ProcessingStrategy.STREAMING_ENTITY_CENTRIC
         )
         
         end_time = time.time()
@@ -1063,11 +1063,11 @@ class TestMappingAwareProcessorPerformance:
 class TestMappingAwareProcessorEdgeCases:
     """Test edge cases and error conditions"""
     
-    def test_processing_with_missing_csv_data(self, test_organization_code, test_base_uri, 
+    def test_processing_with_missing_csv_data(self, test_organization, test_base_uri, 
                                             execution_statistics, execution_config_simple):
         """Test processing when CSV data is missing for a dataset"""
         processor = MappingAwareProcessor(
-            institution=test_organization_code,
+            organization=test_organization,
             base_uri=test_base_uri,
             statistics=execution_statistics
         )
@@ -1078,17 +1078,17 @@ class TestMappingAwareProcessorEdgeCases:
         metrics = processor.process_with_execution_config(
             execution_config=execution_config_simple,
             csv_sources=csv_sources,
-            strategy=ProcessingStrategy.ENTITY_CENTRIC
+            strategy=ProcessingStrategy.STREAMING_ENTITY_CENTRIC
         )
         
         # Should complete without errors despite missing data
         assert isinstance(metrics, ExecutionMetrics)
     
-    def test_processing_with_empty_csv_data(self, test_organization_code, test_base_uri, 
+    def test_processing_with_empty_csv_data(self, test_organization, test_base_uri, 
                                           execution_statistics, execution_config_simple):
         """Test processing with empty CSV data"""
         processor = MappingAwareProcessor(
-            institution=test_organization_code,
+            organization=test_organization,
             base_uri=test_base_uri,
             statistics=execution_statistics
         )
@@ -1098,17 +1098,17 @@ class TestMappingAwareProcessorEdgeCases:
         metrics = processor.process_with_execution_config(
             execution_config=execution_config_simple,
             csv_sources=csv_sources,
-            strategy=ProcessingStrategy.ENTITY_CENTRIC
+            strategy=ProcessingStrategy.STREAMING_ENTITY_CENTRIC
         )
         
         # Should handle empty data gracefully
         assert isinstance(metrics, ExecutionMetrics)
     
-    def test_entity_uri_generation_with_empty_anchor_values(self, test_organization_code, 
+    def test_entity_uri_generation_with_empty_anchor_values(self, test_organization, 
                                                           test_base_uri, execution_statistics):
         """Test entity URI generation when anchor values are empty"""
         processor = MappingAwareProcessor(
-            institution=test_organization_code,
+            organization=test_organization,
             base_uri=test_base_uri,
             statistics=execution_statistics
         )
@@ -1129,11 +1129,11 @@ class TestMappingAwareProcessorEdgeCases:
         # Should fall back to row ID
         assert "6" in uri  # row_id + 1
     
-    def test_multi_value_splitting_edge_cases(self, test_organization_code, test_base_uri, 
+    def test_multi_value_splitting_edge_cases(self, test_organization, test_base_uri, 
                                             execution_statistics):
         """Test multi-value splitting with edge cases"""
         processor = MappingAwareProcessor(
-            institution=test_organization_code,
+            organization=test_organization,
             base_uri=test_base_uri,
             statistics=execution_statistics
         )
