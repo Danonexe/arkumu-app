@@ -32,16 +32,16 @@
                                 <div class="text-sm text-base-content/70 font-mono truncate">{{ related_resource.uri|truncatechars:60 }}</div>
                             </td>
                             <td>
-                                <span class="badge badge-outline badge-sm">{{ related_resource.type }}</span>
+                                {{ related_resource.type }}
                             </td>
                             <td>
-                                <span class="badge badge-primary badge-sm">{{ related_resource.relationship_type|default:"Connected" }}</span>
+                                {{ related_resource.relationship_type|default:"Connected" }}
                             </td>
                             <td>
                                 {% if related_resource.direction == 'outgoing' %}
-                                    <span class="badge badge-success badge-sm">→ Outgoing</span>
+                                    → Outgoing
                                 {% else %}
-                                    <span class="badge badge-info badge-sm">← Incoming</span>
+                                    ← Incoming
                                 {% endif %}
                             </td>
                             <td>
