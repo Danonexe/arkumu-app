@@ -45,9 +45,6 @@
                             {% if resource.language %}
                                 <span class="text-warning">@{{ resource.language }}</span>
                             {% endif %}
-                            {% if resource.datatype %}
-                                <span class="text-info">^^{{ resource.datatype|slice:":20" }}</span>
-                            {% endif %}
                         </div>
                     {% elif resource.uri %}
                         <a href="{{ resource.uri }}" target="_blank" class="link link-primary hover:link-hover font-medium break-all" title="{{ resource.uri }}">
