@@ -62,11 +62,6 @@ class TestTaskCancellationIntegration(TestCase):
             status='processing'
         )
 
-    def tearDown(self):
-        """Clean up after tests"""
-        cache.clear()
-        IngestSession.objects.filter(dataset_name="test_dataset").delete()
-
     def test_complete_cancellation_workflow(self):
         """Test complete cancellation workflow from UI to task execution"""
         task_id = str(uuid.uuid4())

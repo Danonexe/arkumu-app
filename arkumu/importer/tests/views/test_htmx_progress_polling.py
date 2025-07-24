@@ -346,23 +346,6 @@ class HTMXProgressPollingTest(TestCase):
             # Verify response
             self.assertEqual(response.status_code, 200)
             self.assertContains(response, progress['message'])
-    
-    def tearDown(self):
-        """Clean up test data"""
-        # Clean up any cache entries
-        try:
-            self.progress_cache.clear_progress(str(self.user.pk))
-        except:
-            pass
-        
-        # Clean up database
-        IngestSession.objects.all().delete()
-        Mapping.objects.all().delete()
-        Organization.objects.all().delete()
-        User.objects.all().delete()
-
-
-@pytest.mark.django_db
 class TestHTMXProgressPollingIntegration:
     """Pytest-based integration tests for HTMX polling system"""
     

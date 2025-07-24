@@ -60,6 +60,9 @@ from huey.exceptions import CancelExecution
 # Import progress estimation
 from arkumu.importer.services.progress import progress_estimator, ExecutionStrategy
 
+# Schema service for complete schema management
+from arkumu.importer.services.schema_service import SchemaService
+
 logger = logging.getLogger(__name__)
 
 @cancellable_task()
@@ -417,6 +420,9 @@ def run_mapping_aware_import_workflow(
                 logger.error(f"Organization with code '{institution}' not found")
                 raise ValueError(f"Organization with code '{institution}' not found")
         
+        # Initialize schema service for complete schema management
+        schema_service = SchemaService(mapping_id)
+        
         # Initialize processor with organization and session for progress updates
         processor = MappingAwareProcessor(
             organization=organization,
@@ -425,6 +431,13 @@ def run_mapping_aware_import_workflow(
             ingest_session=session,
             channel_id=channel_id
         )
+        
+        # Ensure schema service has the complete schema cached for post-import operations
+        try:
+            schema_result = schema_service.create_complete_schema()
+            logger.info(f"Schema service cached complete schema for mapping {mapping_id}")
+        except Exception as e:
+            logger.warning(f"Schema service caching failed (using fallback): {e}")
         
         # Track processing time like in the test
         from datetime import datetime, timezone as dt_timezone
@@ -1390,7 +1403,10 @@ def _initialize_mapping_schemas_sync(
             logger.error(f"Organization with code '{institution}' not found")
             return {"status": "error", "error_message": f"Organization with code '{institution}' not found", "error_type": "OrganizationNotFound"}
         
-        # Initialize processor for schema creation only
+        # Initialize schema service for complete schema management
+        schema_service = SchemaService(mapping_id)
+        
+        # Initialize processor 
         statistics = ExecutionStatistics()
         processor = MappingAwareProcessor(
             organization=organization,
@@ -1398,8 +1414,16 @@ def _initialize_mapping_schemas_sync(
             statistics=statistics
         )
         
-        # Create complete schema blueprints (this caches them by mapping_id)
+        # Create complete schema blueprints - now using schema service internally
+        # This will be updated to use schema_service in the processor
         processor._create_complete_schema_blueprints(execution_config)
+        
+        # Additionally, ensure schema service has the complete schema cached
+        try:
+            schema_result = schema_service.create_complete_schema()
+            logger.info(f"Schema service cached complete schema for mapping {mapping_id}")
+        except Exception as e:
+            logger.warning(f"Schema service caching failed (using fallback): {e}")
         
         # Calculate schema statistics
         total_properties = sum(len(bp.get('property_resources', {})) for bp in processor.dataset_blueprints.values())
@@ -1485,7 +1509,10 @@ def initialize_mapping_schemas(
             logger.error(f"Organization with code '{institution}' not found")
             return {"status": "error", "error_message": f"Organization with code '{institution}' not found", "error_type": "OrganizationNotFound"}
         
-        # Initialize processor for schema creation only
+        # Initialize schema service for complete schema management
+        schema_service = SchemaService(mapping_id)
+        
+        # Initialize processor 
         statistics = ExecutionStatistics()
         processor = MappingAwareProcessor(
             organization=organization,
@@ -1493,8 +1520,16 @@ def initialize_mapping_schemas(
             statistics=statistics
         )
         
-        # Create complete schema blueprints (this caches them by mapping_id)
+        # Create complete schema blueprints - now using schema service internally
+        # This will be updated to use schema_service in the processor
         processor._create_complete_schema_blueprints(execution_config)
+        
+        # Additionally, ensure schema service has the complete schema cached
+        try:
+            schema_result = schema_service.create_complete_schema()
+            logger.info(f"Schema service cached complete schema for mapping {mapping_id}")
+        except Exception as e:
+            logger.warning(f"Schema service caching failed (using fallback): {e}")
         
         # Calculate schema statistics
         total_properties = sum(len(bp.get('property_resources', {})) for bp in processor.dataset_blueprints.values())

@@ -229,8 +229,3 @@ class TestKHMCorrelationIntegration:
         assert len(result.exactly_matched_datasets) == expected_dataset_count, f"Expected {expected_dataset_count} matched datasets, got {len(result.exactly_matched_datasets)}"
         
         logger.info("✅ Perfect correlation coverage achieved!")
-
-    def teardown_method(self):
-        """Clean up after each test."""
-        # Reset correlation service state if needed
-        pass

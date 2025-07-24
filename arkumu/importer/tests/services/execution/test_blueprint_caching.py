@@ -269,19 +269,3 @@ class TestBlueprintCaching:
                 logger.info("✅ Cache is faster than creation for large mapping")
         
         logger.info("✅ Performance test completed")
-    
-    def teardown_method(self):
-        """Clean up after each test"""
-        # Clear cache to avoid test interference
-        cache.clear()
-        
-        # Reset cached data
-        self.execution_config = None
-        
-        # Clean up test database resources
-        try:
-            # Delete all resources created with test URIs
-            Resource.objects.filter(uri__contains="test-cache").delete()
-            Resource.objects.filter(uri__contains="test-perf").delete()
-        except Exception as e:
-            logger.warning(f"Error cleaning up test resources: {e}")

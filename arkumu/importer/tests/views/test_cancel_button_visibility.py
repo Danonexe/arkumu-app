@@ -20,10 +20,6 @@ class CancelButtonVisibilityTests(TestCase):
         self.client = Client()
         self.task_id = "test-task-123"
         
-    def tearDown(self):
-        # Clean up cache
-        cache.clear()
-        
     def test_cancel_button_visible_for_running_task(self):
         """Test that cancel button appears when task is in RUNNING state"""
         # Arrange: Set up task in RUNNING state in cache
@@ -157,11 +153,6 @@ class TaskManagerIntegrationTests(TestCase):
     def setUp(self):
         self.task_id = "integration-test-456"
         cache.clear()
-        
-    def tearDown(self):
-        cache.clear()
-        
-    @patch('arkumu.importer.services.task_manager.get_task_manager')
     def test_cancellable_task_decorator_registers_with_task_manager(self, mock_get_task_manager):
         """Test that @cancellable_task decorator properly registers the task"""
         # Arrange: Mock the task manager
@@ -232,9 +223,6 @@ class CancellationFunctionalityTests(TestCase):
     def setUp(self):
         self.client = Client()
         self.task_id = "cancel-test-789"
-        cache.clear()
-        
-    def tearDown(self):
         cache.clear()
         
     def test_cancel_api_endpoint_works(self):

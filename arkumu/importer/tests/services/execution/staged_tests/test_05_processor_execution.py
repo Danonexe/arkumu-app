@@ -61,17 +61,6 @@ class TestProcessorExecution:
         self.mapping_adapter = MappingAdapter()
         self.statistics = ExecutionStatistics()
         self.processor = None
-    
-    def teardown_method(self):
-        """Clean up after test"""
-        if self.processor:
-            # Reset processor state
-            if hasattr(self.processor, 'entity_cache'):
-                self.processor.entity_cache = {}
-            if hasattr(self.processor, 'pending_relationships'):
-                self.processor.pending_relationships = []
-    
-    @pytest.mark.django_db(transaction=True)
     def test_processor_initialization(self, execution_statistics):
         """Test processor initialization with test configuration"""
         # Initialize processor with test-specific settings

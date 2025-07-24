@@ -211,14 +211,3 @@ class TestSammlungProductionImport:
         finally:
             # Clean up
             Resource.objects.filter(uri__contains="test-empty.arkumu.org").delete()
-    
-    def teardown_method(self):
-        """Clean up after each test"""
-        if self.processor:
-            self.processor.entity_cache = {}
-            self.processor.pending_relationships = []
-        
-        self.execution_config = None
-        
-        if hasattr(self.statistics, 'reset'):
-            self.statistics.reset()

@@ -24,11 +24,6 @@ class TestCrossDatasetRelationshipIntegration(TestCase):
         self.factory = RequestFactory()
         self.discovery_service = RelationshipDiscoveryService()
         self.temp_dir = tempfile.mkdtemp()
-        
-    def tearDown(self):
-        """Clean up test fixtures"""
-        import shutil
-        shutil.rmtree(self.temp_dir)
     
     def create_test_datasets(self):
         """Create realistic test datasets for cultural heritage domain"""

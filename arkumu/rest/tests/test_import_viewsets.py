@@ -27,12 +27,6 @@ class ImportViewSetTests(TestCase):
         self.zip_path = os.path.join(self.temp_dir, "test_data.zip")
         with zipfile.ZipFile(self.zip_path, 'w') as zipf:
             zipf.write(self.csv_path, arcname="people.csv")
-    
-    def tearDown(self):
-        # Clean up the temp directory
-        shutil.rmtree(self.temp_dir)
-    
-    @patch('arkumu.importer.tasks.import_metadata.run_csv_directory_import_workflow.delay')
     def test_import_directory_with_path(self, mock_import):
         """Test importing from a directory path"""
         # Mock the NEW directory import workflow task

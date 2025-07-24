@@ -541,33 +541,3 @@ class TestRealImportPollingIntegration:
         assert response2.status_code in [403, 404, 302]
         
         logger.info("Concurrent user sessions test passed")
-
-    def teardown_method(self):
-        """Clean up after each test"""
-        logger.info("Cleaning up test resources...")
-        
-        # Clear cache entries
-        if self.test_task_id:
-            cache.delete(f"task_status_{self.test_task_id}")
-        
-        if self.test_session:
-            self.progress_cache.clear_progress(self.test_session.pk)
-            
-        # Clean up test sessions
-        IngestSession.objects.filter(
-            user=self.test_user,
-            dataset_name__startswith="test_"
-        ).delete()
-        
-        # Clean up test resources with test URIs
-        try:
-            from arkumu.metadata.models import Resource
-            from arkumu.metadata.models.triples import Triple
-            
-            Resource.objects.filter(uri__contains="test.arkumu.org").delete()
-            Triple.objects.filter(subject__uri__contains="test.arkumu.org").delete()
-            Triple.objects.filter(object__uri__contains="test.arkumu.org").delete()
-        except Exception as e:
-            logger.warning(f"Error cleaning up test resources: {e}")
-        
-        logger.info("Test cleanup completed")

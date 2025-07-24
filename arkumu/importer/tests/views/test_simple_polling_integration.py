@@ -308,22 +308,3 @@ class TestSimplePollingIntegration:
             data['error_type'] = error_type
         
         cache.set(cache_key, data, timeout=3600)
-
-    def teardown_method(self):
-        """Clean up after each test"""
-        logger.info("Cleaning up test resources...")
-        
-        # Clear cache entries
-        if self.test_task_id:
-            cache.delete(f"task_status_{self.test_task_id}")
-        
-        if self.test_session:
-            self.progress_cache.clear_progress(self.test_session.pk)
-            
-        # Clean up test sessions
-        IngestSession.objects.filter(
-            user=self.test_user,
-            dataset_name__startswith="test_"
-        ).delete()
-        
-        logger.info("Test cleanup completed")

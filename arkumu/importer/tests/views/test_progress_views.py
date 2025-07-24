@@ -58,11 +58,6 @@ class TestProgressViews(TestCase):
             status='processing'
         )
 
-    def tearDown(self):
-        """Clean up after tests"""
-        cache.clear()
-        IngestSession.objects.filter(dataset_name="test_dataset").delete()
-
     def test_progress_monitor_view_get(self):
         """Test the main progress monitor view"""
         task_id = str(uuid.uuid4())

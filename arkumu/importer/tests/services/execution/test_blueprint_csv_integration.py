@@ -28,21 +28,6 @@ class TestBlueprintCSVIntegration:
         self.test_organization = None
         self.test_mapping = None
     
-    def teardown_method(self):
-        """Clean up test resources"""
-        try:
-            # Clean up test resources
-            Resource.objects.filter(uri__contains="test-blueprint").delete()
-            Triple.objects.filter(subject__uri__contains="test-blueprint").delete()
-            Triple.objects.filter(object__uri__contains="test-blueprint").delete()
-            
-            if self.test_mapping:
-                self.test_mapping.delete()
-            if self.test_organization:
-                self.test_organization.delete()
-        except Exception as e:
-            logger.warning(f"Error cleaning up test resources: {e}")
-    
     def test_blueprint_creation_then_csv_processing(self):
         """Test that blueprint creation followed by CSV processing works without conflicts"""
         

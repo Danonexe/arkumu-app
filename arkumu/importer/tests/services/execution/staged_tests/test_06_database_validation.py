@@ -59,13 +59,6 @@ class TestDatabaseValidation:
         self.statistics = ExecutionStatistics()
         self.processor = None
         self.test_uri_pattern = "test.arkumu.org"
-    
-    def teardown_method(self):
-        """Clean up test data"""
-        # Database cleanup is handled automatically by Django test framework
-        pass
-    
-    @pytest.mark.django_db(transaction=True)
     def test_resource_creation_validation(self, production_test_mapping, real_csv_data, execution_statistics):
         """Test that resources are correctly created in database"""
         # Execute processing first

@@ -314,20 +314,3 @@ class TestFullProductionIntegration:
         logger.info("=== S3 ACCESS TEST PASSED ===")
         
         assert len(csv_files) > 0, "No CSV files found in fuk/metadata/"
-    
-    def teardown_method(self):
-        """Clean up after each test"""
-        if self.processor:
-            # Reset processor state
-            if hasattr(self.processor, 'entity_cache'):
-                self.processor.entity_cache = {}
-            if hasattr(self.processor, 'pending_relationships'):
-                self.processor.pending_relationships = []
-        
-        # Reset cached data
-        self.execution_config = None
-        
-        if hasattr(self.statistics, 'reset'):
-            self.statistics.reset()
-        
-        # Database cleanup is handled automatically by Django test framework

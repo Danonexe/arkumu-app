@@ -65,12 +65,6 @@ class TestTaskManager(TestCase):
         # Clear cache
         cache.clear()
 
-    def tearDown(self):
-        """Clean up after tests"""
-        self.task_manager.stop_monitoring()
-        cache.clear()
-        IngestSession.objects.filter(dataset_name="test_dataset").delete()
-
     def test_register_task(self):
         """Test task registration"""
         task_id = str(uuid.uuid4())
@@ -382,11 +376,6 @@ class TestCancellableTaskDecorator(TestCase):
         self.mock_get_manager = self.manager_patch.start()
         self.mock_get_manager.return_value = self.mock_manager
 
-    def tearDown(self):
-        """Clean up after tests"""
-        self.manager_patch.stop()
-        cache.clear()
-
     def test_decorator_with_task_id(self):
         """Test decorator with provided task_id"""
         @cancellable_task()
@@ -472,10 +461,6 @@ class TestTaskManagerIntegration(TestCase):
                 "role": "researcher"
             }
         )
-
-    def tearDown(self):
-        """Clean up after tests"""
-        cache.clear()
 
     def test_full_task_lifecycle(self):
         """Test complete task lifecycle from start to finish"""
