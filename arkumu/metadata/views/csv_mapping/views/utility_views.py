@@ -202,7 +202,7 @@ class ExportMappingJSONView(GeneralLoginRequiredMixin,
             
             # Check if we have a valid organization
             org_context = self.get_organization_context(request)
-            if not org_context['organization_exists']:
+            if not org_context['has_organization']:
                 return JsonResponse({
                     'error': 'Invalid organization',
                     'message': f'Organization "{organization_id}" not found'
