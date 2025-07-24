@@ -337,218 +337,27 @@ def csv_mapping_editor_view(request):
 
 class MappingGraphDataView(GeneralLoginRequiredMixin, CSVMappingCoordinatorMixin, View):
     """
-    Provides graph visualization data for CSV mapping relationships.
+    Graph visualization has been disabled.
     
-    Returns JSON data in Cytoscape.js format containing:
-    - Dataset nodes
-    - Column nodes 
-    - Relationship edges (FK, anchors, junction tables)
+    This view now returns an error message indicating that graph visualization
+    libraries have been removed from the application.
     """
     
     def get(self, request):
-        """Generate graph data for current mapping configuration."""
-        try:
-            # Get current organization using BaseCoordinatorMixin
-            current_org = self.get_current_organization(request)
-            if not current_org:
-                if request.headers.get('HX-Request'):
-                    context = {
-                        'graph_data': {'nodes': [], 'edges': []},
-                        'mapping_name': None,
-                        'mapping_description': None,
-                        'error': 'No organization selected'
-                    }
-                    return render(request, 'csv_mapping/partials/mapping_graph_content.html', context)
-                else:
-                    return JsonResponse({'error': 'No organization selected'}, status=400)
-            
-            # Use organization code for compatibility
-            organization_id = current_org['code']
-            
-            # Check if specific mapping ID is requested
-            mapping_id = request.GET.get('mapping_id')
-            
-            if mapping_id:
-                # Load mapping from database
-                from arkumu.metadata.models.mappings import Mapping
-                try:
-                    mapping = Mapping.objects.get(id=mapping_id)
-                    selected_columns = mapping.mapping_config.get('workspace_columns', {})
-                    
-                    # Safely handle logging to avoid errors with mock objects in tests
-                    try:
-                        logger.info(f"MAPPING_GRAPH: Loaded mapping {mapping_id} with {len(selected_columns)} columns")
-                        logger.info(f"MAPPING_GRAPH: Mapping config keys: {list(mapping.mapping_config.keys())}")
-                        if selected_columns:
-                            logger.info(f"MAPPING_GRAPH: Selected columns sample: {dict(list(selected_columns.items())[:3])}")
-                    except (TypeError, AttributeError):
-                        # Handle mock objects or invalid data gracefully
-                        logger.info(f"MAPPING_GRAPH: Loaded mapping {mapping_id} with workspace columns")
-                except Mapping.DoesNotExist:
-                    if request.headers.get('HX-Request'):
-                        context = {
-                            'graph_data': {'nodes': [], 'edges': []},
-                            'mapping_name': None,
-                            'mapping_description': None,
-                            'error': f'Mapping {mapping_id} not found'
-                        }
-                        return render(request, 'csv_mapping/partials/mapping_graph_content.html', context)
-                    else:
-                        return JsonResponse({'error': 'Mapping not found'}, status=404)
-            else:
-                # Get workspace columns from current session
-                selected_columns = self.get_workspace_columns(request, organization_id)
-                logger.info(f"MAPPING_GRAPH: Using current workspace with {len(selected_columns)} columns")
-            
-            # Generate graph data
-            graph_data = self._generate_cytoscape_data(selected_columns, organization_id)
-            
-            # Return as HTMX template or JSON based on request
-            if request.headers.get('HX-Request'):
-                # Prepare context for HTMX template
-                # Serialize graph_data to JSON string for JavaScript consumption
-                import json
-                context = {
-                    'graph_data_json': json.dumps(graph_data),
-                    'graph_data': graph_data,  # Keep original for debugging
-                    'mapping_name': None,
-                    'mapping_description': None,
-                    'error': None
-                }
-                
-                # Add mapping info if available
-                if mapping_id:
-                    try:
-                        mapping = Mapping.objects.get(id=mapping_id)
-                        context['mapping_name'] = mapping.name
-                        context['mapping_description'] = mapping.description
-                    except Mapping.DoesNotExist:
-                        pass
-                
-                return render(request, 'csv_mapping/partials/mapping_graph_modal_open.html', context)
-            else:
-                return JsonResponse(graph_data)
-                
-        except Exception as e:
-            logger.error(f"MAPPING_GRAPH: Error generating graph data: {e}", exc_info=True)
-            
-            # Return appropriate error response based on request type
-            if request.headers.get('HX-Request'):
-                context = {
-                    'graph_data': {'nodes': [], 'edges': []},
-                    'mapping_name': None,
-                    'mapping_description': None,
-                    'error': str(e)
-                }
-                return render(request, 'csv_mapping/partials/mapping_graph_content.html', context)
-            else:
-                return JsonResponse({'error': str(e)}, status=500)
-    
-    def _generate_cytoscape_data(self, selected_columns, organization_id):
-        """Convert workspace columns into Cytoscape.js graph format."""
-        try:
-            logger.info(f"MAPPING_GRAPH: _generate_cytoscape_data called with {len(selected_columns)} columns")
-        except (TypeError, AttributeError):
-            logger.info(f"MAPPING_GRAPH: _generate_cytoscape_data called with workspace columns")
-        nodes = []
-        edges = []
-        
-        # Track datasets and columns
-        datasets = {}
-        columns_by_dataset = {}
-        
-        # Process workspace columns
-        processed_count = 0
-        for col_id, col_data in selected_columns.items():
-            dataset_name = col_data.get('dataset', '')
-            column_name = col_data.get('name', '')
-            processed_count += 1
-            
-            if processed_count <= 3:  # Log first 3 for debugging
-                logger.info(f"MAPPING_GRAPH: Processing column {processed_count}: {col_id} -> {dataset_name}.{column_name}")
-            
-            # Create dataset node if not exists
-            if dataset_name not in datasets:
-                datasets[dataset_name] = {
-                    'id': f"dataset_{dataset_name}",
-                    'label': f"{dataset_name}.csv",
-                    'type': 'dataset',
-                    'column_count': 0
-                }
-                columns_by_dataset[dataset_name] = []
-            
-            # Add column to dataset
-            datasets[dataset_name]['column_count'] += 1
-            columns_by_dataset[dataset_name].append(col_data)
-            
-            # Create column node
-            column_node = {
-                'id': col_id,
-                'label': column_name,
-                'type': 'column',
-                'dataset': dataset_name,
-                'is_anchor': col_data.get('is_anchor', False),
-                'is_fk': col_data.get('is_fk', False),
-                'is_multi_value': col_data.get('is_multi_value', False),
-                'is_relationship_context': col_data.get('is_relationship_context', False),
-                'is_external_ontology': col_data.get('is_external_ontology', False)
-            }
-            nodes.append(column_node)
-            
-            # Create edge from dataset to column
-            edges.append({
-                'id': f"edge_{dataset_name}_to_{col_id}",
-                'source': f"dataset_{dataset_name}",
-                'target': col_id,
-                'type': 'contains'
-            })
-            
-            # Create FK relationship edges
-            if col_data.get('is_fk') and col_data.get('fk_config'):
-                fk_config = col_data['fk_config']
-                target_dataset = fk_config.get('target_dataset')
-                target_column = fk_config.get('target_column')
-                direction = fk_config.get('direction', 'outbound')
-                
-                if target_dataset and target_column:
-                    target_col_id = f"{organization_id}::{target_dataset}::{target_column}"
-                    
-                    edges.append({
-                        'id': f"fk_{col_id}_to_{target_col_id}",
-                        'source': col_id if direction == 'outbound' else target_col_id,
-                        'target': target_col_id if direction == 'outbound' else col_id,
-                        'type': 'foreign_key',
-                        'direction': direction
-                    })
-            
-            # Create relationship context edges (junction tables)
-            if col_data.get('is_relationship_context') and col_data.get('relationship_context'):
-                rel_context = col_data['relationship_context']
-                primary_fk = rel_context.get('primary_fk_dataset')
-                secondary_fk = rel_context.get('secondary_fk_dataset')
-                predicate = rel_context.get('context_predicate', 'related_to')
-                
-                if primary_fk and secondary_fk:
-                    edges.append({
-                        'id': f"junction_{col_id}_{primary_fk}_{secondary_fk}",
-                        'source': f"dataset_{primary_fk}",
-                        'target': f"dataset_{secondary_fk}",
-                        'type': 'junction_relationship',
-                        'predicate': predicate,
-                        'junction_column': col_id
-                    })
-        
-        # Add dataset nodes
-        for dataset_data in datasets.values():
-            nodes.append(dataset_data)
-        
-        logger.info(f"MAPPING_GRAPH: Generated {len(nodes)} nodes and {len(edges)} edges")
-        logger.info(f"MAPPING_GRAPH: Datasets created: {list(datasets.keys())}")
-        
-        return {
-            'nodes': nodes,
-            'edges': edges
+        """Graph visualization has been disabled."""
+        # Graph visualization libraries have been removed
+        context = {
+            'graph_data': {'nodes': [], 'edges': []},
+            'mapping_name': None,
+            'mapping_description': None,
+            'error': 'Graph visualization unavailable'
         }
+        
+        if request.headers.get('HX-Request'):
+            return render(request, 'csv_mapping/partials/mapping_graph_content.html', context)
+        else:
+            return JsonResponse({'error': 'Graph visualization libraries have been removed'}, status=501)
+    
 
 
 @general_login_required
