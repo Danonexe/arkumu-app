@@ -1,5 +1,5 @@
 from django.urls import path
-from arkumu.metadata.views import dashboard_views, resource_views, triple_views, graph_views, bulk_editor_views, data_discovery_views, data_explorer_views, split_views, direct_data_views, model_graph_views, resource_relationship_views, blueprint_visualizer, database_structure_visualizer
+from arkumu.metadata.views import dashboard_views, resource_views, triple_views, graph_views, bulk_editor_views, data_discovery_views, data_explorer_views, split_views, direct_data_views, model_graph_views, resource_relationship_views, blueprint_visualizer, mapping_visualizer_graphviz, database_structure_visualizer
 from arkumu.metadata.views.data_explorer import DataExplorerView, ResourceDetailView, DataExplorerResultsView
 from arkumu.metadata.views.csv_mapping import saved_mappings_api
 from arkumu.metadata.views.csv_mapping.views import mapping_validation_views, mapping_save_views, mapping_load_views, mapping_delete_views
@@ -229,8 +229,9 @@ urlpatterns = [
     # JSON Export URL (single export button with target="_blank")
     path('csv-mapping/export-json/', utility_views.ExportMappingJSONView.as_view(), name='csv_export_mapping_json'),
     
-    # Blueprint Visualizer
+    # Mapping Visualizer
     path('mappings/<uuid:mapping_id>/blueprint/', blueprint_visualizer.blueprint_visualizer, name='blueprint_visualizer'),
+    path('mappings/<uuid:mapping_id>/mapping-visualizer/', mapping_visualizer_graphviz.mapping_visualizer_graphviz, name='mapping_visualizer_graphviz'),
     
     # Database Structure Visualizer
     path('ingest/<uuid:session_id>/structure/', database_structure_visualizer.database_structure_visualizer, name='database_structure_visualizer'),
