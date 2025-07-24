@@ -1,0 +1,452 @@
+{% extends "base.html" %}
+
+{% block title %}RDF Preview - {{ mapping.name }}{% endblock %}
+
+{% block content %}
+<style>
+    .fullscreen-rdf-visualizer {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        z-index: 1000;
+        background: white;
+        overflow: auto;
+    }
+    
+    .rdf-container {
+        width: 100%;
+        height: 100%;
+        padding: 1rem;
+    }
+    
+    .rdf-section {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        margin-bottom: 1rem;
+    }
+    
+    .rdf-header {
+        padding: 1rem;
+        border-bottom: 1px solid #e5e7eb;
+        background: #f9fafb;
+        border-radius: 8px 8px 0 0;
+    }
+    
+    .rdf-body {
+        padding: 1rem;
+    }
+    
+    .close-btn {
+        position: fixed;
+        top: 1rem;
+        left: 1rem;
+        z-index: 1000;
+        width: 2.5rem;
+        height: 2.5rem;
+        border-radius: 0.375rem;
+        background: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(4px);
+        border: 1px solid rgba(0, 0, 0, 0.1);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-size: 1.25rem;
+        transition: all 0.2s;
+        text-decoration: none;
+        color: #374151;
+    }
+    
+    .close-btn:hover {
+        background: rgba(243, 244, 246, 0.9);
+        border-color: rgba(209, 213, 219, 0.5);
+        color: #374151;
+        text-decoration: none;
+    }
+    
+    .triple-line {
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        font-size: 0.875rem;
+        line-height: 1.5;
+        margin: 0.25rem 0;
+        padding: 0.5rem;
+        border-radius: 4px;
+        background: #f8fafc;
+        border-left: 3px solid #e2e8f0;
+    }
+    
+    .triple-type { border-left-color: #3b82f6; }
+    .triple-property { border-left-color: #10b981; }
+    .triple-relationship { border-left-color: #f59e0b; }
+    .triple-junction-type { border-left-color: #8b5cf6; }
+    .triple-junction-relationship { border-left-color: #ec4899; }
+    .triple-junction-context { border-left-color: #6b7280; }
+    
+    .uri-pattern {
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        font-size: 0.875rem;
+        background: #f1f5f9;
+        padding: 0.5rem;
+        border-radius: 4px;
+        margin: 0.5rem 0;
+        border: 1px solid #e2e8f0;
+    }
+    
+    .property-mapping-table {
+        width: 100%;
+        font-size: 0.875rem;
+    }
+    
+    .property-mapping-table th {
+        background: #f8fafc;
+        padding: 0.75rem;
+        text-align: left;
+        border-bottom: 2px solid #e2e8f0;
+        font-weight: 600;
+    }
+    
+    .property-mapping-table td {
+        padding: 0.75rem;
+        border-bottom: 1px solid #e2e8f0;
+        vertical-align: top;
+    }
+    
+    .code-snippet {
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        background: #1e293b;
+        color: #e2e8f0;
+        padding: 1rem;
+        border-radius: 6px;
+        overflow-x: auto;
+        margin: 1rem 0;
+    }
+    
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin: 1rem 0;
+    }
+    
+    .stat-card {
+        background: #f8fafc;
+        padding: 1rem;
+        border-radius: 6px;
+        text-align: center;
+        border: 1px solid #e2e8f0;
+    }
+    
+    .stat-number {
+        font-size: 2rem;
+        font-weight: bold;
+        color: #1e40af;
+    }
+    
+    .stat-label {
+        font-size: 0.875rem;
+        color: #64748b;
+        margin-top: 0.25rem;
+    }
+    
+    .error-message {
+        background: #fee2e2;
+        color: #dc2626;
+        padding: 1rem;
+        border-radius: 8px;
+        margin: 1rem;
+    }
+    
+    .section-tabs {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+    }
+    
+    .tab-btn {
+        padding: 0.5rem 1rem;
+        border: 1px solid #e2e8f0;
+        background: white;
+        border-radius: 6px 6px 0 0;
+        cursor: pointer;
+        font-size: 0.875rem;
+        transition: all 0.2s;
+    }
+    
+    .tab-btn.active {
+        background: #3b82f6;
+        color: white;
+        border-color: #3b82f6;
+    }
+    
+    .tab-btn:hover:not(.active) {
+        background: #f8fafc;
+    }
+    
+    .tab-content {
+        display: none;
+    }
+    
+    .tab-content.active {
+        display: block;
+    }
+    
+    .badge {
+        display: inline-block;
+        padding: 0.25rem 0.5rem;
+        font-size: 0.75rem;
+        font-weight: 500;
+        border-radius: 9999px;
+        margin-left: 0.5rem;
+    }
+    
+    .badge-anchor { background: #dbeafe; color: #1e40af; }
+    .badge-multi { background: #d1fae5; color: #065f46; }
+    .badge-external { background: #fef3c7; color: #92400e; }
+</style>
+
+<div class="fullscreen-rdf-visualizer">
+    <a href="{% url 'metadata:csv_mapping_editor' %}" class="close-btn" title="Close">×</a>
+    
+    <div class="rdf-container">
+        {% if error %}
+            <div class="rdf-section">
+                <div class="rdf-header">
+                    <h3 class="text-lg font-semibold text-red-600">RDF Preview Error</h3>
+                </div>
+                <div class="rdf-body">
+                    <div class="error-message">
+                        <strong>Error generating RDF preview:</strong> {{ error }}
+                    </div>
+                </div>
+            </div>
+        {% else %}
+            <!-- Header with title and stats -->
+            <div class="rdf-section">
+                <div class="rdf-header">
+                    <h3 class="text-xl font-semibold">RDF Preview: {{ mapping.name }}</h3>
+                    <p class="text-sm text-gray-600 mt-1">Sample RDF triples and URI patterns based on your mapping configuration</p>
+                </div>
+                <div class="rdf-body">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-number">{{ stats.total_entities }}</div>
+                            <div class="stat-label">Entities</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">{{ stats.total_properties }}</div>
+                            <div class="stat-label">Properties</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">{{ stats.total_relationships }}</div>
+                            <div class="stat-label">Relationships</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">{{ stats.total_junctions }}</div>
+                            <div class="stat-label">Junction Tables</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">{{ stats.total_triples }}</div>
+                            <div class="stat-label">Sample Triples</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabbed content -->
+            <div class="rdf-section">
+                <div class="rdf-header">
+                    <div class="section-tabs">
+                        <button class="tab-btn active" onclick="showTab('triples')">Sample Triples</button>
+                        <button class="tab-btn" onclick="showTab('patterns')">URI Patterns</button>
+                        <button class="tab-btn" onclick="showTab('mappings')">Property Mappings</button>
+                        <button class="tab-btn" onclick="showTab('turtle')">Turtle Format</button>
+                    </div>
+                </div>
+                <div class="rdf-body">
+                    <!-- Sample Triples Tab -->
+                    <div id="triples-content" class="tab-content active">
+                        <h4 class="font-semibold mb-3">Sample RDF Triples</h4>
+                        <p class="text-sm text-gray-600 mb-4">These are examples of the RDF triples that would be generated from your CSV data:</p>
+                        
+                        {% for category, triples in triples_by_category.items %}
+                            <h5 class="font-medium text-sm uppercase text-gray-500 mb-2 mt-4">
+                                {% if category == 'type' %}Entity Types
+                                {% elif category == 'property' %}Properties
+                                {% elif category == 'relationship' %}Relationships
+                                {% elif category == 'junction_type' %}Junction Types
+                                {% elif category == 'junction_relationship' %}Junction Relationships
+                                {% elif category == 'junction_context' %}Junction Context
+                                {% else %}{{ category|title }}
+                                {% endif %}
+                            </h5>
+                            {% for triple in triples %}
+                                <div class="triple-line triple-{{ category }}">
+                                    {{ triple.subject }} {{ triple.predicate }} {{ triple.object }} .
+                                    {% if triple.source_column %}
+                                        <span class="text-xs text-gray-500 ml-2"># from column: {{ triple.source_column }}</span>
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                        {% endfor %}
+                    </div>
+
+                    <!-- URI Patterns Tab -->
+                    <div id="patterns-content" class="tab-content">
+                        <h4 class="font-semibold mb-3">URI Generation Patterns</h4>
+                        <p class="text-sm text-gray-600 mb-4">These patterns show how URIs will be generated for your data:</p>
+                        
+                        <h5 class="font-medium mb-2">Entity URIs</h5>
+                        {% for entity_key, pattern_info in uri_patterns.entities.items %}
+                            <div class="uri-pattern">
+                                <strong>{{ entity_key }}:</strong><br>
+                                Pattern: <code>{{ pattern_info.pattern }}</code><br>
+                                Example: <code>{{ pattern_info.example }}</code><br>
+                                {% if pattern_info.anchor_columns %}
+                                    Anchor columns: {{ pattern_info.anchor_columns|join:", " }}
+                                {% endif %}
+                            </div>
+                        {% endfor %}
+
+                        <h5 class="font-medium mb-2 mt-4">Property URIs</h5>
+                        {% for prop_name, prop_info in uri_patterns.properties.items %}
+                            <div class="uri-pattern">
+                                <strong>{{ prop_name }}:</strong> <code>{{ prop_info.uri }}</code>
+                                {% if prop_info.external_ontology %}
+                                    <span class="badge badge-external">External Ontology</span>
+                                {% endif %}
+                            </div>
+                        {% endfor %}
+
+                        {% if uri_patterns.junctions %}
+                            <h5 class="font-medium mb-2 mt-4">Junction URIs</h5>
+                            {% for junction_key, junction_info in uri_patterns.junctions.items %}
+                                <div class="uri-pattern">
+                                    <strong>{{ junction_key }}:</strong><br>
+                                    Pattern: <code>{{ junction_info.pattern }}</code><br>
+                                    Example: <code>{{ junction_info.example }}</code><br>
+                                    Connects: {{ junction_info.primary_entity }} ↔ {{ junction_info.secondary_entity }}
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+
+                    <!-- Property Mappings Tab -->
+                    <div id="mappings-content" class="tab-content">
+                        <h4 class="font-semibold mb-3">Column → Property Mappings</h4>
+                        <p class="text-sm text-gray-600 mb-4">How your CSV columns map to RDF properties:</p>
+                        
+                        <table class="property-mapping-table">
+                            <thead>
+                                <tr>
+                                    <th>Entity</th>
+                                    <th>Source Column</th>
+                                    <th>RDF Property</th>
+                                    <th>Data Type</th>
+                                    <th>Attributes</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for mapping in property_mappings %}
+                                    <tr>
+                                        <td><strong>{{ mapping.entity }}</strong></td>
+                                        <td><code>{{ mapping.source_column }}</code></td>
+                                        <td><code>{{ mapping.rdf_property }}</code></td>
+                                        <td>{{ mapping.data_type }}</td>
+                                        <td>
+                                            {% if mapping.is_anchor %}
+                                                <span class="badge badge-anchor">Anchor</span>
+                                            {% endif %}
+                                            {% if mapping.is_multi_value %}
+                                                <span class="badge badge-multi">Multi-value</span>
+                                            {% endif %}
+                                            {% if mapping.external_ontology %}
+                                                <span class="badge badge-external">{{ mapping.external_ontology }}</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Turtle Format Tab -->
+                    <div id="turtle-content" class="tab-content">
+                        <h4 class="font-semibold mb-3">Turtle Format Preview</h4>
+                        <p class="text-sm text-gray-600 mb-4">Sample data in Turtle (TTL) format:</p>
+                        
+                        <div class="code-snippet">
+<pre>@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt; .
+@prefix arkumu: &lt;{{ uri_patterns.properties.0.uri|slice:":properties" }}/properties/&gt; .
+
+{% for category, triples in triples_by_category.items %}{% for triple in triples %}{{ triple.subject }} {{ triple.predicate }} {{ triple.object }}{% if not forloop.last or not forloop.parentloop.last %} ;{% else %} .{% endif %}
+{% endfor %}
+{% endfor %}</pre>
+                        </div>
+                        
+                        <div class="mt-4">
+                            <button class="btn btn-sm btn-outline" onclick="copyToClipboard('turtle-content')">
+                                📋 Copy Turtle
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function showTab(tabName) {
+    // Hide all tab contents
+    const tabContents = document.querySelectorAll('.tab-content');
+    tabContents.forEach(content => content.classList.remove('active'));
+    
+    // Remove active class from all tab buttons
+    const tabBtns = document.querySelectorAll('.tab-btn');
+    tabBtns.forEach(btn => btn.classList.remove('active'));
+    
+    // Show selected tab content
+    const selectedContent = document.getElementById(tabName + '-content');
+    if (selectedContent) {
+        selectedContent.classList.add('active');
+    }
+    
+    // Add active class to clicked button
+    event.target.classList.add('active');
+}
+
+function copyToClipboard(elementId) {
+    const element = document.getElementById(elementId);
+    if (!element) return;
+    
+    const text = element.querySelector('pre').textContent;
+    navigator.clipboard.writeText(text).then(() => {
+        // Show temporary feedback
+        const btn = event.target;
+        const originalText = btn.textContent;
+        btn.textContent = '✓ Copied!';
+        btn.classList.add('btn-success');
+        
+        setTimeout(() => {
+            btn.textContent = originalText;
+            btn.classList.remove('btn-success');
+        }, 2000);
+    }).catch(err => {
+        console.error('Failed to copy: ', err);
+        alert('Failed to copy to clipboard');
+    });
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        window.location.href = "{% url 'metadata:csv_mapping_editor' %}";
+    }
+});
+</script>
+{% endblock %}

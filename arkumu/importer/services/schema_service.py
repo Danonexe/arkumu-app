@@ -13,6 +13,8 @@ from django.core.cache import cache
 from django.db import transaction
 
 from arkumu.metadata.models.resource import Resource, ResourceType
+from arkumu.metadata.models.mappings import Mapping
+from arkumu.users.models import Organization
 from arkumu.importer.services.mapping_consumer import MappingAdapter
 from arkumu.importer.services.execution.complete_schema_processor import CompleteSchemaProcessor
 from arkumu.importer.services.execution.statistics import ExecutionStatistics
@@ -47,6 +49,14 @@ class SchemaService:
         if self._schema_loaded:
             return
         
+        # Get organization object for the mapping
+        try:
+            mapping = Mapping.objects.get(id=self.mapping_id)
+            organization = Organization.objects.get(code=mapping.organization_id)
+        except (Mapping.DoesNotExist, Organization.DoesNotExist) as e:
+            logger.error(f"Failed to load mapping or organization: {e}")
+            raise ValueError(f"Cannot load schema - mapping or organization not found: {e}")
+        
         # Check cache first
         cache_key = f"complete_schema_blueprints_mapping_{self.mapping_id}"
         cached_blueprints = cache.get(cache_key)
@@ -55,7 +65,7 @@ class SchemaService:
             logger.info(f"📋 Loading cached schema for mapping {self.mapping_id}")
             # Create processor with cached blueprints
             self._processor = CompleteSchemaProcessor(
-                institution=self.institution,
+                organization=organization,
                 base_uri=self.base_uri,
                 statistics=ExecutionStatistics()
             )
@@ -72,7 +82,7 @@ class SchemaService:
         
         # Create processor and generate complete schema
         self._processor = CompleteSchemaProcessor(
-            institution=self.institution,
+            organization=organization,
             base_uri=self.base_uri,
             statistics=ExecutionStatistics()
         )
