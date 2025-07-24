@@ -2,6 +2,7 @@ from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from arkumu.metadata.models import Mapping
 from arkumu.importer.services.schema_service import SchemaService
+from arkumu.common.uri_utils import slugify_uri_part
 import logging
 from datetime import datetime
 
@@ -30,7 +31,7 @@ def convert_schema_data_to_blueprint(schema_data, schema_service):
         for prop_name in node.get('properties', []):
             prop_metadata = dataset_properties.get(prop_name, {})
             properties[prop_name] = {
-                'property_uri': f"http://data.arkumu.org/arkumu/properties/{prop_name}",
+                'property_uri': f"http://data.arkumu.org/arkumu/properties/{slugify_uri_part(prop_name)}",
                 'source_column': prop_name,
                 'data_type': prop_metadata.get('data_type', 'string'),
                 'is_anchor': prop_metadata.get('is_anchor', False),
@@ -80,9 +81,10 @@ def generate_uri_patterns(blueprint):
     # Entity URI patterns
     patterns['entities'] = {}
     for entity_key, entity_config in blueprint.get('entities', {}).items():
+        slugified_entity = slugify_uri_part(entity_key)
         patterns['entities'][entity_key] = {
-            'pattern': f"http://data.arkumu.org/{org_name}/entities/{entity_key}/{{anchor_value}}",
-            'example': f"http://data.arkumu.org/{org_name}/entities/{entity_key}/john_doe_123",
+            'pattern': f"http://data.arkumu.org/{org_name}/entities/{slugified_entity}/{{anchor_value}}",
+            'example': f"http://data.arkumu.org/{org_name}/entities/{slugified_entity}/{slugify_uri_part('john_doe_123')}",
             'anchor_columns': entity_config.get('anchor_columns', [])
         }
     
@@ -90,7 +92,7 @@ def generate_uri_patterns(blueprint):
     patterns['properties'] = {}
     for entity_key, entity_config in blueprint.get('entities', {}).items():
         for prop_name, prop_config in entity_config.get('properties', {}).items():
-            prop_uri = prop_config.get('property_uri', f"http://data.arkumu.org/{org_name}/properties/{prop_name}")
+            prop_uri = prop_config.get('property_uri', f"http://data.arkumu.org/{org_name}/properties/{slugify_uri_part(prop_name)}")
             patterns['properties'][prop_name] = {
                 'uri': prop_uri,
                 'source_column': prop_config.get('source_column', prop_name),
@@ -100,16 +102,17 @@ def generate_uri_patterns(blueprint):
     # Dataset URI patterns
     patterns['datasets'] = {}
     for entity_key in blueprint.get('entities', {}).keys():
-        patterns['datasets'][entity_key] = f"http://data.arkumu.org/{org_name}/datasets/{entity_key}"
+        patterns['datasets'][entity_key] = f"http://data.arkumu.org/{org_name}/datasets/{slugify_uri_part(entity_key)}"
     
     # Junction URI patterns
     patterns['junctions'] = {}
     for junction_key, junction_config in blueprint.get('junctions', {}).items():
         primary_entity = junction_config.get('primary_entity')
         secondary_entity = junction_config.get('secondary_entity')
+        slugified_junction = slugify_uri_part(junction_key)
         patterns['junctions'][junction_key] = {
-            'pattern': f"http://data.arkumu.org/{org_name}/junctions/{junction_key}/{{primary_id}}_{{secondary_id}}",
-            'example': f"http://data.arkumu.org/{org_name}/junctions/{junction_key}/john_123_acme",
+            'pattern': f"http://data.arkumu.org/{org_name}/junctions/{slugified_junction}/{{primary_id}}_{{secondary_id}}",
+            'example': f"http://data.arkumu.org/{org_name}/junctions/{slugified_junction}/{slugify_uri_part('john_123_acme')}",
             'primary_entity': primary_entity,
             'secondary_entity': secondary_entity,
             'context_attributes': junction_config.get('context_attributes', [])
@@ -187,3 +190,55 @@ def rdf_preview_visualizer(request, mapping_id):
         }
     
     return render(request, 'metadata/rdf_preview_visualizer.html', context)
+
+
+@login_required
+def rdf_preview_property_mappings_sorted(request, mapping_id):
+    """Return sorted property mappings table for HTMX."""
+    mapping = get_object_or_404(Mapping, pk=mapping_id)
+    
+    try:
+        # Generate schema data using SchemaService
+        schema_service = SchemaService(mapping_id=str(mapping.id))
+        schema_data = schema_service.get_schema_visualization_data()
+        
+        # Convert schema data to blueprint format for our RDF generation
+        blueprint = convert_schema_data_to_blueprint(schema_data, schema_service)
+        
+        # Generate property mappings
+        property_mappings = generate_property_mappings(blueprint)
+        
+        # Get sort parameters
+        sort_by = request.GET.get('sort', 'entity')  # Default sort by entity
+        sort_order = request.GET.get('order', 'asc')  # Default ascending
+        
+        # Sort the mappings
+        reverse_sort = sort_order == 'desc'
+        
+        if sort_by == 'entity':
+            property_mappings.sort(key=lambda x: x['entity'], reverse=reverse_sort)
+        elif sort_by == 'source_column':
+            property_mappings.sort(key=lambda x: x['source_column'], reverse=reverse_sort)
+        elif sort_by == 'rdf_property':
+            property_mappings.sort(key=lambda x: x['rdf_property'], reverse=reverse_sort)
+        elif sort_by == 'data_type':
+            property_mappings.sort(key=lambda x: x['data_type'], reverse=reverse_sort)
+        
+        context = {
+            'property_mappings': property_mappings,
+            'sort_by': sort_by,
+            'sort_order': sort_order,
+            'mapping_id': mapping_id
+        }
+        
+        return render(request, 'metadata/partials/rdf_property_mappings_table.html', context)
+        
+    except Exception as e:
+        logger.error(f"Error generating sorted property mappings: {e}")
+        return render(request, 'metadata/partials/rdf_property_mappings_table.html', {
+            'property_mappings': [],
+            'sort_by': 'entity',
+            'sort_order': 'asc',
+            'mapping_id': mapping_id,
+            'error': str(e)
+        })

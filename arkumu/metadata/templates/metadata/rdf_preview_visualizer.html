@@ -278,40 +278,9 @@
                     <!-- Property Mappings Tab -->
                     <div id="mappings-content" class="tab-content">
                         <h4 class="font-semibold mb-3">Column → Property Mappings</h4>
-                        <p class="text-sm text-gray-600 mb-4">How your CSV columns map to RDF properties:</p>
+                        <p class="text-sm text-gray-600 mb-4">How your CSV columns map to RDF properties (click column headers to sort):</p>
                         
-                        <table class="property-mapping-table">
-                            <thead>
-                                <tr>
-                                    <th>Entity</th>
-                                    <th>Source Column</th>
-                                    <th>RDF Property</th>
-                                    <th>Data Type</th>
-                                    <th>Attributes</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for mapping in property_mappings %}
-                                    <tr>
-                                        <td><strong>{{ mapping.entity }}</strong></td>
-                                        <td><code>{{ mapping.source_column }}</code></td>
-                                        <td><code>{{ mapping.rdf_property }}</code></td>
-                                        <td>{{ mapping.data_type }}</td>
-                                        <td>
-                                            {% if mapping.is_anchor %}
-                                                <span class="badge badge-anchor">Anchor</span>
-                                            {% endif %}
-                                            {% if mapping.is_multi_value %}
-                                                <span class="badge badge-multi">Multi-value</span>
-                                            {% endif %}
-                                            {% if mapping.external_ontology %}
-                                                <span class="badge badge-external">{{ mapping.external_ontology }}</span>
-                                            {% endif %}
-                                        </td>
-                                    </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+                        {% include 'metadata/partials/rdf_property_mappings_table.html' with property_mappings=property_mappings sort_by='entity' sort_order='asc' mapping_id=mapping.id %}
                     </div>
 
                 </div>

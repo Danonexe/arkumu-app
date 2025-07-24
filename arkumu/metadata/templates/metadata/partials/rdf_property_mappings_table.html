@@ -1,0 +1,134 @@
+{% load static %}
+
+<table class="property-mapping-table" id="property-mappings-table">
+    <thead>
+        <tr>
+            <!-- Entity Column -->
+            <th class="sortable-th" 
+                hx-get="{% url 'metadata:rdf_preview_property_mappings_sorted' mapping_id %}?sort=entity&order={% if sort_by == 'entity' and sort_order == 'asc' %}desc{% else %}asc{% endif %}"
+                hx-target="#property-mappings-table"
+                hx-swap="outerHTML"
+                style="cursor: pointer;">
+                Entity
+                {% if sort_by == 'entity' %}
+                    {% if sort_order == 'asc' %}
+                        <span class="sort-indicator">↑</span>
+                    {% else %}
+                        <span class="sort-indicator">↓</span>
+                    {% endif %}
+                {% else %}
+                    <span class="sort-indicator opacity-30">↕</span>
+                {% endif %}
+            </th>
+            
+            <!-- Source Column -->
+            <th class="sortable-th"
+                hx-get="{% url 'metadata:rdf_preview_property_mappings_sorted' mapping_id %}?sort=source_column&order={% if sort_by == 'source_column' and sort_order == 'asc' %}desc{% else %}asc{% endif %}"
+                hx-target="#property-mappings-table"
+                hx-swap="outerHTML"
+                style="cursor: pointer;">
+                Source Column
+                {% if sort_by == 'source_column' %}
+                    {% if sort_order == 'asc' %}
+                        <span class="sort-indicator">↑</span>
+                    {% else %}
+                        <span class="sort-indicator">↓</span>
+                    {% endif %}
+                {% else %}
+                    <span class="sort-indicator opacity-30">↕</span>
+                {% endif %}
+            </th>
+            
+            <!-- RDF Property -->
+            <th class="sortable-th"
+                hx-get="{% url 'metadata:rdf_preview_property_mappings_sorted' mapping_id %}?sort=rdf_property&order={% if sort_by == 'rdf_property' and sort_order == 'asc' %}desc{% else %}asc{% endif %}"
+                hx-target="#property-mappings-table"
+                hx-swap="outerHTML"
+                style="cursor: pointer;">
+                RDF Property
+                {% if sort_by == 'rdf_property' %}
+                    {% if sort_order == 'asc' %}
+                        <span class="sort-indicator">↑</span>
+                    {% else %}
+                        <span class="sort-indicator">↓</span>
+                    {% endif %}
+                {% else %}
+                    <span class="sort-indicator opacity-30">↕</span>
+                {% endif %}
+            </th>
+            
+            <!-- Data Type -->
+            <th class="sortable-th"
+                hx-get="{% url 'metadata:rdf_preview_property_mappings_sorted' mapping_id %}?sort=data_type&order={% if sort_by == 'data_type' and sort_order == 'asc' %}desc{% else %}asc{% endif %}"
+                hx-target="#property-mappings-table"
+                hx-swap="outerHTML"
+                style="cursor: pointer;">
+                Data Type
+                {% if sort_by == 'data_type' %}
+                    {% if sort_order == 'asc' %}
+                        <span class="sort-indicator">↑</span>
+                    {% else %}
+                        <span class="sort-indicator">↓</span>
+                    {% endif %}
+                {% else %}
+                    <span class="sort-indicator opacity-30">↕</span>
+                {% endif %}
+            </th>
+            
+            <!-- Attributes -->
+            <th>Attributes</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% if error %}
+            <tr>
+                <td colspan="5" class="text-center text-red-600 py-4">Error: {{ error }}</td>
+            </tr>
+        {% elif property_mappings %}
+            {% for mapping in property_mappings %}
+                <tr>
+                    <td><strong>{{ mapping.entity }}</strong></td>
+                    <td><code>{{ mapping.source_column }}</code></td>
+                    <td><code>{{ mapping.rdf_property }}</code></td>
+                    <td>{{ mapping.data_type }}</td>
+                    <td>
+                        {% if mapping.is_anchor %}
+                            <span class="badge badge-anchor">Anchor</span>
+                        {% endif %}
+                        {% if mapping.is_multi_value %}
+                            <span class="badge badge-multi">Multi-value</span>
+                        {% endif %}
+                        {% if mapping.external_ontology %}
+                            <span class="badge badge-external">{{ mapping.external_ontology }}</span>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+        {% else %}
+            <tr>
+                <td colspan="5" class="text-center text-gray-500 py-4">No property mappings found</td>
+            </tr>
+        {% endif %}
+    </tbody>
+</table>
+
+<style>
+.sortable-th {
+    user-select: none;
+    transition: background-color 0.2s;
+}
+
+.sortable-th:hover {
+    background-color: rgba(59, 130, 246, 0.1);
+}
+
+.sort-indicator {
+    margin-left: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: bold;
+}
+
+.sort-indicator.opacity-30 {
+    opacity: 0.3;
+}
+</style>
