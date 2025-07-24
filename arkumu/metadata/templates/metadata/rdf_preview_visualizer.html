@@ -263,13 +263,17 @@
                         {% endfor %}
 
                         {% if uri_patterns.junctions %}
-                            <h5 class="font-medium mb-2 mt-4">Junction URIs</h5>
+                            <h5 class="font-medium mb-2 mt-4">Junction Table URIs</h5>
+                            <p class="text-sm text-gray-600 mb-2">Junction tables handle many-to-many relationships:</p>
                             {% for junction_key, junction_info in uri_patterns.junctions.items %}
                                 <div class="uri-pattern">
-                                    <strong>{{ junction_key }}:</strong><br>
+                                    <strong>{{ junction_key }} (Junction Table):</strong><br>
                                     Pattern: <code>{{ junction_info.pattern }}</code><br>
                                     Example: <code>{{ junction_info.example }}</code><br>
-                                    Connects: {{ junction_info.primary_entity }} ↔ {{ junction_info.secondary_entity }}
+                                    <strong>Connects:</strong> {{ junction_info.primary_entity }} ↔ {{ junction_info.secondary_entity }}<br>
+                                    {% if junction_info.context_attributes %}
+                                        <strong>Context Attributes:</strong> {{ junction_info.context_attributes|join:", " }}
+                                    {% endif %}
                                 </div>
                             {% endfor %}
                         {% endif %}

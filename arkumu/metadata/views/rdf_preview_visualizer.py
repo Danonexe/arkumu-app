@@ -23,27 +23,29 @@ def convert_schema_data_to_blueprint(schema_data, schema_service):
         entity_key = node['id']
         properties = {}
         
-        # Get detailed property information for this dataset
-        dataset_properties = schema_service.get_dataset_properties(entity_key)
-        relationship_info = schema_service.get_relationship_info(entity_key)
+        # Get multi-value and external ontology info directly from node
+        multi_value_columns = node.get('multi_value_columns', [])
+        external_ontologies = node.get('external_ontologies', [])
+        anchor_columns = node.get('anchor_columns', [])
         
         # Build properties from schema
         for prop_name in node.get('properties', []):
-            prop_metadata = dataset_properties.get(prop_name, {})
             properties[prop_name] = {
                 'property_uri': f"http://data.arkumu.org/arkumu/properties/{slugify_uri_part(prop_name)}",
                 'source_column': prop_name,
-                'data_type': prop_metadata.get('data_type', 'string'),
-                'is_anchor': prop_metadata.get('is_anchor', False),
-                'is_multi_value': prop_name in relationship_info.get('multi_value_columns', []),
-                'external_ontology': prop_metadata.get('external_ontology')
+                'data_type': 'string',  # Default type, could be enhanced
+                'is_anchor': prop_name in anchor_columns,
+                'is_multi_value': prop_name in multi_value_columns,
+                'external_ontology': prop_name if prop_name in external_ontologies else None
             }
         
         blueprint['entities'][entity_key] = {
             'entity_type': node.get('entity_type', 'Entity'),
             'properties': properties,
-            'anchor_columns': [p for p, meta in properties.items() if meta.get('is_anchor')],
-            'is_junction': node.get('is_junction', False)
+            'anchor_columns': anchor_columns,
+            'is_junction': node.get('is_junction', False),
+            'multi_value_columns': multi_value_columns,
+            'external_ontologies': external_ontologies
         }
     
     # Convert edges to relationships
@@ -56,17 +58,19 @@ def convert_schema_data_to_blueprint(schema_data, schema_service):
             'edge_type': edge.get('type', 'relationship')
         }
     
-    # Handle junctions
+    # Handle junctions - identify junction tables and their relationships
     for entity_key, entity_info in blueprint['entities'].items():
         if entity_info.get('is_junction'):
-            # Find junction relationships
+            # Find junction relationships (edges going FROM this junction table)
             junction_edges = [e for e in schema_data.get('edges', []) if e['source'] == entity_key]
             if len(junction_edges) >= 2:
                 blueprint['junctions'][entity_key] = {
                     'primary_entity': junction_edges[0]['target'],
                     'secondary_entity': junction_edges[1]['target'],
                     'context_attributes': [p for p in entity_info['properties'].keys() 
-                                         if not entity_info['properties'][p].get('is_anchor')]
+                                         if not entity_info['properties'][p].get('is_anchor')],
+                    'multi_value_columns': entity_info.get('multi_value_columns', []),
+                    'external_ontologies': entity_info.get('external_ontologies', [])
                 }
     
     return blueprint
