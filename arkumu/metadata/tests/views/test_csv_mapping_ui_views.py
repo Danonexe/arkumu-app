@@ -484,42 +484,22 @@ class TestMappingGraphDataView:
                     
                     assert 'Mapping non-existent not found' in context['error']
 
-    def test_graph_data_generation(self, request_factory, organization_id, mock_organization_context, mock_workspace_columns):
-        """Test internal graph data generation with various relationship types"""
+    def test_graph_data_disabled(self, request_factory, organization_id, mock_organization_context, mock_workspace_columns):
+        """Test that graph visualization is disabled and returns appropriate error"""
         request = request_factory.get(f'/?organization={organization_id}')
         request = add_session_to_request(request)
         
         view = MappingGraphDataView()
         
-        # Test the internal _generate_cytoscape_data method
-        graph_data = view._generate_cytoscape_data(mock_workspace_columns, organization_id)
+        # Test that graph visualization returns disabled message
+        response = view.get(request)
         
-        # Verify data structure
-        assert 'nodes' in graph_data
-        assert 'edges' in graph_data
+        # Should return 501 status for non-HTMX requests
+        assert response.status_code == 501
         
-        nodes = graph_data['nodes']
-        edges = graph_data['edges']
-        
-        # Should have dataset nodes and column nodes
-        dataset_nodes = [n for n in nodes if n.get('type') == 'dataset']
-        column_nodes = [n for n in nodes if n.get('type') == 'column']
-        
-        assert len(dataset_nodes) >= 2  # dataset1.csv, dataset2.csv
-        assert len(column_nodes) >= 3   # id, user_id, id
-        
-        # Should have contains edges and FK edges
-        contains_edges = [e for e in edges if e.get('type') == 'contains']
-        fk_edges = [e for e in edges if e.get('type') == 'foreign_key']
-        
-        assert len(contains_edges) >= 3  # Dataset to column edges
-        assert len(fk_edges) >= 1        # FK relationship edge
-        
-        # Verify FK edge structure
-        fk_edge = fk_edges[0]
-        assert 'source' in fk_edge
-        assert 'target' in fk_edge
-        assert 'direction' in fk_edge
+        # Should contain error message about disabled functionality
+        response_data = json.loads(response.content)
+        assert 'Graph visualization libraries have been removed' in response_data['error']
 
     def test_exception_handling_htmx(self, request_factory, organization_id):
         """Test that exceptions are properly handled and return error templates for HTMX"""
