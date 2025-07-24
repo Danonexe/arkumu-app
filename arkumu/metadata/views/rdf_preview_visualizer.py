@@ -71,133 +71,6 @@ def convert_schema_data_to_blueprint(schema_data, schema_service):
     return blueprint
 
 
-def generate_sample_rdf_triples(blueprint, sample_limit=5):
-    """Generate sample RDF triples based on blueprint structure."""
-    triples = []
-    
-    # Get organization from blueprint
-    org_name = blueprint.get('organization', 'org')
-    
-    for entity_key, entity_config in blueprint.get('entities', {}).items():
-        entity_type = entity_config.get('entity_type', 'Entity')
-        properties = entity_config.get('properties', {})
-        
-        # Generate sample entity instances
-        for i in range(min(sample_limit, 3)):  # Limit sample instances
-            # Generate sample entity URI
-            sample_id = f"sample_{i+1}"
-            entity_uri = f"http://data.arkumu.org/{org_name}/entities/{entity_key}/{sample_id}"
-            
-            # Type triple
-            triples.append({
-                'subject': f"<{entity_uri}>",
-                'predicate': 'rdf:type',
-                'object': f"<{entity_type}>",
-                'category': 'type'
-            })
-            
-            # Property triples
-            for prop_name, prop_config in properties.items():
-                prop_uri = prop_config.get('property_uri', f"http://data.arkumu.org/{org_name}/properties/{prop_name}")
-                
-                # Generate sample values based on property type
-                if 'external_ontology' in prop_config:
-                    sample_value = f'"Sample {prop_name.title()} {i+1}"'
-                elif prop_name.lower() in ['id', 'identifier']:
-                    sample_value = f'"{sample_id}"'
-                elif prop_name.lower() in ['name', 'title', 'label']:
-                    sample_value = f'"Sample {entity_key} {i+1}"'
-                elif prop_name.lower() in ['email']:
-                    sample_value = f'"sample{i+1}@example.com"'
-                elif prop_name.lower() in ['age', 'count', 'year']:
-                    sample_value = f'"{20 + i*5}"^^xsd:integer'
-                elif prop_name.lower() in ['date', 'created', 'updated']:
-                    sample_value = f'"2024-01-{i+1:02d}"^^xsd:date'
-                else:
-                    sample_value = f'"Sample {prop_name} value {i+1}"'
-                
-                triples.append({
-                    'subject': f"<{entity_uri}>",
-                    'predicate': f"<{prop_uri}>",
-                    'object': sample_value,
-                    'category': 'property',
-                    'source_column': prop_config.get('source_column', prop_name)
-                })
-    
-    # Generate relationship triples
-    relationships = blueprint.get('relationships', {})
-    entity_keys = list(blueprint.get('entities', {}).keys())
-    
-    if len(entity_keys) >= 2:
-        for rel_key, rel_config in relationships.items():
-            source_entity = rel_config.get('source_entity')
-            target_entity = rel_config.get('target_entity')
-            relationship_type = rel_config.get('relationship_type', 'relatedTo')
-            
-            if source_entity and target_entity:
-                # Generate sample relationship triples
-                for i in range(min(sample_limit, 2)):
-                    source_uri = f"http://data.arkumu.org/{org_name}/entities/{source_entity}/sample_{i+1}"
-                    target_uri = f"http://data.arkumu.org/{org_name}/entities/{target_entity}/sample_{i+1}"
-                    
-                    triples.append({
-                        'subject': f"<{source_uri}>",
-                        'predicate': f"<http://data.arkumu.org/{org_name}/properties/{relationship_type}>",
-                        'object': f"<{target_uri}>",
-                        'category': 'relationship',
-                        'relationship_type': relationship_type
-                    })
-    
-    # Generate junction triples if present
-    junctions = blueprint.get('junctions', {})
-    for junction_key, junction_config in junctions.items():
-        primary_entity = junction_config.get('primary_entity')
-        secondary_entity = junction_config.get('secondary_entity')
-        context_attributes = junction_config.get('context_attributes', [])
-        
-        if primary_entity and secondary_entity:
-            # Generate sample junction entity
-            junction_uri = f"http://data.arkumu.org/{org_name}/junctions/{junction_key}/sample_1"
-            
-            # Junction type triple
-            triples.append({
-                'subject': f"<{junction_uri}>",
-                'predicate': 'rdf:type',
-                'object': f"<http://data.arkumu.org/{org_name}/types/{junction_key}>",
-                'category': 'junction_type'
-            })
-            
-            # Junction relationship triples
-            primary_uri = f"http://data.arkumu.org/{org_name}/entities/{primary_entity}/sample_1"
-            secondary_uri = f"http://data.arkumu.org/{org_name}/entities/{secondary_entity}/sample_1"
-            
-            triples.append({
-                'subject': f"<{junction_uri}>",
-                'predicate': f"<http://data.arkumu.org/{org_name}/properties/primaryEntity>",
-                'object': f"<{primary_uri}>",
-                'category': 'junction_relationship'
-            })
-            
-            triples.append({
-                'subject': f"<{junction_uri}>",
-                'predicate': f"<http://data.arkumu.org/{org_name}/properties/secondaryEntity>",
-                'object': f"<{secondary_uri}>",
-                'category': 'junction_relationship'
-            })
-            
-            # Context attribute triples
-            for attr in context_attributes:
-                attr_uri = f"http://data.arkumu.org/{org_name}/properties/{attr}"
-                triples.append({
-                    'subject': f"<{junction_uri}>",
-                    'predicate': f"<{attr_uri}>",
-                    'object': f'"Sample {attr} value"',
-                    'category': 'junction_context',
-                    'context_attribute': attr
-                })
-    
-    return triples
-
 
 def generate_uri_patterns(blueprint):
     """Generate URI generation patterns from blueprint."""
@@ -279,32 +152,20 @@ def rdf_preview_visualizer(request, mapping_id):
         blueprint = convert_schema_data_to_blueprint(schema_data, schema_service)
         
         # Generate RDF preview components
-        sample_triples = generate_sample_rdf_triples(blueprint)
         uri_patterns = generate_uri_patterns(blueprint)
         property_mappings = generate_property_mappings(blueprint)
-        
-        # Organize triples by category for better display
-        triples_by_category = {}
-        for triple in sample_triples:
-            category = triple.get('category', 'other')
-            if category not in triples_by_category:
-                triples_by_category[category] = []
-            triples_by_category[category].append(triple)
         
         # Generate summary statistics
         stats = {
             'total_entities': len(schema_data.get('nodes', [])),
             'total_properties': sum(len(node.get('properties', [])) for node in schema_data.get('nodes', [])),
             'total_relationships': len(schema_data.get('edges', [])),
-            'total_junctions': sum(1 for node in schema_data.get('nodes', []) if node.get('is_junction', False)),
-            'total_triples': len(sample_triples)
+            'total_junctions': sum(1 for node in schema_data.get('nodes', []) if node.get('is_junction', False))
         }
         
         context = {
             'mapping': mapping,
             'blueprint': blueprint,
-            'sample_triples': sample_triples,
-            'triples_by_category': triples_by_category,
             'uri_patterns': uri_patterns,
             'property_mappings': property_mappings,
             'stats': stats,
@@ -319,8 +180,6 @@ def rdf_preview_visualizer(request, mapping_id):
         context = {
             'mapping': mapping,
             'blueprint': None,
-            'sample_triples': [],
-            'triples_by_category': {},
             'uri_patterns': {},
             'property_mappings': [],
             'stats': {},

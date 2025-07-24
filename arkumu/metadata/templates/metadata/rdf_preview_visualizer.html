@@ -68,23 +68,6 @@
         text-decoration: none;
     }
     
-    .triple-line {
-        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-        font-size: 0.875rem;
-        line-height: 1.5;
-        margin: 0.25rem 0;
-        padding: 0.5rem;
-        border-radius: 4px;
-        background: #f8fafc;
-        border-left: 3px solid #e2e8f0;
-    }
-    
-    .triple-type { border-left-color: #3b82f6; }
-    .triple-property { border-left-color: #10b981; }
-    .triple-relationship { border-left-color: #f59e0b; }
-    .triple-junction-type { border-left-color: #8b5cf6; }
-    .triple-junction-relationship { border-left-color: #ec4899; }
-    .triple-junction-context { border-left-color: #6b7280; }
     
     .uri-pattern {
         font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
@@ -115,15 +98,6 @@
         vertical-align: top;
     }
     
-    .code-snippet {
-        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-        background: #1e293b;
-        color: #e2e8f0;
-        padding: 1rem;
-        border-radius: 6px;
-        overflow-x: auto;
-        margin: 1rem 0;
-    }
     
     .stats-grid {
         display: grid;
@@ -248,10 +222,6 @@
                             <div class="stat-number">{{ stats.total_junctions }}</div>
                             <div class="stat-label">Junction Tables</div>
                         </div>
-                        <div class="stat-card">
-                            <div class="stat-number">{{ stats.total_triples }}</div>
-                            <div class="stat-label">Sample Triples</div>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -260,42 +230,13 @@
             <div class="rdf-section">
                 <div class="rdf-header">
                     <div class="section-tabs">
-                        <button class="tab-btn active" onclick="showTab('triples')">Sample Triples</button>
-                        <button class="tab-btn" onclick="showTab('patterns')">URI Patterns</button>
+                        <button class="tab-btn active" onclick="showTab('patterns')">URI Patterns</button>
                         <button class="tab-btn" onclick="showTab('mappings')">Property Mappings</button>
-                        <button class="tab-btn" onclick="showTab('turtle')">Turtle Format</button>
                     </div>
                 </div>
                 <div class="rdf-body">
-                    <!-- Sample Triples Tab -->
-                    <div id="triples-content" class="tab-content active">
-                        <h4 class="font-semibold mb-3">Sample RDF Triples</h4>
-                        <p class="text-sm text-gray-600 mb-4">These are examples of the RDF triples that would be generated from your CSV data:</p>
-                        
-                        {% for category, triples in triples_by_category.items %}
-                            <h5 class="font-medium text-sm uppercase text-gray-500 mb-2 mt-4">
-                                {% if category == 'type' %}Entity Types
-                                {% elif category == 'property' %}Properties
-                                {% elif category == 'relationship' %}Relationships
-                                {% elif category == 'junction_type' %}Junction Types
-                                {% elif category == 'junction_relationship' %}Junction Relationships
-                                {% elif category == 'junction_context' %}Junction Context
-                                {% else %}{{ category|title }}
-                                {% endif %}
-                            </h5>
-                            {% for triple in triples %}
-                                <div class="triple-line triple-{{ category }}">
-                                    {{ triple.subject }} {{ triple.predicate }} {{ triple.object }} .
-                                    {% if triple.source_column %}
-                                        <span class="text-xs text-gray-500 ml-2"># from column: {{ triple.source_column }}</span>
-                                    {% endif %}
-                                </div>
-                            {% endfor %}
-                        {% endfor %}
-                    </div>
-
                     <!-- URI Patterns Tab -->
-                    <div id="patterns-content" class="tab-content">
+                    <div id="patterns-content" class="tab-content active">
                         <h4 class="font-semibold mb-3">URI Generation Patterns</h4>
                         <p class="text-sm text-gray-600 mb-4">These patterns show how URIs will be generated for your data:</p>
                         
@@ -373,27 +314,6 @@
                         </table>
                     </div>
 
-                    <!-- Turtle Format Tab -->
-                    <div id="turtle-content" class="tab-content">
-                        <h4 class="font-semibold mb-3">Turtle Format Preview</h4>
-                        <p class="text-sm text-gray-600 mb-4">Sample data in Turtle (TTL) format:</p>
-                        
-                        <div class="code-snippet">
-<pre>@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
-@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt; .
-@prefix arkumu: &lt;{{ uri_patterns.properties.0.uri|slice:":properties" }}/properties/&gt; .
-
-{% for category, triples in triples_by_category.items %}{% for triple in triples %}{{ triple.subject }} {{ triple.predicate }} {{ triple.object }}{% if not forloop.last or not forloop.parentloop.last %} ;{% else %} .{% endif %}
-{% endfor %}
-{% endfor %}</pre>
-                        </div>
-                        
-                        <div class="mt-4">
-                            <button class="btn btn-sm btn-outline" onclick="copyToClipboard('turtle-content')">
-                                📋 Copy Turtle
-                            </button>
-                        </div>
-                    </div>
                 </div>
             </div>
         {% endif %}
@@ -420,27 +340,6 @@ function showTab(tabName) {
     event.target.classList.add('active');
 }
 
-function copyToClipboard(elementId) {
-    const element = document.getElementById(elementId);
-    if (!element) return;
-    
-    const text = element.querySelector('pre').textContent;
-    navigator.clipboard.writeText(text).then(() => {
-        // Show temporary feedback
-        const btn = event.target;
-        const originalText = btn.textContent;
-        btn.textContent = '✓ Copied!';
-        btn.classList.add('btn-success');
-        
-        setTimeout(() => {
-            btn.textContent = originalText;
-            btn.classList.remove('btn-success');
-        }, 2000);
-    }).catch(err => {
-        console.error('Failed to copy: ', err);
-        alert('Failed to copy to clipboard');
-    });
-}
 
 // Keyboard shortcuts
 document.addEventListener('keydown', function(e) {
