@@ -1,9 +1,8 @@
-<!DOCTYPE html>
-<html lang="en" data-theme="light">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mapping Visualizer - {{ mapping.name }}</title>
+{% extends "base.html" %}
+
+{% block title %}Mapping Visualizer - {{ mapping.name }}{% endblock %}
+
+{% block content %}
 <style>
     .fullscreen-mapping-visualizer {
         position: fixed;
@@ -124,8 +123,6 @@
         border-color: #d1d5db;
     }
 </style>
-</head>
-<body>
 <div class="fullscreen-mapping-visualizer">
     <a href="{% url 'metadata:csv_mapping_editor' %}" class="close-btn" title="Close">×</a>
     
@@ -295,5 +292,4 @@ function downloadSVG() {
     URL.revokeObjectURL(url);
 }
 </script>
-</body>
-</html>
+{% endblock %}
