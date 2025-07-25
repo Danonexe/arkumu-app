@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Harmonization Rules{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="flex items-center justify-between mb-6">
+        <div class="flex items-center">
+            <a href="{% url 'metadata:harmonization_list' %}" class="btn btn-ghost mr-4">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                </svg>
+            </a>
+            <h1 class="text-3xl font-bold">Harmonization Rules</h1>
+        </div>
+        <a href="{% url 'metadata:harmonization_rule_create' %}" class="btn btn-primary">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            </svg>
+            Create Rule
+        </a>
+    </div>
+
+    <!-- Filters -->
+    <div class="card bg-base-100 shadow-lg mb-6">
+        <div class="card-body">
+            <h3 class="card-title text-lg mb-4">Filters</h3>
+            <form method="get" class="flex flex-wrap gap-4 items-end">
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Organization</span>
+                    </label>
+                    <select name="organization" class="select select-bordered w-full max-w-xs">
+                        <option value="">All organizations</option>
+                        {% for org in organizations %}
+                            <option value="{{ org.id }}" {% if selected_org == org.id|stringformat:"s" %}selected{% endif %}>
+                                {{ org.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-control">
+                    <button type="submit" class="btn btn-outline">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.414A1 1 0 013 6.707V4z" />
+                        </svg>
+                        Filter
+                    </button>
+                </div>
+                {% if selected_org %}
+                <div class="form-control">
+                    <a href="{% url 'metadata:harmonization_rules' %}" class="btn btn-ghost btn-sm">Clear</a>
+                </div>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+
+    <!-- Rules Table -->
+    <div class="card bg-base-100 shadow-lg">
+        <div class="card-body">
+            {% if rules %}
+                <div class="overflow-x-auto">
+                    <table class="table table-zebra w-full">
+                        <thead>
+                            <tr>
+                                <th>Organization</th>
+                                <th>Source Pattern</th>
+                                <th>Catalog Property</th>
+                                <th>Mapping Type</th>
+                                <th>Priority</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for rule in rules %}
+                            <tr>
+                                <td>
+                                    <div class="font-semibold">{{ rule.source_organization.name }}</div>
+                                    <div class="text-sm text-base-content/70">{{ rule.source_organization.code }}</div>
+                                </td>
+                                <td>
+                                    <div class="font-mono text-sm break-all max-w-xs">{{ rule.source_property_pattern }}</div>
+                                </td>
+                                <td>
+                                    <div class="font-medium">{{ rule.catalog_property_label }}</div>
+                                    <div class="text-xs text-base-content/70 font-mono break-all">{{ rule.catalog_property_uri }}</div>
+                                </td>
+                                <td>
+                                    <div class="badge badge-outline 
+                                        {% if rule.mapping_type == 'exact' %}badge-success
+                                        {% elif rule.mapping_type == 'close' %}badge-info
+                                        {% elif rule.mapping_type == 'broad' %}badge-warning
+                                        {% elif rule.mapping_type == 'narrow' %}badge-secondary
+                                        {% endif %}">
+                                        {{ rule.get_mapping_type_display }}
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="badge badge-neutral">{{ rule.priority }}</div>
+                                </td>
+                                <td>
+                                    {% if rule.is_active %}
+                                        <div class="badge badge-success">Active</div>
+                                    {% else %}
+                                        <div class="badge badge-neutral">Inactive</div>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="flex gap-1">
+                                        <a href="{% url 'metadata:harmonization_rule_update' pk=rule.pk %}" 
+                                           class="btn btn-ghost btn-xs">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                            </svg>
+                                            Edit
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                {% if is_paginated %}
+                <div class="flex justify-center mt-6">
+                    <div class="btn-group">
+                        {% if page_obj.has_previous %}
+                            <a href="?page={{ page_obj.previous_page_number }}{% if selected_org %}&organization={{ selected_org }}{% endif %}" 
+                               class="btn btn-outline">«</a>
+                        {% endif %}
+                        
+                        <span class="btn btn-outline btn-active">
+                            Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                        </span>
+                        
+                        {% if page_obj.has_next %}
+                            <a href="?page={{ page_obj.next_page_number }}{% if selected_org %}&organization={{ selected_org }}{% endif %}" 
+                               class="btn btn-outline">»</a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+
+            {% else %}
+                <div class="text-center py-12">
+                    <div class="text-base-content/50 mb-4">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v6a2 2 0 002 2h6a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                        </svg>
+                    </div>
+                    <h3 class="text-lg font-semibold mb-2">No Rules Found</h3>
+                    <p class="text-base-content/70 mb-4">
+                        {% if selected_org %}
+                            No harmonization rules found for the selected organization.
+                        {% else %}
+                            No harmonization rules have been created yet.
+                        {% endif %}
+                    </p>
+                    <a href="{% url 'metadata:harmonization_rule_create' %}" class="btn btn-primary">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                        </svg>
+                        Create First Rule
+                    </a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Quick Links -->
+    <div class="flex justify-center gap-4 mt-6">
+        <a href="{% url 'metadata:harmonization_list' %}" class="btn btn-outline">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+            </svg>
+            Back to Harmonization
+        </a>
+    </div>
+</div>
+{% endblock %}

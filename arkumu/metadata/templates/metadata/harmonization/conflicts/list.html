@@ -1,0 +1,239 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Harmonization Conflicts{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="flex items-center justify-between mb-6">
+        <div class="flex items-center">
+            <a href="{% url 'metadata:harmonization_list' %}" class="btn btn-ghost mr-4">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                </svg>
+            </a>
+            <h1 class="text-3xl font-bold">Harmonization Conflicts</h1>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card bg-base-100 shadow-lg mb-6">
+        <div class="card-body">
+            <h3 class="card-title text-lg mb-4">Filters</h3>
+            <form method="get" class="flex flex-wrap gap-4 items-end">
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Resolution Status</span>
+                    </label>
+                    <select name="resolution" class="select select-bordered w-full max-w-xs">
+                        <option value="">All statuses</option>
+                        {% for value, label in resolution_choices %}
+                            <option value="{{ value }}" {% if selected_resolution == value %}selected{% endif %}>
+                                {{ label }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Execution ID</span>
+                    </label>
+                    <input type="text" name="execution" value="{{ selected_execution|default:'' }}" 
+                           class="input input-bordered w-full max-w-xs" 
+                           placeholder="Enter execution ID...">
+                </div>
+                <div class="form-control">
+                    <button type="submit" class="btn btn-outline">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.414A1 1 0 013 6.707V4z" />
+                        </svg>
+                        Filter
+                    </button>
+                </div>
+                {% if selected_resolution or selected_execution %}
+                <div class="form-control">
+                    <a href="{% url 'metadata:harmonization_conflicts' %}" class="btn btn-ghost btn-sm">Clear</a>
+                </div>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+
+    <!-- Conflicts Table -->
+    <div class="card bg-base-100 shadow-lg">
+        <div class="card-body">
+            {% if conflicts %}
+                <div class="overflow-x-auto">
+                    <table class="table table-zebra w-full">
+                        <thead>
+                            <tr>
+                                <th>Resource</th>
+                                <th>Execution</th>
+                                <th>Conflicting Rules</th>
+                                <th>Selected Rule</th>
+                                <th>Resolution</th>
+                                <th>Resolved By</th>
+                                <th>Created</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for conflict in conflicts %}
+                            <tr>
+                                <td>
+                                    <div class="font-mono text-xs break-all max-w-xs">
+                                        {{ conflict.source_resource_uri }}
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="text-sm">
+                                        <a href="{% url 'metadata:harmonization_execution_detail' pk=conflict.execution.id %}" 
+                                           class="link link-primary">
+                                            {{ conflict.execution.id|slice:":8" }}...
+                                        </a>
+                                    </div>
+                                    <div class="text-xs text-base-content/70">
+                                        {% for org in conflict.execution.organizations.all %}
+                                            {{ org.code }}{% if not forloop.last %}, {% endif %}
+                                        {% endfor %}
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="badge badge-warning">{{ conflict.conflicting_rules.count }} rules</div>
+                                    <div class="text-xs text-base-content/70 mt-1">
+                                        {% for rule in conflict.conflicting_rules.all|slice:":2" %}
+                                            <div>{{ rule.catalog_property_label }}</div>
+                                        {% endfor %}
+                                        {% if conflict.conflicting_rules.count > 2 %}
+                                            <div>+{{ conflict.conflicting_rules.count|add:"-2" }} more...</div>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                                <td>
+                                    {% if conflict.selected_rule %}
+                                        <div class="font-medium">{{ conflict.selected_rule.catalog_property_label }}</div>
+                                        <div class="text-xs text-base-content/70">
+                                            Priority: {{ conflict.selected_rule.priority }}
+                                        </div>
+                                    {% else %}
+                                        <span class="text-base-content/50">Not selected</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="badge badge-sm 
+                                        {% if conflict.resolution == 'pending' %}badge-warning
+                                        {% elif conflict.resolution == 'priority' %}badge-success
+                                        {% elif conflict.resolution == 'manual' %}badge-info
+                                        {% elif conflict.resolution == 'skipped' %}badge-neutral
+                                        {% endif %}">
+                                        {{ conflict.get_resolution_display }}
+                                    </div>
+                                </td>
+                                <td>
+                                    {% if conflict.resolved_by %}
+                                        <div class="text-sm">{{ conflict.resolved_by.username }}</div>
+                                        {% if conflict.resolved_at %}
+                                            <div class="text-xs text-base-content/70">
+                                                {{ conflict.resolved_at|date:"M d, H:i" }}
+                                            </div>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-base-content/50">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="text-sm">{{ conflict.created_at|date:"M d" }}</div>
+                                    <div class="text-xs text-base-content/70">{{ conflict.created_at|date:"H:i" }}</div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                {% if is_paginated %}
+                <div class="flex justify-center mt-6">
+                    <div class="btn-group">
+                        {% if page_obj.has_previous %}
+                            <a href="?page={{ page_obj.previous_page_number }}{% if selected_resolution %}&resolution={{ selected_resolution }}{% endif %}{% if selected_execution %}&execution={{ selected_execution }}{% endif %}" 
+                               class="btn btn-outline">«</a>
+                        {% endif %}
+                        
+                        <span class="btn btn-outline btn-active">
+                            Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                        </span>
+                        
+                        {% if page_obj.has_next %}
+                            <a href="?page={{ page_obj.next_page_number }}{% if selected_resolution %}&resolution={{ selected_resolution }}{% endif %}{% if selected_execution %}&execution={{ selected_execution }}{% endif %}" 
+                               class="btn btn-outline">»</a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+
+            {% else %}
+                <div class="text-center py-12">
+                    <div class="text-base-content/50 mb-4">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                    <h3 class="text-lg font-semibold mb-2">No Conflicts Found</h3>
+                    <p class="text-base-content/70 mb-4">
+                        {% if selected_resolution or selected_execution %}
+                            No conflicts match the current filters.
+                        {% else %}
+                            No harmonization conflicts exist yet.
+                        {% endif %}
+                    </p>
+                    {% if selected_resolution or selected_execution %}
+                        <a href="{% url 'metadata:harmonization_conflicts' %}" class="btn btn-outline">
+                            Clear Filters
+                        </a>
+                    {% endif %}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Summary Stats -->
+    {% if conflicts %}
+    <div class="mt-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="stat bg-base-100 shadow rounded-lg">
+            <div class="stat-title">Total Conflicts</div>
+            <div class="stat-value text-2xl">{{ conflicts|length }}</div>
+        </div>
+        <div class="stat bg-base-100 shadow rounded-lg">
+            <div class="stat-title">Pending</div>
+            <div class="stat-value text-2xl text-warning">
+                {% with pending_count=conflicts|length %}{{ pending_count }}{% endwith %}
+            </div>
+        </div>
+        <div class="stat bg-base-100 shadow rounded-lg">
+            <div class="stat-title">Auto-Resolved</div>
+            <div class="stat-value text-2xl text-success">0</div>
+        </div>
+        <div class="stat bg-base-100 shadow rounded-lg">
+            <div class="stat-title">Manual</div>
+            <div class="stat-value text-2xl text-info">0</div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Quick Links -->
+    <div class="flex justify-center gap-4 mt-6">
+        <a href="{% url 'metadata:harmonization_list' %}" class="btn btn-outline">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+            </svg>
+            Back to Harmonization
+        </a>
+        <a href="{% url 'metadata:harmonization_rules' %}" class="btn btn-ghost">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v6a2 2 0 002 2h6a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+            </svg>
+            Manage Rules
+        </a>
+    </div>
+</div>
+{% endblock %}
