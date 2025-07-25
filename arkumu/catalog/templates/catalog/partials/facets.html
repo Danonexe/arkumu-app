@@ -1,0 +1,98 @@
+{% load catalog_tags %}
+{# Dynamically loaded facets based on current resource class and filters #}
+
+<div class="facets-container">
+    <h2 class="facets-title">Filter By</h2>
+    
+    {% for facet in facets %}
+        <div class="facet-group" data-facet-id="{{ facet.id }}">
+            <h3 class="facet-name">
+                <button class="facet-toggle"
+                        aria-expanded="true"
+                        aria-controls="facet-values-{{ facet.id }}">
+                    {{ facet.name }}
+                    <span class="facet-count">({{ facet.count }})</span>
+                </button>
+            </h3>
+            
+            <div id="facet-values-{{ facet.id }}" 
+                 class="facet-values">
+                
+                {# Show top values, load more via HTMX if needed #}
+                {% for value in facet.values|slice:":5" %}
+                    <label class="facet-value">
+                        <input type="checkbox"
+                               name="filter"
+                               value="{{ facet.id }}:{{ value.id }}"
+                               hx-get="{% url 'catalog:add_filter' %}"
+                               hx-trigger="change"
+                               hx-target="#catalog-results"
+                               hx-indicator="#search-indicator"
+                               {% if value.selected %}checked{% endif %}>
+                        <span class="value-label">{{ value.display }}</span>
+                        <span class="value-count">({{ value.count }})</span>
+                    </label>
+                {% endfor %}
+                
+                {# Load more values if available #}
+                {% if facet.values|length > 5 %}
+                    <button class="load-more-values"
+                            hx-get="{% url 'catalog:facet_values' facet.id %}"
+                            hx-target="this"
+                            hx-swap="outerHTML">
+                        Show {{ facet.values|length|add:"-5" }} more...
+                    </button>
+                {% endif %}
+            </div>
+        </div>
+    {% empty %}
+        <p class="no-facets">No filters available</p>
+    {% endfor %}
+    
+    {# Resource type selector #}
+    <div class="resource-type-selector">
+        <h3>Resource Type</h3>
+        <select name="resource_class"
+                hx-get="{% url 'catalog:change_type' %}"
+                hx-target="#catalog-results"
+                hx-trigger="change"
+                hx-indicator="#search-indicator">
+            <option value="all">All Types</option>
+            <option value="http://arkumu.org/ontology#Project">Projects</option>
+            <option value="http://arkumu.org/ontology#Event">Events</option>
+            <option value="http://arkumu.org/ontology#Person">People</option>
+            <option value="http://arkumu.org/ontology#Organization">Organizations</option>
+        </select>
+    </div>
+</div>
+
+<style>
+/* Scoped styles for facets */
+.facets-container {
+    @apply space-y-4;
+}
+
+.facet-group {
+    @apply border-b pb-3;
+}
+
+.facet-toggle {
+    @apply w-full text-left flex justify-between items-center p-2 hover:bg-gray-50;
+}
+
+.facet-values {
+    @apply mt-2 space-y-1 max-h-48 overflow-y-auto;
+}
+
+.facet-value {
+    @apply flex items-center space-x-2 p-1 hover:bg-gray-50 cursor-pointer;
+}
+
+.value-count {
+    @apply text-sm text-gray-500;
+}
+
+.load-more-values {
+    @apply text-sm text-blue-600 hover:underline mt-2;
+}
+</style>

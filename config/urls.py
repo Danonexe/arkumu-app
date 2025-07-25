@@ -25,12 +25,9 @@ urlpatterns = [
     ),
     
     # ============================================================================
-    # DESIGN SHOWCASE URLS (clean layout)
+    # DESIGN SHOWCASE URLS (moved to catalog app)
     # ============================================================================
-    path("design/", TemplateView.as_view(template_name="pages/prueba.html"), name="design"),
-    path("components/", TemplateView.as_view(template_name="pages/components.html"), name="components"),
-    path("documentation/", TemplateView.as_view(template_name="pages/documentation.html"), name="documentation"),
-    path("projekt/", TemplateView.as_view(template_name="pages/projekt.html"), name="projekt"),
+    # These URLs have been moved to arkumu.catalog.urls
     
     # ============================================================================
     # ADMIN & USER MANAGEMENT
@@ -50,6 +47,7 @@ urlpatterns = [
     path('metadata/', include('arkumu.metadata.urls', namespace='metadata')),
     path('storage/', include('arkumu.storage.urls', namespace='storage')),
     path('importer/', include('arkumu.importer.urls', namespace='importer')),
+    path('catalog/', include('arkumu.catalog.urls', namespace='catalog')),
     # SSE URLs removed - migrated to HTMX polling
     
     # ============================================================================

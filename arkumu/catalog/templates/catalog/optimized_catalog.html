@@ -1,0 +1,148 @@
+{% extends "base_design.html" %}
+{% load static catalog_tags cache %}
+
+{% block title %}Catalog - {{ organization.name }}{% endblock %}
+
+{% block content %}
+<div class="catalog-container" data-turbo-permanent>
+    
+    {# Header with search - cached for all users #}
+    {% cache 3600 catalog_header organization.id %}
+    <header class="catalog-header">
+        <h1 class="text-4xl font-bold mb-4">{{ organization.name }} Archive Catalog</h1>
+        
+        {# HTMX-powered search with debounce #}
+        <div class="search-container">
+            <input type="search" 
+                   name="q"
+                   placeholder="Search projects, people, events..."
+                   class="search-input"
+                   hx-get="{% url 'catalog:search' %}"
+                   hx-trigger="input changed delay:500ms, search"
+                   hx-target="#catalog-results"
+                   hx-indicator="#search-indicator"
+                   hx-push-url="true">
+            <div id="search-indicator" class="htmx-indicator">
+                <div class="spinner"></div>
+            </div>
+        </div>
+    </header>
+    {% endcache %}
+    
+    <div class="catalog-layout">
+        {# Faceted navigation sidebar #}
+        <aside class="facets-sidebar" 
+               id="facets"
+               hx-boost="true"
+               hx-preserve="true">
+            
+            {# Dynamic facets loaded based on current filters #}
+            <div hx-get="{% url 'catalog:load_facets' %}"
+                 hx-trigger="load, facets-updated from:body"
+                 hx-include="[name='filter']">
+                {% include 'catalog/partials/facets.html' %}
+            </div>
+            
+            {# Active filters #}
+            <div id="active-filters" class="active-filters">
+                {% if active_filters %}
+                    <h3>Active Filters</h3>
+                    {% for filter in active_filters %}
+                        <span class="filter-tag">
+                            {{ filter.label }}
+                            <button hx-get="{% url 'catalog:remove_filter' filter.id %}"
+                                    hx-target="#catalog-results"
+                                    class="remove-filter">×</button>
+                        </span>
+                    {% endfor %}
+                    <button hx-get="{% url 'catalog:clear_filters' %}"
+                            hx-target="#catalog-results"
+                            class="clear-all">Clear All</button>
+                {% endif %}
+            </div>
+        </aside>
+        
+        {# Main content area #}
+        <main class="catalog-main">
+            {# Results stats and sorting #}
+            <div class="results-header">
+                <div class="results-count">
+                    <span id="result-count">{{ paginator.count }}</span> results
+                </div>
+                
+                <div class="sorting-controls">
+                    <select name="sort"
+                            hx-get="{% url 'catalog:sort' %}"
+                            hx-target="#catalog-results"
+                            hx-trigger="change">
+                        <option value="relevance">Relevance</option>
+                        <option value="date_desc">Newest First</option>
+                        <option value="date_asc">Oldest First</option>
+                        <option value="title">Title A-Z</option>
+                    </select>
+                </div>
+            </div>
+            
+            {# Results grid with infinite scroll #}
+            <div id="catalog-results" 
+                 class="results-grid"
+                 hx-get="{% url 'catalog:load_more' %}"
+                 hx-trigger="revealed"
+                 hx-vals='{"page": "{{ page_obj.next_page_number }}"}'
+                 hx-swap="afterend"
+                 hx-indicator="#loading-more">
+                
+                {# Render resource cards efficiently #}
+                {% render_resource_cards page_obj %}
+                
+            </div>
+            
+            {# Loading indicator for infinite scroll #}
+            <div id="loading-more" class="htmx-indicator loading-more">
+                <div class="spinner"></div>
+                <span>Loading more results...</span>
+            </div>
+        </main>
+    </div>
+    
+    {# Detail modal placeholder #}
+    <div id="detail-modal" class="modal"></div>
+    
+    {# Edit modal placeholder #}
+    <div id="edit-modal" class="modal"></div>
+</div>
+
+{# Prefetch critical API endpoints for better performance #}
+<link rel="prefetch" href="{% url 'catalog:load_facets' %}">
+<link rel="prefetch" href="{% url 'catalog:search' %}">
+
+{% endblock %}
+
+{% block javascript %}
+{{ block.super }}
+<script>
+    // Cache facet state in sessionStorage
+    htmx.on('htmx:afterSwap', function(evt) {
+        if (evt.detail.target.id === 'facets') {
+            sessionStorage.setItem('catalog-facets', evt.detail.target.innerHTML);
+        }
+    });
+    
+    // Restore facets on back navigation
+    htmx.on('htmx:historyRestore', function(evt) {
+        const cached = sessionStorage.getItem('catalog-facets');
+        if (cached && document.getElementById('facets')) {
+            document.getElementById('facets').innerHTML = cached;
+        }
+    });
+    
+    // Optimize images with lazy loading
+    if ('loading' in HTMLImageElement.prototype) {
+        const images = document.querySelectorAll('img[data-src]');
+        images.forEach(img => {
+            img.loading = 'lazy';
+            img.src = img.dataset.src;
+        });
+    }
+</script>
+{% endblock %}
