@@ -12,15 +12,18 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
   # dependencies for building Python packages
   build-essential \
   # psycopg dependencies
-  libpq-dev
+  libpq-dev \
+  && rm -rf /var/lib/apt/lists/*
 
+# Install uv using the more reliable COPY method from official image
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 # Requirements are installed here to ensure they will be cached.
 COPY ./requirements .
 
-# Create Python Dependency and Sub-Dependency Wheels.
-RUN pip wheel --wheel-dir /usr/src/app/wheels  \
-  -r ${BUILD_ENVIRONMENT}.txt
+# Install Python dependencies with cache mounting
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --system -r ${BUILD_ENVIRONMENT}.txt
 
 
 # Python 'run' stage
@@ -45,19 +48,17 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
   libpq-dev \
   # Translations dependencies
   gettext \
+  # Graphviz for blueprint visualization
+  graphviz \
   # entrypoint
   wait-for-it \
   # cleaning up unused files
   && apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false \
   && rm -rf /var/lib/apt/lists/*
 
-# All absolute dir copies ignore workdir instruction. All relative dir copies are wrt to the workdir instruction
-# copy python dependency wheels from python-build-stage
-COPY --from=python-build-stage /usr/src/app/wheels  /wheels/
-
-# use wheels to install python dependencies
-RUN pip install --no-cache-dir --no-index --find-links=/wheels/ /wheels/* \
-  && rm -rf /wheels/
+# Copy Python packages from build stage - SAME Python base image ensures compatibility
+COPY --from=python-build-stage /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+COPY --from=python-build-stage /usr/local/bin /usr/local/bin
 
 
 COPY --chown=django:django ./compose/production/django/entrypoint /entrypoint
