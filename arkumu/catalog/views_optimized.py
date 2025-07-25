@@ -14,6 +14,7 @@ from django.utils.decorators import method_decorator
 
 from arkumu.metadata.models import Resource, Triple, ResourceType
 from arkumu.catalog.template_utils import ComponentRenderer, FacetBuilder
+from arkumu.users.mixins import general_login_required
 
 
 class OptimizedCatalogView(LoginRequiredMixin, ListView):
@@ -272,6 +273,7 @@ class ResourceDetailView(LoginRequiredMixin, DetailView):
 
 # Utility views for HTMX actions
 
+@general_login_required
 def add_filter(request):
     """Add a filter and return updated results."""
     filter_value = request.GET.get('filter')
@@ -302,6 +304,7 @@ def add_filter(request):
     return HttpResponse(status=400)
 
 
+@general_login_required
 def remove_filter(request, filter_id):
     """Remove a filter and return updated results."""
     filters = request.GET.getlist('filter')
@@ -328,6 +331,7 @@ def remove_filter(request, filter_id):
     )
 
 
+@general_login_required
 def load_contributors(request):
     """Lazy load contributors for a resource card."""
     resource_id = request.GET.get('resource')
@@ -335,7 +339,8 @@ def load_contributors(request):
         return HttpResponse(status=400)
     
     try:
-        resource = Resource.objects.get(id=resource_id)
+        # Use for_user to respect organization boundaries
+        resource = Resource.objects.for_user(request.user).get(id=resource_id)
         
         # Get contributor triples
         contributors = Triple.objects.filter(
