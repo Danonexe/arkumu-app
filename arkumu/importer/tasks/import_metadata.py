@@ -1660,31 +1660,34 @@ def process_dataset_data(
     logger.info(f"📊 DATA PROCESSING: Starting data processing for dataset '{dataset_name}' (mapping: {mapping_id})")
     
     try:
-        # Phase 1: Check schema cache
+        # Phase 1: Load schema using SchemaService (handles cache validation and regeneration)
         phase_info = {"current_phase": "schema_verification", "execution_strategy": "data_only"}
-        update_cache_with_phase_info("processing", "Verifying schemas exist...", 5, phase_info)
+        update_cache_with_phase_info("processing", "Loading/validating schemas...", 5, phase_info)
         
-        # Verify schemas exist in cache
-        blueprint_cache_key = f"schema_blueprints_mapping_{mapping_id}"
-        cached_blueprints = cache.get(blueprint_cache_key)
+        from arkumu.importer.services.schema_service import SchemaService
         
-        if not cached_blueprints:
-            error_msg = (
-                f"Schema blueprints not found for mapping {mapping_id}. "
-                f"Please run initialize_mapping_schemas first."
-            )
+        try:
+            # SchemaService handles cache validation and regeneration automatically
+            schema_service = SchemaService(mapping_id=mapping_id)
+            # This will load from cache if valid, or regenerate if missing/invalid
+            schema_service._ensure_schema_loaded()
+            cached_blueprints = schema_service._processor.dataset_blueprints
+            
+            # SchemaService automatically validates cached resources and regenerates if needed
+            
+            logger.info(f"✅ Schema blueprints loaded for mapping {mapping_id} via SchemaService")
+        except Exception as e:
+            error_msg = f"Failed to load schema blueprints for mapping {mapping_id}: {str(e)}"
             logger.error(error_msg)
-            update_cache_with_phase_info("failed", error_msg, 0, phase_info, error_type="SchemasNotInitialized")
+            update_cache_with_phase_info("failed", error_msg, 0, phase_info, error_type="SchemaLoadFailed")
             return {
                 "status": "error",
                 "dataset_name": dataset_name,
                 "mapping_id": mapping_id,
                 "error_message": error_msg,
-                "error_type": "SchemasNotInitialized",
-                "recovery_suggestion": "Run initialize_mapping_schemas task before processing data"
+                "error_type": "SchemaLoadFailed",
+                "recovery_suggestion": "Check mapping configuration and database connectivity"
             }
-        
-        logger.info(f"✅ Schema blueprints found for mapping {mapping_id}")
         
         # Phase 2: Load mapping configuration
         phase_info = {"current_phase": "mapping_load", "execution_strategy": "data_only"}

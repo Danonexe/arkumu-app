@@ -9,10 +9,10 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 
-def convert_schema_data_to_blueprint(schema_data, schema_service):
+def convert_schema_data_to_blueprint(schema_data, schema_service, organization_id):
     """Convert SchemaService visualization data to blueprint format for RDF generation."""
     blueprint = {
-        'organization': 'arkumu',
+        'organization': organization_id,
         'entities': {},
         'relationships': {},
         'junctions': {}
@@ -31,7 +31,7 @@ def convert_schema_data_to_blueprint(schema_data, schema_service):
         # Build properties from schema
         for prop_name in node.get('properties', []):
             properties[prop_name] = {
-                'property_uri': f"http://data.arkumu.org/arkumu/properties/{slugify_uri_part(prop_name)}",
+                'property_uri': f"http://data.arkumu.org/{organization_id}/properties/{slugify_uri_part(prop_name)}",
                 'source_column': prop_name,
                 'data_type': 'string',  # Default type, could be enhanced
                 'is_anchor': prop_name in anchor_columns,
@@ -156,7 +156,7 @@ def rdf_preview_visualizer(request, mapping_id):
         schema_data = schema_service.get_schema_visualization_data()
         
         # Convert schema data to blueprint format for our RDF generation
-        blueprint = convert_schema_data_to_blueprint(schema_data, schema_service)
+        blueprint = convert_schema_data_to_blueprint(schema_data, schema_service, mapping.organization_id)
         
         # Generate RDF preview components
         uri_patterns = generate_uri_patterns(blueprint)
@@ -207,7 +207,7 @@ def rdf_preview_property_mappings_sorted(request, mapping_id):
         schema_data = schema_service.get_schema_visualization_data()
         
         # Convert schema data to blueprint format for our RDF generation
-        blueprint = convert_schema_data_to_blueprint(schema_data, schema_service)
+        blueprint = convert_schema_data_to_blueprint(schema_data, schema_service, mapping.organization_id)
         
         # Generate property mappings
         property_mappings = generate_property_mappings(blueprint)

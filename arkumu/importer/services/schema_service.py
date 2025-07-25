@@ -63,15 +63,24 @@ class SchemaService:
         
         if cached_blueprints:
             logger.info(f"📋 Loading cached schema for mapping {self.mapping_id}")
-            # Create processor with cached blueprints
-            self._processor = CompleteSchemaProcessor(
-                organization=organization,
-                base_uri=self.base_uri,
-                statistics=ExecutionStatistics()
-            )
-            self._processor.dataset_blueprints = cached_blueprints
-            self._schema_loaded = True
-            return
+            
+            # Validate cached blueprints - check if Resource objects still exist
+            try:
+                self._validate_cached_resources(cached_blueprints)
+                
+                # Create processor with cached blueprints
+                self._processor = CompleteSchemaProcessor(
+                    organization=organization,
+                    base_uri=self.base_uri,
+                    statistics=ExecutionStatistics()
+                )
+                self._processor.dataset_blueprints = cached_blueprints
+                self._schema_loaded = True
+                return
+                
+            except ValueError as e:
+                logger.warning(f"Cached blueprints invalid: {e}. Regenerating schema...")
+                # Cache will be cleared by validation function, continue to regeneration
         
         # Schema not in cache - need to create it
         logger.info(f"🏗️  Creating schema for mapping {self.mapping_id}")
@@ -90,6 +99,40 @@ class SchemaService:
         # This will create and cache the complete schema
         self._processor._create_complete_schema_blueprints(execution_config)
         self._schema_loaded = True
+    
+    def _validate_cached_resources(self, blueprints: Dict[str, Any]):
+        """
+        Validate that all Resource objects in cached blueprints still exist in database.
+        Raises ValueError if stale references found (e.g., after DB deletion).
+        """
+        missing_resources = []
+        
+        for dataset_name, blueprint in blueprints.items():
+            # Check entity_type_resource
+            if 'entity_type_resource' in blueprint:
+                resource = blueprint['entity_type_resource']
+                if hasattr(resource, 'id') and not Resource.objects.filter(id=resource.id).exists():
+                    missing_resources.append(f"entity_type_resource for {dataset_name} (ID: {resource.id})")
+            
+            # Check property_resources
+            if 'property_resources' in blueprint:
+                for prop_name, prop_resource in blueprint['property_resources'].items():
+                    if hasattr(prop_resource, 'id') and not Resource.objects.filter(id=prop_resource.id).exists():
+                        missing_resources.append(f"property_resource {prop_name} for {dataset_name} (ID: {prop_resource.id})")
+        
+        if missing_resources:
+            # Clear all related caches to force regeneration
+            cache_keys = [
+                f"schema_blueprints_mapping_{self.mapping_id}",
+                f"complete_schema_blueprints_mapping_{self.mapping_id}"
+            ]
+            for key in cache_keys:
+                cache.delete(key)
+            
+            raise ValueError(
+                f"Stale blueprint resources detected (likely after database reset). "
+                f"Cache cleared. Missing: {missing_resources[:3]}{'...' if len(missing_resources) > 3 else ''}"
+            )
     
     def get_dataset_schema(self, dataset_name: str) -> Optional[Dict[str, Any]]:
         """
