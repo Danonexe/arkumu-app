@@ -1,0 +1,73 @@
+volumes:
+  dev_postgres_data: {}
+  dev_postgres_data_backups: {}
+  dev_redis_data: {}
+
+networks:
+  arkumu_dev_network:
+    driver: bridge
+
+services:
+  django:
+    build:
+      context: .
+      dockerfile: ./compose/production/django/Dockerfile
+    image: arkumu_dev_django
+    container_name: arkumu_dev_django
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - .:/app:z
+    env_file:
+      - ./.envs/.dev/.django
+      - ./.envs/.dev/.postgres
+    ports:
+      - '8000:8000'
+    command: /start
+    networks:
+      - arkumu_dev_network
+
+  postgres:
+    build:
+      context: .
+      dockerfile: ./compose/production/postgres/Dockerfile
+    image: arkumu_dev_postgres
+    container_name: arkumu_dev_postgres
+    restart: unless-stopped
+    volumes:
+      - dev_postgres_data:/var/lib/postgresql/data
+      - dev_postgres_data_backups:/backups
+    env_file:
+      - ./.envs/.dev/.postgres
+    networks:
+      - arkumu_dev_network
+
+  redis:
+    image: "redis:6"
+    container_name: arkumu_dev_redis
+    restart: unless-stopped
+    volumes:
+      - dev_redis_data:/data
+    networks:
+      - arkumu_dev_network
+
+  huey:
+    build:
+      context: .
+      dockerfile: ./compose/production/django/Dockerfile
+    image: arkumu_dev_huey
+    container_name: arkumu_dev_huey
+    restart: unless-stopped
+    depends_on:
+      - django
+      - redis
+    volumes:
+      - .:/app:z
+    env_file:
+      - ./.envs/.dev/.django
+      - ./.envs/.dev/.postgres
+    command: /bin/sh -c "python manage.py run_huey"
+    networks:
+      - arkumu_dev_network
