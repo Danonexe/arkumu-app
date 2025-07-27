@@ -86,9 +86,11 @@ class BaseStorageService:
                 # logger.info(f"===> BaseStorageService: Ingest bucket '{self.ingest_bucket}' exists result: {ingest_bucket_exists}")
                 ingest_bucket_exists = False
                 
-                logger.info(f"===> BaseStorageService: Checking production bucket: {self.production_bucket}")
-                production_bucket_exists = self.ensure_bucket_exists(self.production_bucket)
-                logger.info(f"===> BaseStorageService: Production bucket '{self.production_bucket}' exists result: {production_bucket_exists}")
+                # Production bucket creation removed - buckets should be created manually or on-demand
+                # logger.info(f"===> BaseStorageService: Checking production bucket: {self.production_bucket}")
+                # production_bucket_exists = self.ensure_bucket_exists(self.production_bucket)
+                # logger.info(f"===> BaseStorageService: Production bucket '{self.production_bucket}' exists result: {production_bucket_exists}")
+                production_bucket_exists = False
                 
                 BaseStorageService._global_buckets_checked = True
                 logger.info("===> BaseStorageService: System buckets GLOBAL check complete. _global_buckets_checked set to True.")
