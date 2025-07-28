@@ -295,10 +295,20 @@ def run_mapping_aware_import_workflow(
         
         logger.info(f"Task {actual_task_id or 'UnknownID'}: Loaded execution config with {len(execution_config.datasets)} datasets")
         
-        # Verify the target dataset exists in the mapping (with Unicode normalization)
-        normalized_dataset_name = normalize_string_nfc(dataset_name)
-        target_dataset_exists = any(normalize_string_nfc(ds.dataset_name) == normalized_dataset_name for ds in execution_config.datasets)
+        # Verify the target dataset exists in the mapping (with consistent URI slugification)
+        from arkumu.common.uri_utils import slugify_uri_part
+        
+        # Apply same slugification to both sides for consistent comparison
+        slugified_target_name = slugify_uri_part(dataset_name)
+        target_dataset_exists = any(
+            slugify_uri_part(ds.dataset_name) == slugified_target_name 
+            for ds in execution_config.datasets
+        )
+        
         if not target_dataset_exists:
+            # Log available datasets for debugging
+            available_datasets = [ds.dataset_name for ds in execution_config.datasets]
+            logger.error(f"Task {actual_task_id or 'UnknownID'}: Dataset '{dataset_name}' (slugified: '{slugified_target_name}') not found. Available: {available_datasets}")
             raise ValueError(f"Dataset '{dataset_name}' not found in mapping configuration")
         
         phase_info = get_mapping_phase_info("mapping_load", 100)
@@ -1710,11 +1720,20 @@ def process_dataset_data(
         mapping_adapter = MappingAdapter()
         execution_config = mapping_adapter.translate_to_execution_config(mapping_id)
         
-        # Verify the target dataset exists in the mapping (with Unicode normalization)
-        normalized_dataset_name = normalize_string_nfc(dataset_name)
-        target_dataset_exists = any(normalize_string_nfc(ds.dataset_name) == normalized_dataset_name for ds in execution_config.datasets)
+        # Verify the target dataset exists in the mapping (with consistent URI slugification)
+        from arkumu.common.uri_utils import slugify_uri_part
+        
+        # Apply same slugification to both sides for consistent comparison
+        slugified_target_name = slugify_uri_part(dataset_name)
+        target_dataset_exists = any(
+            slugify_uri_part(ds.dataset_name) == slugified_target_name 
+            for ds in execution_config.datasets
+        )
+        
         if not target_dataset_exists:
-            error_msg = f"Dataset '{dataset_name}' not found in mapping configuration"
+            # Log available datasets for debugging
+            available_datasets = [ds.dataset_name for ds in execution_config.datasets]
+            error_msg = f"Dataset '{dataset_name}' (slugified: '{slugified_target_name}') not found in mapping configuration. Available: {available_datasets}"
             logger.error(error_msg)
             update_cache_with_phase_info("failed", error_msg, 0, phase_info, error_type="DatasetNotInMapping")
             return {"status": "error", "error_message": error_msg, "error_type": "DatasetNotInMapping"}
