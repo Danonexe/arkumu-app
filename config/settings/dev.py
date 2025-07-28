@@ -52,12 +52,17 @@ LOGGING = {
         },
         "boto3": {
             "handlers": ["console"],
-            "level": "WARNING",
+            "level": "DEBUG",
             "propagate": False,
         },
         "botocore": {
             "handlers": ["console"],
-            "level": "WARNING",
+            "level": "DEBUG",
+            "propagate": False,
+        },
+        "urllib3": {
+            "handlers": ["console"],
+            "level": "DEBUG",
             "propagate": False,
         },
         "storages": {

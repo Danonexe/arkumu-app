@@ -31,11 +31,11 @@ services:
     networks:
       - arkumu_dev_network
     dns:
-      - ${DNS_SERVER_1:-8.8.8.8}
-      - ${DNS_SERVER_2:-8.8.4.4}
+      - ${DNS_PRIMARY}
+      - ${DNS_SECONDARY}
     extra_hosts:
       - "host.docker.internal:host-gateway"
-      - "${RDS_HOST:-rds1.example.com}:${RDS_IP:-127.0.0.1}"
+      - "${S3_HOSTNAME}:${S3_IP}"
 
   postgres:
     build:
@@ -81,8 +81,8 @@ services:
     networks:
       - arkumu_dev_network
     dns:
-      - ${DNS_SERVER_1:-8.8.8.8}
-      - ${DNS_SERVER_2:-8.8.4.4}
+      - ${DNS_PRIMARY}
+      - ${DNS_SECONDARY}
     extra_hosts:
       - "host.docker.internal:host-gateway"
-      - "${RDS_HOST:-rds1.example.com}:${RDS_IP:-127.0.0.1}"
+      - "${S3_HOSTNAME}:${S3_IP}"

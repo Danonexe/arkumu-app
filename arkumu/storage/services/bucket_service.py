@@ -88,7 +88,7 @@ class BucketService:
             for org_id in PREDEFINED_ORGANIZATIONS
         ]
 
-    def ensure_organization_bucket_exists(self, organization_id: str, check_only: bool = False) -> Dict[str, Any]:
+    def ensure_organization_bucket_exists(self, organization_id: str, check_only: bool = False, auto_create: bool = True) -> Dict[str, Any]:
         """
         Ensures an organization-specific bucket exists. 
         Now uses BaseStorageService's ensure_bucket_exists for creation if not check_only.
@@ -108,8 +108,12 @@ class BucketService:
                 if check_only:
                     return {"success": False, "bucket_name": bucket_name, "status": "does_not_exist", "error": "Bucket not found and check_only is True"}
                 
+                if not auto_create:
+                    logger.info(f"Auto-creation disabled for bucket '{bucket_name}'")
+                    return {"success": False, "bucket_name": bucket_name, "status": "does_not_exist", "error": "Bucket not found and auto_create is False"}
+                
                 # Attempt to create using BaseStorageService's method
-                logger.info(f"Attempting to create organization bucket '{bucket_name}' via BaseStorageService.")
+                logger.info(f"🔄 Auto-creating organization bucket '{bucket_name}' via BaseStorageService...")
                 if self.base_s3_service.ensure_bucket_exists(bucket_name):
                     logger.info(f"✅ Organization bucket '{bucket_name}' created successfully.")
                     return {"success": True, "bucket_name": bucket_name, "status": "created"}
@@ -150,19 +154,29 @@ class BucketService:
                 "total_size_formatted": "0 B"
             }
             
-            # Use check_only=True to only verify existence without attempting creation here.
-            # Creation should be an explicit admin action or handled elsewhere if needed.
-            check_result = self.ensure_organization_bucket_exists(org_id, check_only=True)
+            # Try to ensure bucket exists with auto-creation enabled for better UX
+            check_result = self.ensure_organization_bucket_exists(org_id, check_only=False, auto_create=True)
             
-            if check_result["success"] or check_result.get("status") == "exists": # Bucket exists
-                org_info["status"] = "active"
+            if check_result["success"]: 
+                status = check_result.get("status")
+                if status == "exists":
+                    org_info["status"] = "active"
+                elif status == "created":
+                    org_info["status"] = "active_auto_created"
+                    logger.info(f"✅ Auto-created bucket for organization '{org_id}'")
+                else:
+                    org_info["status"] = "active"
+                
                 if include_counts:
                     logger.info(f"Fetching counts for organization '{org_id}' bucket '{bucket_name}'...")
                     items_data = self.get_root_level_items(org_id, bucket_name)
                     org_info.update(items_data) # file_count, folder_count, total_size_formatted
             elif check_result.get("status") == "does_not_exist":
                 org_info["status"] = "inactive_bucket_not_found"
-            else: # error or creation_failed (though creation isn't attempted with check_only=True)
+            elif check_result.get("status") == "creation_failed":
+                org_info["status"] = "error_bucket_creation_failed"
+                org_info["error_details"] = check_result.get("error", "Failed to create bucket")
+            else: # error or other issues
                 org_info["status"] = "error_checking_bucket"
                 org_info["error_details"] = check_result.get("error", "Unknown error")
 
@@ -175,35 +189,60 @@ class BucketService:
         """
         Get root level items (files and folders) for an organization's bucket.
         Uses BaseStorageService.s3_client for listing objects.
+        Auto-creates bucket if it doesn't exist.
         """
         if not bucket_name:
             bucket_name = self._get_organization_bucket_name(organization_id)
         
         logger.info(f"Fetching root level items for bucket: {bucket_name}")
+        
+        # Ensure bucket exists, auto-create if needed
+        bucket_result = self.ensure_organization_bucket_exists(organization_id, check_only=False, auto_create=True)
+        if not bucket_result["success"]:
+            logger.error(f"Failed to ensure bucket '{bucket_name}' exists: {bucket_result.get('error', 'Unknown error')}")
+            return {
+                "files": [], 
+                "folders": [], 
+                "file_count": 0, 
+                "folder_count": 0, 
+                "total_size": 0,
+                "total_size_formatted": "0 B",
+                "error": f"Bucket '{bucket_name}' unavailable: {bucket_result.get('error', 'Unknown error')}"
+            }
         root_items = {"files": [], "folders": [], "file_count": 0, "folder_count": 0, "total_size": 0}
         
         try:
+            logger.info(f"Creating S3 paginator for bucket: {bucket_name}")
             paginator = self.base_s3_service.s3_client.get_paginator('list_objects_v2')
-            for page in paginator.paginate(Bucket=bucket_name, Delimiter='/'):
-                # Add folders (CommonPrefixes)
-                for prefix in page.get('CommonPrefixes', []):
-                    folder_name = prefix.get('Prefix')
-                    root_items["folders"].append({"name": folder_name, "path": folder_name})
-                    root_items["folder_count"] += 1
-                
-                # Add files (Contents)
-                for obj in page.get('Contents', []):
-                    if not obj['Key'].endswith('/'): # Ensure it's not a folder object
-                        file_size = obj.get('Size', 0)
-                        root_items["files"].append({
-                            "name": os.path.basename(obj['Key']),
-                            "path": obj['Key'],
-                            "size": file_size,
-                            "size_formatted": self.base_s3_service._format_size(file_size),
-                            "last_modified": obj.get('LastModified')
-                        })
-                        root_items["file_count"] += 1
-                        root_items["total_size"] += file_size
+            logger.info(f"Starting pagination for bucket: {bucket_name}")
+            page_count = 0
+            try:
+                for page in paginator.paginate(Bucket=bucket_name, Delimiter='/', PaginationConfig={'MaxItems': 100}):
+                    page_count += 1
+                    logger.info(f"Processing page {page_count} for bucket: {bucket_name}")
+                    # Add folders (CommonPrefixes)
+                    for prefix in page.get('CommonPrefixes', []):
+                        folder_name = prefix.get('Prefix')
+                        root_items["folders"].append({"name": folder_name, "path": folder_name})
+                        root_items["folder_count"] += 1
+                    
+                    # Add files (Contents)
+                    for obj in page.get('Contents', []):
+                        if not obj['Key'].endswith('/'): # Ensure it's not a folder object
+                            file_size = obj.get('Size', 0)
+                            root_items["files"].append({
+                                "name": os.path.basename(obj['Key']),
+                                "path": obj['Key'],
+                                "size": file_size,
+                                "size_formatted": self.base_s3_service._format_size(file_size),
+                                "last_modified": obj.get('LastModified')
+                            })
+                            root_items["file_count"] += 1
+                            root_items["total_size"] += file_size
+            except Exception as pagination_error:
+                logger.error(f"Pagination error for bucket {bucket_name}: {pagination_error}")
+                root_items["error"] = f"Pagination failed: {str(pagination_error)}"
+                return root_items
             
             root_items["total_size_formatted"] = self.base_s3_service._format_size(root_items["total_size"])
             logger.info(f"Found {root_items['file_count']} files and {root_items['folder_count']} folders in {bucket_name}.")

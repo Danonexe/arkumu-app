@@ -7,6 +7,7 @@ from botocore.exceptions import ClientError
 from botocore.config import Config
 from django.conf import settings
 import time # Keep time for potential delays if needed
+import urllib3
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +51,11 @@ class BaseStorageService:
             
         logger.info("===> BaseStorageService.__init__: Starting ONE-TIME actual S3 setup.")
         
+        # Disable SSL warnings for self-signed certificates
+        if self._is_minio_environment() or os.environ.get('AWS_S3_ENDPOINT_URL'):
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+            logger.info("===> SSL warnings disabled for custom S3 endpoint")
+        
         # Class-level flag for ensuring buckets are checked only once across all calls to this specific init method.
         # This is somewhat redundant if __init__ itself only runs its core logic once due to _base_initialized_flag,
         # but kept for clarity on the original intent.
@@ -68,6 +74,7 @@ class BaseStorageService:
         self.production_bucket = self._get_production_bucket_name()
         
         logger.info(f"===> BaseStorageService: Attempting to create S3 client. Endpoint: {self.endpoint_url}, Region: {self.region}")
+        logger.info(f"===> BaseStorageService: Access Key: {self.access_key[:10]}..., Secret Key: {self.secret_key[:10]}...")
         # _create_s3_client will set self.s3_client and potentially self.presigned_client
         self._create_s3_client() 
         logger.info("===> BaseStorageService: S3 client(s) created.")
@@ -118,11 +125,14 @@ class BaseStorageService:
         Create an S3 client configured for the current environment.
         Assigns to self.s3_client and self.presigned_client.
         """
+        # Get max pool connections from environment, with sensible defaults
+        max_pool_connections = int(os.environ.get('AWS_MAX_POOL_CONNECTIONS', '10'))
+        
         optimized_config = Config(
             retries={'max_attempts': 2, 'mode': 'standard'},
             connect_timeout=5,
             read_timeout=10,
-            max_pool_connections=10
+            max_pool_connections=max_pool_connections
         )
         
         client_kwargs = {
@@ -137,16 +147,29 @@ class BaseStorageService:
         
         if self.endpoint_url:
             client_kwargs['endpoint_url'] = self.endpoint_url
+            # Dell EMC ECS configuration based on official samples
+            if 'https://' in self.endpoint_url:
+                # Use SSL with verification disabled for self-signed certificates
+                client_kwargs['use_ssl'] = True
+                client_kwargs['verify'] = False
+            else:
+                # Use plaintext HTTP
+                client_kwargs['use_ssl'] = False
+            
+            # Dell EMC ECS compatible configuration with checksum validation disabled
+            custom_s3_config = Config(
+                s3={'addressing_style': 'path'},
+                retries={'max_attempts': 1, 'mode': 'standard'},
+                connect_timeout=60,
+                read_timeout=120,
+                max_pool_connections=max_pool_connections,  # Use environment variable
+                # Disable strict checksum validation for Dell EMC ViPR compatibility
+                request_checksum_calculation='when_required',
+                response_checksum_validation='when_required'
+            )
+            client_kwargs['config'] = custom_s3_config
+            
             if self.is_minio:
-                minio_specific_config_for_main_client = Config(
-                    signature_version='s3v4',
-                    s3={'addressing_style': 'path'},
-                    retries={'max_attempts': 2, 'mode': 'standard'},
-                    connect_timeout=5,
-                    read_timeout=10,
-                    max_pool_connections=10
-                )
-                client_kwargs['config'] = minio_specific_config_for_main_client
                 
                 browser_endpoint = os.environ.get('AWS_S3_BROWSER_ENDPOINT_URL', None)
                 if browser_endpoint:
@@ -158,29 +181,43 @@ class BaseStorageService:
                     browser_endpoint = self.endpoint_url
                     logger.info(f"Using server endpoint for presigned client: {browser_endpoint}")
                 
-                self.presigned_client = boto3.client(
-                    's3',
-                    aws_access_key_id=self.access_key,
-                    aws_secret_access_key=self.secret_key,
-                    region_name=self.region if self.region else None,
-                    endpoint_url=browser_endpoint,
-                    config=Config(
-                        signature_version='s3v4',
+                presigned_kwargs = {
+                    'service_name': 's3',
+                    'aws_access_key_id': self.access_key,
+                    'aws_secret_access_key': self.secret_key,
+                    'region_name': self.region if self.region else None,
+                    'endpoint_url': browser_endpoint,
+                    'config': Config(
                         s3={'addressing_style': 'path'},
                         retries={'max_attempts': 2, 'mode': 'standard'},
                         connect_timeout=5,
                         read_timeout=10,
-                        max_pool_connections=10
+                        max_pool_connections=max_pool_connections,  # Use environment variable
+                        # Disable strict checksum validation for Dell EMC ViPR compatibility
+                        request_checksum_calculation='when_required',
+                        response_checksum_validation='when_required'
                     )
-                )
+                }
+                
+                if 'https://' in browser_endpoint:
+                    presigned_kwargs['use_ssl'] = True
+                    presigned_kwargs['verify'] = False
+                else:
+                    presigned_kwargs['use_ssl'] = False
+                
+                self.presigned_client = boto3.client(**presigned_kwargs)
                 logger.info(f"Created separate presigned client with endpoint: {browser_endpoint}")
-            else: # Not MinIO but has endpoint_url (e.g. other S3 compatible)
+            else: # Not MinIO but has endpoint_url (e.g. Dell EMC ViPR, other S3 compatible)
                  # Ensure presigned_client exists, can be same as s3_client if no special browser URL needed
                 if not hasattr(self, 'presigned_client'):
                     self.presigned_client = boto3.client(**client_kwargs)
-                    logger.info("Created presigned client (same as main client for non-MinIO custom endpoint).")
+                    logger.info("Created presigned client (same as main client for Dell EMC/S3-compatible endpoint).")
 
         self.s3_client = boto3.client(**client_kwargs)
+        
+        # Test S3 connection and log results
+        self._test_s3_connection()
+        
         # If not using a specific endpoint_url (i.e., targeting AWS S3 directly) 
         # and presigned_client wasn't created, make it the same as s3_client.
         if not self.endpoint_url and not hasattr(self, 'presigned_client'):
@@ -190,6 +227,47 @@ class BaseStorageService:
              # Fallback for non-MinIO with endpoint_url if presigned_client still not set
             self.presigned_client = self.s3_client 
             logger.info("Fallback: presigned client set to main client for custom S3 endpoint.")
+
+    def _test_s3_connection(self):
+        """
+        Test S3 connection and log detailed results for debugging.
+        """
+        logger.info("===> Testing S3 connection...")
+        logger.info(f"===> Endpoint: {self.endpoint_url}")
+        logger.info(f"===> Region: {self.region}")
+        logger.info(f"===> Access Key: {self.access_key[:10]}...")
+        
+        try:
+            # Test basic connection by listing buckets
+            logger.info("===> Attempting to list buckets...")
+            response = self.s3_client.list_buckets()
+            buckets = [bucket['Name'] for bucket in response.get('Buckets', [])]
+            logger.info(f"✅ S3 connection successful! Found {len(buckets)} buckets: {buckets}")
+            
+            # Test specific organization buckets
+            from arkumu.storage.services.bucket_service import PREDEFINED_ORGANIZATIONS
+            for org_id in PREDEFINED_ORGANIZATIONS:
+                try:
+                    self.s3_client.head_bucket(Bucket=org_id)
+                    logger.info(f"✅ Organization bucket '{org_id}' exists and is accessible")
+                except ClientError as e:
+                    error_code = e.response.get('Error', {}).get('Code', 'Unknown')
+                    if error_code in ['404', 'NoSuchBucket']:
+                        logger.warning(f"⚠️ Organization bucket '{org_id}' does not exist")
+                    elif error_code in ['403', 'Forbidden']:
+                        logger.error(f"❌ Organization bucket '{org_id}' exists but access denied")
+                    else:
+                        logger.error(f"❌ Error checking bucket '{org_id}': {error_code}")
+                
+        except ClientError as e:
+            error_code = e.response.get('Error', {}).get('Code', 'Unknown')
+            error_message = e.response.get('Error', {}).get('Message', str(e))
+            logger.error(f"❌ S3 connection failed with ClientError: {error_code} - {error_message}")
+            logger.error(f"❌ Full error response: {e.response}")
+        except Exception as e:
+            logger.error(f"❌ S3 connection failed with unexpected error: {type(e).__name__}: {str(e)}")
+            import traceback
+            logger.error(f"❌ Full traceback: {traceback.format_exc()}")
 
     # ... other helper methods (_is_minio_environment, _get_access_key, etc.) ...
     # ... ensure_bucket_exists, ensure_cors_enabled, delete_object etc. ...
