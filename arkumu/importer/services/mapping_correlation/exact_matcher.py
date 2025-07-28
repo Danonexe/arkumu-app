@@ -111,26 +111,24 @@ class ExactMatcher:
                 logger.info(f"✅ REVERSE GERMAN CHARACTER SUCCESS - File '{file_name}' (slugified: '{slugified_filename}') matches dataset '{dataset_name}'")
                 return dataset_name
         
-        # Space-to-underscore conversion matching (for files with spaces vs datasets with underscores)
-        # Convert spaces in file name to underscores and try matching
-        file_name_with_underscores = file_name.replace(' ', '_')
-        if file_name_with_underscores != file_name:  # Only log if we actually changed something
-            logger.info(f"🔄 SPACE-TO-UNDERSCORE - File: '{file_name}' -> With underscores: '{file_name_with_underscores}'")
-            
-            for dataset_name in expected_datasets:
-                if file_name_with_underscores == dataset_name:
-                    logger.info(f"✅ SPACE-TO-UNDERSCORE SUCCESS - File '{file_name}' -> dataset '{dataset_name}'")
-                    return dataset_name
+        # URI slugification matching (using same logic as mapping creation)
+        # This handles the mismatch between file names and slugified dataset names used in mappings
+        slugified_file_name = slugify_uri_part(file_name)
+        logger.info(f"🔄 SLUGIFY MATCHING - File: '{file_name}' -> Slugified: '{slugified_file_name}'")
         
-        # Reverse: Convert underscores in file name to spaces and try matching  
-        file_name_with_spaces = file_name.replace('_', ' ')
-        if file_name_with_spaces != file_name:  # Only log if we actually changed something
-            logger.info(f"🔄 UNDERSCORE-TO-SPACE - File: '{file_name}' -> With spaces: '{file_name_with_spaces}'")
+        for dataset_name in expected_datasets:
+            # Try both ways: slugified file vs dataset, and file vs slugified dataset
+            slugified_dataset_name = slugify_uri_part(dataset_name)
             
-            for dataset_name in expected_datasets:
-                if file_name_with_spaces == dataset_name:
-                    logger.info(f"✅ UNDERSCORE-TO-SPACE SUCCESS - File '{file_name}' -> dataset '{dataset_name}'")
-                    return dataset_name
+            if slugified_file_name == dataset_name:
+                logger.info(f"✅ SLUGIFY SUCCESS (file->dataset) - File '{file_name}' (slugified: '{slugified_file_name}') matches dataset '{dataset_name}'")
+                return dataset_name
+            elif file_name == slugified_dataset_name:
+                logger.info(f"✅ SLUGIFY SUCCESS (dataset->file) - File '{file_name}' matches dataset '{dataset_name}' (slugified: '{slugified_dataset_name}')")
+                return dataset_name
+            elif slugified_file_name == slugified_dataset_name:
+                logger.info(f"✅ SLUGIFY SUCCESS (both slugified) - File '{file_name}' -> '{slugified_file_name}' matches dataset '{dataset_name}' -> '{slugified_dataset_name}'")
+                return dataset_name
 
         # Additional fallback attempts for German characters
         if "informations" in file_name.lower():
