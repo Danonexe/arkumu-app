@@ -31,7 +31,7 @@ class ArchivistDashboardView(GeneralLoginRequiredMixin, BaseCoordinatorMixin, CS
     CSV mapping editor and Metadata Ingestion.
     """
     
-    def render_organization_selectors(self, bucket_service, organizations, selected_org_slug):
+    def render_organization_selectors(self, request, bucket_service, organizations, selected_org_slug):
         """Render organization selector and file browser content for OOB updates."""
         context = {
             'organizations': organizations,
@@ -40,7 +40,8 @@ class ArchivistDashboardView(GeneralLoginRequiredMixin, BaseCoordinatorMixin, CS
         
         upload_selector = render_to_string(
             'dashboard/partials/upload_org_selector.html', 
-            context
+            context,
+            request=request  # Pass request to get CSRF token
         )
         
         # Render file browser content
@@ -60,7 +61,8 @@ class ArchivistDashboardView(GeneralLoginRequiredMixin, BaseCoordinatorMixin, CS
             }
             file_browser_content = render_to_string(
                 'dashboard/organization_files_partial.html',
-                file_browser_context
+                file_browser_context,
+                request=request  # Pass request to get CSRF token
             )
         else:
             # Empty state
@@ -157,7 +159,7 @@ class ArchivistDashboardView(GeneralLoginRequiredMixin, BaseCoordinatorMixin, CS
                 main_html = main_response.content.decode('utf-8')
                 
                 # Add OOB updates for organization selectors and file browser
-                oob_updates = self.render_organization_selectors(bucket_service, organizations, selected_org_slug)
+                oob_updates = self.render_organization_selectors(request, bucket_service, organizations, selected_org_slug)
                 response_html = self.build_oob_response(main_html, oob_updates)
                 
                 # Return response with out-of-band updates
