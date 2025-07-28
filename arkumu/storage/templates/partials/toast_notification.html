@@ -2,8 +2,15 @@
 Toast notification partial template for HTMX responses
 Usage: Include this template with message and type variables
 {% endcomment %}
+{% now "U" as timestamp %}
+<!-- DEBUG: Toast template rendered at {{ timestamp }} for message: {{ message }} -->
 
-<div class="toast toast-top toast-center z-50" hx-swap-oob="afterbegin:#toast-container" id="toast-{{ message|slugify }}-{{ type }}">
+<div class="toast toast-top toast-center z-50" 
+     id="toast-{{ timestamp }}-{{ type }}"
+     hx-get="/storage/dismiss-message"
+     hx-trigger="load delay:5s"
+     hx-swap="outerHTML"
+     hx-target="this">
     <div class="alert {% if type == 'error' %}alert-error{% elif type == 'warning' %}alert-warning{% elif type == 'success' %}alert-success{% else %}alert-info{% endif %} shadow-xl min-w-96 max-w-lg">
         <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
             {% if type == 'error' %}
@@ -26,35 +33,11 @@ Usage: Include this template with message and type variables
             </div>
             <div class="text-sm">{{ message }}</div>
         </div>
-        <button class="btn btn-sm btn-circle btn-ghost ml-2" onclick="dismissToast(this)">✕</button>
+        <button class="btn btn-sm btn-circle btn-ghost ml-2" 
+                hx-get="/storage/dismiss-message"
+                hx-target="closest .toast"
+                hx-swap="outerHTML">✕</button>
     </div>
 </div>
 
-<script>
-function dismissToast(button) {
-    const toast = button.closest('.toast');
-    if (toast) {
-        toast.style.transition = 'all 0.3s ease-out';
-        toast.style.transform = 'translateY(-20px)';
-        toast.style.opacity = '0';
-        setTimeout(() => toast.remove(), 300);
-    }
-}
-
-// Auto-dismiss after 5 seconds
-(function() {
-    const toast = document.querySelector('#toast-{{ message|slugify }}-{{ type }}');
-    if (toast) {
-        setTimeout(() => {
-            toast.style.transition = 'all 0.3s ease-out';
-            toast.style.transform = 'translateY(-20px)';
-            toast.style.opacity = '0';
-            setTimeout(() => {
-                if (toast.parentNode) {
-                    toast.remove();
-                }
-            }, 300);
-        }, 5000);
-    }
-})();
-</script> 
+ 

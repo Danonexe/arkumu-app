@@ -5,7 +5,7 @@ from typing import List
 from django.shortcuts import render
 from django.views.decorators.http import require_http_methods
 from django.contrib.auth.decorators import login_required
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 import time
 from arkumu.users.mixins import general_login_required
 
@@ -240,7 +240,7 @@ def streaming_upload_form(request):
             from django.template.loader import render_to_string
             
             if result.get('success', False):
-                # Success: show results
+                # Success: show results using proper OOB format
                 upload_results_html = render_to_string(
                     'dashboard/partials/upload_results.html',
                     {
@@ -252,29 +252,49 @@ def streaming_upload_form(request):
                     request=request
                 )
                 
-                # Hide progress and show results
-                response_html = f'''
-                    <div id="upload-progress" hx-swap-oob="outerHTML" class="mt-4 hidden"></div>
-                    <div id="upload-status" hx-swap-oob="innerHTML">
-                        <div class="alert alert-success">
-                            <span>Upload completed successfully!</span>
-                        </div>
-                    </div>
-                    {upload_results_html}
-                '''
+                # Refresh file browser content after successful upload
+                from arkumu.storage.services.bucket_service import BucketService
+                bucket_service = BucketService()
+                bucket_name = bucket_service.get_organization_bucket(organization)
+                contents = bucket_service.list_bucket_contents(bucket_name, '')
                 
+                file_browser_html = render_to_string(
+                    'dashboard/organization_files_partial.html',
+                    {
+                        'organization': organization,
+                        'bucket_name': bucket_name,
+                        'contents': contents,
+                        'selected_org_slug': organization,
+                        'prefix': ''
+                    },
+                    request=request
+                )
+                
+                # Use template helper mixin for clean OOB response
+                from arkumu.metadata.views.csv_mapping.mixins.template_helpers import CSVMappingTemplateHelperMixin
+                helper = CSVMappingTemplateHelperMixin()
+                oob_updates = {
+                    'file-browser-content': file_browser_html  # Refresh file browser
+                }
+                
+                response_html = helper.build_oob_response(upload_results_html, oob_updates)
                 return HttpResponse(response_html)
             else:
-                # Error: show error message
-                error_html = f'''
-                    <div id="upload-progress" hx-swap-oob="outerHTML" class="mt-4 hidden"></div>
-                    <div id="upload-status" hx-swap-oob="innerHTML">
+                # Error: show error message using OOB updates
+                oob_updates = {
+                    'upload-progress': '<div class="mt-4 hidden"></div>',  # Hide progress
+                    'upload-status': f'''
                         <div class="alert alert-error">
                             <span>Upload failed: {result.get('error', 'Unknown error')}</span>
                         </div>
-                    </div>
-                '''
-                return HttpResponse(error_html)
+                    '''
+                }
+                
+                response_html = ''
+                for target_id, content in oob_updates.items():
+                    response_html += f'<div id="{target_id}" hx-swap-oob="innerHTML">{content}</div>'
+                
+                return HttpResponse(response_html)
         
         # Non-HTMX request: return JSON as before
         return JsonResponse(result)
@@ -284,14 +304,21 @@ def streaming_upload_form(request):
         upload_session.mark_failed(str(e))
         
         if request.headers.get('HX-Request'):
-            return HttpResponse(f'''
-                <div id="upload-progress" hx-swap-oob="outerHTML" class="mt-4 hidden"></div>
-                <div id="upload-status" hx-swap-oob="innerHTML">
+            # Use consistent OOB format for errors
+            oob_updates = {
+                'upload-progress': '<div class="mt-4 hidden"></div>',
+                'upload-status': f'''
                     <div class="alert alert-error">
                         <span>Upload failed: {str(e)}</span>
                     </div>
-                </div>
-            ''')
+                '''
+            }
+            
+            response_html = ''
+            for target_id, content in oob_updates.items():
+                response_html += f'<div id="{target_id}" hx-swap-oob="innerHTML">{content}</div>'
+            
+            return HttpResponse(response_html)
         
         return JsonResponse({
             'success': False,

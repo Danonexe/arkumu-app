@@ -1,4 +1,4 @@
-<div class="form-control mb-4" id="upload-input-section" hx-swap-oob="true">
+<div class="form-control mb-4" id="upload-input-section" hx-swap-oob="outerHTML">
     <label class="label">
         <span class="label-text">
             {% if is_folder_mode %}
@@ -9,7 +9,6 @@
         </span>
     </label>
     <input type="file" 
-           id="file-input" 
            name="files" 
            {% if is_folder_mode %}
                webkitdirectory
@@ -17,8 +16,7 @@
            {% else %}
                multiple
            {% endif %}
-           class="file-input file-input-bordered file-input-sm w-full" 
-           required />
+           class="file-input file-input-bordered file-input-sm w-full" />
     {% if is_folder_mode %}
         <input type="hidden" name="preserve_folder_structure" value="true" />
     {% endif %}
@@ -29,4 +27,27 @@
             You can select multiple files to upload to S3 at once
         {% endif %}
     </div>
+</div>
+
+<!-- Update button styles with OOB -->
+<div id="files-mode-btn" hx-swap-oob="outerHTML">
+    <button type="button" 
+            class="btn btn-outline btn-sm flex-1 {% if not is_folder_mode %}btn-active{% endif %}" 
+            id="files-mode-btn"
+            hx-get="/storage/dashboard/upload-mode/"
+            hx-vals='{"mode": "files"}'
+            hx-swap="none">
+        📄 Upload Files
+    </button>
+</div>
+
+<div id="folder-mode-btn" hx-swap-oob="outerHTML">
+    <button type="button" 
+            class="btn btn-outline btn-sm flex-1 {% if is_folder_mode %}btn-active{% endif %}" 
+            id="folder-mode-btn"
+            hx-get="/storage/dashboard/upload-mode/"
+            hx-vals='{"mode": "folder"}'
+            hx-swap="none">
+        📁 Upload Folder
+    </button>
 </div>

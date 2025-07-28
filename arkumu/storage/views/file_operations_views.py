@@ -298,15 +298,72 @@ def delete_object(request, bucket_type, object_type, object_path):
         if result.get("success", False):
             success_message = f"Successfully deleted {object_type} '{object_path}'"
             logger.info(success_message)
+            logger.info(f"🔥 DELETE_DEBUG: Processing successful deletion, HTMX={request.headers.get('HX-Request')}, bucket_type={bucket_type}")
             
             if request.headers.get('HX-Request') == 'true':
-                # For HTMX requests, return a toast notification
-                # The element will be removed from the DOM by hx-swap="outerHTML"
-                # and the toast will show the success message
-                return render(request, "partials/toast_notification.html", {
-                    "message": success_message,
-                    "type": "success"
-                })
+                # For HTMX requests, return a toast notification AND refresh file browser
+                from django.template.loader import render_to_string
+                from arkumu.metadata.views.csv_mapping.mixins.template_helpers import CSVMappingTemplateHelperMixin
+                
+                # Get organization from bucket_type for file browser refresh
+                if bucket_type.startswith("org-"):
+                    logger.info(f"🔥 DELETE_DEBUG: Organization bucket deletion path")
+                    org_name = bucket_type[4:]  # Remove 'org-' prefix
+                    
+                    # Refresh file browser content after deletion
+                    contents = bucket_service.list_bucket_contents(bucket_name, '')
+                    
+                    file_browser_html = render_to_string(
+                        'dashboard/organization_files_partial.html',
+                        {
+                            'organization': org_name,
+                            'bucket_name': bucket_name,
+                            'contents': contents,
+                            'selected_org_slug': org_name,
+                            'prefix': ''
+                        },
+                        request=request
+                    )
+                    
+                    # Main toast notification
+                    toast_html = render_to_string(
+                        "partials/toast_notification.html",
+                        {
+                            "message": success_message,
+                            "type": "success"
+                        },
+                        request=request
+                    )
+                    
+                    # Use template helper mixin for clean OOB response
+                    helper = CSVMappingTemplateHelperMixin()
+                    oob_updates = {
+                        'toast-container': toast_html,  # Add toast to container via OOB
+                        'file-browser-content': file_browser_html
+                    }
+                    
+                    # Return empty main content with OOB updates
+                    response_html = helper.build_oob_response("", oob_updates)
+                    logger.info(f"🔥 DELETE_DEBUG: Returning OOB response with toast and file browser update")
+                    return HttpResponse(response_html)
+                else:
+                    # For non-organization buckets, return toast via OOB to container
+                    toast_html = render_to_string(
+                        "partials/toast_notification.html",
+                        {
+                            "message": success_message,
+                            "type": "success"
+                        },
+                        request=request
+                    )
+                    
+                    helper = CSVMappingTemplateHelperMixin()
+                    oob_updates = {
+                        'toast-container': toast_html
+                    }
+                    
+                    response_html = helper.build_oob_response("", oob_updates)
+                    return HttpResponse(response_html)
             
             # Only add Django messages for non-HTMX requests
             messages.success(request, success_message)

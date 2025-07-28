@@ -49,8 +49,8 @@ class UploadFormHandler {
             }
         });
 
-        // Upload button
-        if (this.uploadButton) {
+        // Upload button - only intercept if not using HTMX
+        if (this.uploadButton && !this.form.hasAttribute('hx-post')) {
             this.uploadButton.addEventListener('click', (e) => {
                 e.preventDefault();
                 this.handleUploadClick();
@@ -404,8 +404,9 @@ class UploadFormHandler {
 
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
-    // Only initialize on upload form pages
-    if (document.getElementById('streaming-upload-form')) {
+    // Only initialize on non-HTMX upload form pages
+    const form = document.getElementById('streaming-upload-form');
+    if (form && !form.hasAttribute('hx-post')) {
         window.uploadFormHandler = new UploadFormHandler();
         console.log('📁 Upload form handler initialized');
     }

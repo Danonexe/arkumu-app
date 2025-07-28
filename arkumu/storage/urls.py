@@ -34,6 +34,7 @@ urlpatterns = [
     path("dashboard/", dashboard_views.archivist_dashboard, name="archivist_dashboard"),
     path("dashboard/upload-mode/", dashboard_views.upload_mode_toggle, name="upload_mode_toggle"),
     path("dashboard/folder-contents/<str:bucket_type>/<path:folder_path>/", views.load_folder_contents, name="load_folder_contents"),
+    path("dismiss-message/", dashboard_views.dismiss_message, name="dismiss_message"),
     
     # File operations
     path("file-content/<str:bucket_type>/<path:file_path>/", file_operations_views.file_content, name="file_content"),

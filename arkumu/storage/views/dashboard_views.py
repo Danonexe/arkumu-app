@@ -75,9 +75,17 @@ class ArchivistDashboardView(GeneralLoginRequiredMixin, BaseCoordinatorMixin, CS
                 </div>
             '''
         
+        # Render S3 browser title
+        s3_browser_title = render_to_string(
+            'dashboard/partials/s3_browser_title.html',
+            {'selected_org_slug': selected_org_slug},
+            request=request
+        )
+        
         return {
             'upload-org-selector': upload_selector,
-            'file-browser-content': file_browser_content
+            'file-browser-content': file_browser_content,
+            's3-browser-title': s3_browser_title
         }
     
     def get(self, request):
@@ -357,6 +365,19 @@ def upload_mode_toggle(request):
     
     # Return with out-of-band swap
     return HttpResponse(upload_input_html)
+
+
+@require_http_methods(["GET"])
+@general_login_required
+def dismiss_message(request):
+    """
+    HTMX endpoint for dismissing upload success messages.
+    Returns empty response to remove the element from DOM.
+    """
+    # Return empty response - this will cause HTMX to remove the target element
+    return HttpResponse('')
+
+
 
 
  
