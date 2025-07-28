@@ -23,6 +23,7 @@ urlpatterns = [
     # Mapping import endpoints
     path("mappings/list-importable/", ingest_views.list_importable_mappings, name="list_importable_mappings"),
     path("mappings/import/", ingest_views.import_selected_mappings, name="import_selected_mappings"),
+    path("mappings/close-modal/", ingest_views.close_import_modal, name="close_import_modal"),
     # Organization changes now handled in main ingest_data view
     
     # CSV ingest endpoint (existing)

@@ -1891,36 +1891,53 @@ def import_selected_mappings(request):
         
         logger.info(f"Mapping import completed: {imported_count} successful, {failed_count} failed")
         
-        # Main response content
-        main_html = f'<div class="alert {alert_class}">{message}</div>'
+        # Get fresh mapping data for dropdown update
+        from arkumu.metadata.models.mappings import Mapping
+        mappings = Mapping.objects.filter(
+            organization_id=organization_id
+        ).order_by('-created_at')
         
-        # Render updated mapping dropdown content
+        # Render updated mapping dropdown content with fresh data
         from django.template.loader import render_to_string
-        # We need to call the actual list_mappings_dropdown view to get the updated content
         dropdown_html = render_to_string(
             'importer/partials/mapping_dropdown_list.html',
             {
+                'mappings': mappings,
                 'organization_id': organization_id,
-                # Add any other context needed for the dropdown
             },
             request=request
         )
+        
+        # Render success message with close button
+        if import_results['successful_imports']:
+            main_html = render_to_string(
+                'importer/partials/import_success_message.html',
+                {
+                    'message': message,
+                    'imported_count': imported_count,
+                    'failed_count': failed_count,
+                    'success_names': [imp['mapping_name'] for imp in import_results['successful_imports']]
+                },
+                request=request
+            )
+        else:
+            main_html = f'<div class="alert {alert_class}">{message}</div>'
+        
+        # Use the template helper for OOB response
+        from arkumu.metadata.views.csv_mapping.mixins.template_helpers import CSVMappingTemplateHelperMixin
+        helper = CSVMappingTemplateHelperMixin()
         
         # Build OOB response to update mapping dropdown
         oob_updates = {
             'mapping-dropdown-list': dropdown_html
         }
         
-        # Build response with OOB updates
-        oob_html = ""
-        for target_id, content in oob_updates.items():
-            oob_html += f'<div id="{target_id}" hx-swap-oob="innerHTML">{content}</div>'
+        response_html = helper.build_oob_response(main_html, oob_updates)
         
-        response_html = f'{main_html}{oob_html}'
-        
-        # Create response with HX-Trigger to close modal
+        # Create response with HX-Trigger to close modal for successful imports
         response = HttpResponse(response_html, content_type='text/html')
-        response['HX-Trigger'] = 'closeImportModal'
+        if import_results['successful_imports']:
+            response['HX-Trigger'] = 'closeImportModal'
         
         return response
         
@@ -1930,3 +1947,17 @@ def import_selected_mappings(request):
             f'<div class="alert alert-error">Error importing mappings: {str(e)}</div>',
             content_type='text/html'
         )
+
+
+@general_login_required
+def close_import_modal(request):
+    """
+    HTMX endpoint to trigger modal close via HX-Trigger header.
+    Used for auto-closing the import modal after successful import.
+    """
+    if request.method != 'GET':
+        return HttpResponse('Method not allowed', status=405)
+    
+    response = HttpResponse('', content_type='text/html')
+    response['HX-Trigger'] = 'closeImportModal'
+    return response

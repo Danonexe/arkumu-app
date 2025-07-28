@@ -8,7 +8,7 @@
     </div>
     
     <!-- File Selection Form -->
-    <form id="import-mappings-form" hx-post="{% url 'importer:import_selected_mappings' %}" hx-target="#import-results" hx-swap="innerHTML">
+    <form id="import-mappings-form" hx-post="{% url 'importer:import_selected_mappings' %}" hx-target="#import-results" hx-swap="innerHTML" hx-indicator="#import-spinner">
         {% csrf_token %}
         
         <!-- Select All Controls -->
@@ -67,6 +67,7 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
                     </svg>
                     Import Selected
+                    <span id="import-spinner" class="loading loading-spinner loading-sm htmx-indicator"></span>
                 </button>
             </div>
         </div>
@@ -74,15 +75,6 @@
     
     <!-- Results Container -->
     <div id="import-results" class="mt-4"></div>
-    
-    <!-- Close Button for Success State -->
-    <div class="flex justify-end mt-4" id="close-button-container" style="display: none;">
-        <button type="button" 
-                class="btn btn-sm btn-primary"
-                onclick="import_mappings_modal.close()">
-            Close
-        </button>
-    </div>
 </div>
 
 <script>
@@ -129,77 +121,6 @@
     // Initial count update
     updateSelectedCount();
 })();
-
-// Handle form submission
-document.addEventListener('htmx:beforeRequest', function(event) {
-    if (event.detail.elt.id === 'import-mappings-form') {
-        const importBtn = document.getElementById('import-mappings-btn');
-        importBtn.innerHTML = `
-            <span class="loading loading-spinner loading-sm"></span>
-            Importing...
-        `;
-        importBtn.disabled = true;
-    }
-});
-
-// Handle successful import
-document.addEventListener('htmx:afterRequest', function(event) {
-    if (event.detail.elt.id === 'import-mappings-form' && event.detail.xhr.status === 200) {
-        try {
-            const response = JSON.parse(event.detail.xhr.responseText);
-            if (response.success && response.imported_count > 0) {
-                // Show success message
-                document.getElementById('import-results').innerHTML = `
-                    <div class="alert alert-success">
-                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"/>
-                        </svg>
-                        <div>
-                            <h4 class="font-bold">Import Successful!</h4>
-                            <div class="text-sm">${response.message}</div>
-                        </div>
-                    </div>
-                `;
-                
-                // Show close button
-                document.getElementById('close-button-container').style.display = 'flex';
-                
-                // Trigger mapping dropdown refresh
-                htmx.trigger('#mapping-dropdown-list', 'load');
-                
-                // Close modal after 2 seconds
-                setTimeout(() => {
-                    import_mappings_modal.close();
-                }, 2000);
-            } else {
-                // Show error message
-                document.getElementById('import-results').innerHTML = `
-                    <div class="alert alert-error">
-                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"/>
-                        </svg>
-                        <div>
-                            <h4 class="font-bold">Import Failed</h4>
-                            <div class="text-sm">${response.error || 'No mappings were imported'}</div>
-                        </div>
-                    </div>
-                `;
-            }
-        } catch (e) {
-            console.error('Error parsing import response:', e);
-        }
-        
-        // Reset import button
-        const importBtn = document.getElementById('import-mappings-btn');
-        importBtn.innerHTML = `
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
-            </svg>
-            Import Selected
-        `;
-        importBtn.disabled = document.querySelectorAll('.mapping-file-checkbox:checked').length === 0;
-    }
-});
 </script>
 
 {% elif error %}

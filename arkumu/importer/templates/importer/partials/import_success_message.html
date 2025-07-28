@@ -1,0 +1,33 @@
+<!-- Import Success Message -->
+<div class="alert alert-success">
+    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"/>
+    </svg>
+    <div>
+        <h4 class="font-bold">Import Successful!</h4>
+        <div class="text-sm">{{ message }}</div>
+        {% if success_names %}
+        <ul class="text-xs mt-2 space-y-1">
+            {% for name in success_names %}
+            <li>• {{ name }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Auto-close modal trigger -->
+<div hx-trigger="load delay:2s" 
+     hx-get="{% url 'importer:close_import_modal' %}"
+     hx-target="body"
+     hx-swap="none"
+     style="display: none;"></div>
+
+<!-- Close button for immediate close -->
+<div class="flex justify-end mt-4">
+    <button type="button" 
+            class="btn btn-sm btn-primary"
+            onclick="import_mappings_modal.close()">
+        Close
+    </button>
+</div>
