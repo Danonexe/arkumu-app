@@ -95,8 +95,14 @@ class ArchivistDashboardView(GeneralLoginRequiredMixin, BaseCoordinatorMixin, CS
                 self.set_current_organization(request, org_param)
             
             # Get current organization using BaseCoordinatorMixin
+            # This will persist across page navigation
             current_org = self.get_current_organization(request)
             selected_org_slug = current_org['code'] if current_org else None
+            
+            # If no organization is selected but we have organizations available, 
+            # don't auto-select - let user choose explicitly
+            if not selected_org_slug and not org_param:
+                logger.info("No organization selected in session or URL")
             
             logger.info("Attempting to get available organizations...")
             # Get organizations from database, auto-create if none exist
@@ -120,6 +126,7 @@ class ArchivistDashboardView(GeneralLoginRequiredMixin, BaseCoordinatorMixin, CS
             
             organization_structure = None
             selected_org_data = None
+            contents = []  # Initialize contents for the template
 
             if selected_org_slug:
                 logger.info(f"Selected organization slug: {selected_org_slug}")
@@ -129,6 +136,10 @@ class ArchivistDashboardView(GeneralLoginRequiredMixin, BaseCoordinatorMixin, CS
                     if selected_org_data:
                         logger.info(f"Fetching structure for existing org: {selected_org_slug}")
                         bucket_name = bucket_service.get_organization_bucket(selected_org_slug)
+                        # Get bucket contents for the file browser
+                        contents = bucket_service.list_bucket_contents(bucket_name, '')
+                        logger.info(f"Loaded {len(contents)} items for {selected_org_slug}")
+                        # Also get root level items if needed for other purposes
                         organization_structure = bucket_service.get_root_level_items(bucket_name)
                         logger.info(f"Structure fetched for {selected_org_slug}")
                     else:
@@ -144,23 +155,11 @@ class ArchivistDashboardView(GeneralLoginRequiredMixin, BaseCoordinatorMixin, CS
                 # For HTMX organization changes, return OOB updates to sync both selectors
                 logger.info(f"HTMX organization change detected: {org_param}")
                 
-                # Render the full page content first
-                main_response = render(request, "dashboard/archivist_dashboard.html", {
-                    "organizations": organizations,
-                    "organization_count": organization_count,
-                    "total_files_display": total_files_display,
-                    "storage_used_display": storage_used_display,
-                    "organization_structure": organization_structure,
-                    "selected_org_data": selected_org_data, 
-                    "selected_org_slug": selected_org_slug
-                })
-                
-                # Get the rendered HTML content
-                main_html = main_response.content.decode('utf-8')
-                
-                # Add OOB updates for organization selectors and file browser
+                # Get OOB updates for organization selectors and file browser
                 oob_updates = self.render_organization_selectors(request, bucket_service, organizations, selected_org_slug)
-                response_html = self.build_oob_response(main_html, oob_updates)
+                
+                # Build response with just the OOB updates (no main content needed)
+                response_html = self.build_oob_response('', oob_updates)
                 
                 # Return response with out-of-band updates
                 response = HttpResponse(response_html)
@@ -174,7 +173,11 @@ class ArchivistDashboardView(GeneralLoginRequiredMixin, BaseCoordinatorMixin, CS
                 "storage_used_display": storage_used_display,
                 "organization_structure": organization_structure,
                 "selected_org_data": selected_org_data, 
-                "selected_org_slug": selected_org_slug
+                "selected_org_slug": selected_org_slug,
+                "contents": contents,  # Pass contents for the file browser
+                "organization": selected_org_slug,  # Pass organization for the template
+                "bucket_name": bucket_service.get_organization_bucket(selected_org_slug) if selected_org_slug else None,
+                "prefix": ""
             })
         except Exception as e:
             logger.exception(f"Outer exception in archivist_dashboard: {str(e)}")

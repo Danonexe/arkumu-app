@@ -1,7 +1,11 @@
 <label class="label">
     <span class="label-text">Upload to Organization</span> 
 </label>
-<select id="organization" name="organization" class="select select-bordered w-full select-sm" required>
+<select id="organization" name="organization" class="select select-bordered w-full select-sm" required
+        hx-get="/storage/dashboard/"
+        hx-trigger="change"
+        hx-vals='js:{organization: event.target.value}'
+        hx-swap="none">
     {% if selected_org_slug %}
         <!-- Pre-select the current dashboard organization -->
         {% for org in organizations %}
