@@ -164,22 +164,27 @@ class MappingAwareProcessor:
         # FIXED: Only process datasets that are actually present in CSV sources
         # This prevents false warnings about missing datasets that aren't being processed
         for dataset_name in context.all_csv_sources.keys():
-            # Find the corresponding dataset configuration
+            # Find the corresponding dataset configuration (with consistent URI slugification)
+            from arkumu.common.uri_utils import slugify_uri_part
+            
             dataset_config = None
+            slugified_csv_name = slugify_uri_part(dataset_name)
             for config in context.execution_config.datasets:
-                if config.dataset_name == dataset_name:
+                if slugify_uri_part(config.dataset_name) == slugified_csv_name:
                     dataset_config = config
                     break
             
             if not dataset_config:
-                logger.warning(f"CSV data provided for '{dataset_name}' but no mapping configuration found")
+                # Log available configurations for debugging
+                available_configs = [config.dataset_name for config in context.execution_config.datasets]
+                logger.warning(f"CSV data provided for '{dataset_name}' (slugified: '{slugified_csv_name}') but no mapping configuration found. Available: {available_configs}")
                 continue
                 
             logger.info(f"🔍 PROCESSING: Dataset '{dataset_name}' (has CSV data)")
             logger.info(f"📊 Available csv_sources: {list(context.all_csv_sources.keys())}")
             
             context.current_dataset = dataset_config.dataset_name
-            csv_data = context.all_csv_sources[dataset_config.dataset_name]
+            csv_data = context.all_csv_sources[dataset_name]
             
             # Convert to DataFrame for chunked processing
             # Handle the test data format: {'headers': [...], 'rows': [...]}
