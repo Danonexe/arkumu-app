@@ -8,6 +8,8 @@ Contains mixins for handling column workspace and session management:
 import logging
 from datetime import datetime
 
+from arkumu.common.uri_utils import slugify_uri_part
+
 logger = logging.getLogger(__name__)
 
 
@@ -137,11 +139,18 @@ class MappingWorkspaceMixin:
             return False, existing_column, len(existing_columns)
         
         # Create new column entry with precise timestamp
+        # Normalize dataset name: convert spaces to underscores to match mapping expectations
+        # This ensures consistency between file names with spaces and dataset names in mappings
+        normalized_dataset_name = dataset_name.replace(' ', '_')
         timestamp = datetime.now().isoformat()
+        
+        if normalized_dataset_name != dataset_name:
+            logger.info(f"🔄 DATASET NORMALIZATION - Original: '{dataset_name}' -> Normalized: '{normalized_dataset_name}'")
+        
         new_column = {
             'id': column_id,
             'name': column_name,
-            'dataset': dataset_name,
+            'dataset': normalized_dataset_name,  # Use normalized dataset name
             'source': source_name,
             'type': 'string',  # Could be enhanced with type detection
             'is_fk': False,
