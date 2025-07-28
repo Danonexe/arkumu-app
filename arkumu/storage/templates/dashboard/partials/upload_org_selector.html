@@ -1,17 +1,26 @@
 <label class="label">
-    <span class="label-text">Select Organization</span> 
+    <span class="label-text">Upload to Organization</span> 
 </label>
-<select id="organization" name="organization" class="select select-bordered w-full select-sm"
-        hx-get="/storage/dashboard/"
-        hx-target="body"
-        hx-trigger="change"
-        hx-include="this">
-    <option value="">Choose organization...</option>
-    {% for org in organizations %}
-        <option value="{{ org.code }}" {% if org.code == selected_org_slug %}selected{% endif %}>
-            {{ org.name }}{% if org.is_active %} ✓{% endif %}
-        </option>
-    {% endfor %}
+<select id="organization" name="organization" class="select select-bordered w-full select-sm" required>
+    {% if selected_org_slug %}
+        <!-- Pre-select the current dashboard organization -->
+        {% for org in organizations %}
+            {% if org.code == selected_org_slug %}
+                <option value="{{ org.code }}" selected>{{ org.name }}{% if org.is_active %} ✓{% endif %}</option>
+            {% endif %}
+        {% endfor %}
+        <!-- Show other organizations as options -->
+        {% for org in organizations %}
+            {% if org.code != selected_org_slug %}
+                <option value="{{ org.code }}">{{ org.name }}{% if org.is_active %} ✓{% endif %}</option>
+            {% endif %}
+        {% endfor %}
+    {% else %}
+        <option value="" disabled selected>Choose organization...</option>
+        {% for org in organizations %}
+            <option value="{{ org.code }}">{{ org.name }}{% if org.is_active %} ✓{% endif %}</option>
+        {% endfor %}
+    {% endif %}
 </select>
 <div class="label">
     <span class="label-text-alt">✓ indicates S3 bucket already exists</span>
