@@ -111,6 +111,27 @@ class ExactMatcher:
                 logger.info(f"✅ REVERSE GERMAN CHARACTER SUCCESS - File '{file_name}' (slugified: '{slugified_filename}') matches dataset '{dataset_name}'")
                 return dataset_name
         
+        # Space-to-underscore conversion matching (for files with spaces vs datasets with underscores)
+        # Convert spaces in file name to underscores and try matching
+        file_name_with_underscores = file_name.replace(' ', '_')
+        if file_name_with_underscores != file_name:  # Only log if we actually changed something
+            logger.info(f"🔄 SPACE-TO-UNDERSCORE - File: '{file_name}' -> With underscores: '{file_name_with_underscores}'")
+            
+            for dataset_name in expected_datasets:
+                if file_name_with_underscores == dataset_name:
+                    logger.info(f"✅ SPACE-TO-UNDERSCORE SUCCESS - File '{file_name}' -> dataset '{dataset_name}'")
+                    return dataset_name
+        
+        # Reverse: Convert underscores in file name to spaces and try matching  
+        file_name_with_spaces = file_name.replace('_', ' ')
+        if file_name_with_spaces != file_name:  # Only log if we actually changed something
+            logger.info(f"🔄 UNDERSCORE-TO-SPACE - File: '{file_name}' -> With spaces: '{file_name_with_spaces}'")
+            
+            for dataset_name in expected_datasets:
+                if file_name_with_spaces == dataset_name:
+                    logger.info(f"✅ UNDERSCORE-TO-SPACE SUCCESS - File '{file_name}' -> dataset '{dataset_name}'")
+                    return dataset_name
+
         # Additional fallback attempts for German characters
         if "informations" in file_name.lower():
             logger.info(f"🔧 GERMAN CHARACTER FALLBACK - Trying additional patterns for: '{file_name}'")
@@ -132,6 +153,16 @@ class ExactMatcher:
         
         if "informations" in file_name.lower():
             logger.error(f"❌ GERMAN CHARACTER FAILURE - No match found for: '{file_name}' in {len(expected_datasets)} datasets")
+        else:
+            # Log details for non-German character files that don't match
+            logger.info(f"❌ NO MATCH FOUND - File: '{file_name}' (from path: '{file_path}') not found in {len(expected_datasets)} expected datasets")
+            if "bestehender" in file_name.lower() or "einliefernde" in file_name.lower():
+                logger.info(f"🔍 SPACE/UNDERSCORE DEBUG - File with possible space issue: '{file_name}'")
+                # Show a few expected datasets that might be similar
+                similar_datasets = [d for d in expected_datasets if any(word in d.lower() for word in file_name.lower().split(' '))]
+                if similar_datasets:
+                    logger.info(f"🔍 SIMILAR DATASETS FOUND: {similar_datasets}")
+        
         logger.debug(f"No match for file '{file_name}' in datasets: {expected_datasets}")
         return None
     
